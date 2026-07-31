@@ -7,7 +7,7 @@ var HELP_PAGE_MAP={
   board:'inspect', logs:null, users:'users'
 };
 var HELP_PAGE_TIPS={
-  dashboard:'首页概览：查看统计数据和待办事项',
+  dashboard:'样品看板：查看统计数据和待办事项',
   samples:'样品列表：支持多维度筛选和详情查看',
   new:'新建样品：填写信息后自动生成编号和标签',
   scan:'扫码台：扫描样品二维码驱动状态流转',

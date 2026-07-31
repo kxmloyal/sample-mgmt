@@ -1,7 +1,7 @@
 // help-data.js — 帮助数据（10个功能模块），按模块组织
 var HELP_DATA=[
   {
-    id:'dashboard', module:'看板', desc:'登录后的首页面板',
+    id:'dashboard', module:'看板', desc:'登录后的样品看板',
     items:[
       {h:'样品状态概览',body:'顶部6个状态卡片，显示各状态样品数量\n点击卡片可跳转对应列表筛选\nNEW=待制作确认 / PRODUCED=制作完成 / RELEASED=已发行 / IN_CUSTODY=保管中 / RETURNING=退回审核中 / RETIRED=已作废'},
       {h:'待办列表',body:'根据您的角色显示需要处理的样品\n研发：待制作+指派重做的样品\n品保：待发行+退回审核的样品\n保管/生技：待接收的样品'},
