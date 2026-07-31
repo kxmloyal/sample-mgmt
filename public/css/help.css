@@ -1,0 +1,24 @@
+/* 帮助指南 */
+.help-fab{position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:var(--brand);color:#fff;font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);z-index:90;transition:.2s}
+.help-fab:hover{background:var(--brand-d);transform:scale(1.05)}
+.help-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:100}
+.help-panel{background:#fff;border-radius:16px;width:94vw;max-width:600px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow)}
+.help-head{display:flex;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);align-items:center}
+.help-head input{flex:1}
+#help-list{flex:1;overflow-y:auto;padding:10px 18px}
+.help-module{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.help-module-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;background:var(--bg)}
+.help-module-title{font-weight:600;flex:1}
+.help-module-roles{display:flex;gap:4px}
+.help-toggle{font-size:12px;color:var(--brand);white-space:nowrap}
+.help-module-summary{padding:6px 14px;font-size:13px;color:var(--muted)}
+.help-module.open .help-module-summary{display:none}
+.help-sections{padding:0 14px}
+.help-section{margin-bottom:8px}
+.help-section h4{margin:8px 0 4px;font-size:13px;color:var(--brand)}
+.help-section pre{font-family:inherit;font-size:13px;line-height:1.6;white-space:pre-wrap;margin:0;color:var(--text)}
+.help-hint{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;margin-bottom:12px;font-size:13px}
+.help-hint .link{margin-left:auto}
+.help-hint-close{cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px}
+.help-hint-close:hover{color:var(--bad)}
+@media print{.help-fab,.help-mask,.help-hint{display:none!important}}

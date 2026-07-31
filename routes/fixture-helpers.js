@@ -1,0 +1,36 @@
+// routes/fixture-helpers.js — 治具状态机辅助：标签/权限/可用操作
+var D = require('../db');
+
+var STATUS_LABEL = {
+  REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待双人验证',
+  VERIFY_RD_OK: 'RD已确认(待申请单位)', VERIFY_ORG_OK: '申请单位已确认(待RD)',
+  TRANSFERRED: '已移交', IN_USE: '领用中', IMPROVING: '改善中',
+  REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '维修完成(待确认)', RETIRED: '已报废'
+};
+
+function isMECustodyQA(role) { return role === 'ME' || role === 'QA' || role === 'CUSTODY'; }
+
+async function allowedActions(role, status, fixture, userId, userDept) {
+  var actions = [];
+  if (role === 'RD' && status === 'REQUESTED') actions.push('ACCEPT');
+  if (status === 'REQUESTED' && fixture.requested_by === userId) actions.push('CANCEL');
+  if (role === 'RD' && status === 'ACCEPTED') {
+    var cntDrawing = await D.countFilesByCategory(fixture.id, 'design_drawing');
+    var cntPhoto = await D.countFilesByCategory(fixture.id, 'fixture_photo');
+    if (cntDrawing && cntDrawing.cnt > 0 && cntPhoto && cntPhoto.cnt > 0) actions.push('MAKE');
+  }
+  if (role === 'RD' && (status === 'VERIFY_PENDING' || status === 'VERIFY_ORG_OK')) actions.push('VERIFY_RD');
+  if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && (status === 'VERIFY_PENDING' || status === 'VERIFY_RD_OK')) actions.push('VERIFY_ORG');
+  if (isMECustodyQA(role) && status === 'TRANSFERRED') actions.push('USE');
+  if (status === 'TRANSFERRED') actions.push('IMPROVE');
+  if (isMECustodyQA(role) && status === 'IN_USE') { actions.push('RETURN'); actions.push('REPAIR_ME'); actions.push('REPAIR_RD_REQ'); }
+  if (role === 'ME' && (status === 'TRANSFERRED' || status === 'IN_USE')) actions.push('MAINTENANCE');
+  if ((role === 'RD' || isMECustodyQA(role)) && status === 'IMPROVING') actions.push('IMPROVE_DONE');
+  if (isMECustodyQA(role) && status === 'REPAIRING_ME') actions.push('REPAIR_DONE');
+  if (role === 'RD' && status === 'REPAIRING_RD') actions.push('REPAIR_RD_DONE');
+  if (isMECustodyQA(role) && status === 'REPAIR_DONE') actions.push('REPAIR_CONFIRM');
+  if (role === 'ADMIN' && ['IN_USE','TRANSFERRED','IMPROVING','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK'].indexOf(status) !== -1) actions.push('RETIRE');
+  return actions;
+}
+
+module.exports = { STATUS_LABEL, isMECustodyQA, allowedActions };

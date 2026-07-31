@@ -1,0 +1,88 @@
+// routes/misc.js — 看板 / 日志 / 用户管理 / 健康检查 / 共享常量
+const bcrypt = require('bcryptjs');
+const D = require('../db');
+
+function register(app) {
+  const requireAuth = app.locals.requireAuth;
+  const currentUser = app.locals.currentUser;
+
+  // 共享常量（前端脚本，数据源为 data/*.json）
+  app.get('/js/shared-constants.js', (req, res) => {
+    const limitItems = require('../data/limit-items.json');
+    const sourceTypes = require('../data/source-types.json');
+    res.type('js').send(
+      '// 由服务端 data/*.json 生成，请勿手动修改\n' +
+      'const LIMIT_ITEMS = ' + JSON.stringify(limitItems) + ';\n' +
+      'const SOURCE_TYPES = ' + JSON.stringify(sourceTypes) + ';\n'
+    );
+  });
+
+  // 角色快捷操作映射（dashboard 用）
+  var ROLE_ACTIONS = {
+    ADMIN: [{t:'新建样品',h:'#/new'},{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'},{t:'用户管理',h:'#/users'}],
+    RD: [{t:'新建样品',h:'#/new'},{t:'扫码台',h:'#/scan'}],
+    QA: [{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'}],
+    ME: [{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'}],
+    CUSTODY: [{t:'扫码台',h:'#/scan'}]
+  };
+
+  // 看板
+  app.get('/api/dashboard', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    var [rows, overdue, dueSoon, myPending] = await Promise.all([
+      D.countSamplesByStatus(),
+      D.listOverdueSamples(),
+      D.listDueSoonSamples(),
+      D.listMyPendingSamples(u.role, u.id)
+    ]);
+    var byStatus = { NEW: 0, PRODUCED: 0, RELEASED: 0, IN_CUSTODY: 0, RETURNING: 0, RETIRED: 0 };
+    var total = 0;
+    for (var _i = 0; _i < rows.length; _i++) { var r = rows[_i]; byStatus[r.status] = Number(r.cnt); total += Number(r.cnt); }
+    res.json({ byStatus, total, overdue, dueSoon, myPending, role: u.role, dept: u.dept, display_name: u.display_name, roleActions: ROLE_ACTIONS[u.role] || [] });
+  });
+
+  // 日志
+  app.get('/api/logs', requireAuth, async (req, res) => {
+    res.json(await D.listLogs());
+  });
+
+  // 用户管理（ADMIN）
+  app.get('/api/users', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '无权限' });
+    res.json(await D.listUsers());
+  });
+
+  app.post('/api/users', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '无权限' });
+    const { username, password, role, dept, display_name } = req.body || {};
+    if (!username || !password || !role) return res.status(400).json({ error: '账号/密码/角色必填' });
+    if (await D.getUserByUsername(username)) return res.status(409).json({ error: '账号已存在' });
+    if (!['RD', 'ME', 'QA', 'CUSTODY'].includes(role)) return res.status(400).json({ error: '角色只能是 RD/ME/QA/CUSTODY' });
+    const created = await D.createUser({ username, password_hash: bcrypt.hashSync(password, 10), role, dept: dept || '', display_name: display_name || '' });
+    res.json(created);
+  });
+
+  // RD 用户列表（供退回指派选择）
+  app.get('/api/rd-users', requireAuth, async (req, res) => {
+    const users = await D.listUsers();
+    const rds = users.filter(u => u.role === 'RD').map(u => ({ id: u.id, display_name: u.display_name || u.username, dept: u.dept }));
+    res.json(rds);
+  });
+
+  // 健康检查
+  app.get('/health', (req, res) => {
+    const pool = D.pool();
+    const dbReady = pool && pool.pool && pool.pool._allConnections;
+    res.json({
+      status: pool ? 'ok' : 'degraded',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      memory: process.memoryUsage().rss,
+      db: pool ? 'connected' : 'disconnected'
+    });
+  });
+}
+
+module.exports = { register };

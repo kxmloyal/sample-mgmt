@@ -1,0 +1,243 @@
+# CLAUDE.md — Claude 项目工作指南
+
+> 本文件是 Claude 在本项目工作时的特定指南。**核心规则与 AGENTS.md 一致**,本文件仅补充 Claude 特有的工作偏好、技能调用顺序、工具使用约束。
+> 阅读优先级:本文件 > AGENTS.md > 用户 user_rules。
+
+## 1. 项目一句话
+
+制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理与治具管理两大子系统,统一门户入口 portal.html。
+
+完整项目指南见 [AGENTS.md](./AGENTS.md)。
+
+## 2. Claude 工作流程(强制)
+
+### 2.1 收到非平凡需求时,MUST 按顺序执行
+
+```
+1. Skill: brainstorming        → 探索意图、对比方案、用户确认设计
+2. 写设计文档                  → docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md
+3. Skill: writing-plans        → 产出实现计划 docs/superpowers/plans/YYYY-MM-DD-<topic>.md
+4. subagent 驱动执行(Task 工具)→ 每 Task 派发 general_purpose_task subagent
+5. browser_use subagent 验证   → 自动化回归
+6. 输出文件臃肿检测报告
+```
+
+### 2.2 技能调用时机
+
+| 技能 | 触发条件 |
+|---|---|
+| `brainstorming` | 任何创建功能/构建组件/添加功能/修改行为的需求(创意工作前 MUST 调用) |
+| `writing-plans` | 已有 spec/需求,多步任务,动代码前 MUST 调用 |
+| `systematic-debugging` | 遇到 bug/测试失败/异常行为,提出修复前 MUST 调用 |
+| `test-driven-development` | 实现任何功能/bugfix,写实现代码前 MUST 调用 |
+| `code-review` | 完成任务/实现主要功能/合并前 SHOULD 调用 |
+| `self-improvement` | 命令失败、用户纠正、发现知识过时、发现更好方法时 SHOULD 调用 |
+
+### 2.3 例外(可跳过 brainstorming + writing-plans)
+
+- 简单 bug 修复(单行/单函数)
+- 纯文档更新
+- 配置单值改动
+- 用户明确指示「直接改」
+
+但仍需:全链路排查 + 回归验证 + 臃肿检测报告。
+
+## 3. 工具使用约束
+
+### 3.1 优先级(CRITICAL)
+
+- 读文件 → `Read`(禁 `cat`/`head`/`tail`)
+- 编辑文件 → `Edit`(禁 `sed`/`awk`)
+- 创建文件 → `Write`(禁 `cat heredoc`/`echo >`)
+- 搜索文件名 → `Glob`(禁 `find`)
+- 搜索文件内容 → `Grep`(禁 `grep`/`rg`)
+- 模糊语义搜索 → `SearchCodebase` 或 `Task` with `search` subagent
+- 终端操作 → `RunCommand`(仅限 git/npm/system 命令,禁用于文件操作)
+
+### 3.2 并行调用
+
+- 无依赖的多个工具调用 MUST 在同一消息内并行(如同时读多个文件、同时 git status + git log + git diff)
+- 上限 5 个并行工具调用(除非用户明确要求更多)
+
+### 3.3 Subagent 派发
+
+- 复杂多步任务、跨层改动、产生大量中间 token 的任务 → `Task` with `general_purpose_task`
+- 代码库探索、模糊搜索 → `Task` with `search`
+- UI 设计/组件 → `Task` with `ui-designer`
+- API 设计/后端架构 → `Task` with `backend-architect`
+- 前端架构 → `Task` with `frontend-architect`
+- 浏览器自动化验证 → `Task` with `browser_use`
+
+**Subagent 使用原则**:
+- 派发后不再重复 subagent 已做的搜索
+- 给 subagent 提供完整上下文(它看不到对话历史)
+- 用祈使句描述任务,不用第一人称
+
+### 3.4 TodoWrite
+
+- 3+ 步任务 MUST 用 TodoWrite 跟踪
+- 完成任务后 IMMEDIATELY 标记 completed(不要批量)
+- 一次仅 1 个 in_progress
+
+### 3.5 AskUserQuestion
+
+- 不确定的需求、冲突的上下文、无法确认的技术细节 → 主动问
+- 变更可能影响现有系统 → 提前明确告知风险与影响范围
+- 提供选项时,推荐项放第一并标注「(Recommended)」
+
+## 4. 代码风格偏好
+
+### 4.1 JavaScript(项目当前风格)
+
+- 函数声明优先于箭头函数(顶层函数 `function foo(){}` 或 `async function foo(){}`)
+- 单行压缩风格(项目历史风格,如 `function foo(a,b){return a+b;}`)
+- 字符串:模板字符串 `` ` `` 优先于 `+` 拼接(含变量时)
+- 错误处理:API 边界 try-catch,内部信任不包
+- 不写 JSDoc(项目无此习惯),但复杂逻辑写中文行内注释
+
+### 4.2 CSS(项目当前风格)
+
+- 单行规则(如 `.modal{background:#fff;border-radius:16px;...}`)
+- CSS 变量:`--brand`/`--muted`/`--line`/`--bg`/`--ok`/`--warn`/`--shadow`(见 `:root`)
+- 颜色用 hex 或 var(),不用 rgb()/hsl()
+- 媒体查询 `min-width` 移动优先
+
+### 4.3 HTML
+
+- 语义化标签(`<table>`/`<form>`/`<nav>` 等)
+- 不写 ARIA(项目当前无,留待独立无障碍任务)
+- 内联 `style="..."` 仅用于一次性样式,复用样式 MUST 抽 CSS 类
+
+## 5. 全链路变更规则(核心)
+
+> 完整规则见 AGENTS.md 第 6 节与用户 user_rules。Claude MUST 永久记忆:
+
+1. **变更前**:全局扫描 5 维度(代码/SQL/配置/接口/文档),输出《全链路关联依赖清单》
+2. **变更中**:清单内所有关联项同步改;高危删除三步走(兼容→注释→物理删除)
+3. **变更后**:补关联单元测试 + 输出回归清单 + 提示上线 1~3 周期监控
+
+**拦截逻辑**:
+- 用户只改单点拒绝全链路 → 拒写代码
+- 直接删字段无兼容 → 标记高危中止
+- 只改主文件遗漏关联 → 列遗漏暂停
+
+### 5.1 子系统隔离原则(强制)
+
+项目含样品管理与治具管理两个独立子系统,修改任一子系统 MUST 确保不影响另一子系统:
+
+1. **共享资源变更 MUST 双系统回归**:修改 `server.js`/`db.js`/`app.css`/`modal.js`/`portal.html` 等共享文件时,Claude MUST 在样品和治具两个子系统中均进行回归验证。
+2. **禁止交叉污染**:不得为修复一个子系统而改变另一子系统的行为、样式、接口或状态机。
+3. **拦截**:修改共享文件仅验证一个子系统 → 暂停;为治具修改了样品状态机 → 标记高危中止。
+
+## 6. 文件容量红线(强制)
+
+详见 AGENTS.md 第 7.1 节。关键阈值:
+
+- 项目入口 `public/index.html`/`public/fixture.html`:600 行 / 20000 字符
+- `server.js`/`routes/*.js`:400 行(Service 业务逻辑)
+- `db.js`:200 行(通用工具)
+- 顶层函数 ≤10/文件,单函数 ≤60 行
+
+**预警触发时**:
+- 70%:停止新增业务,输出拆分方案
+- 90%:仅允许精简/重构,禁追加新功能
+
+**当前所有文件均在健康容量范围内,无预警触发**。
+
+## 7. 修改完成强制报告
+
+每次修改文件结束 MUST 输出 3 项:
+
+1. **容量**:文件类型、有效代码行、总字符、距上限剩余
+2. **元素**:函数/Class 数量,是否触发预警
+3. **冗余**:未使用导入、废弃代码、可合并重复 + 瘦身方案
+
+## 8. Git 规范
+
+- Conventional Commits 格式(`feat`/`fix`/`refactor`/`docs`/`chore`/`test`/`style`/`perf`)
+- 一个 Task 一个 commit
+- commit 信息聚焦「why」
+- **NEVER** push 除非用户明确要求
+- **NEVER** `--force` 到 main
+- **NEVER** 修改 git config
+- **NEVER** `reset --hard`/`checkout .`/`clean -f` 除非用户明确要求
+- 首次 init 仓库需用户确认(归属/分支策略/远端)
+
+## 9. 响应式 UI 约定
+
+| 断点 | 宽度 | 布局 |
+|---|---|---|
+| XS | <576px | 单栏 |
+| SM | 576~767px | 单栏(字段 2 列) |
+| MD | 768~1199px | 双栏 35/65 |
+| LG | 1200~1599px | 双栏 30/70,弹窗 800px |
+| XL | ≥1600px | 三栏 25/25/50,弹窗 900px |
+
+新增 UI MUST 遵循上述断点,CSS Grid + Flexbox,避免硬编码 px。
+
+## 10. API 与状态机
+
+### API
+- 路径 `/api/...`,JSON 返回,错误 `{error:'...'}` + 语义化 HTTP 码
+- session cookie 鉴权(`requireAuth` 中间件)
+- 角色:`ADMIN`/`RD`/`ME`/`QA`/`CUSTODY`
+- 变更出入参 MUST 保留旧参数兼容,排查下游
+
+### 状态机
+**样品**:`NEW → PRODUCED → RELEASED → IN_CUSTODY → RETURNING → RETIRED`
+- 研发扫码 → PRODUCED
+- 品保扫码 → RELEASED
+- 保管扫码 → IN_CUSTODY
+- 周期到点 → 派生「待复检」/「逾期」
+
+**治具**:`REQUESTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ME_OK → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`
+- RD制作 → VERIFY_PENDING
+- RD+ME双人扫码 → TRANSFERRED
+- ME/QA/CUSTODY领用 → IN_USE
+- 领用中可报修(自行/退回RD) → 维修完成 → ME确认 → TRANSFERRED
+- ADMIN报废 → RETIRED
+
+## 11. 当前技术债(新增功能前评估)
+
+- `public/js/scan.js` 224 行(74.7%),函数多,后续版本可拆分
+- `routes/fixtures.js` 231 行(57.8%),治具状态机分支多,后续迭代需关注
+- `public/index.html` 已模块化拆分为 HTML 骨架 + 外部 JS 文件,容量安全
+
+## 12. 验证清单(提交前自检)
+
+- [ ] 全链路依赖已排查(5 维度)
+- [ ] 关联文件已同步修改
+- [ ] 文件臃肿检测报告已输出
+- [ ] 回归验证步骤已列
+- [ ] 子系统隔离已验证（修改共享文件 MUST 双系统回归）
+- [ ] 兼容性影响已说明
+- [ ] 部署/回滚步骤已提供
+- [ ] 上线监控提示已给出(1~3 周期)
+- [ ] 文档已同步(如适用)
+
+## 13. 输出风格
+
+- 简洁直接,不废话
+- 中文响应(用户语言一致)
+- 代码引用用可点击链接 `[文件名](file:///path#L行号)`
+- 代码块用三反引号 + 语言标签
+- 表格/列表优先于大段文字
+- 关键信息加粗
+- 不用 emoji 除非用户要求
+- 不预测时间估算
+
+## 14. 禁止行为
+
+1. 创建不必要文件(优先编辑已有)
+2. 主动创建文档(除非用户要求)
+3. 添加未要求的功能/重构/改进
+4. 添加多余错误处理/兼容性 shim
+5. 添加 JSDoc/类型注解到未改动的代码
+6. 修改 AGENTS.md/CLAUDE.md 除非用户明确要求
+7. 编造信息(不确定就问)
+8. 原地堆砌新业务到大文件
+9. 复制现有函数改少量参数追加到原文件
+
+---
+
+**本文件为 Claude 特定指南。核心规则与 AGENTS.md 一致,修改本文件需用户明确同意。**

@@ -1,0 +1,27 @@
+node_modules/
+data/
+public/uploads/
+*.log
+.DS_Store
+
+# 环境变量配置（包含敏感信息，禁止提交）
+.env
+.env.local
+.env.production
+logs/
+.superpowers/
+
+# curl cookie 文件
+cj.txt
+
+# 临时文档/二进制文件（不应提交到仓库根目录）
+*.doc
+*.docx
+
+# 备份文件
+*.bak.demo
+*.bak.p1
+*.bak.*
+
+# 临时目录（测试日志/审计文件）
+tmp/
