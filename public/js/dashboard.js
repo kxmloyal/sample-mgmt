@@ -11,6 +11,14 @@ var STAT_COLORS = {
   RELEASED: 'var(--ok)', IN_CUSTODY: 'var(--brand)',
   RETURNING: 'var(--bad)', RETIRED: 'var(--muted)'
 };
+// 角色优先级排序：高优先级状态前置（RD制作优先/QA发行优先/CUSTODY接收优先）
+var STAT_ORDER = {
+  ADMIN:   ['total','NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING','RETIRED'],
+  RD:      ['total','NEW','PRODUCED','RETURNING','RELEASED','IN_CUSTODY','RETIRED'],
+  QA:      ['total','PRODUCED','RETURNING','RELEASED','NEW','IN_CUSTODY','RETIRED'],
+  ME:      ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED'],
+  CUSTODY: ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED']
+};
 var STAT_LABELS = {
   NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行',
   IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已废弃'
@@ -48,10 +56,14 @@ function _renderStats(d) {
     ['退回审核中', s.RETURNING || 0, 'RETURNING'],
     ['已废弃', s.RETIRED || 0, 'RETIRED']
   ];
+  // 按角色优先级排序卡片（STAT_ORDER 未定义角色用 ADMIN 顺序兜底）
+  var order = STAT_ORDER[me.role] || STAT_ORDER.ADMIN;
+  stats.sort(function(a, b) { return order.indexOf(a[2]) - order.indexOf(b[2]); });
   var cards = stats.map(function(x) {
-    // 卡片点击筛选：总数→全部样品，状态卡片→对应状态列表
+    // 卡片单击筛选待办（不跳转），双击下钻样品列表（看该状态全部）
+    var f = x[2] === 'total' ? '' : x[2];
     var href = x[2] === 'total' ? '#/samples' : '#/samples?status=' + x[2];
-    return '<div class="dash-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="location.hash=\'' + href + '\'"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></div>';
+    return '<div class="dash-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="filterTodo(\'' + f + '\',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></div>';
   }).join('');
   var total = d.total || 0;
   var barHtml = '';
