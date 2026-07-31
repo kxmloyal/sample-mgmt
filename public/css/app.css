@@ -128,6 +128,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 .dash-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .dash-stat:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
+.dash-stat.active{border-color:var(--stat-color);box-shadow:0 0 0 2px var(--stat-color)}
 .dash-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stat-color,var(--brand))}
 .dash-stat .n{font-size:26px;font-weight:700;color:var(--stat-color,var(--brand))}
 .dash-stat .l{color:var(--muted);font-size:12px;margin-top:2px}
@@ -137,14 +138,27 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .dash-bar-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:8px;font-size:12px}
 .dash-bar-legend span{display:flex;align-items:center;gap:4px;cursor:pointer}
 .dash-bar-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.dash-bar-seg.active{outline:2px solid var(--brand);outline-offset:1px;opacity:1}
+.dash-legend{cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:opacity .15s}
+.dash-legend:hover{opacity:.7}
+.dash-legend.active{font-weight:600;opacity:1}
 .dash-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .dash-actions .btn{padding:8px 18px;font-size:14px}
 .dash-todo-pri-high{border-left:3px solid var(--bad);padding-left:8px}
 .dash-todo-pri-normal{border-left:3px solid var(--warn);padding-left:8px}
+.dash-todo-row{cursor:pointer;transition:background .15s}
+.dash-todo-row:hover{background:rgba(20,30,50,.04)}
+.dash-todo-row.active{background:rgba(20,30,50,.08)}
+.dash-todo-row.dash-todo-pri-high{border-left:3px solid var(--warn)}
+.dash-todo-row.dash-todo-pri-normal{border-left:3px solid var(--ok)}
+.dash-todo-row.dash-todo-pri-high:hover,.dash-todo-row.dash-todo-pri-high.active{border-left-width:5px}
 .dash-alert-overdue{border:1px solid #fecaca;background:#fef2f2;border-radius:14px;padding:16px;margin-top:16px}
 .dash-alert-overdue h3{margin:0 0 10px;color:var(--bad)}
 .dash-alert-soon{border:1px solid #fde68a;background:#fffbeb;border-radius:14px;padding:16px;margin-top:16px}
 .dash-alert-soon h3{margin:0 0 10px;color:#b45309}
+.dash-alert-row{cursor:pointer;transition:background .15s}
+.dash-alert-row:hover{background:rgba(220,53,69,.08)}
+.dash-alert-row.active{background:rgba(220,53,69,.15)}
 .dash-pager{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px;font-size:13px}
 .dash-pager .btn{padding:4px 12px;font-size:12px}
 @media(max-width:767px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
