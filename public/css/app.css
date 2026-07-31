@@ -128,7 +128,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .kb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 .kb-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
 .kb-stat:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
-.kb-stat.active{border-color:var(--stat-color);box-shadow:0 0 0 2px var(--stat-color)}
+.kb-stat.active{border-color:var(--stat-color,var(--brand));box-shadow:0 0 0 2px var(--stat-color,var(--brand));background:#eef2ff}
 .kb-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stat-color,var(--brand))}
 .kb-stat .n{font-size:26px;font-weight:700;color:var(--stat-color,var(--brand))}
 .kb-stat .l{color:var(--muted);font-size:12px;margin-top:2px}
