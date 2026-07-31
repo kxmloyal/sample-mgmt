@@ -72,14 +72,21 @@ function _renderStats(d) {
     var segs = keys.map(function(k) {
       var pct = ((s[k] || 0) / total * 100);
       if (pct < 0.1) return '';
-      return '<div class="dash-bar-seg" style="width:' + pct + '%;background:' + STAT_COLORS[k] + '" title="' + STAT_LABELS[k] + ': ' + (s[k] || 0) + ' (' + pct.toFixed(1) + '%)" onclick="location.hash=\'#/samples?status=' + k + '\'"></div>';
+      return '<div class="dash-bar-seg" style="width:' + pct + '%;background:' + STAT_COLORS[k] + '" title="' + STAT_LABELS[k] + ': ' + (s[k] || 0) + ' (' + pct.toFixed(1) + '%)" onclick="barDrill(\'' + k + '\',this)"></div>';
     }).join('');
     var legend = '<div class="dash-bar-legend">' + keys.map(function(k) {
-      return '<span onclick="location.hash=\'#/samples?status=' + k + '\'"><i style="background:' + STAT_COLORS[k] + '"></i>' + STAT_LABELS[k] + ' ' + (s[k] || 0) + '</span>';
+      return '<span class="dash-legend" onclick="barDrill(\'' + k + '\',this)"><i style="background:' + STAT_COLORS[k] + '"></i>' + STAT_LABELS[k] + ' ' + (s[k] || 0) + '</span>';
     }).join('') + '</div>';
     barHtml = '<div class="dash-bar">' + segs + '</div>' + legend;
   }
   return '<div class="dash-stats">' + cards + '</div><div style="margin-top:12px">' + barHtml + '</div>';
+}
+
+// 比例条下钻：切换 active 高亮 + 跳转样品列表（保留原跳转行为，向后兼容）
+function barDrill(key, el) {
+  document.querySelectorAll('.dash-bar-seg.active,.dash-legend.active').forEach(function(n){ n.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  location.hash = key === 'total' ? '#/samples' : '#/samples?status=' + key;
 }
 
 // 快捷操作 fallback（dashboard-todo.js 加载后由 renderTodo 覆盖为富样式）
@@ -125,7 +132,7 @@ function _renderAlertBlock(type, title, list, pager, pageFn, isOverdue) {
     var img = (s.produced_image || s.image) ? '<img src="' + e(s.produced_image || s.image) + '" width="40" height="40" style="border-radius:4px;object-fit:cover" loading="lazy"/>' : '—';
     var dateCls = isOverdue ? 'b-overdue' : 'muted';
     var dateStyle = isOverdue ? 'font-weight:700' : '';
-    return '<tr><td>' + e(s.sample_no) + '</td><td>' + e(s.name || '—') + '</td><td>' + img + '</td><td>' + e(s.custody_dept || '—') + '</td><td>' + e(s.storage_location || '—') + '</td><td class="' + dateCls + '" style="' + dateStyle + '">' + fmt(s.next_inspect_at) + '</td><td><a class="link" onclick="goScan(\'' + e(s.sample_no) + '\')">去处理</a></td></tr>';
+    return '<tr class="dash-alert-row" onclick="viewDetail(\'' + s.id + '\')" style="cursor:pointer"><td>' + e(s.sample_no) + '</td><td>' + e(s.name || '—') + '</td><td>' + img + '</td><td>' + e(s.custody_dept || '—') + '</td><td>' + e(s.storage_location || '—') + '</td><td class="' + dateCls + '" style="' + dateStyle + '">' + fmt(s.next_inspect_at) + '</td><td><a class="link" onclick="event.stopPropagation();goScan(\'' + e(s.sample_no) + '\')">去处理</a></td></tr>';
   }).join('');
   var pagerHtml = _renderPager(pager, pageFn);
   return '<div class="' + cls + '" id="dash-' + type + '"><h3>' + title + '（' + list.length + '）</h3><div style="overflow-x:auto"><table><tr><th>编号</th><th>名称</th><th>图片</th><th>保管部门</th><th>储位</th><th>' + (isOverdue ? '应复检日' : '到期日') + '</th><th>操作</th></tr>' + rows + '</table></div>' + pagerHtml + '</div>';
