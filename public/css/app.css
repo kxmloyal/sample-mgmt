@@ -125,13 +125,13 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
   .fx-list-table td:before{content:attr(data-label);font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
 }
 /* ===== Dashboard 专用 ===== */
-.dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.dash-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
-.dash-stat:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
-.dash-stat.active{border-color:var(--stat-color);box-shadow:0 0 0 2px var(--stat-color)}
-.dash-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stat-color,var(--brand))}
-.dash-stat .n{font-size:26px;font-weight:700;color:var(--stat-color,var(--brand))}
-.dash-stat .l{color:var(--muted);font-size:12px;margin-top:2px}
+.kb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.kb-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.kb-stat:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
+.kb-stat.active{border-color:var(--stat-color);box-shadow:0 0 0 2px var(--stat-color)}
+.kb-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stat-color,var(--brand))}
+.kb-stat .n{font-size:26px;font-weight:700;color:var(--stat-color,var(--brand))}
+.kb-stat .l{color:var(--muted);font-size:12px;margin-top:2px}
 .dash-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:12px;background:var(--bg)}
 .dash-bar-seg{height:100%;cursor:pointer;transition:opacity .2s}
 .dash-bar-seg:hover{opacity:.8}
@@ -161,5 +161,5 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .dash-alert-row.active{background:rgba(220,53,69,.15)}
 .dash-pager{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px;font-size:13px}
 .dash-pager .btn{padding:4px 12px;font-size:12px}
-@media(max-width:767px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:767px){.kb-stats{grid-template-columns:repeat(2,1fr)}}
 

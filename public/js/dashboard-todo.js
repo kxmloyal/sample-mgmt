@@ -3,31 +3,33 @@
 // renderTodo(d) 由 dashboard.js 的 viewDashboard 延迟调用（确保 #dash-todo DOM 就绪）
 var _todoPager = { limit: 10, offset: 0, total: 0 };
 var _todoData = [];
-var _todoFilter = '';
 
 // 入口：填充待办数据并首次渲染（分页 10 条/页，清除筛选）
 function renderTodo(d) {
   _todoData = d.myPending || [];
-  _todoFilter = '';
+  _kbFilter = 0; // 跨文件重置 dashboard.js 的筛选状态，确保每次 dashboard 加载清空旧筛选
   _todoPager.offset = 0;
   _renderTodoTable();
 }
 
-// 点击统计卡片按状态筛选待办（status 空字符串=全部，el=点击的卡片元素用于高亮）
-function filterTodo(status, el) {
-  _todoFilter = status;
+// 卡片单击索引式 toggle：点击同一卡片回退到默认(0=总数=全部待办)，否则切换到目标卡片
+// 跨文件：_kbFilter/_kbStats 由 dashboard.js 定义（_renderStats 填充），本函数读写筛选状态
+function filterKbStat(idx, el) {
+  _kbFilter = (_kbFilter === idx) ? 0 : idx;
   _todoPager.offset = 0;
-  document.querySelectorAll('.dash-stat.active').forEach(function(n){ n.classList.remove('active'); });
-  if (el) el.classList.add('active');
+  document.querySelectorAll('.kb-stat.active').forEach(function(n){ n.classList.remove('active'); });
+  if (el && _kbFilter !== 0) el.classList.add('active');
   _renderTodoTable();
 }
 
-// 渲染待办表格（按 _todoFilter 过滤，空数据显示提示，复用 dashboard.js 的 _renderPager）
+// 渲染待办表格（按 filterKey 过滤，空数据显示提示，复用 dashboard.js 的 _renderPager）
 function _renderTodoTable() {
   var box = $('#dash-todo');
   if (!box) return;
-  var title = '我的待办（' + (ROLE[me.role] || me.role) + '）' + (_todoFilter ? ' · ' + (STAT_LABELS[_todoFilter] || _todoFilter) : '');
-  var filtered = _todoFilter ? _todoData.filter(function(s){ return s.status === _todoFilter; }) : _todoData;
+  var filterKey = _kbStats[_kbFilter] ? _kbStats[_kbFilter][2] : '';
+  if (filterKey === 'total') filterKey = '';
+  var title = '我的待办（' + (ROLE[me.role] || me.role) + '）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '');
+  var filtered = filterKey ? _todoData.filter(function(s){ return s.status === filterKey; }) : _todoData;
   _todoPager.total = filtered.length;
   if (!filtered.length) {
     box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 12px">' + title + '</h3><div class="empty">' + (_todoData.length ? '该状态暂无待办' : '暂无待办') + '</div></div>';

@@ -1,11 +1,13 @@
-// dashboard.js — 首页概览（统计卡片 + 比例条 + 预警区块 + 错误处理）
+// dashboard.js — 样品看板（统计卡片 + 比例条 + 预警区块 + 错误处理）
 // 待办和快捷操作见 dashboard-todo.js（renderTodo 由本文件 viewDashboard 延迟调用）
+var _kbFilter = 0;   // 卡片筛选索引：0=总数(默认全部待办)，1..6=STAT_ORDER 排序后各状态
+var _kbStats = [];   // _renderStats 填充的排序后 stats 数组 [[label,count,key],...]，供 dashboard-todo.js 查索引→状态键
 var _dashOverduePager = { limit: 5, offset: 0, total: 0 };
 var _dashDueSoonPager = { limit: 5, offset: 0, total: 0 };
 var _dashOverdueData = [];
 var _dashDueSoonData = [];
 
-// 状态颜色映射（与 .dash-stat::before 的 --stat-color 配合）
+// 状态颜色映射（与 .kb-stat::before 的 --stat-color 配合）
 var STAT_COLORS = {
   total: 'var(--brand)', NEW: 'var(--muted)', PRODUCED: 'var(--warn)',
   RELEASED: 'var(--ok)', IN_CUSTODY: 'var(--brand)',
@@ -59,11 +61,11 @@ function _renderStats(d) {
   // 按角色优先级排序卡片（STAT_ORDER 未定义角色用 ADMIN 顺序兜底）
   var order = STAT_ORDER[me.role] || STAT_ORDER.ADMIN;
   stats.sort(function(a, b) { return order.indexOf(a[2]) - order.indexOf(b[2]); });
-  var cards = stats.map(function(x) {
-    // 卡片单击筛选待办（不跳转），双击下钻样品列表（看该状态全部）
-    var f = x[2] === 'total' ? '' : x[2];
+  _kbStats = stats.slice(); // 保存排序后数组，供 dashboard-todo.js 的 _renderTodoTable 按索引查状态键
+  var cards = stats.map(function(x, idx) {
+    // 卡片单击索引 toggle 筛选待办（不跳转，再点回退默认），双击下钻样品列表（看该状态全部）
     var href = x[2] === 'total' ? '#/samples' : '#/samples?status=' + x[2];
-    return '<div class="dash-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="filterTodo(\'' + f + '\',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></div>';
+    return '<div class="kb-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></div>';
   }).join('');
   var total = d.total || 0;
   var barHtml = '';
@@ -79,7 +81,7 @@ function _renderStats(d) {
     }).join('') + '</div>';
     barHtml = '<div class="dash-bar">' + segs + '</div>' + legend;
   }
-  return '<div class="dash-stats">' + cards + '</div><div style="margin-top:12px">' + barHtml + '</div>';
+  return '<div class="kb-stats">' + cards + '</div><div style="margin-top:12px">' + barHtml + '</div>';
 }
 
 // 比例条下钻：切换 active 高亮 + 跳转样品列表（保留原跳转行为，向后兼容）
@@ -88,6 +90,9 @@ function barDrill(key, el) {
   if (el) el.classList.add('active');
   location.hash = key === 'total' ? '#/samples' : '#/samples?status=' + key;
 }
+
+// filterKbStat 定义在 dashboard-todo.js（与 _renderTodoTable 同文件，原 filterTodo 位置）
+// _kbFilter/_kbStats 由本文件定义（_renderStats 填充），filterKbStat 跨文件读写
 
 // 快捷操作 fallback（dashboard-todo.js 加载后由 renderTodo 覆盖为富样式）
 function _renderQuickActions(actions) {
