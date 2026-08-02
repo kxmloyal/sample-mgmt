@@ -70,7 +70,7 @@ th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:600;font-size:12px}
 tr:hover td{background:#fafbfc}
 /* fluent-data-grid 适配(模块4) */
-fluent-data-grid{width:100%;font-size:13px}
+fluent-data-grid{display:block;width:100%;font-size:13px}
 fluent-data-grid-row::part(row){border-bottom:1px solid var(--line)}
 fluent-data-grid-row[row-type="header"]::part(row){background:var(--bg);color:var(--muted);font-weight:600;font-size:12px}
 fluent-data-grid-row:not([row-type="header"]):hover::part(row){background:#fafbfc}
