@@ -16,18 +16,18 @@ async function renderFixtureList() {
 
     // 筛选栏
     html += '<div class="row" style="margin-bottom:12px">';
-    html += '<fluent-select onchange="fixtureListState.status=this.value;fixtureListPager.offset=0;renderFixtureList()" style="width:auto"><fluent-option value="">全部状态</fluent-option>';
+    html += '<fluent-select onchange="fixtureListState.status=this.value;fixtureListPager.offset=0;renderFixtureList()" style="flex:1;min-width:110px"><fluent-option value="">全部状态</fluent-option>';
     Object.keys(STATUS).forEach(function (k) {
       html += '<fluent-option value="' + k + '"' + (fixtureListState.status === k ? ' selected' : '') + '>' + STATUS[k] + '</fluent-option>';
     });
     html += '</fluent-select>';
-    html += '<fluent-select onchange="fixtureListState.dept=this.value;fixtureListPager.offset=0;renderFixtureList()" style="width:auto"><fluent-option value="">全部部门</fluent-option>';
+    html += '<fluent-select onchange="fixtureListState.dept=this.value;fixtureListPager.offset=0;renderFixtureList()" style="flex:1;min-width:110px"><fluent-option value="">全部部门</fluent-option>';
     var depts = ['研发中心', '品保文管中心', '制造部', 'FQC', '生技部'];
     depts.forEach(function (d) {
       html += '<fluent-option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</fluent-option>';
     });
     html += '</fluent-select>';
-    html += '<fluent-text-field placeholder="搜索编号/名称/规格" value="' + e(fixtureListState.search) + '" oninput="fixtureListState.search=this.value;fixtureListPager.offset=0;debounceRenderFixtureList()" style="width:200px"></fluent-text-field>';
+    html += '<fluent-text-field placeholder="搜索编号/名称/规格" value="' + e(fixtureListState.search) + '" oninput="fixtureListState.search=this.value;fixtureListPager.offset=0;debounceRenderFixtureList()" style="flex:2;min-width:160px"></fluent-text-field>';
     html += '</div>';
 
     // 筛选 chip
