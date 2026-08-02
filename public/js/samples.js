@@ -26,17 +26,30 @@ function _buildQueryParams(baseParams) {
   return p;
 }
 
-/** 构建 fluent-data-grid 表头行 HTML */
+/** 构建样品列表表头 HTML（含 colgroup 列宽定义）。
+ *  原 fluent-data-grid 方案的 Shadow DOM 不应用宿主 grid-template-columns 到 slotted cell，
+ *  导致列宽失效、内容堆挤；改用原生 <table> + colgroup 可靠控制列宽。
+ */
 function _sampleHeaderCols(isOverdue) {
   var cols = ['编号', '名称', '机型/站别', '图片', '规格', '类型', '状态', '制作', '发行', '保管部门/储位'];
   if (isOverdue) cols.push('复检到期');
-  cols.push(''); // 操作列
-  var cells = cols.map(function(c) {
-    return c
-      ? '<fluent-data-grid-cell cell-type="columnheader">' + c + '</fluent-data-grid-cell>'
-      : '<fluent-data-grid-cell cell-type="columnheader"></fluent-data-grid-cell>';
-  }).join('');
-  return '<fluent-data-grid-row row-type="header">' + cells + '</fluent-data-grid-row>';
+  cols.push('操作');
+  var ths = cols.map(function(c) { return '<th>' + c + '</th>'; }).join('');
+  var cg = '<colgroup>' +
+    '<col style="width:100px">' +   // 编号
+    '<col>' +                       // 名称
+    '<col>' +                       // 机型/站别
+    '<col style="width:52px">' +    // 图片
+    '<col>' +                       // 规格
+    '<col style="width:70px">' +    // 类型
+    '<col style="width:84px">' +    // 状态
+    '<col style="width:78px">' +    // 制作
+    '<col style="width:78px">' +    // 发行
+    '<col>' +                       // 保管部门/储位
+    (isOverdue ? '<col style="width:84px">' : '') + // 复检到期
+    '<col style="width:120px">' +   // 操作
+    '</colgroup>';
+  return cg + '<thead><tr>' + ths + '</tr></thead>';
 }
 
 /** 构建单行数据 HTML */
@@ -57,22 +70,22 @@ function _sampleRowHtml(s, isOverdue) {
   var overdueCell = '';
   if (isOverdue) {
     var overdue = s.next_inspect_at && new Date(s.next_inspect_at).getTime() < Date.now();
-    overdueCell = '<fluent-data-grid-cell class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</fluent-data-grid-cell>';
+    overdueCell = '<td class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>';
   }
-  return '<fluent-data-grid-row>' +
-    '<fluent-data-grid-cell>' + e(s.sample_no) + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell>' + e(s.name || '—') + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell class="muted">' + e(s.model || '—') + (s.station ? ' · ' + e(s.station) : '') + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell>' + img + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell class="muted">' + e(s.spec || '—') + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell>' + typeCell + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell>' + statusBadge(s) + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell class="muted">' + fmt(s.produced_at) + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell class="muted">' + fmt(s.released_at) + '</fluent-data-grid-cell>' +
-    '<fluent-data-grid-cell class="muted">' + e(s.custody_dept || '—') + '/' + e(s.storage_location || '—') + '</fluent-data-grid-cell>' +
+  return '<tr>' +
+    '<td>' + e(s.sample_no) + '</td>' +
+    '<td>' + e(s.name || '—') + '</td>' +
+    '<td class="muted">' + e(s.model || '—') + (s.station ? ' · ' + e(s.station) : '') + '</td>' +
+    '<td>' + img + '</td>' +
+    '<td class="muted">' + e(s.spec || '—') + '</td>' +
+    '<td>' + typeCell + '</td>' +
+    '<td>' + statusBadge(s) + '</td>' +
+    '<td class="muted">' + fmt(s.produced_at) + '</td>' +
+    '<td class="muted">' + fmt(s.released_at) + '</td>' +
+    '<td class="muted">' + e(s.custody_dept || '—') + '/' + e(s.storage_location || '—') + '</td>' +
     overdueCell +
-    '<fluent-data-grid-cell>' + actions + '</fluent-data-grid-cell>' +
-    '</fluent-data-grid-row>';
+    '<td style="white-space:nowrap">' + actions + '</td>' +
+    '</tr>';
 }
 
 // 统一拉取一页样品数据（resetOffset=true 用于筛选条件变更时回到第一页）
@@ -124,7 +137,9 @@ function _renderSampleList(list, isOverdue, pager) {
   if (!list.length) { box.innerHTML = '<div class="empty">' + (isOverdue ? '无逾期/即将到期样品' : '无样品') + '</div>'; return; }
   var cols = _sampleHeaderCols(isOverdue);
   var rows = list.map(function(s) { return _sampleRowHtml(s, isOverdue); }).join('');
-  var html = '<div class="card" style="padding:0"><fluent-data-grid>' + cols + rows + '</fluent-data-grid></div>';
+  // min-width 保证列宽不被过度压缩：列多时表格按自然宽度展开，.card overflow-x:auto 横向滚动
+  var minWidth = isOverdue ? 1000 : 920;
+  var html = '<div class="card" style="padding:0"><table style="min-width:' + minWidth + 'px">' + cols + '<tbody>' + rows + '</tbody></table></div>';
   if (pager && pager.total > pager.limit) {
     var totalPages = Math.ceil(pager.total / pager.limit);
     var currentPage = Math.floor(pager.offset / pager.limit) + 1;
@@ -135,7 +150,6 @@ function _renderSampleList(list, isOverdue, pager) {
     html += '</div>';
   }
   box.innerHTML = html;
-  fixGridColumns(box);
 }
 
 async function loadSamples() {
