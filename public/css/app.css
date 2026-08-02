@@ -6,6 +6,17 @@
   --shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.04);
   --shadow-2:0 4px 6px rgba(15,23,42,.07),0 2px 4px rgba(15,23,42,.05);
   --shadow-3:0 10px 15px rgba(15,23,42,.08),0 4px 6px rgba(15,23,42,.05);
+  /* Fluent Design Token 映射(青蓝品牌色 → Fluent accent) */
+  --accent-fill-rest:#0f766e;
+  --accent-fill-hover:#115e59;
+  --accent-fill-active:#134e4a;
+  --accent-foreground-rest:#fff;
+  --neutral-background-2:#f8fafc;
+  --neutral-foreground-1:#0f172a;
+  --neutral-foreground-2:#64748b;
+  --neutral-stroke-1:#e2e8f0;
+  --neutral-stroke-2:#f1f5f9;
+  --stroke-control-strong:#0f172a;
   color-scheme:light;
 }
 *{box-sizing:border-box}
