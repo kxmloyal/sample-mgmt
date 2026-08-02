@@ -23,10 +23,10 @@ function renderFixtureLogsFiltered(search) {
   html += '<div class="card" style="padding:0">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">';
   html += '<span style="font-weight:600;font-size:14px">操作日志 (<b>' + logs.length + '</b>)</span></div>';
-  html += '<table><thead><tr><th>时间</th><th>操作</th><th>用户</th><th>部门</th><th>备注</th></tr></thead><tbody>';
+  html += '<fluent-data-grid><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">时间</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">操作</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">用户</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">部门</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">备注</fluent-data-grid-cell></fluent-data-grid-row>';
   logs.forEach(function (l) {
-    html += '<tr><td><small>' + fmt(l.created_at) + '</small></td><td>' + (ACTION_CN[l.action] || l.action) + '</td><td>' + e(l.display_name || l.username || '—') + '</td><td>' + e(l.dept || '—') + '</td><td>' + e(l.note || '—') + '</td></tr>';
+    html += '<fluent-data-grid-row><fluent-data-grid-cell><small>' + fmt(l.created_at) + '</small></fluent-data-grid-cell><fluent-data-grid-cell>' + (ACTION_CN[l.action] || l.action) + '</fluent-data-grid-cell><fluent-data-grid-cell>' + e(l.display_name || l.username || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + e(l.dept || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + e(l.note || '—') + '</fluent-data-grid-cell></fluent-data-grid-row>';
   });
-  html += '</tbody></table></div>';
+  html += '</fluent-data-grid></div>';
   document.getElementById('view').innerHTML = html;
 }

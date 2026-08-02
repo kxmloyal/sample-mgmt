@@ -40,26 +40,26 @@ function _renderDashContent() {
   // 逾期表
   if (d.overdue.length > 0) {
     html += '<div class="card" style="margin-top:18px;border-color:#fecaca"><h3 style="margin:0 0 12px;color:var(--bad)">逾期未归还 (' + d.overdue.length + ')</h3>';
-    html += '<table><tr><th>编号</th><th>名称</th><th>部门</th><th>状态</th><th>预计归还</th></tr>';
+    html += '<fluent-data-grid><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">编号</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">名称</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">部门</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">状态</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">预计归还</fluent-data-grid-cell></fluent-data-grid-row>';
     html += d.overdue.map(function(f) {
-      return '<tr style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><td><b>' + e(f.fixture_no || '—') + '</b></td><td>' + e(f.name || '—') + '</td><td>' + e(f.requested_dept || '—') + '</td><td>' + statusBadge(f) + '</td><td style="color:var(--bad);font-weight:600">' + fmt(f.expected_return_at) + '</td></tr>';
+      return '<fluent-data-grid-row style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><fluent-data-grid-cell><b>' + e(f.fixture_no || '—') + '</b></fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.name || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.requested_dept || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + statusBadge(f) + '</fluent-data-grid-cell><fluent-data-grid-cell style="color:var(--bad);font-weight:600">' + fmt(f.expected_return_at) + '</fluent-data-grid-cell></fluent-data-grid-row>';
     }).join('');
-    html += '</table></div>';
+    html += '</fluent-data-grid></div>';
   }
 
   // 逾期保养预警表
   var maintPending = (d.maintenanceOverdue || []).concat(d.maintenanceUpcoming || []);
   if (maintPending.length > 0) {
     html += '<div class="card" style="margin-top:18px;border-color:#fecaca"><h3 style="margin:0 0 12px;color:var(--bad)">待保养治具 (' + maintPending.length + ')</h3>';
-    html += '<table><tr><th>编号</th><th>名称</th><th>存放位置</th><th>上次保养</th><th>应保养日期</th><th>状态</th></tr>';
+    html += '<fluent-data-grid><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">编号</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">名称</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">存放位置</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">上次保养</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">应保养日期</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">状态</fluent-data-grid-cell></fluent-data-grid-row>';
     html += maintPending.map(function(f) {
       var isOverdue = f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date();
       var overdueDays = isOverdue ? Math.ceil((new Date() - new Date(f.next_maintenance_at)) / 86400000) : 0;
       var label = isOverdue ? '<span style="color:var(--bad);font-weight:600">已逾期' + overdueDays + '天</span>' : '<span style="color:#d97706">即将到期</span>';
-      var cls = isOverdue ? ' class="overdue-row"' : '';
-      return '<tr' + cls + ' style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><td><b>' + e(f.fixture_no || '—') + '</b></td><td>' + e(f.name || '—') + '</td><td class="muted">' + e(f.storage_location || '—') + '</td><td>' + fmt(f.last_maintenance_at) + '</td><td style="color:var(--bad);font-weight:600">' + fmt(f.next_maintenance_at) + '</td><td>' + label + '</td></tr>';
+      var cls = isOverdue ? 'overdue-row' : '';
+      return '<fluent-data-grid-row class="' + cls + '" style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><fluent-data-grid-cell><b>' + e(f.fixture_no || '—') + '</b></fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.name || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell class="muted">' + e(f.storage_location || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + fmt(f.last_maintenance_at) + '</fluent-data-grid-cell><fluent-data-grid-cell style="color:var(--bad);font-weight:600">' + fmt(f.next_maintenance_at) + '</fluent-data-grid-cell><fluent-data-grid-cell>' + label + '</fluent-data-grid-cell></fluent-data-grid-row>';
     }).join('');
-    html += '</table></div>';
+    html += '</fluent-data-grid></div>';
   }
 
   // 待办表（根据筛选）
@@ -69,15 +69,15 @@ function _renderDashContent() {
   if (filterCfg && filterCfg.status === 'MAINTENANCE_DUE') {
     if (maintPending.length > 0) {
       html += '<div class="card" style="margin-top:18px"><h3 style="margin:0 0 12px">待保养治具 (' + maintPending.length + ')</h3>';
-      html += '<table><tr><th>编号</th><th>名称</th><th>存放位置</th><th>上次保养</th><th>应保养日期</th><th>状态</th></tr>';
+      html += '<fluent-data-grid><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">编号</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">名称</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">存放位置</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">上次保养</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">应保养日期</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">状态</fluent-data-grid-cell></fluent-data-grid-row>';
       html += maintPending.map(function(f) {
         var isOverdue = f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date();
         var overdueDays = isOverdue ? Math.ceil((new Date() - new Date(f.next_maintenance_at)) / 86400000) : 0;
         var label = isOverdue ? '<span style="color:var(--bad);font-weight:600">已逾期' + overdueDays + '天</span>' : '<span style="color:#d97706">即将到期</span>';
-        var cls = isOverdue ? ' class="overdue-row"' : '';
-        return '<tr' + cls + ' style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><td><b>' + e(f.fixture_no || '—') + '</b></td><td>' + e(f.name || '—') + '</td><td class="muted">' + e(f.storage_location || '—') + '</td><td>' + fmt(f.last_maintenance_at) + '</td><td style="color:var(--bad);font-weight:600">' + fmt(f.next_maintenance_at) + '</td><td>' + label + '</td></tr>';
+        var cls = isOverdue ? 'overdue-row' : '';
+        return '<fluent-data-grid-row class="' + cls + '" style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><fluent-data-grid-cell><b>' + e(f.fixture_no || '—') + '</b></fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.name || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell class="muted">' + e(f.storage_location || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + fmt(f.last_maintenance_at) + '</fluent-data-grid-cell><fluent-data-grid-cell style="color:var(--bad);font-weight:600">' + fmt(f.next_maintenance_at) + '</fluent-data-grid-cell><fluent-data-grid-cell>' + label + '</fluent-data-grid-cell></fluent-data-grid-row>';
       }).join('');
-      html += '</table></div>';
+      html += '</fluent-data-grid></div>';
     } else {
       html += '<div class="card" style="margin-top:18px"><h3 style="margin:0 0 12px">待保养治具 (0)</h3><div class="empty" style="padding:16px">暂无待保养治具</div></div>';
     }
@@ -90,13 +90,13 @@ function _renderDashContent() {
     if (filtered.length === 0) {
       html += '<div class="empty" style="padding:16px">暂无 ' + (filterCfg.status ? STATUS[filterCfg.status] || '' : '') + ' 状态的待办</div>';
     } else {
-      html += '<table><tr><th>#</th><th>编号</th><th>名称</th><th>规格</th><th>部门</th><th>待办类型</th><th>状态</th></tr>';
+      html += '<fluent-data-grid><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">#</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">编号</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">名称</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">规格</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">部门</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">待办类型</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">状态</fluent-data-grid-cell></fluent-data-grid-row>';
       html += filtered.map(function(f, i) {
         var pendingType = STATUS[f.status] || f.status;
         var extra = f.expected_finish_at ? ' | RD预计:' + fmt(f.expected_finish_at) : '';
-        return '<tr style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><td class="muted">' + (i + 1) + '</td><td><b>' + fixtureNoVersion(f) + '</b></td><td>' + e(f.name || '—') + '</td><td class="muted">' + e(f.spec || '—') + '</td><td>' + e(f.requested_dept || '—') + '</td><td>' + pendingType + '<small class="muted">' + extra + '</small></td><td>' + statusBadge(f) + '</td></tr>';
+        return '<fluent-data-grid-row style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><fluent-data-grid-cell class="muted">' + (i + 1) + '</fluent-data-grid-cell><fluent-data-grid-cell><b>' + fixtureNoVersion(f) + '</b></fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.name || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell class="muted">' + e(f.spec || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + e(f.requested_dept || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell>' + pendingType + '<small class="muted">' + extra + '</small></fluent-data-grid-cell><fluent-data-grid-cell>' + statusBadge(f) + '</fluent-data-grid-cell></fluent-data-grid-row>';
       }).join('');
-      html += '</table>';
+      html += '</fluent-data-grid>';
     }
     html += '</div>';
   }

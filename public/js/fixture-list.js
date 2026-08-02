@@ -51,7 +51,7 @@ async function renderFixtureList() {
     function th(label, field) {
       var arrow = '';
       if (sortCol === field) arrow = sortDir === 'asc' ? ' ▲' : ' ▼';
-      return '<th style="cursor:pointer;white-space:nowrap" onclick="toggleFixtureSort(\'' + field + '\')">' + label + '<span style="font-size:10px">' + arrow + '</span></th>';
+      return '<fluent-data-grid-cell cell-type="columnheader" style="cursor:pointer;white-space:nowrap" onclick="toggleFixtureSort(\'' + field + '\')">' + label + '<span style="font-size:10px">' + arrow + '</span></fluent-data-grid-cell>';
     }
 
     // 表格
@@ -64,9 +64,9 @@ async function renderFixtureList() {
       html += '<div class="hint">' + (hasFilter ? '未找到匹配的治具，请调整筛选条件' : '暂无治具数据') + '</div>';
     }
     else {
-      html += '<table class="fx-list-table"><thead><tr><th>#</th>' + th('编号', 'fixture_no') + th('名称', 'name') + '<th>规格</th><th>部门</th><th>储位</th><th>图片</th><th>状态</th>' + th('更新时间', 'updated_at') + '<th>操作</th></tr></thead><tbody>';
+      html += '<fluent-data-grid class="fx-list-table"><fluent-data-grid-row row-type="header"><fluent-data-grid-cell cell-type="columnheader">#</fluent-data-grid-cell>' + th('编号', 'fixture_no') + th('名称', 'name') + '<fluent-data-grid-cell cell-type="columnheader">规格</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">部门</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">储位</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">图片</fluent-data-grid-cell><fluent-data-grid-cell cell-type="columnheader">状态</fluent-data-grid-cell>' + th('更新时间', 'updated_at') + '<fluent-data-grid-cell cell-type="columnheader">操作</fluent-data-grid-cell></fluent-data-grid-row>';
       fixtures.forEach(function (f, i) {
-        var cls = isOverdue(f) ? ' class="overdue-row"' : '';
+        var cls = isOverdue(f) ? 'overdue-row' : '';
         var photoHtml;
         if (f.first_photo) {
           photoHtml = '<img src="/uploads/fixtures/' + f.first_photo + '" width="32" height="32" style="object-fit:cover;border-radius:4px" onerror="this.style.display=\'none\'" />';
@@ -74,9 +74,9 @@ async function renderFixtureList() {
         } else {
           photoHtml = '<span class="muted">—</span>';
         }
-        html += '<tr' + cls + ' onclick="showFixtureDetail(' + f.id + ')"><td data-label="序号" class="muted">' + (p.offset + i + 1) + '</td><td data-label="编号"><b>' + fixtureNoVersion(f) + '</b></td><td data-label="名称">' + e(f.name || '—') + '</td><td data-label="规格">' + e(f.spec || '—') + '</td><td data-label="部门">' + e(f.requested_dept || '—') + '</td><td data-label="储位" class="muted">' + e(f.storage_location || '—') + '</td><td data-label="图片">' + photoHtml + '</td><td data-label="状态">' + statusBadge(f) + '</td><td data-label="更新时间"><small>' + fmt(f.updated_at) + '</small></td><td data-label="操作"><a class="link" onclick="event.stopPropagation();showFixtureDetail(' + f.id + ')">详情</a></td></tr>';
+        html += '<fluent-data-grid-row class="' + cls + '" onclick="showFixtureDetail(' + f.id + ')"><fluent-data-grid-cell data-label="序号" class="muted">' + (p.offset + i + 1) + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="编号"><b>' + fixtureNoVersion(f) + '</b></fluent-data-grid-cell><fluent-data-grid-cell data-label="名称">' + e(f.name || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="规格">' + e(f.spec || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="部门">' + e(f.requested_dept || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="储位" class="muted">' + e(f.storage_location || '—') + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="图片">' + photoHtml + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="状态">' + statusBadge(f) + '</fluent-data-grid-cell><fluent-data-grid-cell data-label="更新时间"><small>' + fmt(f.updated_at) + '</small></fluent-data-grid-cell><fluent-data-grid-cell data-label="操作"><a class="link" onclick="event.stopPropagation();showFixtureDetail(' + f.id + ')">详情</a></fluent-data-grid-cell></fluent-data-grid-row>';
       });
-      html += '</tbody></table>';
+      html += '</fluent-data-grid>';
     }
     html += '</div>';
 
