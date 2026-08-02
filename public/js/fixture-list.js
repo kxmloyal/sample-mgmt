@@ -84,9 +84,9 @@ async function renderFixtureList() {
     var totalPages = Math.ceil(p.total / p.limit);
     var currentPage = Math.floor(p.offset / p.limit) + 1;
     html += '<div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:12px;font-size:13px">';
-    html += '<button class="btn sm" ' + (p.offset === 0 ? 'disabled' : '') + ' onclick="goFixturePage(' + (currentPage - 1) + ')">← 上一页</button>';
+    html += '<fluent-button appearance="accent" size="small" ' + (p.offset === 0 ? 'disabled' : '') + ' onclick="goFixturePage(' + (currentPage - 1) + ')">← 上一页</fluent-button>';
     html += '<span class="muted">第 <b>' + currentPage + '</b>/<b>' + totalPages + '</b> 页 · 共 <b>' + p.total + '</b> 条</span>';
-    html += '<button class="btn sm" ' + (currentPage >= totalPages ? 'disabled' : '') + ' onclick="goFixturePage(' + (currentPage + 1) + ')">下一页 →</button>';
+    html += '<fluent-button appearance="accent" size="small" ' + (currentPage >= totalPages ? 'disabled' : '') + ' onclick="goFixturePage(' + (currentPage + 1) + ')">下一页 →</fluent-button>';
     html += '</div>';
 
     document.getElementById('view').innerHTML = html;

@@ -4,12 +4,12 @@ async function renderFixtureScan() {
   html += '<div class="scan-box" style="border:2px dashed var(--line);border-radius:12px;padding:32px 24px;text-align:center;background:var(--bg)">';
   html += '<div style="font-size:15px;color:var(--muted);margin-bottom:12px">扫描或输入治具编号（支持扫码枪自动回车）</div>';
   html += '<input id="scan-code" placeholder="FJ-000001" onkeydown="if(event.key===\'Enter\')doScanFix()" style="width:100%;max-width:380px;text-align:center;font-size:18px;box-sizing:border-box" autofocus />';
-  html += '<div style="margin-top:12px"><button class="btn" onclick="doScanFix()" style="min-width:120px">查询</button></div>';
+  html += '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="doScanFix()" style="min-width:120px">查询</fluent-button></div>';
   html += '<div id="scan-status" style="margin-top:12px;font-size:13px;color:var(--ok)">● 已就绪，等待扫码枪输入…</div>';
   html += '<details style="margin-top:12px;font-size:13px"><summary style="cursor:pointer;color:var(--muted)">摄像头扫码（实验性）</summary>';
   html += '<div style="margin-top:8px"><video id="cam-video" style="width:100%;max-width:400px;border-radius:8px;display:none" autoplay></video></div>';
-  html += '<div><button class="btn sm ghost" onclick="startFxCamea()" style="margin-top:8px">开启摄像头</button>';
-  html += '<button class="btn sm ghost" onclick="stopFxCamea()" style="margin-left:4px">关闭</button></div></details>';
+  html += '<div><fluent-button appearance="neutral" size="small" onclick="startFxCamea()" style="margin-top:8px">开启摄像头</fluent-button>';
+  html += '<fluent-button appearance="neutral" size="small" onclick="stopFxCamea()" style="margin-left:4px">关闭</fluent-button></div></details>';
   html += '<label style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;cursor:pointer">';
   html += '<input type="checkbox" id="fx-continuous" onchange="toggleFxContinuous(this.checked)" />连续扫码模式</label>';
   html += '</div>';
@@ -96,7 +96,7 @@ function showFixActions(result) {
     html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center">';
     html += '<select id="fx-file-cat" style="width:auto"><option value="design_drawing">设计图纸</option><option value="purchase_order">请购单</option><option value="other">其他</option></select>';
     html += '<input type="file" id="fx-file-input" data-fixture-id="' + f.id + '" style="display:none" onchange="onFixFileSelected()" />';
-    html += '<button class="btn sm" onclick="document.getElementById(\'fx-file-input\').click()">上传文件</button></div></div>';
+    html += '<fluent-button appearance="accent" size="small" onclick="document.getElementById(\'fx-file-input\').click()">上传文件</fluent-button></div></div>';
   }
 
   if (actions.length === 0) { html += '<p style="margin-top:12px;color:var(--muted);text-align:center">当前角色无可执行操作</p>'; }
@@ -104,7 +104,7 @@ function showFixActions(result) {
     html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
     var labelMap = { ACCEPT: '接收治具', MAKE: '制作完成', CANCEL: '撤销申请', VERIFY_RD: 'RD验证确认', VERIFY_ORG: '申请单位验证', USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成', REPAIR_ME: '自行维修', REPAIR_RD_REQ: '退回RD维修', REPAIR_DONE: '维修完成', REPAIR_RD_DONE: 'RD维修完成', REPAIR_CONFIRM: '确认维修', RETIRE: '报废', MAINTENANCE: '保养' };
     actions.forEach(function (a) {
-      html += '<button class="btn" onclick="execFixAction(\'' + f.fixture_no + '\',\'' + a + '\')">' + (labelMap[a] || a) + '</button>';
+      html += '<fluent-button appearance="accent" onclick="execFixAction(\'' + f.fixture_no + '\',\'' + a + '\')">' + (labelMap[a] || a) + '</fluent-button>';
     });
     html += '</div>';
     html += '<div id="fix-action-form" style="margin-top:12px;max-width:400px"></div>';
@@ -166,7 +166,7 @@ function execFixAction(fixtureNo, action) {
     formHtml += '<div class="field"><label>保养日期</label><input type="date" id="act-maint-date" value="' + new Date().toISOString().slice(0,10) + '" /></div>';
     formHtml += '<div class="field"><label>下次保养</label><input type="date" id="act-next-date" value="' + nextDate + '" /></div>';
   }
-  formHtml += '<button class="btn" style="margin-top:8px" onclick="submitFixAction(\'' + fixtureNo + '\',\'' + action + '\')">确认执行</button>';
+  formHtml += '<fluent-button appearance="accent" style="margin-top:8px" onclick="submitFixAction(\'' + fixtureNo + '\',\'' + action + '\')">确认执行</fluent-button>';
   formHtml += '</div>';
   document.getElementById('fix-action-form').innerHTML = formHtml;
 }

@@ -15,7 +15,7 @@ async function renderFixtureNew() {
   html += '<label>申请说明</label><textarea id="fn-note" rows="3"></textarea>';
   html += '<label>保养周期(天) <small>(选填，默认90)</small></label><input id="fn-maint-cycle" type="number" min="0" value="90" placeholder="0=无需定期保养" />';
   html += '</div></div>';
-  html += '<button class="btn" type="submit" style="margin-top:16px">提交申请</button>';
+  html += '<fluent-button appearance="accent" onclick="submitFixtureNew(event)" style="margin-top:16px">提交申请</fluent-button>';
   html += '</form></div>';
   document.getElementById('view').innerHTML = html;
 }
