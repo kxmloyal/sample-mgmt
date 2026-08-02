@@ -6,8 +6,8 @@ function renderPrintQueue(){
   if(printQueue.length===0){pq.innerHTML='';return;}
   pq.innerHTML='<div style="padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;color:#1e40af;display:flex;align-items:center;gap:8px">'+
     '📋 已积累 <b>'+printQueue.length+'</b> 张标示卡'+
-    '<button class="btn ghost sm" onclick="printAllCards()" style="margin-left:auto;font-size:10px">打印全部</button>'+
-    '<button class="btn ghost sm" onclick="printQueue=[];renderPrintQueue()" style="font-size:10px">清空</button>'+
+    '<fluent-button appearance="neutral" size="small" onclick="printAllCards()" style="margin-left:auto;font-size:10px">打印全部</fluent-button>'+
+    '<fluent-button appearance="neutral" size="small" onclick="printQueue=[];renderPrintQueue()" style="font-size:10px">清空</fluent-button>'+
   '</div>';
 }
 function printAllCards(){

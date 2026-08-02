@@ -182,4 +182,6 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .dash-pager{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px;font-size:13px}
 .dash-pager .btn{padding:4px 12px;font-size:12px}
 @media(max-width:767px){.kb-stats{grid-template-columns:repeat(2,1fr)}}
+.dash-actions fluent-button{margin-right:8px}
+.dash-pager fluent-button{padding:4px 12px}
 

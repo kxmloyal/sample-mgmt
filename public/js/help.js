@@ -44,7 +44,7 @@ function renderHelpPanel(){
   panel.innerHTML=
     '<div class="help-head">'+
       '<input id="help-search" placeholder="搜索关键词..." oninput="filterHelp(this.value)">'+
-      '<button class="btn ghost sm" onclick="closeHelp()">关闭</button>'+
+      '<fluent-button appearance="neutral" size="small" onclick="closeHelp()">关闭</fluent-button>'+
     '</div>'+
     '<div id="help-list"></div>';
   mask.appendChild(panel);

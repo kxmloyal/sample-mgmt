@@ -23,7 +23,7 @@ function viewNew(){
     '<label>标准范围</label><textarea id="n-test-standard" rows="3"></textarea>'+
     '</div>'+
     '</div>'+
-    '<div style="margin-top:16px"><button class="btn" onclick="submitNew()">创建样品并生成条码</button></div>'+
+    '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
     '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
 }
 async function submitNew(){

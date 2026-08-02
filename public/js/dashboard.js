@@ -98,7 +98,7 @@ function barDrill(key, el) {
 function _renderQuickActions(actions) {
   if (!actions || !actions.length) return '';
   var btns = actions.map(function(a) {
-    return '<button class="btn" onclick="location.hash=\'' + a.h + '\'">' + a.t + '</button>';
+    return '<fluent-button appearance="accent" onclick="location.hash=\'' + a.h + '\'">' + a.t + '</fluent-button>';
   }).join('');
   return '<div class="dash-actions" style="margin-top:16px">' + btns + '</div>';
 }
@@ -148,5 +148,5 @@ function _renderPager(pager, pageFn) {
   if (pager.total <= pager.limit) return '';
   var totalPages = Math.ceil(pager.total / pager.limit);
   var currentPage = Math.floor(pager.offset / pager.limit) + 1;
-  return '<div class="dash-pager"><button class="btn sm" ' + (pager.offset === 0 ? 'disabled' : '') + ' onclick="' + pageFn + '(' + (currentPage - 1) + ')">← 上一页</button><span class="muted">第 <b>' + currentPage + '</b>/<b>' + totalPages + '</b> 页 · 共 <b>' + pager.total + '</b> 条</span><button class="btn sm" ' + (currentPage >= totalPages ? 'disabled' : '') + ' onclick="' + pageFn + '(' + (currentPage + 1) + ')">下一页 →</button></div>';
+  return '<div class="dash-pager"><fluent-button appearance="accent" size="small" ' + (pager.offset === 0 ? 'disabled' : '') + ' onclick="' + pageFn + '(' + (currentPage - 1) + ')">← 上一页</fluent-button><span class="muted">第 <b>' + currentPage + '</b>/<b>' + totalPages + '</b> 页 · 共 <b>' + pager.total + '</b> 条</span><fluent-button appearance="accent" size="small" ' + (currentPage >= totalPages ? 'disabled' : '') + ' onclick="' + pageFn + '(' + (currentPage + 1) + ')">下一页 →</fluent-button></div>';
 }

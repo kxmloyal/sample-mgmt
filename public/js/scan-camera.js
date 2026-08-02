@@ -39,7 +39,7 @@ function renderCameraSection(){
     (location.protocol==='https:'?'<span style="color:var(--ok)">HTTPS ✓</span>':'<span style="color:var(--bad)">HTTP ✗</span>')+
     '</summary>'+
     '<div style="margin-top:10px">'+
-      '<button class="btn ghost sm" onclick="startCamera()">📷 开启摄像头</button>'+
+      '<fluent-button appearance="neutral" size="small" onclick="startCamera()">📷 开启摄像头</fluent-button>'+
       '<video id="cam" playsinline style="display:none;margin-top:10px;border-radius:8px;max-width:100%"></video>'+
       '<div id="cam-msg" class="muted" style="font-size:12px;margin-top:8px"></div>'+
     '</div>'+
@@ -103,7 +103,7 @@ function handleScanSuccess(r){
       '<p>样品 '+e(r.sample.sample_no)+' 状态已更新为：<b>'+STATUS[r.sample.status]+'</b></p>'+
       (r.sample.next_inspect_at?('<p class="muted">下次复检：'+fmt(r.sample.next_inspect_at)+'</p>'):'')+
       (r.sample.storage_location?('<p class="muted">储位：'+e(r.sample.storage_location)+'（'+e(r.sample.custody_dept)+'）</p>'):'')+
-      '<button class="btn sm" onclick="afterScanReset()">继续扫码</button></div>';
+      '<fluent-button appearance="accent" size="small" onclick="afterScanReset()">继续扫码</fluent-button></div>';
     toast('操作成功','ok');
   }
 }

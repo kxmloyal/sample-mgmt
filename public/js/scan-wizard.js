@@ -24,7 +24,7 @@ function renderWizardStep1(s){
       '<span class="muted" style="margin-left:8px;font-size:12px" id="wiz-next-date">→ 下次复检：'+nextDate+'</span>'+
     '</div>'+
     '<div style="text-align:right;margin-top:14px">'+
-      '<button class="btn sm" onclick="goWizardStep(2)">下一步：填写标示卡 →</button>'+
+      '<fluent-button appearance="accent" size="small" onclick="goWizardStep(2)">下一步：填写标示卡 →</fluent-button>'+
     '</div>'
   ;
 }
@@ -47,8 +47,8 @@ function renderWizardStep2(s){
       '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
-      '<button class="btn ghost sm" onclick="goWizardStep(1)">← 上一步</button>'+
-      '<button class="btn sm" onclick="goWizardStep(3)">下一步：确认发行 →</button>'+
+      '<fluent-button appearance="neutral" size="small" onclick="goWizardStep(1)">← 上一步</fluent-button>'+
+      '<fluent-button appearance="accent" size="small" onclick="goWizardStep(3)">下一步：确认发行 →</fluent-button>'+
     '</div>'
   ;
 }
@@ -74,9 +74,9 @@ function renderWizardStep3(s){
       (!ok?'<p style="color:#dc2626;font-size:11px;margin-top:8px">⚠ 标示卡必填字段未完成，请返回 Step2 补填</p>':'')+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
-      '<button class="btn ghost sm" onclick="goWizardStep(2)">← 返回修改</button>'+
-      '<button class="btn" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\')"'+
-        (!ok?' disabled':'')+'>'+confirmLabel+'</button>'+
+      '<fluent-button appearance="neutral" size="small" onclick="goWizardStep(2)">← 返回修改</fluent-button>'+
+      '<fluent-button appearance="accent" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\')"'+
+        (!ok?' disabled':'')+'>'+confirmLabel+'</fluent-button>'+
     '</div>'
   ;
 }

@@ -35,7 +35,7 @@ async function viewSamples(){
     '<select id="f-limit-item" onchange="loadSamples()"><option value="">全部项目</option>'+LIMIT_ITEMS.map(function(x){return '<option value="'+x.code+'">'+x.label+'</option>';}).join('')+'</select>'+
     '<select id="f-source" onchange="loadSamples()"><option value="">全部来源</option><option value="C">客供</option><option value="T">元山</option><option value="G">塔岗</option></select>'+
     '<select id="f-sort" onchange="loadSamples()">'+sortOpts+'</select>'+
-    '<button class="btn sm" onclick="loadSamples()">查询</button></div>'+
+    '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button></div>'+
     '<div class="filters" style="margin-bottom:14px;align-items:center">'+
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>'+
     '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>'+
@@ -71,9 +71,9 @@ function _renderSampleList(list,isOverdue,pager){
     var totalPages=Math.ceil(pager.total/pager.limit);
     var currentPage=Math.floor(pager.offset/pager.limit)+1;
     html+='<div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:12px;font-size:13px">';
-    html+='<button class="btn sm" '+(pager.offset===0?'disabled':'')+' onclick="goSamplePage('+(currentPage-1)+')">← 上一页</button>';
+    html+='<fluent-button appearance="accent" size="small" '+(pager.offset===0?'disabled':'')+' onclick="goSamplePage('+(currentPage-1)+')">← 上一页</fluent-button>';
     html+='<span class="muted">第 <b>'+currentPage+'</b>/<b>'+totalPages+'</b> 页 · 共 <b>'+pager.total+'</b> 条</span>';
-    html+='<button class="btn sm" '+(currentPage>=totalPages?'disabled':'')+' onclick="goSamplePage('+(currentPage+1)+')">下一页 →</button>';
+    html+='<fluent-button appearance="accent" size="small" '+(currentPage>=totalPages?'disabled':'')+' onclick="goSamplePage('+(currentPage+1)+')">下一页 →</fluent-button>';
     html+='</div>';
   }
   box.innerHTML=html;

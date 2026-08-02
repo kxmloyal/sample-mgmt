@@ -4,7 +4,7 @@ var _detailSample=null;
 async function viewDetail(id){
   _detailSample=await api('GET','/api/samples/'+id);
   const head='<b>'+e(_detailSample.sample_no)+'</b>'+statusBadge(_detailSample);
-  openModal('','<div class="detail-cards"></div>',{head:head, foot:'<a class="link" style="margin-right:14px;cursor:pointer" onclick="downloadQR('+id+')">下载二维码</a><button class="btn ghost sm" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</button>'});
+  openModal('','<div class="detail-cards"></div>',{head:head, foot:'<a class="link" style="margin-right:14px;cursor:pointer" onclick="downloadQR('+id+')">下载二维码</a><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>'});
   await renderDetailBody(id);
 }
 async function renderDetailBody(id){
@@ -126,8 +126,8 @@ async function viewDetailCard(id){
       '<div class="full-row"><label>样品数值</label><textarea id="cd-test-data" rows="1"'+dis+'style="resize:none;min-height:32px">'+e(s.test_data||'')+'</textarea></div>'+
     '</div>'+
     '<div style="margin-top:12px;display:flex;gap:8px">'+
-    (locked?'':'<button class="btn" onclick="saveCard('+id+')">保存标示卡</button>')+
-    '<button class="btn ghost" onclick="printCard('+id+')">打印标示卡</button>'+
+    (locked?'':'<fluent-button appearance="accent" onclick="saveCard('+id+')">保存标示卡</fluent-button>')+
+    '<fluent-button appearance="neutral" onclick="printCard('+id+')">打印标示卡</fluent-button>'+
     '</div>'+
     '<div id="cd-msg" class="muted" style="margin-top:8px"></div>'+
     '</div>';

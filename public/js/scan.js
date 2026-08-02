@@ -10,7 +10,7 @@ function viewScan(){
       '<input id="scan-code" class="scan-input" placeholder="扫描或输入 SM-XXXXXX" autocomplete="off"/>'+
       '<small class="muted" style="font-size:11px">格式：SM-XXXXXX</small>'+
       '<div style="margin-top:14px">'+
-        '<button class="btn sm" onclick="doScan()">确认扫码</button>'+
+        '<fluent-button appearance="accent" size="small" onclick="doScan()">确认扫码</fluent-button>'+
         '<label class="muted" style="margin-left:12px;font-size:13px;cursor:pointer">'+
           '<input type="checkbox" id="scan-cont" onchange="refocusScan()"/> 连续扫码（自动清空并聚焦，适合扫码枪批量作业）'+
         '</label>'+
@@ -47,7 +47,7 @@ function renderScanAction(s,actions){
   window._scanActions=actions;
   var buttonRow=actions.length>1?actions.map(function(a){
     var label=CONFIRM_ACTIONS.has(a)?'确认'+ACTION_CN[a]:(ACTION_CN[a]||a);
-    return '<button class="btn sm" onclick="showScanActionForm(\''+a+'\')">'+label+'</button>';
+    return '<fluent-button appearance="accent" size="small" onclick="showScanActionForm(\''+a+'\')">'+label+'</fluent-button>';
   }).join(' '):'';
   box.innerHTML='<div class="card sample-card">'+
     '<div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">'+e(s.sample_no)+'</h3>'+statusBadge(s)+'</div>'+
@@ -58,7 +58,7 @@ function renderScanAction(s,actions){
     (s.retired_reason?'<div class="field"><span>作废原因</span><span class="muted">'+e(s.retired_reason)+'</span></div>':'')+
     (buttonRow?'<div style="margin-top:12px">'+buttonRow+'</div>':'')+
     '<div id="scan-action-form" style="margin-top:12px"></div>'+
-    '<div style="margin-top:8px"><button class="btn ghost sm" onclick="afterScanReset()">取消</button></div>'+
+    '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="afterScanReset()">取消</fluent-button></div>'+
   '</div>';
   showScanActionForm(actions[0]);
 }
@@ -71,9 +71,7 @@ function showScanActionForm(action){
     html='<label>制作照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div>'+
       '<label>备注</label><input id="scan-note" placeholder="如：制作完成"/>'+
-      '<div style="margin-top:12px"><button class="btn" onclick="confirmScan(\'PRODUCE\')">确认制作完成</button></div>';
-  }else if(action==='RELEASE'){
-    html=buildReleaseWizard(s,false);
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\')">确认制作完成</fluent-button></div>';
   }else if(action==='INSPECT'){
     html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div><label>备注</label><input id="scan-note" placeholder="如：复检通过"/>'+
@@ -82,20 +80,20 @@ function showScanActionForm(action){
       '<table style="width:100%;font-size:12px"><tr><td style="padding:4px 0;color:#6b7280">版次</td><td><input id="scan-card-ver" value="'+e(s.card_version||'')+'" style="width:100%"/></td></tr>'+
       '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td><td><textarea id="scan-card-data" rows="2" style="resize:vertical;width:100%">'+e(s.test_data||'')+'</textarea></td></tr></table>'+
       '</details>'+
-      '<div style="margin-top:12px"><button class="btn" onclick="confirmScan(\'INSPECT\')">确认复检完成</button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\')">确认复检完成</fluent-button></div>';
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><input id="scan-loc" placeholder="如 A区-3架-2层"/>'+
-      '<div style="margin-top:12px"><button class="btn" onclick="confirmScan(\'CUSTODY\')">确认接收保管</button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\')">确认接收保管</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
-      '<div style="margin-top:12px"><button class="btn" onclick="confirmScan(\'EDIT_CARD\')">保存修正 + 打印标示卡</button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\')">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
       '<label>新储位 *</label><input id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"/>'+
-      '<div style="margin-top:12px"><button class="btn" onclick="confirmScan(\'EDIT_STORAGE\')">确认修改储位</button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\')">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+
-      '<div style="margin-top:12px"><button class="btn" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\')">提交退回申请</button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\')">提交退回申请</fluent-button></div>';
   }else{
     html=renderReturnActions(action,s);
     if(!html){formEl.innerHTML='';return;}
