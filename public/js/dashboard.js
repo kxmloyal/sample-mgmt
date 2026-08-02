@@ -65,7 +65,7 @@ function _renderStats(d) {
   var cards = stats.map(function(x, idx) {
     // 卡片单击索引 toggle 筛选待办（不跳转，再点回退默认），双击下钻样品列表（看该状态全部）
     var href = x[2] === 'total' ? '#/samples' : '#/samples?status=' + x[2];
-    return '<div class="kb-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></div>';
+    return '<fluent-card class="kb-stat" style="--stat-color:' + (STAT_COLORS[x[2]] || 'var(--brand)') + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + x[1] + '</div><div class="l">' + x[0] + '</div></fluent-card>';
   }).join('');
   var total = d.total || 0;
   var barHtml = '';

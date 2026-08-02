@@ -34,7 +34,7 @@ function _renderDashContent() {
     var count = cfg.countByStatus ? (cfg.status === 'MAINTENANCE_DUE' ? (d.maintenanceOverdueCount || 0) + (d.maintenanceUpcomingCount || 0) : (s[cfg.status] || 0)) : (cfg.countKey === 'total' ? d.total : d.myPending.length);
     var isActive = (_dashFilter === i);
     var cls = isActive ? ' active' : '';
-    return '<div class="kb-stat' + cls + '" onclick="filterDashStats(' + i + ')"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></div>';
+    return '<fluent-card class="kb-stat' + cls + '" onclick="filterDashStats(' + i + ')"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
   }).join('') + '</div>';
 
   // 逾期表
