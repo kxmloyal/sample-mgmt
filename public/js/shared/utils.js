@@ -12,9 +12,8 @@ function formatFileSize(bytes) {
   return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }
 
-/** 修复 fluent-data-grid 列宽：FAST DataGrid 内部 grid-template-columns 默认为 auto，
- *  列宽按内容收缩。调用 fixGridColumns(el) 将容器内所有 data-grid 设为 1fr 均分。
- *  始终通过 customElements.whenDefined 异步执行，确保组件初始化完成后再设属性。
+/** 修复 fluent-data-grid 列宽：Shadow DOM 仅 slot，row 本身是 grid 容器。
+ *  fixGridColumns(el) 给容器内每个 row 设 style.gridTemplateColumns 为 1fr 等分。
  */
 function fixGridColumns(container) {
   function apply() {
@@ -25,18 +24,15 @@ function fixGridColumns(container) {
         var n = hdr.querySelectorAll('fluent-data-grid-cell').length;
         if (!n) return;
         var cols = Array(n).fill('1fr').join(' ');
-        if ('gridTemplateColumns' in grid) grid.gridTemplateColumns = cols;
+        // grid 容器是 row（Shadow DOM 仅 slot），给每个 row 设 inline style
+        grid.querySelectorAll('fluent-data-grid-row').forEach(function(row) {
+          row.style.gridTemplateColumns = cols;
+        });
       } catch(e) {}
     });
   }
-
   var TAG = 'fluent-data-grid';
   if (window.customElements) {
-    customElements.whenDefined(TAG).then(function() {
-      requestAnimationFrame(apply);
-    });
-  } else {
-    // 极老浏览器 fallback：直接执行
-    apply();
-  }
+    customElements.whenDefined(TAG).then(function() { requestAnimationFrame(apply); });
+  } else { apply(); }
 }

@@ -69,12 +69,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:600;font-size:12px}
 tr:hover td{background:#fafbfc}
-/* fluent-data-grid 适配(模块4) */
+/* fluent-data-grid 适配(模块4) — Shadow DOM 仅 slot，grid 容器是 row 本身 */
 fluent-data-grid{display:block;width:100%;font-size:13px}
-fluent-data-grid-row::part(row){border-bottom:1px solid var(--line)}
-fluent-data-grid-row[row-type="header"]::part(row){background:var(--bg);color:var(--muted);font-weight:600;font-size:12px}
-fluent-data-grid-row:not([row-type="header"]):hover::part(row){background:#fafbfc}
-fluent-data-grid-cell{padding:10px 12px;text-align:left}
+fluent-data-grid-row{display:grid;grid-template-columns:1fr;border-bottom:1px solid var(--line)}
+fluent-data-grid-row[row-type="header"]{background:var(--bg);color:var(--muted);font-weight:600;font-size:12px}
+fluent-data-grid-row:not([row-type="header"]):hover{background:#fafbfc}
+fluent-data-grid-cell{padding:10px 12px;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
 .b-NEW{background:#f0fdfa;color:#115e59}
 .b-PRODUCED{background:#ecfeff;color:#155e75}
@@ -149,7 +149,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .overdue-row{background:#fff5f5!important}
 @media(max-width:767px){
   fluent-data-grid.fx-list-table fluent-data-grid-row[row-type="header"]{display:none}
-  fluent-data-grid.fx-list-table fluent-data-grid-row::part(row){display:block;padding:8px}
+  fluent-data-grid.fx-list-table fluent-data-grid-row{display:block;padding:8px}
   fluent-data-grid.fx-list-table fluent-data-grid-cell{display:block;padding:2px 0}
   fluent-data-grid.fx-list-table fluent-data-grid-cell::before{content:attr(data-label);font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
 }
