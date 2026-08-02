@@ -61,6 +61,6 @@ function isOverdue(f) { return f.status === 'IN_USE' && f.expected_return_at && 
 // 覆盖 shared/api-base.js 的 statusBadge：治具逾期检测
 function statusBadge(f) {
   var cls = 'b-' + (f.status === 'IN_USE' && isOverdue(f) ? 'overdue' : f.status);
-  return '<span class="badge ' + cls + '">' + (STATUS[f.status] || f.status) + '</span>';
+  return '<fluent-badge class="badge ' + cls + '" appearance="filled">' + (STATUS[f.status] || f.status) + '</fluent-badge>';
 }
 function goFixScan(code) { location.hash = '#/scan'; setTimeout(function() { var el = document.getElementById('scan-code'); if (el && code) el.value = code; }, 50); }

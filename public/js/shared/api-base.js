@@ -79,7 +79,7 @@ function statusBadge(row) {
   var cls0 = row.status || 'NEW';
   var cls = 'b-' + cls0;
   var label = STATUS[cls0] || cls0;
-  return '<span class="badge ' + cls + '">' + label + '</span>';
+  return '<fluent-badge class="badge ' + cls + '" appearance="filled">' + label + '</fluent-badge>';
 }
 
 /** 日期格式化 */
