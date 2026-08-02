@@ -60,6 +60,7 @@ fluent-button[appearance="accent"]{width:auto}
 .new-col{border:1px solid var(--line);border-radius:12px;padding:16px}
 .new-col-title{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 @media(min-width:768px){.new-grid{grid-template-columns:1fr 1fr}}
+.new-grid fluent-text-field,.new-grid fluent-select{margin-bottom:8px}
 .row{display:flex;gap:14px;flex-wrap:wrap}
 .stat{flex:1;min-width:130px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
 .stat .n{font-size:28px;font-weight:700}
@@ -138,6 +139,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .scan-card-more summary{cursor:pointer;color:var(--brand);padding:4px 0}
 .card-lock-banner{background:#fef9c3;color:#854d0e;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:12px}
 .card-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.card-grid fluent-text-field,.card-grid fluent-select{width:100%}
 .card-grid .full-row{grid-column:1/-1}
 /* 治具 badge 状态标签（从 fixture.html 迁移） */
 .b-REQUESTED{background:#f0f0f0;color:#666}.b-VERIFY_PENDING{background:#fef3c7;color:#92400e}.b-VERIFY_RD_OK{background:#e0e7ff;color:#3730a3}.b-VERIFY_ME_OK{background:#fce7f3;color:#9d174d}.b-TRANSFERRED{background:#d1fae5;color:#065f46}.b-IN_USE{background:#dbeafe;color:#1d4ed8}.b-REPAIRING_ME{background:#fee2e2;color:#991b1b}.b-REPAIRING_RD{background:#fed7aa;color:#9a3412}.b-REPAIR_DONE{background:#e0e7ff;color:#3730a3}.b-RETIRED{background:#f0f0f0;color:#999}.b-ACCEPTED{background:#dbeafe;color:#1d4ed8}.b-IMPROVING{background:#fef3c7;color:#92400e}.b-VERIFY_ORG_OK{background:#fce7f3;color:#9d174d}
