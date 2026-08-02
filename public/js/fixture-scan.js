@@ -94,7 +94,7 @@ function showFixActions(result) {
     html += '<div class="card" style="margin-top:12px;padding:12px"><div style="font-weight:600;font-size:13px;color:var(--muted);margin-bottom:8px">📂 文件管理</div>';
     html += '<div id="fix-files" style="font-size:13px;color:var(--muted)">加载中…</div>';
     html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center">';
-    html += '<select id="fx-file-cat" style="width:auto"><option value="design_drawing">设计图纸</option><option value="purchase_order">请购单</option><option value="other">其他</option></select>';
+    html += '<fluent-select id="fx-file-cat" style="width:auto"><fluent-option value="design_drawing">设计图纸</fluent-option><fluent-option value="purchase_order">请购单</fluent-option><fluent-option value="other">其他</fluent-option></fluent-select>';
     html += '<input type="file" id="fx-file-input" data-fixture-id="' + f.id + '" style="display:none" onchange="onFixFileSelected()" />';
     html += '<fluent-button appearance="accent" size="small" onclick="document.getElementById(\'fx-file-input\').click()">上传文件</fluent-button></div></div>';
   }
@@ -118,8 +118,8 @@ function execFixAction(fixtureNo, action) {
   var formHtml = '<div class="card" style="margin-top:8px;padding:16px">';
   formHtml += '<div style="font-size:14px;font-weight:600;margin-bottom:12px">' + (ACTION_CN[action] || action) + '</div>';
   if (['USE'].includes(action)) {
-    formHtml += '<label>使用位置<span style="color:var(--bad)">*</span></label><input id="fx-location" placeholder="生产线/工位" />';
-    formHtml += '<label>预计使用天数<span style="color:var(--bad)">*</span></label><input id="fx-days" type="number" min="1" value="30" placeholder="如 30" />';
+    formHtml += '<label>使用位置<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-location" placeholder="生产线/工位"></fluent-text-field>';
+    formHtml += '<label>预计使用天数<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-days" type="number" min="1" value="30" placeholder="如 30"></fluent-text-field>';
   }
   if (['REPAIR_DONE', 'REPAIR_RD_DONE'].includes(action)) {
     formHtml += '<label>备注说明</label><textarea id="fx-note" rows="2" placeholder="选填"></textarea>';
@@ -136,11 +136,11 @@ function execFixAction(fixtureNo, action) {
   if (['VERIFY_RD', 'VERIFY_ORG'].includes(action)) {
     var isTransfer = (action === 'VERIFY_RD' && f.status === 'VERIFY_ORG_OK') || (action === 'VERIFY_ORG' && f.status === 'VERIFY_RD_OK');
     var locLabel = isTransfer ? '存放位置<span style="color:var(--bad)">*</span>' : '存放位置 <small>(选填)</small>';
-    formHtml += '<label>' + locLabel + '</label><input id="fx-location" placeholder="如：A-3-12 / 线边1号工位" value="' + e(f.storage_location || '') + '" />';
+    formHtml += '<label>' + locLabel + '</label><fluent-text-field id="fx-location" placeholder="如：A-3-12 / 线边1号工位" value="' + e(f.storage_location || '') + '"></fluent-text-field>';
     formHtml += '<label>验证备注</label><textarea id="fx-note" rows="2" placeholder="选填"></textarea>';
   }
   if (action === 'ACCEPT') {
-    formHtml += '<label>预计完成天数<span style="color:var(--bad)">*</span></label><input id="fx-days" type="number" min="1" value="7" />';
+    formHtml += '<label>预计完成天数<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-days" type="number" min="1" value="7"></fluent-text-field>';
     formHtml += '<label>备注说明</label><textarea id="fx-note" rows="2" placeholder="选填"></textarea>';
   }
   if (action === 'IMPROVE') {
