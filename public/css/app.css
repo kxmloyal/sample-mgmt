@@ -1,7 +1,12 @@
 :root{
-  --bg:#f4f6f9; --panel:#fff; --line:#e3e8ef; --text:#1f2733; --muted:#6b7785;
-  --brand:#2563eb; --brand-d:#1d4ed8; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
-  --chip:#eef2ff; --shadow:0 1px 3px rgba(20,30,50,.08),0 1px 2px rgba(20,30,50,.06);
+  --bg:#f8fafc; --panel:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b;
+  --brand:#0f766e; --brand-d:#115e59; --brand-l:#ccfbf1; --ok:#16a34a; --warn:#d97706; --bad:#dc2626;
+  --chip:#f0fdfa;
+  --r-sm:8px; --r-md:12px; --r-lg:16px;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.04);
+  --shadow-2:0 4px 6px rgba(15,23,42,.07),0 2px 4px rgba(15,23,42,.05);
+  --shadow-3:0 10px 15px rgba(15,23,42,.08),0 4px 6px rgba(15,23,42,.05);
+  color-scheme:light;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
@@ -14,7 +19,7 @@ button{font-family:inherit;cursor:pointer}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 input,select,textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);
   border-radius:8px;background:#fff;color:var(--text);width:100%}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand)}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
 label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:600}
 /* login */
 #login{display:flex;align-items:center;justify-content:center;min-height:100vh}
@@ -50,14 +55,14 @@ th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:600;font-size:12px}
 tr:hover td{background:#fafbfc}
 .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
-.b-NEW{background:#eef2ff;color:#4338ca}
-.b-PRODUCED{background:#ecfeff;color:#0e7490}
+.b-NEW{background:#f0fdfa;color:#115e59}
+.b-PRODUCED{background:#ecfeff;color:#155e75}
 .b-RELEASED{background:#fef9c3;color:#854d0e}
 .b-IN_CUSTODY{background:#dcfce7;color:#166534}
 .b-overdue{background:#fee2e2;color:#991b1b;animation:pulse 1.5s infinite}
 .muted{color:var(--muted)}
 .toast{position:fixed;top:18px;right:18px;background:#1f2733;color:#fff;padding:12px 18px;border-radius:10px;
-  box-shadow:var(--shadow);font-size:14px;opacity:0;transform:translateY(-8px);transition:.25s;z-index:50;max-width:360px}
+  box-shadow:var(--shadow);font-size:14px;opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s;z-index:50;max-width:360px}
 .toast.show{opacity:1;transform:none}
 .toast.err{background:var(--bad)}
 .toast.ok{background:var(--ok)}
@@ -116,6 +121,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 /* 治具 badge 状态标签（从 fixture.html 迁移） */
 .b-REQUESTED{background:#f0f0f0;color:#666}.b-VERIFY_PENDING{background:#fef3c7;color:#92400e}.b-VERIFY_RD_OK{background:#e0e7ff;color:#3730a3}.b-VERIFY_ME_OK{background:#fce7f3;color:#9d174d}.b-TRANSFERRED{background:#d1fae5;color:#065f46}.b-IN_USE{background:#dbeafe;color:#1d4ed8}.b-REPAIRING_ME{background:#fee2e2;color:#991b1b}.b-REPAIRING_RD{background:#fed7aa;color:#9a3412}.b-REPAIR_DONE{background:#e0e7ff;color:#3730a3}.b-RETIRED{background:#f0f0f0;color:#999}.b-ACCEPTED{background:#dbeafe;color:#1d4ed8}.b-IMPROVING{background:#fef3c7;color:#92400e}.b-VERIFY_ORG_OK{background:#fce7f3;color:#9d174d}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+@media(prefers-reduced-motion:reduce){.b-overdue{animation:none}*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 .overdue-row{background:#fff5f5!important}
 @media(max-width:767px){
   .fx-list-table thead{display:none}

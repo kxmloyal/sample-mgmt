@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f766e" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232563eb'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>M</text></svg>" />
 <title>制造品质管理系统</title>
 <style>
-:root{--bg:#f4f6f9;--panel:#fff;--line:#e3e8ef;--text:#1f2733;--muted:#6b7785;--brand:#2563eb;--shadow:0 1px 3px rgba(20,30,50,.08),0 1px 2px rgba(20,30,50,.06)}
+:root{--bg:#f8fafc;--panel:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#64748b;--brand:#0f766e;--brand-d:#115e59;--shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.04)}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;display:flex;flex-direction:column}
 .topbar{display:flex;align-items:center;justify-content:center;background:var(--brand);color:#fff;padding:0 20px;height:48px;flex-shrink:0}
@@ -21,7 +22,7 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
 .card h3{margin:0;font-size:16px}
 .card p{margin:0;font-size:13px;color:var(--muted)}
 .card .btn-enter{background:var(--brand);color:#fff;border:none;border-radius:8px;padding:8px 24px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
-.card .btn-enter:hover{background:#1d4ed8}
+.card .btn-enter:hover{background:var(--brand-d)}
 .footer{text-align:center;padding:16px;color:var(--muted);font-size:12px;flex-shrink:0}
 @media(max-width:576px){.card{width:100%;max-width:280px}}
 </style>
@@ -35,19 +36,19 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
   <p class="welcome-sub">请选择子系统进入</p>
   <div class="cards">
     <a class="card" href="/index.html">
-      <span class="icon">🧪</span>
+      <span class="icon" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6.5L5.2 17.5a2 2 0 0 0 1.7 3h10.2a2 2 0 0 0 1.7-3L14 9.5V3M7.5 14h9"/></svg></span>
       <h3>样品管理</h3>
       <p>限度样品发行·确认·分发</p>
       <span class="btn-enter">进入系统</span>
     </a>
     <a class="card" href="/fixture.html">
-      <span class="icon">🔧</span>
+      <span class="icon" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-2.4 2.5-2.5Z"/></svg></span>
       <h3>治具管理</h3>
       <p>申请·制作·验证·维修</p>
       <span class="btn-enter">进入系统</span>
     </a>
   </div>
 </div>
-<div class="footer">v1.0.0</div>
+<div class="footer">制造品质管理系统</div>
 </body>
 </html>
