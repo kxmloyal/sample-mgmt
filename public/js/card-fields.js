@@ -4,7 +4,7 @@
 // 生成 LIMIT_ITEMS 下拉选项，预选 matched 项
 function limitItemOptions(matched){
   return LIMIT_ITEMS.map(function(item){
-    return '<option value="'+item.code+'"'+(item.code===matched?' selected':'')+'>'+item.label+'</option>';
+    return '<fluent-option value="'+item.code+'"'+(item.code===matched?' selected':'')+'>'+item.label+'</fluent-option>';
   }).join('');
 }
 
@@ -33,16 +33,16 @@ function buildCardFieldTable(s,editable,suggestedVersion){
   var ro=editable?'':'disabled';
   return '<table style="width:100%;font-size:12px;border-collapse:collapse">'+
     '<tr><td style="padding:4px 0;width:70px;color:#6b7280">样品类型 *</td>'+
-      '<td style="padding:4px 0"><select id="scan-card-type" '+ro+'><option value="">请选择</option><option value="OK"'+(t==='OK'?' selected':'')+'>OK样品</option><option value="NG"'+(t==='NG'?' selected':'')+'>NG样品</option></select></td>'+
+      '<td style="padding:4px 0"><fluent-select id="scan-card-type" '+ro+'><fluent-option value="">请选择</fluent-option><fluent-option value="OK"'+(t==='OK'?' selected':'')+'>OK样品</fluent-option><fluent-option value="NG"'+(t==='NG'?' selected':'')+'>NG样品</fluent-option></fluent-select></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('sample_type',typeSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">限度项目 *</td>'+
-      '<td style="padding:4px 0"><select id="scan-card-item" '+ro+'><option value="">请选择</option>'+limitItemOptions(l)+'</select></td>'+
+      '<td style="padding:4px 0"><fluent-select id="scan-card-item" '+ro+'><fluent-option value="">请选择</fluent-option>'+limitItemOptions(l)+'</fluent-select></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('limit_item',itemSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">来源</td>'+
-      '<td style="padding:4px 0"><select id="scan-card-source" '+ro+'><option value="">未指定</option><option value="C"'+(src==='C'?' selected':'')+'>客供(C)</option><option value="T"'+(src==='T'?' selected':'')+'>元山(T)</option><option value="G"'+(src==='G'?' selected':'')+'>元将五金塔岗分厂(G)</option></select></td>'+
+      '<td style="padding:4px 0"><fluent-select id="scan-card-source" '+ro+'><fluent-option value="">未指定</fluent-option><fluent-option value="C"'+(src==='C'?' selected':'')+'>客供(C)</fluent-option><fluent-option value="T"'+(src==='T'?' selected':'')+'>元山(T)</fluent-option><fluent-option value="G"'+(src==='G'?' selected':'')+'>元将五金塔岗分厂(G)</fluent-option></fluent-select></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('source_type',srcSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">版次</td>'+
-      '<td style="padding:4px 0"><input id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"/></td>'+
+      '<td style="padding:4px 0"><fluent-text-field id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"></fluent-text-field></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('card_version',verSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td>'+
       '<td style="padding:4px 0"><textarea id="scan-card-data" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(data)+'</textarea></td>'+
@@ -52,7 +52,7 @@ function buildCardFieldTable(s,editable,suggestedVersion){
 
 // 复用于样品已有标示卡数据 pre-fill QA 发行表单
 function buildReleaseCardForm(s){
-  return '<label>复检周期（天）<b class="required">*</b></label><input id="scan-cycle" type="number" min="1" value="90" placeholder="如 90"/>'+
+  return '<label>复检周期（天）<b class="required">*</b></label><fluent-text-field id="scan-cycle" type="number" min="1" value="90" placeholder="如 90"></fluent-text-field>'+
     '<div class="scan-section-title">标示卡 <b class="required">*</b></div>'+
     buildCardFieldTable(s,true)+
     '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>';

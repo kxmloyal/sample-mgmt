@@ -43,7 +43,7 @@ function renderHelpPanel(){
   panel.onclick=function(e){e.stopPropagation();};
   panel.innerHTML=
     '<div class="help-head">'+
-      '<input id="help-search" placeholder="搜索关键词..." oninput="filterHelp(this.value)">'+
+      '<fluent-text-field id="help-search" placeholder="搜索关键词..." oninput="filterHelp(this.value)"></fluent-text-field>'+
       '<fluent-button appearance="neutral" size="small" onclick="closeHelp()">关闭</fluent-button>'+
     '</div>'+
     '<div id="help-list"></div>';

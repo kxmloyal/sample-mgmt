@@ -70,26 +70,26 @@ function showScanActionForm(action){
   if(action==='PRODUCE'){
     html='<label>制作照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div>'+
-      '<label>备注</label><input id="scan-note" placeholder="如：制作完成"/>'+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：制作完成"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\')">确认制作完成</fluent-button></div>';
   }else if(action==='INSPECT'){
     html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
-      '<div id="scan-img-prev" style="margin-top:8px"></div><label>备注</label><input id="scan-note" placeholder="如：复检通过"/>'+
+      '<div id="scan-img-prev" style="margin-top:8px"></div><label>备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
       '<details class="scan-card-more" style="margin-top:10px"><summary>标示卡更新（选填）</summary>'+
       '<p class="muted" style="font-size:11px">复检时可更新版次/测试数据</p>'+
-      '<table style="width:100%;font-size:12px"><tr><td style="padding:4px 0;color:#6b7280">版次</td><td><input id="scan-card-ver" value="'+e(s.card_version||'')+'" style="width:100%"/></td></tr>'+
+      '<table style="width:100%;font-size:12px"><tr><td style="padding:4px 0;color:#6b7280">版次</td><td><fluent-text-field id="scan-card-ver" value="'+e(s.card_version||'')+'" style="width:100%"></fluent-text-field></td></tr>'+
       '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td><td><textarea id="scan-card-data" rows="2" style="resize:vertical;width:100%">'+e(s.test_data||'')+'</textarea></td></tr></table>'+
       '</details>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\')">确认复检完成</fluent-button></div>';
   }else if(action==='CUSTODY'){
-    html='<label>保管储位 *</label><input id="scan-loc" placeholder="如 A区-3架-2层"/>'+
+    html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\')">确认接收保管</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\')">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
-      '<label>新储位 *</label><input id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"/>'+
+      '<label>新储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\')">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+

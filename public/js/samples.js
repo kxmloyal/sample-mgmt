@@ -25,16 +25,16 @@ function goSamplePage(page){
 }
 async function viewSamples(){
   var v=$('#view');
-  var stOpts='<option value="">全部状态</option><option value="NEW">待制作</option><option value="PRODUCED">制作完成</option><option value="RELEASED">已发行</option><option value="IN_CUSTODY">保管中</option><option value="RETURNING">退回审核中</option><option value="RETIRED">已作废</option>';
-  var deptOpts='<option value="">保管部门</option><option value="研发中心">研发中心</option><option value="品保文管中心">品保文管中心</option><option value="制造部">制造部</option><option value="FQC">FQC</option><option value="生技部">生技部</option>';
-  var sortOpts='<option value="">排序：最新优先</option><option value="created_at">最早优先</option><option value="sample_no">编号升序</option><option value="-sample_no">编号降序</option>';
-  v.innerHTML='<div class="filters"><input id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"/>'+
-    '<select id="f-status" onchange="loadSamples()">'+stOpts+'</select>'+
-    '<select id="f-dept" onchange="loadSamples()">'+deptOpts+'</select>'+
-    '<select id="f-type" onchange="loadSamples()"><option value="">全部类型</option><option value="OK">OK样品</option><option value="NG">NG样品</option></select>'+
-    '<select id="f-limit-item" onchange="loadSamples()"><option value="">全部项目</option>'+LIMIT_ITEMS.map(function(x){return '<option value="'+x.code+'">'+x.label+'</option>';}).join('')+'</select>'+
-    '<select id="f-source" onchange="loadSamples()"><option value="">全部来源</option><option value="C">客供</option><option value="T">元山</option><option value="G">塔岗</option></select>'+
-    '<select id="f-sort" onchange="loadSamples()">'+sortOpts+'</select>'+
+  var stOpts='<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
+  var deptOpts='<fluent-option value="">保管部门</fluent-option><fluent-option value="研发中心">研发中心</fluent-option><fluent-option value="品保文管中心">品保文管中心</fluent-option><fluent-option value="制造部">制造部</fluent-option><fluent-option value="FQC">FQC</fluent-option><fluent-option value="生技部">生技部</fluent-option>';
+  var sortOpts='<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
+  v.innerHTML='<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>'+
+    '<fluent-select id="f-status" onchange="loadSamples()">'+stOpts+'</fluent-select>'+
+    '<fluent-select id="f-dept" onchange="loadSamples()">'+deptOpts+'</fluent-select>'+
+    '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>'+
+    '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>'+LIMIT_ITEMS.map(function(x){return '<fluent-option value="'+x.code+'">'+x.label+'</fluent-option>';}).join('')+'</fluent-select>'+
+    '<fluent-select id="f-source" onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>'+
+    '<fluent-select id="f-sort" onchange="loadSamples()">'+sortOpts+'</fluent-select>'+
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button></div>'+
     '<div class="filters" style="margin-bottom:14px;align-items:center">'+
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>'+

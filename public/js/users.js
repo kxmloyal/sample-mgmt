@@ -1,6 +1,6 @@
 // users.js — 用户管理（管理员）
 async function viewUsers(){
-  const v=$('#view');v.innerHTML='<div class="filters"><input id="u-user" placeholder="账号"/><input id="u-name" placeholder="姓名"/><select id="u-role"><option value="RD">研发 RD</option><option value="ME">生技 ME</option><option value="QA">品保 QA</option><option value="CUSTODY">保管 CUSTODY</option></select><input id="u-dept" placeholder="部门"/><input id="u-pass" placeholder="初始密码" value="123456"/><fluent-button appearance="accent" size="small" onclick="addUser()">新增账号</fluent-button></div><div id="u-list"></div>';
+  const v=$('#view');v.innerHTML='<div class="filters"><fluent-text-field id="u-user" placeholder="账号"></fluent-text-field><fluent-text-field id="u-name" placeholder="姓名"></fluent-text-field><fluent-select id="u-role"><fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option></fluent-select><fluent-text-field id="u-dept" placeholder="部门"></fluent-text-field><fluent-text-field id="u-pass" placeholder="初始密码" value="123456"></fluent-text-field><fluent-button appearance="accent" size="small" onclick="addUser()">新增账号</fluent-button></div><div id="u-list"></div>';
   loadUsers();
 }
 async function loadUsers(){

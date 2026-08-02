@@ -20,7 +20,7 @@ function renderWizardStep1(s){
     '<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:14px">设置周期 · 标示卡 · 确认</div>'+
     '<div class="wizard-body">'+
       '<label>复检周期（天）<b class="required">*</b></label>'+
-      '<input id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 90" oninput="updateWizardNextDate()" style="width:100px;text-align:center"/>'+
+      '<fluent-text-field id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 90" oninput="updateWizardNextDate()" style="width:100px;text-align:center"></fluent-text-field>'+
       '<span class="muted" style="margin-left:8px;font-size:12px" id="wiz-next-date">→ 下次复检：'+nextDate+'</span>'+
     '</div>'+
     '<div style="text-align:right;margin-top:14px">'+

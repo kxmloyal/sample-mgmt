@@ -120,7 +120,7 @@ tr:hover td{background:#fafbfc}
 .tag{display:inline-block;background:var(--chip);color:var(--brand);border-radius:6px;padding:2px 8px;font-size:12px;margin-right:6px}
 .empty{text-align:center;color:var(--muted);padding:40px}
 .filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-.filters select,.filters input{max-width:200px}
+.filters select,.filters input,.filters fluent-text-field,.filters fluent-select{max-width:200px;width:auto}
 a.link{color:var(--brand);cursor:pointer;font-weight:600}
 /* 标示卡发行表单 */
 .required{color:var(--bad);font-weight:700}

@@ -11,9 +11,9 @@ function renderReturnActions(action,s){
   }else if(action==='RE_RELEASE'){
     return buildReleaseWizard(s,true);
   }else if(action==='RETIRE_RECREATE'){
-    var rdOptions=(window._scanRdUsers||[]).map(function(u){return '<option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</option>';}).join('');
-    return '<label>指派研发人员 *</label><select id="scan-rd-select"><option value="">请选择RD</option>'+rdOptions+'</select>'+
-      '<label>备注</label><input id="scan-note" placeholder="如：需重新制作"/>'+
+    var rdOptions=(window._scanRdUsers||[]).map(function(u){return '<fluent-option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</fluent-option>';}).join('');
+    return '<label>指派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+rdOptions+'</fluent-select>'+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：需重新制作"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\')">确认作废并指派重做</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+

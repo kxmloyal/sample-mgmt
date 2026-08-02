@@ -109,20 +109,20 @@ async function viewDetailCard(id){
   body.classList.remove('log-mode');
   const locked=['RELEASED','IN_CUSTODY','RETURNING','RETIRED'].includes(s.status);
   const dis=locked?' disabled':'';
-  const typeOpts='<option value="">不适用</option><option value="OK"'+(s.sample_type==='OK'?' selected':'')+'>OK样品</option><option value="NG"'+(s.sample_type==='NG'?' selected':'')+'>NG样品</option>';
-  const limitOpts='<option value="">不适用</option>'+LIMIT_ITEMS.map(function(x){return '<option value="'+x.code+'"'+(s.limit_item===x.code?' selected':'')+'>'+x.label+'</option>';}).join('');
-  const srcOpts='<option value="">不适用</option><option value="C"'+(s.source_type==='C'?' selected':'')+'>客供(C)</option><option value="T"'+(s.source_type==='T'?' selected':'')+'>元山(T)</option><option value="G"'+(s.source_type==='G'?' selected':'')+'>塔岗(G)</option>';
+  const typeOpts='<fluent-option value="">不适用</fluent-option><fluent-option value="OK"'+(s.sample_type==='OK'?' selected':'')+'>OK样品</fluent-option><fluent-option value="NG"'+(s.sample_type==='NG'?' selected':'')+'>NG样品</fluent-option>';
+  const limitOpts='<fluent-option value="">不适用</fluent-option>'+LIMIT_ITEMS.map(function(x){return '<fluent-option value="'+x.code+'"'+(s.limit_item===x.code?' selected':'')+'>'+x.label+'</fluent-option>';}).join('');
+  const srcOpts='<fluent-option value="">不适用</fluent-option><fluent-option value="C"'+(s.source_type==='C'?' selected':'')+'>客供(C)</fluent-option><fluent-option value="T"'+(s.source_type==='T'?' selected':'')+'>元山(T)</fluent-option><fluent-option value="G"'+(s.source_type==='G'?' selected':'')+'>塔岗(G)</fluent-option>';
 
   body.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
     (locked?'<div class="card-lock-banner">标示卡已锁定（样品已发行），仅可查看和打印</div>':'')+
     '<div class="card-grid">'+
-      '<div><label>样品类型</label><select id="cd-type"'+dis+'>'+typeOpts+'</select></div>'+
-      '<div><label>限度项目</label><select id="cd-limit-item"'+dis+'>'+limitOpts+'</select></div>'+
-      '<div><label>来源</label><select id="cd-source"'+dis+'>'+srcOpts+'</select></div>'+
+      '<div><label>样品类型</label><fluent-select id="cd-type"'+dis+'>'+typeOpts+'</fluent-select></div>'+
+      '<div><label>限度项目</label><fluent-select id="cd-limit-item"'+dis+'>'+limitOpts+'</fluent-select></div>'+
+      '<div><label>来源</label><fluent-select id="cd-source"'+dis+'>'+srcOpts+'</fluent-select></div>'+
       '<div><label>有效期</label><span style="font-size:13px;color:#333">'+(s.next_inspect_at?new Date(s.next_inspect_at).toISOString().slice(0,10):'—')+'</span><span class="muted" style="font-size:11px"> (=复检日，自动同步)</span></div>'+
-      '<div><label>版次</label><input id="cd-card-version" value="'+e(s.card_version||'')+'" placeholder="如 01"'+dis+'/></div>'+
-      '<div><label>制作</label><input id="cd-signed-rnd" value="'+e(s.signed_by_rd||'')+'"'+dis+'/></div>'+
-      '<div><label>确认</label><input id="cd-signed-qa" value="'+e(s.signed_by_qa||'')+'"'+dis+'/></div>'+
+      '<div><label>版次</label><fluent-text-field id="cd-card-version" value="'+e(s.card_version||'')+'" placeholder="如 01"'+dis+'></fluent-text-field></div>'+
+      '<div><label>制作</label><fluent-text-field id="cd-signed-rnd" value="'+e(s.signed_by_rd||'')+'"'+dis+'></fluent-text-field></div>'+
+      '<div><label>确认</label><fluent-text-field id="cd-signed-qa" value="'+e(s.signed_by_qa||'')+'"'+dis+'></fluent-text-field></div>'+
       '<div class="full-row"><label>样品数值</label><textarea id="cd-test-data" rows="1"'+dis+'style="resize:none;min-height:32px">'+e(s.test_data||'')+'</textarea></div>'+
     '</div>'+
     '<div style="margin-top:12px;display:flex;gap:8px">'+
