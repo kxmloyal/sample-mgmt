@@ -77,6 +77,7 @@ function _renderSampleList(list,isOverdue,pager){
     html+='</div>';
   }
   box.innerHTML=html;
+  fixGridColumns(box);
 }
 async function loadSamples(){
   _quickFilterType=null;

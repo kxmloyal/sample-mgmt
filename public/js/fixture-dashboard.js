@@ -106,4 +106,5 @@ function _renderDashContent() {
     html += '<div class="empty">暂无治具数据，请先新建申请</div>';
   }
   document.getElementById('view').innerHTML = html;
+  fixGridColumns(document.getElementById('view'));
 }

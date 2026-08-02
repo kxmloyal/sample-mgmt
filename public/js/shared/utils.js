@@ -11,3 +11,17 @@ function formatFileSize(bytes) {
   while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
   return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }
+
+/** 修复 fluent-data-grid 列宽：FAST DataGrid 内部 grid-template-columns 默认为 auto，
+ *  列宽按内容收缩。调用 fixGridColumns(el) 将容器内所有 data-grid 设为 1fr 均分。
+ */
+function fixGridColumns(container) {
+  (container || document).querySelectorAll('fluent-data-grid').forEach(function(grid) {
+    try {
+      var hdr = grid.querySelector('fluent-data-grid-row[row-type="header"]');
+      if (!hdr) return;
+      var n = hdr.querySelectorAll('fluent-data-grid-cell').length;
+      if (n) grid.gridTemplateColumns = Array(n).fill('1fr').join(' ');
+    } catch(e) {}
+  });
+}

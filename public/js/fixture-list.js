@@ -90,6 +90,7 @@ async function renderFixtureList() {
     html += '</div>';
 
     document.getElementById('view').innerHTML = html;
+    fixGridColumns(document.getElementById('view'));
   } catch (e) { document.getElementById('view').innerHTML = '<div class="hint">加载失败：' + e.message + '</div>'; }
 }
 

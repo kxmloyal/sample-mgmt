@@ -29,4 +29,5 @@ function renderFixtureLogsFiltered(search) {
   });
   html += '</fluent-data-grid></div>';
   document.getElementById('view').innerHTML = html;
+  fixGridColumns(document.getElementById('view'));
 }

@@ -39,6 +39,7 @@ async function viewDashboard() {
     h += _renderOverdue(d.overdue || []);
     h += _renderDueSoon(d.dueSoon || []);
     v.innerHTML = h;
+    fixGridColumns(v);
     // 待办由 dashboard-todo.js 渲染（延迟调用确保 DOM 就绪）
     if (typeof renderTodo === 'function') renderTodo(d);
   } catch (err) {
@@ -112,7 +113,7 @@ function _renderOverdue(list) {
 function goOverduePage(page) {
   _dashOverduePager.offset = (page - 1) * _dashOverduePager.limit;
   var box = $('#dash-overdue');
-  if (box) box.outerHTML = _renderAlertBlock('overdue', '⚠ 复检逾期', _dashOverdueData, _dashOverduePager, 'goOverduePage', true);
+  if (box) { box.outerHTML = _renderAlertBlock('overdue', '⚠ 复检逾期', _dashOverdueData, _dashOverduePager, 'goOverduePage', true); fixGridColumns(document.getElementById('view')); }
 }
 
 // 即将到期预警（黄色区块，5 条/页）
@@ -124,7 +125,7 @@ function _renderDueSoon(list) {
 function goDueSoonPage(page) {
   _dashDueSoonPager.offset = (page - 1) * _dashDueSoonPager.limit;
   var box = $('#dash-soon');
-  if (box) box.outerHTML = _renderAlertBlock('soon', '⏰ 即将到期·7天内', _dashDueSoonData, _dashDueSoonPager, 'goDueSoonPage', false);
+  if (box) { box.outerHTML = _renderAlertBlock('soon', '⏰ 即将到期·7天内', _dashDueSoonData, _dashDueSoonPager, 'goDueSoonPage', false); fixGridColumns(document.getElementById('view')); }
 }
 
 // 预警区块通用渲染（isOverdue 控制红色/黄色样式与缓存目标）
