@@ -14,14 +14,24 @@ function formatFileSize(bytes) {
 
 /** 修复 fluent-data-grid 列宽：FAST DataGrid 内部 grid-template-columns 默认为 auto，
  *  列宽按内容收缩。调用 fixGridColumns(el) 将容器内所有 data-grid 设为 1fr 均分。
+ *  带重试机制处理 custom element 延迟升级(module script deferred)。
  */
 function fixGridColumns(container) {
-  (container || document).querySelectorAll('fluent-data-grid').forEach(function(grid) {
-    try {
-      var hdr = grid.querySelector('fluent-data-grid-row[row-type="header"]');
-      if (!hdr) return;
-      var n = hdr.querySelectorAll('fluent-data-grid-cell').length;
-      if (n && 'gridTemplateColumns' in grid) grid.gridTemplateColumns = Array(n).fill('1fr').join(' ');
-    } catch(e) {}
+  function apply() {
+    (container || document).querySelectorAll('fluent-data-grid').forEach(function(grid) {
+      try {
+        var hdr = grid.querySelector('fluent-data-grid-row[row-type="header"]');
+        if (!hdr) return;
+        var n = hdr.querySelectorAll('fluent-data-grid-cell').length;
+        if (n && 'gridTemplateColumns' in grid) grid.gridTemplateColumns = Array(n).fill('1fr').join(' ');
+      } catch(e) {}
+    });
+  }
+  apply();
+  // 重试：custom element 可能尚未升级(deferred module)，rAF 后再试一次
+  requestAnimationFrame(function() {
+    apply();
+    // 终极兜底：100ms 后再试
+    setTimeout(apply, 100);
   });
 }
