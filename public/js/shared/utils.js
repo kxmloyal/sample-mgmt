@@ -21,7 +21,7 @@ function fixGridColumns(container) {
       var hdr = grid.querySelector('fluent-data-grid-row[row-type="header"]');
       if (!hdr) return;
       var n = hdr.querySelectorAll('fluent-data-grid-cell').length;
-      if (n) grid.gridTemplateColumns = Array(n).fill('1fr').join(' ');
+      if (n && 'gridTemplateColumns' in grid) grid.gridTemplateColumns = Array(n).fill('1fr').join(' ');
     } catch(e) {}
   });
 }

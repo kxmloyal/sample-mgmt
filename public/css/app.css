@@ -55,7 +55,7 @@ fluent-button[appearance="accent"]{width:auto}
 .main{flex:1;padding:24px 30px;overflow:auto}
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .topbar h2{margin:0;font-size:20px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);overflow-x:auto}
 .new-grid{display:grid;grid-template-columns:1fr;gap:16px}
 .new-col{border:1px solid var(--line);border-radius:12px;padding:16px}
 .new-col-title{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
