@@ -17,10 +17,10 @@
     <h1>制造品质管理系统</h1>
     <p class="sub">发行 · 确认 · 生命周期 · 分发</p>
     <label>账号</label>
-    <input id="lg-user" placeholder="如 rd01 / qa01 / mfg01 / admin" />
+    <fluent-text-field id="lg-user" placeholder="如 rd01 / qa01 / mfg01 / admin" appearance="outline"></fluent-text-field>
     <label>密码</label>
-    <input id="lg-pass" type="password" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()" />
-    <button class="btn" style="width:100%;margin-top:18px" onclick="doLogin()">登录</button>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
     <div class="login-err" id="lg-err"></div>
     <div class="hint" id="demo-hint">
       演示账号：<br/>

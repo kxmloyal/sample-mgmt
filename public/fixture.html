@@ -16,10 +16,10 @@
     <h1 style="margin:0 0 4px;font-size:20px">制造品质管理系统</h1>
     <p style="color:var(--muted);font-size:14px;margin:0 0 20px">治具管理</p>
     <label>账号</label>
-    <input id="lg-user" placeholder="如 rd01 / me01 / admin" style="width:100%;box-sizing:border-box" />
+    <fluent-text-field id="lg-user" placeholder="如 rd01 / me01 / admin" appearance="outline" style="width:100%;box-sizing:border-box"></fluent-text-field>
     <label>密码</label>
-    <input id="lg-pass" type="password" placeholder="密码" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')doLogin()" />
-    <button class="btn" style="width:100%;margin-top:18px" onclick="doLogin()">登录</button>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
     <div id="lg-err" style="color:var(--bad);font-size:13px;margin-top:8px;text-align:center"></div>
   </div>
 </div>
