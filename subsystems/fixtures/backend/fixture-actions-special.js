@@ -1,5 +1,5 @@
 // routes/fixture-actions-special.js — 改善/报废 action 执行器
-var D = require('../db');
+var D = require('../../../db');
 
 async function doImprove(updated, u, ts, f, note) {
   if (!note || !note.trim()) throw { status: 400, message: '请填写改善说明' };

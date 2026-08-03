@@ -5,8 +5,6 @@
 .b-REQUESTED { background: #f0f0f0; color: #666; }
 .b-ACCEPTED { background: #dbeafe; color: #1d4ed8; }
 .b-VERIFY_PENDING { background: #fef3c7; color: #92400e; }
-.b-VERIFY_RD_OK { background: #e0e7ff; color: #3730a3; }
-.b-VERIFY_ORG_OK { background: #fce7f3; color: #9d174d; }
 .b-TRANSFERRED { background: #d1fae5; color: #065f46; }
 .b-IN_USE { background: #dbeafe; color: #1d4ed8; }
 .b-IMPROVING { background: #fef3c7; color: #92400e; }

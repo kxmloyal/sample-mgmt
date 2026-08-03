@@ -1,9 +1,8 @@
 // routes/fixture-helpers.js — 治具状态机辅助：标签/权限/可用操作
-var D = require('../db');
+var D = require('../../../db');
 
 var STATUS_LABEL = {
-  REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待双人验证',
-  VERIFY_RD_OK: 'RD已确认(待申请单位)', VERIFY_ORG_OK: '申请单位已确认(待RD)',
+  REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
   TRANSFERRED: '已移交', IN_USE: '领用中', IMPROVING: '改善中',
   REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '维修完成(待确认)', RETIRED: '已报废'
 };
@@ -19,8 +18,7 @@ async function allowedActions(role, status, fixture, userId, userDept) {
     var cntPhoto = await D.countFilesByCategory(fixture.id, 'fixture_photo');
     if (cntDrawing && cntDrawing.cnt > 0 && cntPhoto && cntPhoto.cnt > 0) actions.push('MAKE');
   }
-  if (role === 'RD' && (status === 'VERIFY_PENDING' || status === 'VERIFY_ORG_OK')) actions.push('VERIFY_RD');
-  if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && (status === 'VERIFY_PENDING' || status === 'VERIFY_RD_OK')) actions.push('VERIFY_ORG');
+  if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && status === 'VERIFY_PENDING') actions.push('VERIFY');
   if (isMECustodyQA(role) && status === 'TRANSFERRED') actions.push('USE');
   if (status === 'TRANSFERRED') actions.push('IMPROVE');
   if (isMECustodyQA(role) && status === 'IN_USE') { actions.push('RETURN'); actions.push('REPAIR_ME'); actions.push('REPAIR_RD_REQ'); }
@@ -29,7 +27,7 @@ async function allowedActions(role, status, fixture, userId, userDept) {
   if (isMECustodyQA(role) && status === 'REPAIRING_ME') actions.push('REPAIR_DONE');
   if (role === 'RD' && status === 'REPAIRING_RD') actions.push('REPAIR_RD_DONE');
   if (isMECustodyQA(role) && status === 'REPAIR_DONE') actions.push('REPAIR_CONFIRM');
-  if (role === 'ADMIN' && ['IN_USE','TRANSFERRED','IMPROVING','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK'].indexOf(status) !== -1) actions.push('RETIRE');
+  if (role === 'ADMIN' && ['IN_USE','TRANSFERRED','IMPROVING','ACCEPTED','VERIFY_PENDING'].indexOf(status) !== -1) actions.push('RETIRE');
   return actions;
 }
 

@@ -1,5 +1,5 @@
 // routes/fixture-actions-repair.js — 维修 action 执行器
-var D = require('../db');
+var D = require('../../../db');
 
 async function doRepairME(updated, u, ts, f, note) {
   updated.repair_type = 'ME'; updated.repair_requested_by = u.id; updated.repair_requested_at = ts; updated.repair_note = note.trim();

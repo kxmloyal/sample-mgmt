@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>S</text></svg>" />
 <title>制造品质管理系统 - 样品管理</title>
-<link rel="stylesheet" href="/css/app.css?v=20260803d" />
+<link rel="stylesheet" href="/css/app.css?v=20260804c" />
 <link rel="stylesheet" href="/css/help.css" />
 <link rel="stylesheet" href="/subsystems/samples/frontend/css/module.css" />
 <script type="module" src="/vendor/fluentui-web-components.js"></script>
@@ -54,32 +54,32 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Phase 2 过渡期：仍引用 public/ 旧路径 JS，Phase 6 切换至 shared/frontend/ -->
-<script src="/js/shared/utils.js?v=20260803a"></script>
-<script src="/js/shared/api-base.js"></script>
+<!-- Phase 5: 切换到子系统内部路径 + shared/frontend/ -->
+<script src="/shared/frontend/shared/utils.js?v=20260803a"></script>
+<script src="/shared/frontend/api-base.js"></script>
 <script src="/js/shared-constants.js?v=20260803a"></script>
-<script src="/js/constants.js"></script>
-<script src="/js/api.js"></script>
-<script src="/js/ui.js"></script>
-<script src="/js/modal.js"></script>
-<script src="/js/dashboard.js?v=20260803d"></script>
-<script src="/js/dashboard-todo.js?v=20260810"></script>
-<script src="/js/new.js"></script>
-<script src="/js/samples.js?v=20260803a"></script>
-<script src="/js/sample-filter.js?v=20260803a"></script>
-<script src="/js/sample-list-render.js?v=20260803a"></script>
-<script src="/js/detail.js"></script>
-<script src="/js/scan-camera.js"></script>
-<script src="/js/print-queue.js"></script>
-<script src="/js/card-fields.js"></script>
-<script src="/js/scan-wizard.js"></script>
-<script src="/js/scan-return-actions.js"></script>
-<script src="/js/scan.js?v=20260810"></script>
-<script src="/js/logs.js"></script>
-<script src="/js/users.js"></script>
-<script src="/js/help-data.js"></script>
-<script src="/js/help.js"></script>
-<script src="/js/router.js?v=20260810"></script>
+<script src="/subsystems/samples/frontend/js/constants.js"></script>
+<script src="/subsystems/samples/frontend/js/api.js"></script>
+<!-- /js/ui.js 已合并到 shared/frontend/shared/utils.js -->
+<script src="/shared/frontend/modal.js"></script>
+<script src="/subsystems/samples/frontend/js/views/dashboard.js?v=20260803d"></script>
+<script src="/subsystems/samples/frontend/js/views/dashboard-todo.js?v=20260810"></script>
+<script src="/subsystems/samples/frontend/js/views/new.js"></script>
+<script src="/subsystems/samples/frontend/js/views/list.js?v=20260803a"></script>
+<script src="/subsystems/samples/frontend/js/views/list-filter.js?v=20260803a"></script>
+<script src="/subsystems/samples/frontend/js/views/list-render.js?v=20260803a"></script>
+<script src="/subsystems/samples/frontend/js/views/detail.js"></script>
+<script src="/subsystems/samples/frontend/js/views/scan-camera.js"></script>
+<script src="/subsystems/samples/frontend/js/views/print-queue.js"></script>
+<script src="/subsystems/samples/frontend/js/views/card-fields.js"></script>
+<script src="/subsystems/samples/frontend/js/views/scan-wizard.js"></script>
+<script src="/subsystems/samples/frontend/js/views/scan-return-actions.js"></script>
+<script src="/subsystems/samples/frontend/js/views/scan.js?v=20260810"></script>
+<script src="/subsystems/samples/frontend/js/views/logs.js"></script>
+<script src="/subsystems/samples/frontend/js/views/users.js"></script>
+<script src="/subsystems/samples/frontend/js/views/help-data.js"></script>
+<script src="/subsystems/samples/frontend/js/views/help.js"></script>
+<script src="/subsystems/samples/frontend/js/router.js?v=20260810"></script>
 <script>
 window.addEventListener('hashchange',route);
 boot();

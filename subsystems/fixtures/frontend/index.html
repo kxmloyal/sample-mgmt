@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>F</text></svg>" />
 <title>制造品质管理系统 - 治具管理</title>
-<link rel="stylesheet" href="/css/app.css?v=20260803a" />
+<link rel="stylesheet" href="/css/app.css?v=20260804c" />
 <link rel="stylesheet" href="/subsystems/fixtures/frontend/css/module.css" />
 <script type="module" src="/vendor/fluentui-web-components.js"></script>
 </head>
@@ -45,22 +45,22 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- Phase 3 过渡期：仍引用 public/ 旧路径 JS，Phase 6 切换至 subsystems/ 内部路径 -->
-<script src="/js/shared/utils.js?v=20260803a"></script>
-<script src="/js/shared/api-base.js"></script>
-<script src="/js/fixture-api.js"></script>
-<script src="/js/fixture-file-api.js"></script>
-<script src="/js/modal.js"></script>
-<script src="/js/fixture-dashboard.js?v=20260803d"></script>
-<script src="/js/fixture-detail.js"></script>
-<script src="/js/fixture-list-filter.js?v=20260803a"></script>
-<script src="/js/fixture-list.js?v=20260803c"></script>
-<script src="/js/fixture-file-ui.js"></script>
-<script src="/js/fixture-photo-upload.js"></script>
-<script src="/js/fixture-scan.js"></script>
-<script src="/js/fixture-logs.js?v=20260803a"></script>
-<script src="/js/fixture-new.js"></script>
-<script src="/js/fixture-router.js"></script>
+<!-- Phase 5: 切换到子系统内部路径 + shared/frontend/ -->
+<script src="/shared/frontend/shared/utils.js?v=20260803a"></script>
+<script src="/shared/frontend/api-base.js"></script>
+<script src="/shared/frontend/modal.js"></script>
+<script src="/subsystems/fixtures/frontend/js/api.js"></script>
+<script src="/subsystems/fixtures/frontend/js/file-api.js"></script>
+<script src="/subsystems/fixtures/frontend/js/file-ui.js"></script>
+<script src="/subsystems/fixtures/frontend/js/views/dashboard.js?v=20260803d"></script>
+<script src="/subsystems/fixtures/frontend/js/views/detail.js"></script>
+<script src="/subsystems/fixtures/frontend/js/views/list-filter.js?v=20260803a"></script>
+<script src="/subsystems/fixtures/frontend/js/views/list.js?v=20260803c"></script>
+<script src="/subsystems/fixtures/frontend/js/views/fixture-photo-upload.js"></script>
+<script src="/subsystems/fixtures/frontend/js/views/scan.js"></script>
+<script src="/subsystems/fixtures/frontend/js/views/logs.js?v=20260803a"></script>
+<script src="/subsystems/fixtures/frontend/js/views/new.js"></script>
+<script src="/subsystems/fixtures/frontend/js/router.js"></script>
 <script>
 window.addEventListener('hashchange',routeFixture);
 bootFixture();

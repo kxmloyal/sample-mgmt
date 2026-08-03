@@ -1,5 +1,5 @@
 // routes/card-page.js — 匿名数字标示卡页面
-const D = require('../db');
+const D = require('../../../db');
 const { SOURCE_TYPES } = require('./card-constants');
 
 function fmtCard(t) {

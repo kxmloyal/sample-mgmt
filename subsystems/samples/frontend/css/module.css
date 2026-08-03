@@ -8,4 +8,4 @@
 .b-IN_CUSTODY { background: #dcfce7; color: #166534; }
 .b-RETURNING { background: #fee2e2; color: #991b1b; }
 .b-RETIRED { background: #f0f0f0; color: #999; }
-.b-overdue { background: #fee2e2; color: #991b1b; animation: pulse 1.5s infinite; }
+/* .b-overdue 在 app.css 中定义为共享样式 */

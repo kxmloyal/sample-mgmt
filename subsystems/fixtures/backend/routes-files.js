@@ -3,8 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
-const D = require('../db');
-const { logger } = require('../logger');
+const D = require('../../../db');
+const { logger } = require('../../../logger');
 
 var storage = multer.diskStorage({
   destination: function(req, file, cb) {

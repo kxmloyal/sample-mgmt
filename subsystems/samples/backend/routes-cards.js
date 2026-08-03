@@ -1,6 +1,6 @@
 // routes/cards.js — 标示卡：匿名查看 / 标签下载 / 二维码 / 打印
-const D = require('../db');
-const { logger } = require('../logger');
+const D = require('../../../db');
+const { logger } = require('../../../logger');
 const QRCode = require('qrcode');
 const { buildLabelHtml, buildCardPrintHtml, parseSize } = require('./card-html');
 const { cardPageHtml } = require('./card-page');

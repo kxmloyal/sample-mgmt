@@ -1,5 +1,5 @@
 // routes/fixture-actions-cycle.js — 接收/撤销/归还/领用 action 执行器
-var D = require('../db');
+var D = require('../../../db');
 
 async function doAccept(updated, u, ts, f, note, expectedDays) {
   if (!expectedDays || expectedDays <= 0) throw { status: 400, message: '请填写预计完成天数' };

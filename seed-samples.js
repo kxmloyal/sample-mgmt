@@ -1,13 +1,16 @@
-// subsystems/samples/seed/seed.js — 样品子系统种子数据
-// 导出 seed(pool) 函数供框架调用，Phase 2 过渡期内仍通过 D 模块操作
-
-const D = require('../../../db');
+// 样品管理系统全量测试数据种子脚本
+// 用法: node seed-samples.js（先清空再导入，需先执行 node seed.js 创建账号）
+require('dotenv').config();
+const D = require('./db');
 
 const NOW = new Date();
 function daysAgo(n) { var d = new Date(NOW); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 19).replace('T', ' '); }
 function daysFromNow(n) { var d = new Date(NOW); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 19).replace('T', ' '); }
 
-async function seed(pool) {
+async function seed() {
+  await D.init();
+  const pool = D.pool();
+
   // 查找用户
   const admin = await D.getUserByUsername('admin');
   const rd    = await D.getUserByUsername('rd01');
@@ -16,9 +19,9 @@ async function seed(pool) {
   const fqc   = await D.getUserByUsername('fqc01');
   const me    = await D.getUserByUsername('me01');
 
-  if (!rd || !qa) { console.log('请先执行 node seed.js 创建基础账号'); return; }
+  if (!rd || !qa) { console.log('请先执行 node seed.js 创建基础账号'); process.exit(1); }
 
-  // 清空样品数据
+  // ═══ 清空样品数据 ═══
   console.log('清空样品数据…');
   await pool.execute('DELETE FROM scan_logs');
   await pool.execute('DELETE FROM samples');
@@ -26,7 +29,7 @@ async function seed(pool) {
   await pool.execute('ALTER TABLE scan_logs AUTO_INCREMENT = 1');
   console.log('已清空。\n');
 
-  // 工具函数
+  // ═══ 工具函数 ═══
   async function transition(s, overrides) {
     var current = await D.getSampleById(s.id);
     return await D.updateSample({ ...current, ...overrides });
@@ -58,7 +61,7 @@ async function seed(pool) {
   await D.addLog({ sample_id: s3.id, action: 'CREATE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '新建样品（含标示卡）' });
   console.log('  ' + s3.sample_no + ' 长寿命验证风扇 [含标示卡 NG·外观·客供]');
 
-  // ═══ 2. PRODUCED: 制作完成 (2个) ═══
+  // ═══ 2. PRODUCED: 制作完成，待品保发行 (2个) ═══
   console.log('\n--- PRODUCED 状态 ---');
 
   var s4 = await D.createSample({
@@ -81,7 +84,7 @@ async function seed(pool) {
   await D.addLog({ sample_id: s5.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '研发确认制作完成' });
   console.log('  ' + s5.sample_no + ' 竞品对标风扇·A品牌');
 
-  // ═══ 3. RELEASED: 已发行 (3个) ═══
+  // ═══ 3. RELEASED: 已发行，待保管接收 (3个) ═══
   console.log('\n--- RELEASED 状态 ---');
 
   var s6 = await D.createSample({
@@ -122,7 +125,7 @@ async function seed(pool) {
   await D.addLog({ sample_id: s8.id, action: 'RELEASE', role: 'QA', user_id: qa.id, dept: '品保文管中心', note: '正式发行，复检周期365天' });
   console.log('  ' + s8.sample_no + ' 年度稽核留样（365天周期）');
 
-  // ═══ 4. IN_CUSTODY: 保管中 (4个) ═══
+  // ═══ 4. IN_CUSTODY: 保管中 (4个，含逾期/将到期/正常/长周期) ═══
   console.log('\n--- IN_CUSTODY 状态 ---');
 
   async function fullFlow(s, produced, released, cycle, inspectOffset, user, dept, location) {
@@ -134,6 +137,7 @@ async function seed(pool) {
     await D.addLog({ sample_id: s.id, action: 'CUSTODY', role: user.role, user_id: user.id, dept: dept, location: location, note: '部门接收保管' });
   }
 
+  // 正常保管中
   var s9 = await D.createSample({
     name: '产线日常监控样品', spec: 'DC12V·0.35A·Φ80×45mm', model: 'SF-1225-A', station: '马达组',
     notes: '产线日常品质监控样品', created_by: rd.id,
@@ -144,6 +148,7 @@ async function seed(pool) {
   await fullFlow(s9, 168, 120, 90, 60, mfg, '制造部', 'A区-3架-2层');
   console.log('  ' + s9.sample_no + ' 产线日常监控样品 [含标示卡 NG·成品检测·元山, 90天, 60天后复检]');
 
+  // 即将到期（7天内）
   var s10 = await D.createSample({
     name: '出货检验留样', spec: 'DC12V·0.35A·Φ80×45mm', model: 'SF-1225-A', station: '成品组',
     notes: '出货检验留样，需尽快复检', created_by: rd.id,
@@ -154,6 +159,7 @@ async function seed(pool) {
   await fullFlow(s10, 200, 150, 90, 3, mfg, '制造部', 'A区-2架-1层');
   console.log('  ' + s10.sample_no + ' 出货检验留样 [含标示卡 OK·异音·客供, 90天, 3天后复检(即将到期)]');
 
+  // 已逾期
   var s11 = await D.createSample({
     name: '客诉追溯留样', spec: 'DC12V·0.45A·Φ92×38mm', model: 'SF-9225-Y', station: '成品组',
     notes: '客诉追溯样品，已逾期未复检', created_by: rd.id,
@@ -164,6 +170,7 @@ async function seed(pool) {
   await fullFlow(s11, 300, 250, 60, -15, fqc, 'FQC', 'B区-3架-2层');
   console.log('  ' + s11.sample_no + ' 客诉追溯留样 [含标示卡 NG·外观·塔岗, 60天, 已逾期15天]');
 
+  // 长周期正常保管
   var s12 = await D.createSample({
     name: '年度型式试验留样', spec: 'DC24V·0.45A·IP55·Φ120×38mm', model: 'SF-12025-P', station: '成品组',
     notes: '年度型式试验留样', created_by: rd.id,
@@ -220,15 +227,14 @@ async function seed(pool) {
   await D.addLog({ sample_id: s15.id, action: 'RETIRE_ONLY', role: 'QA', user_id: qa.id, dept: '品保文管中心', note: '样品过期无法使用，确认作废' });
   console.log('  ' + s15.sample_no + ' 过期作废样品 [含标示卡 OK·异音·客供, QA已签]');
 
-  // 汇总
-  var rows = await pool.execute('SELECT status, COUNT(*) as cnt FROM samples GROUP BY status ORDER BY status');
+  // ═══ 汇总 ═══
+  var all = await pool.execute('SELECT status, COUNT(*) as cnt FROM samples GROUP BY status ORDER BY status');
   console.log('\n========== 汇总 ==========');
-  var total = (await pool.execute('SELECT COUNT(*) as cnt FROM samples'))[0][0].cnt;
-  console.log('  样品总数: ' + total + ' 个');
-  rows[0].forEach(function(r) { console.log('    ' + r.status + ': ' + r.cnt + ' 个'); });
-  var logCnt = (await pool.execute('SELECT COUNT(*) as cnt FROM scan_logs'))[0][0].cnt;
-  console.log('  操作日志: ' + logCnt + ' 条');
-  console.log('\n样品种子完成。');
+  console.log('  样品总数: ' + (await pool.execute('SELECT COUNT(*) as cnt FROM samples'))[0][0].cnt + ' 个');
+  all[0].forEach(function(r) { console.log('    ' + r.status + ': ' + r.cnt + ' 个'); });
+  var logs = await pool.execute('SELECT COUNT(*) as cnt FROM scan_logs');
+  console.log('  操作日志: ' + logs[0][0].cnt + ' 条');
+  console.log('\n样品种子完成，请访问 http://localhost:3000/index.html 验证。');
 }
 
-module.exports = seed;
+seed().catch(function(e) { console.error(e); process.exit(1); });

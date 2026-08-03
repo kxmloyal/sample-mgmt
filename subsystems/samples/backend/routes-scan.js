@@ -1,5 +1,5 @@
 // routes/scan.js — 扫码台：解析 + 状态机
-const D = require('../db');
+const D = require('../../../db');
 
 const STATUS_LABEL = {
   NEW: '新建(待制作确认)', PRODUCED: '制作完成', RELEASED: '已发行',

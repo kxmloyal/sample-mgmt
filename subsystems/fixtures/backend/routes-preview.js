@@ -2,8 +2,8 @@
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
-const D = require('../db');
-const { logger } = require('../logger');
+const D = require('../../../db');
+const { logger } = require('../../../logger');
 
 // 检测 gmsh 是否可用
 var gmshPath = null;

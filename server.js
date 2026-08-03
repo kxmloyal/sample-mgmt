@@ -15,7 +15,7 @@ const MySQLStoreFactory = require('express-mysql-session');
 const D = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'sample-mgmt-dev-secret-change-me';
 
 if (process.env.NODE_ENV === 'production' && SESSION_SECRET === 'sample-mgmt-dev-secret-change-me') {
@@ -137,14 +137,8 @@ if (require('fs').existsSync(subsysBase)) {
   }
 }
 
-// Phase 2-3 兼容期：保留旧路由直接注册（Phase 6 删除）
-require('./routes/samples').register(app);
-require('./routes/scan').register(app);
-require('./routes/cards').register(app);
+// 全局路由（不属于任何子系统）
 require('./routes/misc').register(app);
-require('./routes/fixtures').register(app);
-require('./routes/fixture-files').register(app);
-require('./routes/fixture-preview').register(app);
 
 // ---------------- 全局错误处理 ----------------
 app.use((err, req, res, next) => {

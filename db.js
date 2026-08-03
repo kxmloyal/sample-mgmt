@@ -36,124 +36,7 @@ async function init() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS samples (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        sample_no VARCHAR(20) UNIQUE NOT NULL,
-        name VARCHAR(200),
-        spec VARCHAR(200),
-        model VARCHAR(100),
-        station VARCHAR(50),
-        image VARCHAR(500),
-        produced_image VARCHAR(500),
-        inspect_image VARCHAR(500),
-        qr_token VARCHAR(64) UNIQUE NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'NEW',
-        created_by INT,
-        produced_at VARCHAR(24),
-        released_at VARCHAR(24),
-        release_cycle_days INT,
-        next_inspect_at VARCHAR(24),
-        custody_dept VARCHAR(50),
-        storage_location VARCHAR(100),
-        notes TEXT,
-        sample_type VARCHAR(20),
-        limit_item VARCHAR(50),
-        source_type VARCHAR(10),
-        valid_until VARCHAR(24),
-        card_version VARCHAR(10),
-        test_standard TEXT,
-        test_data TEXT,
-        signed_by_rnd VARCHAR(50), /* @deprecated v2: 待物理删除，已全量迁移到 signed_by_rd */
-        signed_by_rd VARCHAR(50),
-        signed_by_qa VARCHAR(50),
-        retired_reason TEXT,
-        replaced_by VARCHAR(20),
-        replaces VARCHAR(20),
-        retire_assigned_rd VARCHAR(10),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_samples_status (status),
-        INDEX idx_samples_retire_rd (retire_assigned_rd)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS scan_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        sample_id INT NOT NULL,
-        action VARCHAR(30) NOT NULL,
-        role VARCHAR(20),
-        user_id INT,
-        dept VARCHAR(50),
-        location VARCHAR(100),
-        note TEXT,
-        target_type VARCHAR(10) DEFAULT 'sample',
-        target_id INT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_logs_sample (sample_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS fixtures (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        fixture_no VARCHAR(20) UNIQUE NOT NULL,
-        name VARCHAR(200) NOT NULL,
-        spec VARCHAR(200),
-        model VARCHAR(100),
-        station VARCHAR(100),
-        category VARCHAR(50),
-        status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
-        requested_by INT,
-        requested_dept VARCHAR(50),
-        request_note TEXT,
-        request_image VARCHAR(300),
-        made_by INT,
-        made_at DATETIME,
-        made_note TEXT,
-        made_image VARCHAR(300),
-        verified_rd INT,
-        verified_rd_at DATETIME,
-        verified_me INT,
-        verified_me_at DATETIME,
-        transferred_at DATETIME,
-        verify_note TEXT,
-        used_by INT,
-        used_at DATETIME,
-        use_location VARCHAR(100),
-        expected_return_days INT DEFAULT NULL,
-        expected_return_at DATETIME DEFAULT NULL,
-        use_note TEXT,
-        repair_type VARCHAR(10),
-        repair_requested_by INT,
-        repair_requested_at DATETIME,
-        repair_note TEXT,
-        repaired_by INT,
-        repaired_at DATETIME,
-        repair_done_image VARCHAR(300),
-        repair_confirmed_by INT,
-        repair_confirmed_at DATETIME,
-        retired_by INT,
-        retired_at DATETIME,
-        retired_reason TEXT,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_fixtures_status (status)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS fixture_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        fixture_id INT NOT NULL,
-        action VARCHAR(30) NOT NULL,
-        role VARCHAR(20),
-        user_id INT,
-        dept VARCHAR(50),
-        note TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_flogs_fixture (fixture_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
+    // ★ 子系统 DDL 已迁移至 subsystems/*/db/schema.sql，由下方自动扫描加载
   } finally {
     conn.release();
   }
@@ -210,9 +93,41 @@ const dbRef = {
   }
 };
 const users = require('./db/users')({ q, one, dbRef });
-const samples = require('./db/samples')({ q, one, dbRef, nowISO });
-const logs = require('./db/logs')({ q, dbRef });
-const fixtures = require('./db/fixtures')({ q, one, dbRef, nowISO });
+
+// ★ Phase 6: 自动扫描 subsystems/*/db/dao.js 工厂函数并实例化
+// 各子系统 DAO 接受 { q, one, run, nowISO } 参数，通过展平暴露给 D.fnName()
+const allDaoExports = {};
+(function scanDao() {
+  const fs = require('fs');
+  const path = require('path');
+  const subsystemsDir = path.join(__dirname, 'subsystems');
+  if (!fs.existsSync(subsystemsDir)) return;
+  const subEntries = fs.readdirSync(subsystemsDir, { withFileTypes: true });
+  for (const subEntry of subEntries) {
+    if (!subEntry.isDirectory()) continue;
+    const daoPath = path.join(subsystemsDir, subEntry.name, 'db', 'dao.js');
+    if (!fs.existsSync(daoPath)) continue;
+    try {
+      const createDao = require(daoPath);
+      const deps = { q, one, run: dbRef.run, nowISO };
+      const dao = createDao(deps);
+      // 展平：同名函数冲突时加子系统前缀
+      for (const key of Object.keys(dao)) {
+        if (allDaoExports[key] !== undefined) {
+          allDaoExports[subEntry.name + '_' + key] = dao[key];
+          console.log('[db] DAO 函数名冲突，已重命名: ' + key + ' → ' + subEntry.name + '_' + key);
+        } else {
+          allDaoExports[key] = dao[key];
+        }
+      }
+      console.log('[db] 子系统 DAO 已加载: ' + subEntry.name);
+    } catch (e) {
+      console.error('[db] 加载子系统 DAO 失败: ' + subEntry.name, e.message);
+    }
+  }
+})();
+
+// 治具文件管理 DAO（尚未迁移到 subsystems/fixtures/db/，保留手动加载）
 const fixtureFiles = require('./db/fixture-files')({ q, one, dbRef, nowISO });
 
 const ready = init(); // 兼容 server.js D.ready.then(...)
@@ -220,5 +135,5 @@ const ready = init(); // 兼容 server.js D.ready.then(...)
 function withTransaction(fn) { return txWithTransaction(getPool(), fn); }
 module.exports = {
   init, ready, pool: getPool, nowISO, withTransaction,
-  ...users, ...samples, ...logs, ...fixtures, ...fixtureFiles
+  ...users, ...allDaoExports, ...fixtureFiles
 };

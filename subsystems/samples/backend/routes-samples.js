@@ -1,10 +1,10 @@
 // routes/samples.js — 样品 CRUD（列表/详情/新建/删除/更新 + saveSampleImage）
 const path = require('path');
 const fs = require('fs');
-const D = require('../db');
-const { logger } = require('../logger');
+const D = require('../../../db');
+const { logger } = require('../../../logger');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
+const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
 const UPLOAD_MAX_SIZE = parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10);
 
 // 保存样品图片（同步落盘后再返回 URL，避免 DB 入库但文件未写入的脏数据）

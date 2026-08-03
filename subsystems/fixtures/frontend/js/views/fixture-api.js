@@ -39,9 +39,9 @@ function buildFixtureNav() {
     { id: 'dashboard', label: '看板' },
     { id: 'list', label: '治具清单' },
     { id: 'new', label: '新建申请' },
-    { id: 'scan', label: '扫码台' }
+    { id: 'scan', label: '扫码台' },
+    { id: 'logs', label: '操作日志' }
   ];
-  if (me.role === 'ADMIN') nav.push({ id: 'logs', label: '操作日志' });
   document.getElementById('nav').innerHTML = nav.map(function (n) {
     return '<button data-k="' + n.id + '" onclick="goFixture(\'' + n.id + '\')">' + n.label + '</button>';
   }).join('');

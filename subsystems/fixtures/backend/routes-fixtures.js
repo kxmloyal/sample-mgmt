@@ -1,5 +1,5 @@
 // routes/fixtures.js — 治具路由：CRUD + 扫码状态机
-var D = require('../db');
+var D = require('../../../db');
 var H = require('./fixture-helpers');
 var AM = require('./fixture-actions-make');
 var { doAccept, doCancel, doReturn, doUse, doMaintenance } = require('./fixture-actions-cycle');
@@ -138,17 +138,10 @@ function register(app) {
         });
         return res.json({ fixture: makeResult, action: chosenAction, message: '操作成功：' + chosenAction });
       }
-      else if (chosenAction === 'VERIFY_RD')  {
-        var willTransfer = f.status === 'VERIFY_ORG_OK';
-        if (willTransfer && (!location || !location.trim())) return res.status(400).json({ error: '请填写存放位置' });
+      else if (chosenAction === 'VERIFY')  {
+        if (!location || !location.trim()) return res.status(400).json({ error: '请填写存放位置' });
         if (location && location.trim()) updated.storage_location = location.trim();
-        updated = await AM.doVerifyRD(updated, u, ts, f, note);
-      }
-      else if (chosenAction === 'VERIFY_ORG')  {
-        var willTransfer = f.status === 'VERIFY_RD_OK';
-        if (willTransfer && (!location || !location.trim())) return res.status(400).json({ error: '请填写存放位置' });
-        if (location && location.trim()) updated.storage_location = location.trim();
-        updated = await AM.doVerifyOrg(updated, u, ts, f, note);
+        updated = await AM.doVerify(updated, u, ts, f, note);
       }
       else if (chosenAction === 'ACCEPT')       updated = await doAccept(updated, u, ts, f, note, Number(expectedDays || 0));
       else if (chosenAction === 'CANCEL')       updated = await doCancel(updated, u, ts, f, note);

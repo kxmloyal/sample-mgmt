@@ -12,11 +12,10 @@ const fs = require('fs');
  * 此处由旧路由委托确保兼容。Phase 4 切换后 server.js 不再直接注册。
  */
 function register(app) {
-  // Phase 2 过渡期：旧路由已在 server.js 注册，此处不重复注册
-  // Phase 4 切换后：取消注释以下行，改为框架自动调用
-  // require('../../../routes/samples').register(app);
-  // require('../../../routes/scan').register(app);
-  // require('../../../routes/cards').register(app);
+  // Phase 6: 子系统自行注册路由
+  require('./routes-samples').register(app);
+  require('./routes-scan').register(app);
+  require('./routes-cards').register(app);
 }
 
 /**
