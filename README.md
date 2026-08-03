@@ -109,7 +109,7 @@ npm start            # 启动，访问 http://localhost:3000
 
 | 变量 | 作用 | 默认值 |
 |---|---|---|
-| `PORT` | 服务监听端口 | `3000` |
+| `PORT` | 服务监听端口 | `4000` |
 | `SESSION_SECRET` | 会话签名密钥 | `sample-mgmt-dev-secret-change-me` |
 | `NODE_ENV` | 环境标识 | `development` |
 | `LOGIN_RATE_LIMIT_MAX` | 登录速率限制（次/分钟） | `10` |

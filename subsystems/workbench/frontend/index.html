@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f766e" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>W</text></svg>" />
+<title>制造品质管理系统 - 全局工作台</title>
+<link rel="stylesheet" href="/css/app.css?v=20260804c" />
+<link rel="stylesheet" href="/subsystems/workbench/frontend/css/module.css?v=20260804f" />
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
+</head>
+<body>
+
+<fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
+<div id="login" style="display:none">
+  <div class="login-card">
+    <h1>制造品质管理系统</h1>
+    <p class="sub">全局项目进度监控</p>
+    <label>账号</label>
+    <fluent-text-field id="lg-user" placeholder="如 admin / rd01 / qa01" appearance="outline"></fluent-text-field>
+    <label>密码</label>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
+    <div class="login-err" id="lg-err"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="side">
+    <div class="logo">全局工作台</div>
+    <div class="nav" id="nav"></div>
+    <div class="me">
+      <div><b id="me-name"></b></div>
+      <div id="me-role" class="muted"></div>
+      <a href="/portal.html" style="display:block;font-size:12px;color:var(--muted);text-decoration:none;margin-top:4px">← 返回门户</a>
+      <button class="btn ghost sm" style="margin-top:8px" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div></div>
+    <div id="view"></div>
+  </div>
+</div>
+</fluent-provider>
+
+<div class="toast" id="toast"></div>
+
+<script src="/shared/frontend/shared/utils.js?v=20260804"></script>
+<script src="/shared/frontend/api-base.js"></script>
+<script src="/shared/frontend/modal.js"></script>
+<script src="/subsystems/workbench/frontend/js/views/overdue.js?v=20260804g"></script>
+<script src="/subsystems/workbench/frontend/js/views/dashboard.js?v=20260804g"></script>
+<script src="/subsystems/workbench/frontend/js/views/threshold.js?v=20260804f"></script>
+<script src="/subsystems/workbench/frontend/js/router.js"></script>
+<script>
+window.addEventListener('hashchange', route);
+boot();
+</script>
+</body>
+</html>

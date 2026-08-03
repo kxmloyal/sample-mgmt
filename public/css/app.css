@@ -6,6 +6,12 @@
   --shadow-3:0 10px 15px rgba(15,23,42,.08),0 4px 6px rgba(15,23,42,.05);
   /* Fluent Design Token 映射（由 Fluent Web Components 自动读取） */
   --accent-fill-rest:#0f766e;
+  /* 卡片设计 token（规范见 docs/superpowers/specs/2026-08-04-card-design-system.md） */
+  --card-radius:12px;
+  --card-border:1px solid var(--line);
+  --card-pad:14px 16px;
+  --card-hover:transform .15s ease,box-shadow .15s ease;
+  --card-shadow-hover:0 4px 12px rgba(15,23,42,.10);
   color-scheme:light;
 }
 *{box-sizing:border-box}
@@ -68,10 +74,7 @@ fluent-data-grid-row[row-type="header"]{background:var(--bg);color:var(--muted);
 fluent-data-grid-row:not([row-type="header"]):hover{background:#fafbfc}
 fluent-data-grid-cell{padding:10px 12px;text-align:left;overflow:hidden;text-overflow:ellipsis}
 .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
-.b-NEW{background:#f0fdfa;color:#115e59}
-.b-PRODUCED{background:#ecfeff;color:#155e75}
-.b-RELEASED{background:#fef9c3;color:#854d0e}
-.b-IN_CUSTODY{background:#dcfce7;color:#166534}
+/* 子系统状态 badge 颜色由 subsystems/*/frontend/css/module.css 提供 */
 .b-overdue{background:#fee2e2;color:#991b1b;animation:pulse 1.5s infinite}
 .muted{color:var(--muted)}
 .toast{position:fixed;top:18px;right:18px;background:#1f2733;color:#fff;padding:12px 18px;border-radius:10px;
@@ -137,8 +140,7 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 .card-grid .full-row{flex-direction:column;align-items:stretch;gap:2px;grid-column:1/-1}
 .card-grid .full-row label{white-space:normal}
 @media(max-width:767px){.card-grid{grid-template-columns:1fr}}
-/* 治具 badge 状态标签（从 fixture.html 迁移） */
-.b-REQUESTED{background:#f0f0f0;color:#666}.b-VERIFY_PENDING{background:#fef3c7;color:#92400e}.b-VERIFY_RD_OK{background:#e0e7ff;color:#3730a3}.b-VERIFY_ME_OK{background:#fce7f3;color:#9d174d}.b-TRANSFERRED{background:#d1fae5;color:#065f46}.b-IN_USE{background:#dbeafe;color:#1d4ed8}.b-REPAIRING_ME{background:#fee2e2;color:#991b1b}.b-REPAIRING_RD{background:#fed7aa;color:#9a3412}.b-REPAIR_DONE{background:#e0e7ff;color:#3730a3}.b-RETIRED{background:#f0f0f0;color:#999}.b-ACCEPTED{background:#dbeafe;color:#1d4ed8}.b-IMPROVING{background:#fef3c7;color:#92400e}.b-VERIFY_ORG_OK{background:#fce7f3;color:#9d174d}
+/* 治具 status badge 由 subsystems/fixtures/frontend/css/module.css 提供 */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
 @media(prefers-reduced-motion:reduce){.b-overdue{animation:none}*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 .overdue-row{background:#fff5f5!important}
@@ -172,9 +174,9 @@ a.link{color:var(--brand);cursor:pointer;font-weight:600}
 }
 /* ===== Dashboard 专用 ===== */
 .kb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.kb-stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.kb-stat{background:var(--panel);border:var(--card-border);border-radius:var(--card-radius);padding:var(--card-pad);position:relative;overflow:hidden;cursor:pointer;transition:var(--card-hover)}
 fluent-card.kb-stat::part(control){background:transparent;border:none;padding:0}
-.kb-stat:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
+.kb-stat:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
 .kb-stat.active{border-color:var(--stat-color,var(--brand));box-shadow:0 0 0 2px var(--stat-color,var(--brand));background:#eef2ff}
 .kb-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stat-color,var(--brand))}
 .kb-stat .n{font-size:26px;font-weight:700;color:var(--stat-color,var(--brand))}
@@ -221,11 +223,11 @@ fluent-card.kb-stat::part(control){background:transparent;border:none;padding:0}
 .dash-pager fluent-button{padding:4px 12px}
 /* 门户卡片网格 — 弹性等高卡片，按钮自动底部对齐 */
 .portal-cards{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
-.portal-card{background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:32px 40px;width:240px;
+.portal-card{background:var(--panel);border-radius:var(--card-radius);box-shadow:var(--shadow);padding:32px 40px;width:240px;
   text-align:center;text-decoration:none;color:var(--text);
   display:flex;flex-direction:column;align-items:center;
-  transition:transform .15s,box-shadow .15s;cursor:pointer}
-.portal-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(20,30,50,.12)}
+  transition:var(--card-hover);cursor:pointer}
+.portal-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
 .portal-card .card-icon{font-size:40px;line-height:1;margin-bottom:12px}
 .portal-card h3{margin:0 0 8px;font-size:16px}
 .portal-card .card-desc{margin:0;font-size:13px;color:var(--muted);flex:1}

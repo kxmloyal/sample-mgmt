@@ -69,3 +69,6 @@ function _initColResize(table) {
     });
   });
 }
+
+// 兼容别名：toast() → showToast()（从 public/js/ui.js 迁移）
+function toast(msg, type) { showToast(msg, type); }

@@ -1,0 +1,59 @@
+/* subsystems/workbench/frontend/css/module.css — 工作台专属样式
+   卡片组件使用共享 .kb-stats/.kb-stat（规范见 docs/superpowers/specs/2026-08-04-card-design-system.md） */
+
+/* 总计卡突出标识（JS 钩子类，边框加粗突出） */
+.wb-card-total{border-width:2px;border-color:var(--brand)}
+
+/* 积压标签（扩展区，位于 .kb-stat 内） */
+.wb-card-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.wb-tag{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
+.wb-tag-1{color:#16a34a;background:#f0fdf4}
+.wb-tag-2{color:#ea580c;background:#fff7ed}
+.wb-tag-3{color:#dc2626;background:#fef2f2}
+
+/* 表格内积压标记 */
+.wb-badge{font-size:12px;padding:2px 8px;border-radius:4px;font-weight:600;white-space:nowrap}
+
+/* 类型标签 */
+.wb-type-tag{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
+.wb-type-tag.sample{color:var(--brand);background:#f0fdfa}
+.wb-type-tag.fixture{color:#7c3aed;background:#f5f3ff}
+
+/* 表格容器与表头（app.css 无 .data-table/.table-wrap，需工作台自备） */
+.table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table thead th{background:#f8fafc;text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap}
+
+/* 表格行 */
+.wb-row td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.wb-row:last-child td{border-bottom:none}
+
+/* 筛选下拉 */
+.filter-select{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;color:var(--text)}
+.filter-select:focus{outline:none;border-color:var(--brand)}
+
+/* ===== 阈值设置弹窗（.th-* 仅工作台使用，模块样式隔离） ===== */
+.th-form{min-width:0;width:min(500px,100%);padding:18px;display:flex;flex-direction:column;gap:16px}
+.th-presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.th-preset-label{font-size:12px;color:var(--muted);margin-right:2px}
+.th-fields{display:flex;gap:16px;flex-wrap:wrap}
+.th-field{flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px}
+.th-field label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:2px}
+.th-sub{font-size:11px;color:var(--muted);font-weight:400}
+.th-input-row{display:flex;align-items:center;gap:8px}
+.th-input-row input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;color:var(--text)}
+.th-input-row input:focus{outline:none;border-color:var(--brand)}
+.th-unit{color:var(--muted);font-size:13px}
+.th-hint{font-size:11px;color:var(--muted)}
+.th-preview{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+.th-preview-title{font-size:12px;color:var(--muted);margin-bottom:10px}
+.th-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px}
+.th-bar:last-child{margin-bottom:0}
+.th-bar-label{width:64px;color:var(--muted);flex:none}
+.th-bar-track{flex:1;height:10px;background:#eef0f3;border-radius:5px;overflow:hidden}
+.th-bar-fill{height:100%;border-radius:5px;transition:width .2s ease}
+.th-bar-ok{background:#16a34a}
+.th-bar-warn{background:#ea580c}
+.th-bar-bad{background:#dc2626}
+.th-bar-count{width:52px;text-align:right;flex:none;font-weight:600}
+.th-err{color:var(--bad);font-size:12px;min-height:18px;margin-top:8px}

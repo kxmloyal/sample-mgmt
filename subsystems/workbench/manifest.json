@@ -1,0 +1,28 @@
+{
+  "id": "workbench",
+  "name": "全局工作台",
+  "description": "跨部门项目进度监控，合并样品与治具待办积压视图",
+  "version": "1.0.0",
+  "icon": "chart",
+  "route": {
+    "prefix": "/api/workbench",
+    "entry": "/subsystems/workbench/frontend/index.html",
+    "hashBase": "/workbench"
+  },
+  "database": {
+    "tables": []
+  },
+  "roles": {
+    "use": ["ADMIN", "RD", "QA", "CUSTODY", "ME"],
+    "admin": ["ADMIN"]
+  },
+  "navigation": [
+    {
+      "key": "dashboard",
+      "label": "工作台",
+      "icon": "chart",
+      "view": "renderWorkbenchDashboard",
+      "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"]
+    }
+  ]
+}

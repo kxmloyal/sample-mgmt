@@ -308,6 +308,23 @@ Claude 生成 manifest.json 后 MUST 自检：
 5. **禁止**在 subsystem 注册时硬编码 `server.js`（框架应自动发现）
 6. **禁止**在 `portal.html` 中硬编码新子系统卡片（应用 JS 动态渲染）
 
+## 16. 卡片设计系统（Claude 实施指引）
+
+> 完整规范见 [docs/superpowers/specs/2026-08-04-card-design-system.md](./docs/superpowers/specs/2026-08-04-card-design-system.md) 与 [AGENTS.md 第 18 节](./AGENTS.md#18-卡片设计系统规范强制)。
+
+### 16.1 核心要点
+
+- 卡片圆角/过渡/阴影 MUST 使用 app.css 的 `--card-radius`/`--card-hover`/`--card-shadow-hover` token，禁止硬编码
+- 统计卡 MUST 使用共享 `.kb-stat`（fluent-card + `.n`/`.l` + 可选 `.x` 扩展区），禁止自建卡片类
+- 交互协议：hover 上浮 / 单击筛选 / 再次单击取消 / active 高亮；双击跳列表（仅单一子系统看板）
+- 子系统补充样式（如积压标签 `.wb-tag`）写入本子系统 `module.css`
+
+### 16.2 Claude 禁止行为（卡片相关）
+
+1. 禁止在 app.css 新增子系统卡片样式（`.kb-stat` 是共享组件，修改需三系统回归）
+2. 禁止硬编码卡片圆角 14/16px 或自定义 hover 阴影
+3. 禁止统计卡与入口卡混用结构（`.kb-stat` 与 `.portal-card` 职责分离）
+
 ---
 
 **本文件为 Claude 特定指南。核心规则与 AGENTS.md 一致,修改本文件需用户明确同意。**
