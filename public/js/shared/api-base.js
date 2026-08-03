@@ -89,10 +89,10 @@ function fmt(d) {
   return s;
 }
 
-/** Toast 提示 */
-function showToast(msg) {
+/** Toast 提示（type可选：'ok'成功/'err'错误/'warn'警告） */
+function showToast(msg, type) {
   var el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(function () { el.classList.remove('show'); }, 2500);
+  el.textContent = msg; el.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(function() { el.className = 'toast'; }, 2500);
 }

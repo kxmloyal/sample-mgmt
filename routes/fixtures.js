@@ -45,17 +45,21 @@ function register(app) {
 
   // 新建申请
   app.post('/api/fixtures', requireAuth, async function(req, res) {
-    var u = await currentUser(req);
-    var _b = req.body || {}, name = _b.name, spec = _b.spec, model = _b.model, station = _b.station,
-        category = _b.category, request_note = _b.request_note, notes = _b.notes;
-    if (!name || !name.trim()) return res.status(400).json({ error: '治具名称必填' });
-    var f = await D.createFixture({
-      name: name.trim(), spec: spec, model: model, station: station,
-      category: category, requested_by: u.id, requested_dept: u.dept,
-      request_note: request_note, notes: notes
-    });
-    await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建申请' });
-    res.json(f);
+    try {
+      var u = await currentUser(req);
+      var _b = req.body || {}, name = _b.name, spec = _b.spec, model = _b.model, station = _b.station,
+          category = _b.category, request_note = _b.request_note, notes = _b.notes;
+      if (!name || !name.trim()) return res.status(400).json({ error: '治具名称必填' });
+      var f = await D.createFixture({
+        name: name.trim(), spec: spec, model: model, station: station,
+        category: category, requested_by: u.id, requested_dept: u.dept,
+        request_note: request_note, notes: notes
+      });
+      await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建申请' });
+      res.json(f);
+    } catch (err) {
+      res.status(500).json({ error: '新建治具失败：' + (err.message || '服务器内部错误') });
+    }
   });
 
   // 看板
@@ -93,6 +97,7 @@ function register(app) {
 
   // 扫码状态机（统一入口）
   app.post('/api/fixtures/scan', requireAuth, async function(req, res) {
+    try {
     var u = await currentUser(req);
     var _c = req.body || {}, code = _c.code, note = _c.note, location = _c.location, days = _c.days, expectedDays = _c.expectedDays;
     var fixtureNo = (code || '').trim();
@@ -178,6 +183,9 @@ function register(app) {
 
     var result = await D.updateFixture(updated, f);
     res.json({ fixture: result, action: chosenAction, message: '操作成功：' + chosenAction });
+    } catch (err) {
+      res.status(500).json({ error: '治具扫码操作失败：' + (err.message || '服务器内部错误') });
+    }
   });
 }
 

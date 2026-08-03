@@ -1,3 +1,8 @@
+<!--
+  过渡期说明：此文件为治具子系统旧入口。
+  新入口: /subsystems/fixtures/frontend/index.html
+  Phase 6 统一切换后删除此文件。
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -5,7 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232563eb'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>M</text></svg>" />
 <title>制造品质管理系统 - 治具管理</title>
-<link rel="stylesheet" href="/css/app.css?v=20260812" />
+<link rel="stylesheet" href="/css/app.css?v=20260803a" />
 <script type="module" src="/vendor/fluentui-web-components.js"></script>
 </head>
 <body>
@@ -44,18 +49,19 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/js/shared/utils.js?v=20260812"></script>
+<script src="/js/shared/utils.js?v=20260803a"></script>
 <script src="/js/shared/api-base.js"></script>
 <script src="/js/fixture-api.js"></script>
 <script src="/js/fixture-file-api.js"></script>
 <script src="/js/modal.js"></script>
-<script src="/js/fixture-dashboard.js?v=20260811"></script>
+<script src="/js/fixture-dashboard.js?v=20260803d"></script>
 <script src="/js/fixture-detail.js"></script>
-<script src="/js/fixture-list.js?v=20260811"></script>
+<script src="/js/fixture-list-filter.js?v=20260803a"></script>
+<script src="/js/fixture-list.js?v=20260803c"></script>
 <script src="/js/fixture-file-ui.js"></script>
 <script src="/js/fixture-photo-upload.js"></script>
 <script src="/js/fixture-scan.js"></script>
-<script src="/js/fixture-logs.js?v=20260811"></script>
+<script src="/js/fixture-logs.js?v=20260803a"></script>
 <script src="/js/fixture-new.js"></script>
 <script src="/js/fixture-router.js"></script>
 <script>

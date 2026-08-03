@@ -8,6 +8,8 @@
     "start": "node server.js",
     "seed": "node seed.js",
     "seed-rich": "node seed-rich.js",
+    "seed-samples": "node seed-samples.js",
+    "seed-fixture": "node seed-fixture.js",
     "test": "jest --forceExit --detectOpenHandles",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

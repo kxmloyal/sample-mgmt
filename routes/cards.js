@@ -37,7 +37,7 @@ function register(app) {
       return res.status(404).send('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>未找到</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f5;color:#999}</style></head><body><div style="text-align:center"><h1>404</h1><p>未找到样品: '+escapeHtml(sampleNo)+'</p></div></body></html>');
     }
 
-    const html = cardPageHtml(s);
+    const html = await cardPageHtml(s);
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   });

@@ -5,7 +5,7 @@
 
 ## 1. 项目一句话
 
-制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理与治具管理两大子系统,统一门户入口 portal.html。
+制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理与治具管理两大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
 完整项目指南见 [AGENTS.md](./AGENTS.md)。
 
@@ -190,16 +190,18 @@
 - 保管扫码 → IN_CUSTODY
 - 周期到点 → 派生「待复检」/「逾期」
 
-**治具**:`REQUESTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ME_OK → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`
+**治具**:`REQUESTED → ACCEPTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ORG_OK → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`,另有 `IN_USE←IMPROVING` 改善流程
 - RD制作 → VERIFY_PENDING
-- RD+ME双人扫码 → TRANSFERRED
+- RD+申请单位双人验证 → TRANSFERRED
 - ME/QA/CUSTODY领用 → IN_USE
 - 领用中可报修(自行/退回RD) → 维修完成 → ME确认 → TRANSFERRED
 - ADMIN报废 → RETIRED
+- 改善中不能领用，完成后直接报废
 
 ## 11. 当前技术债(新增功能前评估)
 
-- `public/js/scan.js` 224 行(74.7%),函数多,后续版本可拆分
+- `public/js/samples.js` ~225 行(56.3%),顶层函数 14 个(超 10 个上限),建议列表渲染与列宽拖拽拆分独立模块
+- `public/js/fixture-list.js` ~168 行(42%),顶层函数 12 个(接近上限),后续功能需拆分
 - `routes/fixtures.js` 231 行(57.8%),治具状态机分支多,后续迭代需关注
 - `public/index.html` 已模块化拆分为 HTML 骨架 + 外部 JS 文件,容量安全
 
@@ -237,6 +239,74 @@
 7. 编造信息(不确定就问)
 8. 原地堆砌新业务到大文件
 9. 复制现有函数改少量参数追加到原文件
+
+## 15. 子系统插件协议（Claude 实施指引）
+
+> 完整协议定义见 [AGENTS.md 第 17 节](./AGENTS.md#17-子系统插件协议核心架构)。
+> Claude 在涉及子系统的任务中 MUST 遵循本指引。
+
+### 15.1 核心判断：新功能放哪里
+
+收到用户需求时，先判断归属：
+
+| 需求类型 | 归属 | 修改目标 |
+|---|---|---|
+| 属于现有子系统（样品/治具） | `subsystems/<id>/` | 只改该子系统目录内文件 |
+| 全新业务模块 | 新建 `subsystems/<new-id>/` | 按协议创建子系统 |
+| 框架级功能（鉴权/日志/门戶/样式基础） | `shared/` 或 `server.js` | 修改共享层 |
+| 跨子系统功能 | `shared/` | 抽取为共享模块 |
+
+### 15.2 Claude 新增子系统标准流程
+
+当用户需要创建新子系统时，Claude MUST 按以下步骤执行：
+
+```
+1. brainstorming        → 探索子系统需求、状态机设计、角色权限
+2. 写 design doc        → docs/superpowers/specs/YYYY-MM-DD-<subsystem>-design.md
+3. writing-plans        → 产出实现计划
+4. 生成 manifest.json   → 基于协议规范，填写完整 manifest
+5. 生成目录骨架         → mkdir + 创建 backend/index.js / db/schema.sql / frontend/
+6. 生成前端骨架         → index.html + router.js + views/*.js
+7. 验证                 → 启动服务，确认门户卡片出现 + 导航正常 + 路由可用
+8. 臃肿检测报告         → 按 AGENTS.md 第 9 节输出
+```
+
+### 15.3 manifest.json 生成校验清单
+
+Claude 生成 manifest.json 后 MUST 自检：
+
+- [ ] `id` 全小写 kebab-case，与目录名一致
+- [ ] `route.prefix` 以 `/api/` 开头，不与现有子系统冲突
+- [ ] `route.entry` 路径指向 `subsystems/<id>/frontend/index.html`
+- [ ] `route.hashBase` 以 `/` 开头
+- [ ] `database.tables[]` 每项含 `name` 和 `schema` 两个字段
+- [ ] `roles.use` 至少包含 `ADMIN`
+- [ ] `navigation[]` 每项含 `key`/`label`/`icon`/`view`/`roles` 五个字段
+- [ ] `navigation[].view` 函数名不与现有子系统冲突（全局作用域）
+- [ ] 如需状态机：`stateMachine.initial` 对应的状态在 `states` 中存在
+- [ ] 如需状态机：每个 `transitions[].from` 和 `transitions[].to` 都在 `states` 中存在
+- [ ] 如需文件管理：`files.categories[]` 每项含 `key`/`label`/`extensions`
+
+### 15.4 共享资源变更强制双系统（三系统）回归
+
+修改以下文件/目录时，MUST 在所有已注册子系统中回归验证：
+
+| 共享资源 | 说明 |
+|---|---|
+| `shared/` | 框架共享模块 |
+| `server.js` | 框架入口 |
+| `db.js` | 数据库连接池 |
+| `public/css/app.css` | 共享 CSS 变量和基础样式 |
+| `public/portal.html` | 门户页 |
+
+### 15.5 Claude 禁止行为（子系统相关）
+
+1. **禁止**将新子系统代码写入 `routes/`、`public/js/`、`db/` 等旧目录
+2. **禁止**在 `app.css` 中新增子系统特定样式（应写入 `frontend/css/module.css`）
+3. **禁止**跨子系统引用文件（如从治具子系统 import 样品子系统的代码）
+4. **禁止**修改 manifest.json 时不校验 schema
+5. **禁止**在 subsystem 注册时硬编码 `server.js`（框架应自动发现）
+6. **禁止**在 `portal.html` 中硬编码新子系统卡片（应用 JS 动态渲染）
 
 ---
 

@@ -41,8 +41,10 @@ function register(app) {
     res.json({ byStatus, total, overdue, dueSoon, myPending, role: u.role, dept: u.dept, display_name: u.display_name, roleActions: ROLE_ACTIONS[u.role] || [] });
   });
 
-  // 日志
+  // 日志（ADMIN 专属）
   app.get('/api/logs', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可查看全量操作日志' });
     res.json(await D.listLogs());
   });
 

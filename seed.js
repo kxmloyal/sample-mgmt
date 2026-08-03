@@ -1,4 +1,6 @@
-// 种子脚本：创建角色账号与演示样品
+// 种子脚本：创建 6 个角色账号（不含演示数据）
+// 样品测试数据请用: node seed-samples.js
+// 治具测试数据请用: node seed-fixture.js
 // 用法: node seed.js
 require('dotenv').config();
 const bcrypt = require('bcryptjs');

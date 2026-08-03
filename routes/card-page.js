@@ -8,8 +8,8 @@ function fmtCard(t) {
   return d.toLocaleString('zh-CN', { hour12: false });
 }
 
-function cardPageHtml(s) {
-  const logs = D.listLogsBySample(s.id).slice(0, 2);
+async function cardPageHtml(s) {
+  const logs = (await D.listLogsBySample(s.id) || []).slice(0, 2);
   const sourceLabel = SOURCE_TYPES[s.source_type] || s.source_type || '—';
   const typeBadge = s.sample_type === 'OK' ? '<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">OK样品</span>'
     : s.sample_type === 'NG' ? '<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">NG样品</span>' : '';
@@ -64,7 +64,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="row"><span class="lbl">有效期</span><span class="val" style="${validClass}">${s.valid_until?fmtCard(s.valid_until):'—'}${expired?' <span class="badge-expired">已过期</span>':''}</span></div>
   <div class="divider"></div>
   <div class="section-title">签署</div>
-  <div class="row"><span class="lbl">制作</span><span class="val">${s.signed_by_rd||s.signed_by_rnd||'—'}</span></div>
+  <div class="row"><span class="lbl">制作</span><span class="val">${s.signed_by_rd||'—'}</span></div>
   <div class="row"><span class="lbl">确认</span><span class="val">${s.signed_by_qa||'—'}</span></div>
   <div class="divider"></div>
   <div class="section-title">规格/型号</div>

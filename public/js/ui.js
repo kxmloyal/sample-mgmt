@@ -1,2 +1,2 @@
-// ui.js — Toast 提示 + 通用 UI 辅助
-function toast(msg,type){const t=$('#toast');t.textContent=msg;t.className='toast show '+(type||'');setTimeout(function(){t.className='toast';},2600);}
+// ui.js — 委托 shared/api-base.js 的 showToast
+function toast(msg, type) { showToast(msg, type); }

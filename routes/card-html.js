@@ -167,7 +167,7 @@ function buildCardPrintHtml(s, scale, sizeKey) {
 '    <div class="full"><span class="lbl">\u6709\u6548\u671f</span><span class="val" style="'+validColor+'"><b>'+validStr+'</b>'+(expired?' [\u5df2\u8fc7\u671f]':'')+'</span></div>\n'+
 '    <div class="full"><span class="lbl">\u6837\u54c1\u6570\u503c</span><span class="val">'+(s.test_data||'')+'</span></div>\n'+
 '    <div class="pair-row">\n'+
-'      <div class="pair"><span class="lbl">\u5236\u4f5c</span><span class="val"><b>'+(s.signed_by_rd||s.signed_by_rnd||'')+'</b></span></div>\n'+
+'      <div class="pair"><span class="lbl">\u5236\u4f5c</span><span class="val"><b>'+(s.signed_by_rd||'')+'</b></span></div>\n'+
 '      <div class="pair"><span class="lbl">\u786e\u8ba4</span><span class="val"><b>'+(s.signed_by_qa||'')+'</b></span></div>\n'+
 '    </div>\n'+
 '    <div class="full"><span class="lbl">\u5907\u6ce8</span><span class="val">'+(s.notes||'')+'</span></div>\n'+

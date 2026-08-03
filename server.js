@@ -80,6 +80,26 @@ app.use(session({
 }));
 // 根路径 → 门户首页（必须在 express.static 之前注册）
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
+// 共享前端模块静态服务（框架层，子系统通用）
+app.use('/shared/frontend', express.static(path.join(__dirname, 'shared', 'frontend'), {
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
+  etag: true,
+  setHeaders: function(res, filePath) {
+    if (/\.js$/.test(filePath)) {
+      res.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'no-cache');
+    }
+  }
+}));
+// 子系统前端静态服务（每个子系统独立 SPA 入口）
+app.use('/subsystems', express.static(path.join(__dirname, 'subsystems'), {
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
+  etag: true,
+  setHeaders: function(res, filePath) {
+    if (/\.(js|css)$/.test(filePath)) {
+      res.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'no-cache');
+    }
+  }
+}));
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
   etag: true,
@@ -95,6 +115,29 @@ app.use(morgan('short', { stream: morganStream }));
 
 // 路由注册（顺序：auth 必须先注册——requireAuth/currentUser 挂在 app.locals 上供其他模块复用）
 require('./routes/auth').register(app);
+require('./routes/subsystems').register(app);
+
+// ★ Phase 4: 子系统自动发现 — 扫描 subsystems/ 调用每个子系统的 backend/index.js#register()
+var subsysBase = path.join(__dirname, 'subsystems');
+if (require('fs').existsSync(subsysBase)) {
+  var entries = require('fs').readdirSync(subsysBase, { withFileTypes: true });
+  for (var ei = 0; ei < entries.length; ei++) {
+    var entry = entries[ei];
+    if (!entry.isDirectory()) continue;
+    var manifestPath = path.join(subsysBase, entry.name, 'manifest.json');
+    var backendPath = path.join(subsysBase, entry.name, 'backend', 'index.js');
+    if (!require('fs').existsSync(manifestPath) || !require('fs').existsSync(backendPath)) continue;
+    try {
+      var manifest = require(manifestPath);
+      require(backendPath).register(app);
+      logger.info('子系统已自动加载: ' + manifest.name + ' (' + entry.name + ') v' + manifest.version);
+    } catch (e) {
+      logger.error('子系统自动加载失败: ' + entry.name + ' — ' + e.message);
+    }
+  }
+}
+
+// Phase 2-3 兼容期：保留旧路由直接注册（Phase 6 删除）
 require('./routes/samples').register(app);
 require('./routes/scan').register(app);
 require('./routes/cards').register(app);

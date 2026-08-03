@@ -1,0 +1,78 @@
+{
+  "id": "fixtures",
+  "name": "治具管理",
+  "description": "覆盖治具申请→制作→验证移交→领用→维修→报废全流程",
+  "version": "1.0.0",
+  "icon": "wrench",
+  "route": {
+    "prefix": "/api/fixtures",
+    "entry": "/subsystems/fixtures/frontend/index.html",
+    "hashBase": "/fixtures"
+  },
+  "database": {
+    "tables": [
+      { "name": "fixtures", "schema": "db/schema.sql" },
+      { "name": "fixture_logs", "schema": "db/schema.sql" },
+      { "name": "fixture_files", "schema": "db/schema.sql" }
+    ]
+  },
+  "roles": {
+    "use": ["ADMIN", "RD", "QA", "CUSTODY", "ME"],
+    "admin": ["ADMIN"]
+  },
+  "navigation": [
+    { "key": "dashboard", "label": "治具看板", "icon": "chart", "view": "renderFixtureDashboard", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "list",      "label": "治具清单", "icon": "list",  "view": "renderFixtureList",      "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "new",       "label": "新建申请", "icon": "add",   "view": "renderFixtureNew",       "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "scan",      "label": "扫码台",   "icon": "qr",    "view": "renderFixtureScan",      "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "logs",      "label": "操作日志", "icon": "history","view":"renderFixtureLogs",      "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] }
+  ],
+  "stateMachine": {
+    "initial": "REQUESTED",
+    "states": {
+      "REQUESTED":      { "label": "已申请",       "color": "#666666", "bg": "#f0f0f0" },
+      "ACCEPTED":       { "label": "已接收",       "color": "#1d4ed8", "bg": "#dbeafe" },
+      "VERIFY_PENDING": { "label": "待双人验证",   "color": "#92400e", "bg": "#fef3c7" },
+      "VERIFY_RD_OK":   { "label": "RD已确认",     "color": "#3730a3", "bg": "#e0e7ff" },
+      "VERIFY_ORG_OK":  { "label": "申请单位已确认","color": "#9d174d","bg": "#fce7f3" },
+      "TRANSFERRED":    { "label": "已移交",       "color": "#065f46", "bg": "#d1fae5" },
+      "IN_USE":         { "label": "领用中",       "color": "#1d4ed8", "bg": "#dbeafe" },
+      "IMPROVING":      { "label": "改善中",       "color": "#92400e", "bg": "#fef3c7" },
+      "REPAIRING_ME":   { "label": "ME维修中",     "color": "#991b1b", "bg": "#fee2e2" },
+      "REPAIRING_RD":   { "label": "RD维修中",     "color": "#9a3412", "bg": "#fed7aa" },
+      "REPAIR_DONE":    { "label": "维修完成",     "color": "#3730a3", "bg": "#e0e7ff" },
+      "RETIRED":        { "label": "已废弃",       "color": "#999999", "bg": "#f0f0f0" }
+    },
+    "transitions": [
+      { "from": "REQUESTED",      "to": "ACCEPTED",       "action": "ACCEPT",         "role": ["RD"],                    "label": "RD接收" },
+      { "from": "REQUESTED",      "to": "RETIRED",        "action": "CANCEL",         "role": ["RD","ADMIN"],            "label": "撤销申请" },
+      { "from": "ACCEPTED",       "to": "VERIFY_PENDING", "action": "MAKE",           "role": ["RD"],                    "label": "制作完成" },
+      { "from": "VERIFY_PENDING", "to": "VERIFY_RD_OK",   "action": "VERIFY_RD",      "role": ["RD"],                    "label": "RD验证" },
+      { "from": "VERIFY_PENDING", "to": "VERIFY_ORG_OK",  "action": "VERIFY_ORG",     "role": ["QA","CUSTODY","ME"],     "label": "申请单位验证" },
+      { "from": "VERIFY_RD_OK",   "to": "TRANSFERRED",    "action": "VERIFY_ORG",     "role": ["QA","CUSTODY","ME"],     "label": "申请单位验证(移交)" },
+      { "from": "VERIFY_ORG_OK",  "to": "TRANSFERRED",    "action": "VERIFY_RD",      "role": ["RD"],                    "label": "RD验证(移交)" },
+      { "from": "TRANSFERRED",    "to": "IN_USE",         "action": "USE",            "role": ["ME","QA","CUSTODY"],     "label": "领用" },
+      { "from": "IN_USE",         "to": "TRANSFERRED",    "action": "RETURN",         "role": ["ME","QA","CUSTODY"],     "label": "归还" },
+      { "from": "IN_USE",         "to": "REPAIRING_ME",   "action": "REPAIR_ME",      "role": ["ME"],                    "label": "ME自行维修" },
+      { "from": "IN_USE",         "to": "REPAIRING_RD",   "action": "REPAIR_RD_REQ",  "role": ["ME","QA","CUSTODY"],     "label": "退回RD维修" },
+      { "from": "REPAIRING_ME",   "to": "REPAIR_DONE",    "action": "REPAIR_DONE",    "role": ["ME"],                    "label": "ME维修完成" },
+      { "from": "REPAIRING_RD",   "to": "REPAIR_DONE",    "action": "REPAIR_RD_DONE", "role": ["RD"],                    "label": "RD维修完成" },
+      { "from": "REPAIR_DONE",    "to": "TRANSFERRED",    "action": "REPAIR_CONFIRM", "role": ["ME"],                    "label": "ME确认维修" },
+      { "from": "IN_USE",         "to": "IMPROVING",      "action": "IMPROVE",        "role": ["ME","QA","CUSTODY"],     "label": "申请改善" },
+      { "from": "IMPROVING",      "to": "RETIRED",        "action": "IMPROVE_DONE",   "role": ["ME","QA","CUSTODY"],     "label": "改善完成" },
+      { "from": "TRANSFERRED",    "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废" }
+    ]
+  },
+  "files": {
+    "enabled": true,
+    "uploadDir": "public/uploads/fixtures",
+    "maxSize": 10485760,
+    "categories": [
+      { "key": "design_drawing",  "label": "设计图纸", "extensions": ["pdf","dwg","dxf","step","stp","iges","igs"] },
+      { "key": "verify_photo",    "label": "验证照片", "extensions": ["jpg","jpeg","png","webp"] },
+      { "key": "repair_photo",    "label": "维修照片", "extensions": ["jpg","jpeg","png","webp"] },
+      { "key": "maintenance_log", "label": "保养记录", "extensions": ["pdf","jpg","jpeg","png"] },
+      { "key": "other",           "label": "其他",     "extensions": ["pdf","zip","rar","jpg","jpeg","png","webp"] }
+    ]
+  }
+}

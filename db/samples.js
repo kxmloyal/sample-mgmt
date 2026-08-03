@@ -18,11 +18,10 @@ module.exports = function({ q, one, dbRef, nowISO }) {
   // 并发场景下 sample_no UNIQUE 冲突时重试 3 次（事务内用 SAVEPOINT 隔离失败 INSERT）
   async function createSample({ name, spec, model, station, image, notes, created_by,
     sample_type, limit_item, source_type, valid_until, card_version,
-    test_standard, test_data, signed_by_rd, signed_by_rnd, signed_by_qa,
+    test_standard, test_data, signed_by_rd, signed_by_qa,
     replaces }, conn) {
     const token = crypto.randomBytes(8).toString('hex');
-    // 兼容过渡期：优先 signed_by_rd，回退 signed_by_rnd
-    const sbRd = signed_by_rd || signed_by_rnd || '';
+    const sbRd = signed_by_rd || '';
     const sql = `INSERT INTO samples (sample_no,name,spec,model,station,image,qr_token,status,created_by,notes,
       sample_type,limit_item,source_type,valid_until,card_version,test_standard,test_data,signed_by_rd,signed_by_qa,
       replaces)
@@ -109,7 +108,7 @@ module.exports = function({ q, one, dbRef, nowISO }) {
        s.produced_image ?? null, s.inspect_image ?? null, s.notes || null,
        s.sample_type ?? '', s.limit_item ?? '', s.source_type ?? '', s.valid_until ?? null,
        s.card_version ?? '', s.test_standard ?? '', s.test_data ?? '',
-       s.signed_by_rd ?? s.signed_by_rnd ?? '',
+       s.signed_by_rd ?? '',
        s.signed_by_qa ?? '',
        s.retired_reason ?? null, s.replaced_by ?? null, s.replaces ?? null, s.retire_assigned_rd ?? null,
        s.id];

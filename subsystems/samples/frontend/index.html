@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>S</text></svg>" />
+<title>制造品质管理系统 - 样品管理</title>
+<link rel="stylesheet" href="/css/app.css?v=20260803d" />
+<link rel="stylesheet" href="/css/help.css" />
+<link rel="stylesheet" href="/subsystems/samples/frontend/css/module.css" />
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
+</head>
+<body>
+
+<fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
+<div id="login" style="display:none">
+  <div class="login-card">
+    <h1>制造品质管理系统</h1>
+    <p class="sub">发行 · 确认 · 生命周期 · 分发</p>
+    <label>账号</label>
+    <fluent-text-field id="lg-user" placeholder="如 rd01 / qa01 / mfg01 / admin" appearance="outline"></fluent-text-field>
+    <label>密码</label>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
+    <div class="login-err" id="lg-err"></div>
+    <div class="hint" id="demo-hint">
+      演示账号：<br/>
+      rd01 / rd123（研发·研发中心）<br/>
+      qa01 / qa123（品保·品保文管中心）<br/>
+      mfg01 / mfg123（保管·制造部）<br/>
+      fqc01 / fqc123（保管·FQC）<br/>
+      me01 / me123（生技·生技部）
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="side">
+    <div class="logo">样品管理</div>
+    <div class="nav" id="nav"></div>
+    <div class="me">
+      <div><b id="me-name"></b></div>
+      <div id="me-role" class="muted"></div>
+      <a href="/portal.html" style="display:block;font-size:12px;color:var(--muted);text-decoration:none;margin-top:4px">← 返回门户</a>
+      <button class="btn ghost sm" style="margin-top:8px" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div></div>
+    <div id="view"></div>
+  </div>
+</div>
+</fluent-provider>
+
+<div class="toast" id="toast"></div>
+
+<!-- Phase 2 过渡期：仍引用 public/ 旧路径 JS，Phase 6 切换至 shared/frontend/ -->
+<script src="/js/shared/utils.js?v=20260803a"></script>
+<script src="/js/shared/api-base.js"></script>
+<script src="/js/shared-constants.js?v=20260803a"></script>
+<script src="/js/constants.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/dashboard.js?v=20260803d"></script>
+<script src="/js/dashboard-todo.js?v=20260810"></script>
+<script src="/js/new.js"></script>
+<script src="/js/samples.js?v=20260803a"></script>
+<script src="/js/sample-filter.js?v=20260803a"></script>
+<script src="/js/sample-list-render.js?v=20260803a"></script>
+<script src="/js/detail.js"></script>
+<script src="/js/scan-camera.js"></script>
+<script src="/js/print-queue.js"></script>
+<script src="/js/card-fields.js"></script>
+<script src="/js/scan-wizard.js"></script>
+<script src="/js/scan-return-actions.js"></script>
+<script src="/js/scan.js?v=20260810"></script>
+<script src="/js/logs.js"></script>
+<script src="/js/users.js"></script>
+<script src="/js/help-data.js"></script>
+<script src="/js/help.js"></script>
+<script src="/js/router.js?v=20260810"></script>
+<script>
+window.addEventListener('hashchange',route);
+boot();
+</script>
+</body>
+</html>

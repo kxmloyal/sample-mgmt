@@ -58,25 +58,30 @@ function register(app) {
 
   // 新建样品（研发或管理员）
   app.post('/api/samples', requireAuth, async (req, res) => {
-    const u = await currentUser(req);
-    if (!['RD', 'ADMIN'].includes(u.role))
-      return res.status(403).json({ error: '无权限：仅研发可新建样品' });
-    const { name, spec, model, station, notes,
-      sample_type, limit_item, source_type, valid_until, card_version,
-      test_standard, test_data } = req.body || {};
-    if (!name || !name.trim()) return res.status(400).json({ error: '请填写样品名称' });
-    const s = await D.createSample({
-      name: name.trim(), spec: spec || '', model: model || '', station: station || '',
-      notes: notes || '', image: '', created_by: u.id,
-      sample_type: sample_type || '', limit_item: limit_item || '',
-      source_type: source_type || '', valid_until: valid_until || '',
-      card_version: card_version || '', test_standard: test_standard || '',
-      test_data: test_data || '',
-      signed_by_rd: u.display_name || u.username,
-      signed_by_qa: ''
-    });
-    await D.addLog({ sample_id: s.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建样品' });
-    res.json(s);
+    try {
+      const u = await currentUser(req);
+      if (!['RD', 'ADMIN'].includes(u.role))
+        return res.status(403).json({ error: '无权限：仅研发可新建样品' });
+      const { name, spec, model, station, notes,
+        sample_type, limit_item, source_type, valid_until, card_version,
+        test_standard, test_data } = req.body || {};
+      if (!name || !name.trim()) return res.status(400).json({ error: '请填写样品名称' });
+      const s = await D.createSample({
+        name: name.trim(), spec: spec || '', model: model || '', station: station || '',
+        notes: notes || '', image: '', created_by: u.id,
+        sample_type: sample_type || '', limit_item: limit_item || '',
+        source_type: source_type || '', valid_until: valid_until || '',
+        card_version: card_version || '', test_standard: test_standard || '',
+        test_data: test_data || '',
+        signed_by_rd: u.display_name || u.username,
+        signed_by_qa: ''
+      });
+      await D.addLog({ sample_id: s.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建样品' });
+      res.json(s);
+    } catch (err) {
+      logger.error('新建样品失败: ' + (err.message || String(err)));
+      res.status(500).json({ error: '新建样品失败：' + (err.message || '服务器内部错误') });
+    }
   });
 
   // 删除样品（仅NEW/PRODUCED，ADMIN或创建者或RD可删）

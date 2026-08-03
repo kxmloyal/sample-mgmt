@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>子系统管理</title>
+<link rel="stylesheet" href="/css/app.css?v=20260803" />
+<style>
+.subsys-admin{max-width:900px;margin:0 auto;padding:20px}
+.subsys-admin h1{margin:0 0 4px}
+.subsys-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.subsys-list{display:flex;flex-direction:column;gap:12px}
+.subsys-row{display:flex;align-items:center;background:var(--panel);border-radius:10px;padding:14px 20px;box-shadow:var(--shadow);gap:16px}
+.subsys-row .sicon{width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--chip);border-radius:8px;font-size:20px}
+.subsys-row .sinfo{flex:1;min-width:0}
+.subsys-row .sinfo h3{margin:0 0 2px;font-size:15px}
+.subsys-row .sinfo .meta{font-size:12px;color:var(--muted)}
+.subsys-row .sacts{display:flex;gap:8px;flex-shrink:0}
+#subsys-form{display:none;background:var(--panel);border-radius:12px;padding:28px;box-shadow:var(--shadow);margin-top:16px}
+#subsys-form h3{margin:0 0 16px}
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.form-row label{flex:1;min-width:140px}
+#subsys-form button{margin-top:8px}
+.form-status{font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<div class="subsys-admin">
+  <div class="subsys-header">
+    <div><h1>子系统管理</h1><span style="color:var(--muted);font-size:13px">仅管理员可操作</span></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="btn-create" onclick="showForm()">+ 新建子系统</button>
+      <a href="/portal.html" style="font-size:13px;color:var(--muted);text-decoration:none;align-self:center">← 返回门户</a>
+    </div>
+  </div>
+  <div class="subsys-list" id="list"></div>
+  <div id="subsys-form"></div>
+</div>
+
+<script>
+var ICONS = {flask:'🧪',wrench:'🔧',chart:'📊',_default:'📦'};
+
+async function load() {
+  var list = document.getElementById('list');
+  try {
+    var res = await fetch('/api/subsystems');
+    var subs = await res.json();
+    if (!subs.length) { list.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">暂无子系统</div>'; return; }
+    list.innerHTML = subs.map(function(m) {
+      var icon = ICONS[m.icon] || ICONS._default;
+      var stateInfo = m.stateCount ? m.stateCount + ' 状态' : '无状态机';
+      return '<div class="subsys-row">' +
+        '<div class="sicon">' + icon + '</div>' +
+        '<div class="sinfo">' +
+          '<h3>' + m.name + '</h3>' +
+          '<div class="meta">' + m.id + ' · v' + m.version + ' · ' + stateInfo + ' · ' + m.navCount + ' 导航</div>' +
+        '</div>' +
+        '<div class="sacts">' +
+          '<button class="btn ghost sm" onclick="editManifest(\'' + m.id + '\')">编辑</button>' +
+          '<button class="btn ghost sm" onclick="exportManifest(\'' + m.id + '\')">导出</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div style="color:#dc2626;text-align:center;padding:20px">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function showForm() {
+  var f = document.getElementById('subsys-form');
+  f.style.display = 'block';
+  f.innerHTML =
+    '<h3>新建子系统</h3>' +
+    '<div class="form-row">' +
+      '<label>子系统 ID（kebab-case）<input id="sf-id" placeholder="如 my-module" /></label>' +
+      '<label>显示名称<input id="sf-name" placeholder="如 我的模块" /></label>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<label>描述<input id="sf-desc" placeholder="简要描述子系统功能" /></label>' +
+      '<label>图标<select id="sf-icon"><option value="_default">📦 默认</option><option value="flask">🧪 样品</option><option value="wrench">🔧 治具</option><option value="chart">📊 报表</option></select></label>' +
+    '</div>' +
+    '<div class="form-row">' +
+      '<label>版本<input id="sf-ver" value="1.0.0" /></label>' +
+      '<label>API 前缀<input id="sf-prefix" placeholder="/api/my-module" /></label>' +
+    '</div>' +
+    '<button class="btn" onclick="doCreate()">确认创建</button>' +
+    '<button class="btn ghost" onclick="cancelForm()" style="margin-left:8px">取消</button>' +
+    '<div class="form-status" id="sf-status"></div>';
+}
+
+function cancelForm() {
+  document.getElementById('subsys-form').style.display = 'none';
+}
+
+async function doCreate() {
+  var st = document.getElementById('sf-status');
+  st.style.color = 'var(--muted)'; st.textContent = '创建中…';
+  var id = document.getElementById('sf-id').value.trim();
+  var name = document.getElementById('sf-name').value.trim();
+  if (!id || !name) { st.style.color = '#dc2626'; st.textContent = 'ID 和名称必填'; return; }
+  try {
+    var res = await fetch('/api/subsystems', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        id: id, name: name,
+        description: document.getElementById('sf-desc').value,
+        icon: document.getElementById('sf-icon').value,
+        version: document.getElementById('sf-ver').value || '1.0.0',
+        route: { prefix: document.getElementById('sf-prefix').value || ('/api/' + id), entry: '/subsystems/' + id + '/frontend/index.html', hashBase: '/' + id }
+      })
+    });
+    if (!res.ok) { var err = await res.json(); throw new Error(err.error); }
+    st.style.color = 'var(--ok)'; st.textContent = '子系统 ' + id + ' 创建成功! 需重启服务使其生效。';
+    cancelForm(); load();
+  } catch (e) { st.style.color = '#dc2626'; st.textContent = e.message; }
+}
+
+async function editManifest(id) {
+  var f = document.getElementById('subsys-form');
+  f.style.display = 'block';
+  f.innerHTML = '<h3>编辑 manifest — ' + id + ' <span style="color:var(--muted);font-size:12px">(JSON 格式)</span></h3>' +
+    '<p style="color:var(--muted);font-size:12px">修改后点击保存，格式错误将拒绝写入</p>' +
+    '<textarea id="sf-json" rows="24" style="font-family:monospace;font-size:12px;width:100%">加载中…</textarea>' +
+    '<button class="btn" onclick="saveManifest(\'' + id + '\')">保存</button>' +
+    '<button class="btn ghost" style="margin-left:8px" onclick="cancelForm()">取消</button>' +
+    '<div class="form-status" id="sf-status"></div>';
+  try {
+    var res = await fetch('/api/subsystems/' + id);
+    var m = await res.json();
+    document.getElementById('sf-json').value = JSON.stringify(m, null, 2);
+  } catch (e) { document.getElementById('sf-json').value = '加载失败: ' + e.message; }
+}
+
+async function saveManifest(id) {
+  var st = document.getElementById('sf-status');
+  st.style.color = 'var(--muted)'; st.textContent = '保存中…';
+  try {
+    var data = JSON.parse(document.getElementById('sf-json').value);
+    var res = await fetch('/api/subsystems/' + id + '/manifest', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) { var err = await res.json(); throw new Error(err.error); }
+    st.style.color = 'var(--ok)'; st.textContent = '已保存。需重启服务使路由变更生效。';
+    setTimeout(function(){ cancelForm(); load(); }, 1000);
+  } catch (e) {
+    if (e instanceof SyntaxError) { st.style.color = '#dc2626'; st.textContent = 'JSON 格式错误: ' + e.message; }
+    else { st.style.color = '#dc2626'; st.textContent = e.message; }
+  }
+}
+
+async function exportManifest(id) {
+  window.open('/api/subsystems/' + id + '/export', '_blank');
+}
+
+load();
+</script>
+</body>
+</html>

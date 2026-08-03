@@ -121,7 +121,7 @@ module.exports = function({ q, one, dbRef, nowISO }) {
   function listMyPendingFixtures(role, userId) {
     if (role === 'RD') return q("SELECT * FROM fixtures WHERE status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_ORG_OK','REPAIRING_RD','IMPROVING') ORDER BY id DESC LIMIT 50");
     if (role === 'ADMIN') return q("SELECT * FROM fixtures WHERE status != 'RETIRED' ORDER BY id DESC LIMIT 50");
-    if (['ME','QA','CUSTODY'].includes(role)) return q("SELECT * FROM fixtures WHERE status IN ('VERIFY_PENDING','VERIFY_RD_OK','TRANSFERRED','REPAIRING_ME','REPAIR_DONE','IN_USE') ORDER BY id DESC LIMIT 50");
+    if (['ME','QA','CUSTODY'].includes(role)) return q("SELECT * FROM fixtures WHERE status IN ('VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','REPAIRING_ME','REPAIR_DONE','IN_USE') ORDER BY id DESC LIMIT 50");
     return q('SELECT * FROM fixtures WHERE requested_by=? ORDER BY id DESC LIMIT 50', [userId]);
   }
   // 详情页用户信息联查（一条 SQL 替代 listUsers + 内存 join）

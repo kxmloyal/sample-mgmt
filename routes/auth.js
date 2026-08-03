@@ -1,17 +1,13 @@
 // routes/auth.js — 鉴权守卫 + 登录/登出
 const bcrypt = require('bcryptjs');
 const D = require('../db');
+const { mount: mountAuth } = require('../shared/middleware/auth');
 
 function register(app) {
-  // 鉴权守卫（导出供其他路由复用）
-  function requireAuth(req, res, next) {
-    if (!req.session.userId) return res.status(401).json({ error: '未登录' });
-    next();
-  }
-  async function currentUser(req) {
-    if (!req.session.userId) return null;
-    return await D.getUserById(req.session.userId);
-  }
+  // 挂载共享鉴权中间件（requireAuth/currentUser）
+  mountAuth(app);
+  const requireAuth = app.locals.requireAuth;
+  const currentUser = app.locals.currentUser;
 
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body || {};
@@ -20,7 +16,12 @@ function register(app) {
     if (!u || !bcrypt.compareSync(password, u.password_hash))
       return res.status(401).json({ error: '账号或密码错误' });
     req.session.userId = u.id;
-    res.json({ id: u.id, username: u.username, role: u.role, dept: u.dept, display_name: u.display_name });
+    // 防止 session fixation：登录后重新生成 session ID
+    req.session.regenerate(function(err) {
+      if (err) return res.status(500).json({ error: '会话创建失败' });
+      req.session.userId = u.id;
+      res.json({ id: u.id, username: u.username, role: u.role, dept: u.dept, display_name: u.display_name });
+    });
   });
 
   app.post('/api/logout', (req, res) => {
@@ -32,10 +33,6 @@ function register(app) {
     if (!u) return res.status(401).json({ error: '未登录' });
     res.json({ id: u.id, username: u.username, role: u.role, dept: u.dept, display_name: u.display_name });
   });
-
-  // 挂到 app 上供其他路由模块使用
-  app.locals.requireAuth = requireAuth;
-  app.locals.currentUser = currentUser;
 }
 
 module.exports = { register };

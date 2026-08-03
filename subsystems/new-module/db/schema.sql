@@ -1,0 +1,2 @@
+-- subsystems/new_module/db/schema.sql
+-- 本模板无数据表，留空即可

@@ -64,7 +64,7 @@ async function init() {
         card_version VARCHAR(10),
         test_standard TEXT,
         test_data TEXT,
-        signed_by_rnd VARCHAR(50), /* @deprecated: 旧字段，保留兼容，新逻辑请用 signed_by_rd */
+        signed_by_rnd VARCHAR(50), /* @deprecated v2: 待物理删除，已全量迁移到 signed_by_rd */
         signed_by_rd VARCHAR(50),
         signed_by_qa VARCHAR(50),
         retired_reason TEXT,
@@ -157,6 +157,30 @@ async function init() {
   } finally {
     conn.release();
   }
+
+  // ★ Phase 4: 自动扫描 subsystems/*/db/schema.sql 并执行建表（幂等，追加到已有表之后）
+  const fs = require('fs');
+  const path = require('path');
+  const subsystemsDir = path.join(__dirname, 'subsystems');
+  if (fs.existsSync(subsystemsDir)) {
+    const subEntries = fs.readdirSync(subsystemsDir, { withFileTypes: true });
+    for (const subEntry of subEntries) {
+      if (!subEntry.isDirectory()) continue;
+      const schemaPath = path.join(subsystemsDir, subEntry.name, 'db', 'schema.sql');
+      if (!fs.existsSync(schemaPath)) continue;
+      try {
+        const sql = fs.readFileSync(schemaPath, 'utf8');
+        const statements = sql.split(';').filter(s => s.trim());
+        for (const stmt of statements) {
+          await pool.execute(stmt);
+        }
+        console.log('[db] 子系统 schema 已加载: ' + subEntry.name);
+      } catch (e) {
+        console.error('[db] 加载子系统 schema 失败: ' + subEntry.name, e.message);
+      }
+    }
+  }
+
   await runMigrations(pool);
   return true;
 }

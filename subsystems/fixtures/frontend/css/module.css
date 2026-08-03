@@ -1,0 +1,16 @@
+/* subsystems/fixtures/frontend/css/module.css — 治具子系统专属样式 */
+/* Phase 3 过渡期：主样式仍在 app.css 中。Phase 4-6 逐步迁移至此。 */
+
+/* 治具状态 badge 颜色（与 app.css 第 141 行一致） */
+.b-REQUESTED { background: #f0f0f0; color: #666; }
+.b-ACCEPTED { background: #dbeafe; color: #1d4ed8; }
+.b-VERIFY_PENDING { background: #fef3c7; color: #92400e; }
+.b-VERIFY_RD_OK { background: #e0e7ff; color: #3730a3; }
+.b-VERIFY_ORG_OK { background: #fce7f3; color: #9d174d; }
+.b-TRANSFERRED { background: #d1fae5; color: #065f46; }
+.b-IN_USE { background: #dbeafe; color: #1d4ed8; }
+.b-IMPROVING { background: #fef3c7; color: #92400e; }
+.b-REPAIRING_ME { background: #fee2e2; color: #991b1b; }
+.b-REPAIRING_RD { background: #fed7aa; color: #9a3412; }
+.b-REPAIR_DONE { background: #e0e7ff; color: #3730a3; }
+.b-RETIRED { background: #f0f0f0; color: #999; }

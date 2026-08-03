@@ -61,8 +61,9 @@ function register(app) {
 
   // 扫码状态机
   app.post('/api/scan', requireAuth, async (req, res) => {
-    const u = await currentUser(req);
-    const { code, location, cycleDays, note } = req.body || {};
+    try {
+      const u = await currentUser(req);
+      const { code, location, cycleDays, note } = req.body || {};
     const bodyAction = (req.body.action || '').trim();
     const scanCode = (code || '').trim();
     if (!scanCode) return res.status(400).json({ error: '未提供扫码内容' });
@@ -214,6 +215,9 @@ function register(app) {
     const result = await D.updateSample(updated);
     const printCard = (chosenAction === 'RELEASE' || chosenAction === 'RE_RELEASE' || chosenAction === 'EDIT_CARD');
     res.json({ sample: result, action: chosenAction, message: `操作成功：${chosenAction}`, printCard });
+    } catch (err) {
+      res.status(500).json({ error: '扫码操作失败：' + (err.message || '服务器内部错误') });
+    }
   });
 }
 
