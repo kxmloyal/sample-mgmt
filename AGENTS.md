@@ -5,11 +5,12 @@
 
 ## 1. 项目概述
 
-**制造品质管理系统**:含样品管理与治具管理两大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。**架构基础：子系统插件协议（见第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架，无需修改框架核心代码。
+**制造品质管理系统**:含样品管理、治具管理与全局工作台三大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。**架构基础：子系统插件协议（见第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架，无需修改框架核心代码。
 
 **子系统**:
 - **样品管理**:覆盖样品「发行 → 确认 → 生命周期管理 → 分发」全流程
 - **治具管理**:覆盖治具「申请 → 制作 → 验证移交 → 领用 → 维修 → 报废」全流程
+- **全局工作台**:跨部门监控样品/治具项目进度（待办/积压 3 档），积压阈值仅 ADMIN 可改（全局生效）
 
 **五个责任主体**:
 - 研发工程:建样、制作治具、扫码确认制作、维修治具、创建替代品
@@ -20,7 +21,7 @@
 
 **状态机**:
 - 样品:`NEW → PRODUCED → RELEASED → IN_CUSTODY → RETURNING → RETIRED`
-- 治具:`REQUESTED → ACCEPTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ORG_OK → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`，另有 `IN_USE←IMPROVING` 改善流程
+- 治具:`REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`，另有 `IN_USE←IMPROVING` 改善流程。验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为历史状态（旧双人验证，存量数据兼容）
 
 ## 2. 技术栈
 
@@ -39,33 +40,34 @@
 
 ```
 /www/wwwroot/sample-mgmt/
-├── server.js              # 后端入口:加载中间件、注册路由模块
-├── db.js                  # 数据层入口:建表/迁移/工厂组装
+├── server.js              # 框架入口:加载中间件、自动扫描 subsystems/ 挂载子系统、注册公共路由
+├── db.js                  # 数据层入口:连接池 + 自动执行 subsystems/*/db/schema.sql 建表 + 扫描加载子系统 DAO
 ├── db/
-│   ├── samples.js         # 样品 CRUD + 编号生成
-│   ├── fixtures.js        # 治具 CRUD + 编号生成
 │   ├── users.js           # 用户查询
-│   └── logs.js            # 操作日志
+│   ├── fixture-files.js   # 治具文件管理 DAO
+│   ├── migrations.js      # 增量迁移
+│   └── tx.js              # 事务工具
 ├── routes/
-│   ├── auth.js            # 鉴权路由
-│   ├── samples.js         # 样品路由(CRUD + QR)
-│   ├── fixtures.js        # 治具路由(CRUD + 扫码状态机)
-│   ├── cards.js           # 标示卡路由(匿名页/标签/打印)
-│   ├── scan.js            # 样品扫码台路由(解析 + 状态机)
-│   └── misc.js            # 杂项路由(看板/日志/用户/健康检查)
+│   ├── auth.js            # 鉴权路由(登录/登出)
+│   ├── misc.js            # 杂项路由(看板/日志/用户/健康检查)
+│   └── subsystems.js      # 子系统发现 + CRUD API(管理面板)
+├── shared/                # 框架共享层
+│   ├── middleware/        # 鉴权/上传中间件(不绑定子系统)
+│   ├── state-machine.js   # 通用状态机引擎
+│   ├── file-manager.js    # 通用文件管理 DAO
+│   └── frontend/          # 共享前端模块(api-base.js / modal.js / shared/utils.js)
+├── subsystems/            # ★ 所有子系统(插件协议,见第 17 节)
+│   ├── samples/           # 样品管理(backend/ db/ frontend/ seed/ manifest.json)
+│   ├── fixtures/          # 治具管理(同上)
+│   └── workbench/         # 全局工作台(跨部门积压监控 + 阈值设置)
 ├── logger.js              # 日志系统(Winston)
 ├── seed.js                # 种子:6 个角色账号
-├── seed-rich.js           # 丰富演示数据:14 个样品(旧版)
 ├── seed-samples.js        # 样品全量测试数据:15 个,6 种状态全覆盖
 ├── seed-fixture.js        # 治具全量测试数据:15 个,12 种状态全覆盖
-├── test_flow.js           # 端到端流程测试
 ├── public/
-│   ├── portal.html        # 门户首页(统一入口,先选子系统后登录)
-│   ├── index.html         # 样品单页入口(纯 HTML 结构)
-│   ├── fixture.html       # 治具单页入口(独立 SPA)
-│   ├── css/
-│   │   └── app.css        # 全部样式(样品+治具共享 CSS 变量)
-│   ├── js/                # 前端模块(32 个 JS,按职责拆分,含 shared/ 公共模块)
+│   ├── portal.html        # 门户首页(统一入口,JS 动态渲染子系统卡片)
+│   ├── admin-subsystems.html # 子系统可视化管理面板(仅 ADMIN)
+│   ├── css/app.css        # 共享样式(布局/基础组件/CSS 变量/卡片设计 token)
 │   └── uploads/           # 样品/治具图片上传目录
 ├── data/                  # 共享数据(limit-items.json, source-types.json)
 ├── tests/                 # 单元测试(含 helpers)
@@ -75,10 +77,7 @@
 │   └── superpowers/
 │       ├── specs/         # brainstorming 产出的设计文档
 │       └── plans/         # writing-plans 产出的实现计划
-├── scripts/
-│   ├── to-production.sh   # 演示→生产模式切换
-│   └── to-demo.sh         # 生产→演示模式切换
-├── .env.example           # 环境变量模板
+├── .env.example           # 环境变量模板(含 MariaDB 连接配置)
 ├── .gitignore
 └── package.json
 ```
@@ -139,7 +138,7 @@ npm start           # 启动,访问 http://localhost:4000(端口可通过 .env �
 
 1. **共享资源变更 MUST 双系统回归**:修改共享文件（`server.js`/`db.js`/`app.css`/`modal.js`/`portal.html` 等）时,MUST 在样品和治具两个子系统中均进行回归验证,确认行为无变化。
 2. **禁止交叉污染**:不得为了修复/优化一个子系统而改变另一个子系统的行为、样式、接口返回格式、状态机流转逻辑。
-3. **共享 CSS 类修改**:修改 `app.css` 中的共享样式类时,MUST 同时在样品页面（`index.html`）和治具页面（`fixture.html`）验证渲染效果,不得破坏任一系统的 UI 布局。
+3. **共享 CSS 类修改**:修改 `app.css` 中的共享样式类时,MUST 同时在样品页面（`subsystems/samples/frontend/index.html`）和治具页面（`subsystems/fixtures/frontend/index.html`）验证渲染效果,不得破坏任一系统的 UI 布局。
 4. **共享中间件/路由修改**:修改 `requireAuth`、`db.js` 连接池、公共路由模块时,MUST 验证两个子系统的鉴权、数据读写均正常。
 5. **API 路径隔离**:样品 API（`/api/samples/...`）与治具 API（`/api/fixtures/...`）路径前缀已隔离,新增 API 不得跨子系统复用路径前缀。
 
@@ -295,11 +294,10 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 
 ## 14. 当前已知技术债
 
-- `public/js/samples.js` ~225 行,接近 400 行上限(56.3%),顶层函数 14 个(超 10 个上限),建议:列表渲染与列宽拖拽拆分独立模块
-- `public/js/fixture-list.js` ~168 行,接近 400 行上限(42%),顶层函数 12 个(接近上限),后续功能需拆分
-- `routes/fixtures.js` 231 行,接近 400 行上限(57.8%),状态机分支多,后续治具迭代需关注
-- `scan.js` 仍在阈值内,无需紧急拆分
-- 无阻塞性技术债,`index.html` 已模块化拆分为骨架+外部 JS
+- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 4 个 action helper 拆分后仍偏大），后续治具迭代需关注拆分
+- `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
+- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
+- 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
 
 ## 15. 禁止行为黑名单
 
@@ -541,13 +539,13 @@ module.exports = { register, initDB, seed };
 
 ### 17.5 前端插件接口
 
-每个子系统的 `frontend/` 目录为独立 SPA，与现有 `index.html`/`fixture.html` 模式一致：
+每个子系统的 `frontend/` 目录为独立 SPA，与现有子系统（samples/fixtures）前端模式一致：
 
 **必须提供的文件**：
 
 | 文件 | 作用 |
 |---|---|
-| `frontend/index.html` | SPA 入口，格式与现有 index.html/fixture.html 一致 |
+| `frontend/index.html` | SPA 入口，格式与现有子系统（samples/fixtures）前端一致 |
 | `frontend/js/router.js` | 前端路由，解析 `location.hash`，调用 `manifest.navigation[].view` 对应函数 |
 | `frontend/js/views/*.js` | 每个 view 函数独立文件，文件容量遵循第 7.1 节红线 |
 
@@ -665,7 +663,7 @@ module.exports = { register, initDB, seed };
 
 ### 17.9 现有子系统迁移路径
 
-当前样品管理和治具管理需按协议重构为 `subsystems/samples/` 和 `subsystems/fixtures/`：
+样品管理、治具管理已按协议完成迁移（2026-08，Phase 5/6），全局工作台亦按协议新增。下表为迁移路径参考（已完成，仅存档）：
 
 | 迁移项 | 当前位置 → 目标位置 | 注意事项 |
 |---|---|---|

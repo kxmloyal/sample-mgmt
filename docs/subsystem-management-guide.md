@@ -184,14 +184,14 @@ module.exports = { register, initDB, seed };
 
 ---
 
-## 7. 生态位兼容性清单
+## 7. 迁移与兼容性清单
 
-子系统协议与现有功能完全兼容：
+样品管理、治具管理已随 Phase 5/6 迁移至子系统目录，全局工作台按协议新增：
 
 | 现有功能 | 影响 | 说明 |
 |---|---|---|
-| 旧路由 `routes/samples.js` | 不变 | 与 `subsystems/samples/backend/index.js` 并行运行，Phase 6 统一切换 |
-| 旧入口 `index.html` | 不变 | 与 `subsystems/samples/frontend/index.html` 均可访问 |
+| 样品路由/入口 | 已迁移 | `routes/samples.js`、`public/index.html` 已迁至 `subsystems/samples/`，经门户统一访问 |
+| 治具路由/入口 | 已迁移 | `routes/fixtures.js`、`public/fixture.html` 已迁至 `subsystems/fixtures/` |
 | 扫码台 | 不变 | 状态机逻辑完全保持 |
 | 治具管理 | 不变 | 独立子系统目录隔离 |
 | 用户管理 | 不变 | 全局共享 `users` 表 |
@@ -245,4 +245,4 @@ A: 下次请求 `/api/subsystems` 时会自动刷新 registry，刷新页面即�
 A: 需以 ADMIN 账号登录后才可访问子系统管理 API。
 
 **Q: 旧入口（index.html/fixture.html）还能用吗？**
-A: 可以，新旧入口并行运行，Phase 6 统一清理。新子系统建议通过门户卡片访问。
+A: 已统一迁移至 `subsystems/<id>/frontend/`，旧 `public/index.html`、`public/fixture.html` 已随 Phase 5/6 删除。所有子系统一律通过门户（portal.html）卡片进入。

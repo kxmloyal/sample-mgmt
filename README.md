@@ -1,6 +1,6 @@
 # 制造品质管理系统
 
-含**样品管理**与**治具管理**两大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
+含**样品管理**、**治具管理**与**全局工作台**三大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
 
 ## 五个责任主体
 
@@ -70,15 +70,15 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 ### 状态机
 
 ```
-REQUESTED → ACCEPTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ME_OK
-                          ↕
-                    VERIFY_ORG_OK → TRANSFERRED ⇄ IN_USE
+REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
                                        ↓
                                  REPAIRING_ME/REPAIRING_RD
                                        ↓
                                  REPAIR_DONE → TRANSFERRED
                                        ↓→ IMPROVING → RETIRED
 ```
+
+> 验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为旧双人验证的历史状态（存量数据兼容）。
 
 ### 治具看板
 
@@ -94,6 +94,20 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ME_OK
 
 ---
 
+## 全局工作台
+
+跨部门监控样品 + 治具全部活跃项目（合并视图），帮助各部门掌握积压情况。
+
+### 功能
+
+- **统计卡片**：总计 + 各部门卡片，互斥三档积压（≤3 天 / 3~7 天 / 7 天以上），标签随阈值动态显示
+- **卡片交互**：单击部门卡筛选该部门数据、再次单击取消；双击/总计卡清除筛选
+- **统一列表**：编号/名称/类型/阶段/负责部门/申请部门/停留时长/积压状态，支持类型 + 积压等级筛选
+- **阈值设置**（仅 ADMIN）：可自定义 3 天 / 7 天边界（支持快捷预设 3/7、5/10、7/14、10/30 天），保存后全局生效（存 `workbench_settings` 表），所有用户即时按新阈值渲染
+- **逾期判定**：样品 NEW/PRODUCED 阈值放大 3 倍（制样中更宽松）；RELEASED/IN_CUSTODY 按复检日；治具按维修请求日
+
+---
+
 ## 运行
 
 ```bash
@@ -102,7 +116,7 @@ cp .env.example .env # 复制环境变量模板
 npm run seed         # 初始化角色账号（仅一次）
 npm run seed-samples # 样品全量测试数据（15个，6种状态全覆盖）
 npm run seed-fixture # 治具全量测试数据（15个，12种状态全覆盖）
-npm start            # 启动，访问 http://localhost:3000
+npm start            # 启动，访问 http://localhost:4000（需先配置 .env 数据库连接）
 ```
 
 ### 环境变量
@@ -169,62 +183,47 @@ Node.js + Express · MariaDB(MySQL) via mysql2 · express-session + bcryptjs · 
 ## 目录
 
 ```
-server.js               后端入口：加载中间件、注册路由模块
-db.js                   数据层入口：建表/迁移/工厂组装
-db/
-  ├── samples.js         样品 CRUD + 编号生成
-  ├── fixtures.js        治具 CRUD + 编号生成
-  ├── users.js           用户查询
-  └── logs.js            操作日志
-logger.js               日志系统（Winston，按天轮转）
-seed.js                 种子：6 个角色账号
-seed-rich.js            丰富样品演示数据（旧版）
-seed-samples.js          样品全量测试数据（15个，6种状态 + 表示卡）
-seed-fixture.js          治具全量测试数据（15个，12种状态）
-test_flow.js            端到端流程测试
+server.js                   后端入口：加载中间件、扫描注册子系统
+db.js                       数据层入口：建表/迁移/工厂组装
+logger.js                   日志系统（Winston，按天轮转）
+seed.js                     种子：6 个角色账号
+seed-samples.js             样品全量测试数据（15个，6种状态）
+seed-fixture.js             治具全量测试数据（15个，12种状态）
+seed-rich.js                丰富样品演示数据（旧版，仅参考）
+test_flow.js                端到端流程测试
+shared/                     框架共享层
+  ├── middleware/           鉴权 + 上传中间件
+  ├── state-machine.js      通用状态机引擎
+  ├── file-manager.js       通用文件管理 DAO
+  └── frontend/             共享前端模块（api-base/modal/utils）
 routes/
-  ├── auth.js            鉴权路由
-  ├── samples.js         样品路由（CRUD + QR）
-  ├── fixtures.js        治具路由（CRUD + 扫码状态机）
-  ├── cards.js           标示卡路由
-  ├── scan.js            样品扫码台（解析 + 状态机）
-  └── misc.js            看板/日志/用户/健康检查
+  ├── auth.js               鉴权路由
+  ├── misc.js               杂项路由（看板/日志/用户/健康检查）
+  └── subsystems.js         子系统发现 + CRUD API
+subsystems/                 所有子系统（插件协议，每目录自包含）
+  ├── samples/              样品管理（manifest + backend/db/frontend/seed）
+  ├── fixtures/             治具管理（同构）
+  └── workbench/            全局工作台（同构）
+db/                         数据访问层
+  ├── users.js              用户查询
+  ├── fixture-files.js      治具文件 DAO
+  ├── tx.js                 事务工具
+  └── migrations.js         增量迁移
 data/
-  ├── limit-items.json    限度项目（26项）
-  └── source-types.json   来源类型
+  ├── limit-items.json       限度项目（26项）
+  └── source-types.json      来源类型
 public/
-  ├── portal.html         门户首页（统一入口）
-  ├── index.html          样品单页入口
-  ├── fixture.html        治具单页入口
-  ├── css/
-  │   └── app.css          全局共享样式（两系统共用 CSS 变量）
-  ├── js/
-  │   ├── shared/          共享模块
-  │   │   ├── api.js          鉴权 + HTTP 请求
-  │   │   ├── utils.js        工具函数（initColResize 等）
-  │   │   ├── constants.js    全局常量
-  │   │   └── ui.js           toast/UI 辅助
-  │   ├── samples.js       样品列表 + 列宽拖拽
-  │   ├── detail.js        样品详情弹窗（信息/标示卡/日志/大图 四Tab）
-  │   ├── dashboard.js     样品看板（DASH_STATS + 比例条 + 预警）
-  │   ├── dashboard-todo.js 样品看板-待办
-  │   ├── scan.js          样品扫码台
-  │   ├── fixture-api.js   治具共享 API + 状态助手
-  │   ├── fixture-dashboard.js 治具看板
-  │   ├── fixture-list.js  治具清单 + 分页 + 每页条数选择
-  │   ├── fixture-detail.js 治具详情弹窗
-  │   ├── fixture-logs.js  治具日志
-  │   └── ...
-  └── uploads/            样品/治具图片上传目录
+  ├── portal.html            门户首页（统一入口）
+  ├── admin-subsystems.html  子系统管理面板
+  ├── css/app.css            全局共享样式
+  └── uploads/               样品/治具图片与文件上传目录
 docs/
-  ├── deploy-baota.md      宝塔部署文档
-  ├── operation-manual.md  用户操作说明书
-  └── superpowers/
-      ├── specs/            设计文档
-      └── plans/            实现计划
+  ├── deploy-baota.md        宝塔部署文档
+  ├── operation-manual.md    用户操作说明书
+  └── superpowers/           设计文档与实现计划
 scripts/
-  ├── to-production.sh     演示 → 生产模式切换
-  └── to-demo.sh           生产 → 演示模式切换
+  ├── to-production.sh       演示 → 生产模式切换
+  └── to-demo.sh             生产 → 演示模式切换
 ```
 
 ## 响应式断点

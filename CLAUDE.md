@@ -5,7 +5,7 @@
 
 ## 1. 项目一句话
 
-制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理与治具管理两大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
+制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理、治具管理与全局工作台三大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
 完整项目指南见 [AGENTS.md](./AGENTS.md)。
 
@@ -133,7 +133,7 @@
 
 详见 AGENTS.md 第 7.1 节。关键阈值:
 
-- 项目入口 `public/index.html`/`public/fixture.html`:600 行 / 20000 字符
+- 子系统前端入口 `subsystems/*/frontend/index.html`:600 行 / 20000 字符
 - `server.js`/`routes/*.js`:400 行(Service 业务逻辑)
 - `db.js`:200 行(通用工具)
 - 顶层函数 ≤10/文件,单函数 ≤60 行
@@ -190,9 +190,9 @@
 - 保管扫码 → IN_CUSTODY
 - 周期到点 → 派生「待复检」/「逾期」
 
-**治具**:`REQUESTED → ACCEPTED → VERIFY_PENDING → VERIFY_RD_OK/VERIFY_ORG_OK → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`,另有 `IN_USE←IMPROVING` 改善流程
+**治具**:`REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`,另有 `IN_USE←IMPROVING` 改善流程。验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为历史状态（旧双人验证，存量数据兼容）
 - RD制作 → VERIFY_PENDING
-- RD+申请单位双人验证 → TRANSFERRED
+- 申请部门人员单人验证 → TRANSFERRED
 - ME/QA/CUSTODY领用 → IN_USE
 - 领用中可报修(自行/退回RD) → 维修完成 → ME确认 → TRANSFERRED
 - ADMIN报废 → RETIRED
@@ -200,10 +200,9 @@
 
 ## 11. 当前技术债(新增功能前评估)
 
-- `public/js/samples.js` ~225 行(56.3%),顶层函数 14 个(超 10 个上限),建议列表渲染与列宽拖拽拆分独立模块
-- `public/js/fixture-list.js` ~168 行(42%),顶层函数 12 个(接近上限),后续功能需拆分
-- `routes/fixtures.js` 231 行(57.8%),治具状态机分支多,后续迭代需关注
-- `public/index.html` 已模块化拆分为 HTML 骨架 + 外部 JS 文件,容量安全
+- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 action helper 拆分后仍偏大），后续治具迭代需关注
+- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
+- 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 
 ## 12. 验证清单(提交前自检)
 
