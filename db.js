@@ -8,7 +8,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'sample_mgmt',
   charset: 'utf8mb4',
-  connectionLimit: 10,
+  connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '20', 10),
   waitForConnections: true,
   queueLimit: 0
 };
