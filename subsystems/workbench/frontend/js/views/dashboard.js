@@ -128,7 +128,7 @@ function renderFilterBar() {
 // 阈值设置弹窗逻辑见 views/threshold.js（openThresholdModal/applyPreset/refreshThresholdPreview/saveThreshold）
 
 function renderItemTable(items) {
-  var rows = items.map(function(item) {
+  var rows = items.map(function(item, idx) {
     var style = OVERDUE_STYLES[item.overdue_level] || OVERDUE_STYLES[0];
     var badgeHtml = item.overdue_level > 0
       ? '<span class="wb-badge" style="color:' + style.color + ';background:' + style.bg + '">' + item.overdue_label + '·' + item.overdue_reason + '</span>'
@@ -138,6 +138,7 @@ function renderItemTable(items) {
       : '<span class="wb-type-tag fixture">治具</span>';
 
     return '<tr class="wb-row" data-type="' + item.item_type + '" data-level="' + item.overdue_level + '" data-dept="' + item.resp_dept + '">' +
+      '<td class="muted">' + (idx + 1) + '</td>' +
       '<td>' + e(item.item_no) + '</td>' +
       '<td>' + e(item.name) + '</td>' +
       '<td>' + typeBadge + '</td>' +
@@ -149,12 +150,12 @@ function renderItemTable(items) {
       '</tr>';
   }).join('');
 
-  var bodyHtml = rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:40px">暂无活跃项目</td></tr>';
+  var bodyHtml = rows || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:40px">暂无活跃项目</td></tr>';
 
   return '<div class="table-wrap">' +
     '<table class="data-table" id="wb-table">' +
     '<thead><tr>' +
-    '<th>编号</th><th>名称</th><th>类型</th><th>阶段</th><th>负责部门</th><th>申请部门</th><th>停留</th><th>积压状态</th>' +
+    '<th>#</th><th>编号</th><th>名称</th><th>类型</th><th>阶段</th><th>负责部门</th><th>申请部门</th><th>停留</th><th>积压状态</th>' +
     '</tr></thead>' +
     '<tbody>' + bodyHtml + '</tbody>' +
     '</table></div>';
@@ -165,12 +166,14 @@ function doFilter() {
   var levelVal = document.getElementById('filter-level').value;
   _filterCache = { type: typeVal, level: levelVal };
   var rows = document.querySelectorAll('#wb-table tbody tr');
+  var n = 0;
   rows.forEach(function(tr) {
     var show = true;
     if (typeVal && tr.getAttribute('data-type') !== typeVal) show = false;
     if (levelVal !== '' && tr.getAttribute('data-level') !== levelVal) show = false;
     if (_deptFilter && tr.getAttribute('data-dept') !== _deptFilter) show = false;
     tr.style.display = show ? '' : 'none';
+    if (show) { n++; tr.cells[0].textContent = n; } // 可见行重新编号，保证筛选后序号连续
   });
 }
 
