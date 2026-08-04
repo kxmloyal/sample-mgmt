@@ -137,7 +137,7 @@ function renderItemTable(items) {
       ? '<span class="wb-type-tag sample">样品</span>'
       : '<span class="wb-type-tag fixture">治具</span>';
 
-    return '<tr class="wb-row" data-type="' + item.item_type + '" data-level="' + item.overdue_level + '" data-dept="' + item.resp_dept + '">' +
+    return '<tr class="wb-row" data-type="' + item.item_type + '" data-level="' + item.overdue_level + '" data-dept="' + item.resp_dept + '" style="cursor:pointer" onclick="openWbDetail(' + JSON.stringify(item).replace(/"/g, '&quot;') + ')">' +
       '<td class="muted">' + (idx + 1) + '</td>' +
       '<td>' + e(item.item_no) + '</td>' +
       '<td>' + e(item.name) + '</td>' +
