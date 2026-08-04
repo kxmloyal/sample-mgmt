@@ -771,6 +771,70 @@ module.exports = { register, initDB, seed };
 - 在 app.css 添加子系统卡片样式 → 拒绝，要求写入 `module.css`
 - 修改 app.css 中 `.kb-stat` 共享定义 → 标记高危，需样品/治具/工作台三系统回归
 
+## 19. JS 合并构建规范（强制）
+
+> 2026-08-04 实施。每个子系统前端原先 7~25 个独立 `<script>` 标签，HTTP/1.1 下单域名并发仅 6 连接，首屏需排队多轮往返，
+> 通过合并 + defer 将请求数降为 1 个，加载时间减少 50%+。
+
+### 19.1 构建脚本
+
+```bash
+node tools/build-bundles.js
+```
+
+该脚本自动：
+1. 解析三个子系统 `index.html` 中的 `<script src>` 顺序（即依赖顺序）
+2. 按顺序拼接所有 JS 文件为单个 `bundle.js`
+3. 在末尾追加子系统对应的初始化调用（`boot()`/`bootFixture()`）
+4. 将 `bundle.js` 输出到 `/tmp`（避免 `subsystems/` 目录权限问题）
+5. 生成唯一版本号（`b`+时间戳），写入 `tools/.bundle-ver`
+
+**输出**：
+| 子系统 | 原始文件数 | bundle 大小 |
+|---|---|---|
+| samples | 25 → 1 | ~100KB |
+| fixtures | 16 → 1 | ~75KB |
+| workbench | 7 → 1 | ~29KB |
+
+### 19.2 部署步骤
+
+```bash
+node tools/build-bundles.js
+# 将 /tmp/bundle-*.js 复制到子系统 js/ 目录
+sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
+sudo cp /tmp/bundle-fixtures.js   subsystems/fixtures/frontend/js/bundle.js
+sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
+# 更新 index.html script 引用路径 + 版本号
+```
+
+### 19.3 index.html 规范
+
+每个子系统入口 MUST 仅含以下 script 标签：
+```html
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
+<script src="/subsystems/<id>/frontend/js/bundle.js?v=<ver>" defer></script>
+```
+
+- `fluentui-web-components.js` 为共享 UI 组件库（367KB，`type="module"` 异步加载）
+- `bundle.js` 使用 `defer`：异步下载 + 解析后执行（DOM 就绪），不阻塞首屏
+- 不再使用内联 `<script>boot()</script>`，初始化逻辑已包含在 bundle 末尾
+- 版本号 MUST 使用构建脚本生成的值（`tools/.bundle-ver`）
+
+### 19.4 何时重建 bundle
+
+以下情况 MUST 执行 `node tools/build-bundles.js && 复制 + 更新版本号`：
+- 新增/删除/重命名 `subsystems/*/frontend/js/` 下的任何 JS 文件
+- 修改 `index.html` 中 script 引用顺序
+- 修改了任意 JS 文件内容
+
+**例外**：仅修改 CSS 或后端代码无需重建 bundle。
+
+### 19.5 AI 拦截规则
+
+- 直接修改 `index.html` 手动添加/删除 `<script src>` 而不重建 bundle → 拒绝，要求执行构建流程
+- 在 bundle 之外新增独立 `<script>` 标签 → 拒绝，应合并到 bundle 中
+- 修改 bundle 已覆盖的单个 JS 文件后未重建 → 警告，提示重建
+
 ---
 
 **本文件为项目级 AI 协作指南,适用于所有 AI agent。修改本文件需用户明确同意。**

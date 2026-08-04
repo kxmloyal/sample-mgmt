@@ -324,6 +324,34 @@ Claude 生成 manifest.json 后 MUST 自检：
 2. 禁止硬编码卡片圆角 14/16px 或自定义 hover 阴影
 3. 禁止统计卡与入口卡混用结构（`.kb-stat` 与 `.portal-card` 职责分离）
 
+## 17. JS 合并构建（Claude 实施指引）
+
+> 完整规范见 [AGENTS.md 第 19 节](./AGENTS.md#19-js-合并构建规范强制)。
+> 每个子系统前端仅 1 个 `bundle.js`（25→1 / 16→1 / 7→1），defer 加载。
+
+### 17.1 Claude MUST 遵守
+
+- 新增/删除/重命名 `subsystems/*/frontend/js/` 下的 JS 文件后，**MUST 执行重建**：
+  ```bash
+  node tools/build-bundles.js   # 生成 /tmp/bundle-*.js
+  sudo cp /tmp/bundle-*.js subsystems/*/frontend/js/bundle.js
+  # 更新 index.html 中的版本号（tools/.bundle-ver 中获取）
+  ```
+- 修改任意 JS 文件内容后，同上重建
+- 三个 `index.html` 中 **只能有 2 个 script**：`fluentui`（module） + `bundle.js`（defer）
+- 初始化调用（`boot()`/`bootFixture()`）已包含在 bundle 末尾，**不要**在 HTML 中写内联 `<script>boot()</script>`
+
+### 17.2 Claude 禁止行为
+
+1. 在 `index.html` 中手动添加 `<script src="...">` 绕开 bundle
+2. 修改 JS 文件后不重建 bundle（写代码 → 改测试 → 重建 bundle → 验证，这是完整流程）
+3. 移除 bundle 末尾的 `boot()` 初始化调用
+
+### 17.3 容量检测豁免
+
+`bundle.js` 不适用 AGENTS.md 第 7.1 节单文件红线（它是构建产物，非源码）；
+修改仍在原始拆分文件中进行，修改后重建即可。
+
 ---
 
 **本文件为 Claude 特定指南。核心规则与 AGENTS.md 一致,修改本文件需用户明确同意。**
