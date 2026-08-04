@@ -4,6 +4,7 @@
 
 var unionSQL = `
   SELECT
+    s.id AS id,
     s.sample_no AS item_no,
     s.name,
     'sample' AS item_type,
@@ -46,6 +47,7 @@ var unionSQL = `
   UNION ALL
 
   SELECT
+    f.id AS id,
     f.fixture_no AS item_no,
     f.name,
     'fixture' AS item_type,
