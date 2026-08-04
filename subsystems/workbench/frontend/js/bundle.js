@@ -1,4 +1,4 @@
-/** BUNDLE vbmsedj3me — 8 files */
+/** BUNDLE vbmseokf2n — 8 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -639,11 +639,23 @@ function _renderWbDetail(detail, logs, item) {
   if (dlg) {
     dlg.setAttribute('data-wb-detail', '1'); // 触发 module.css 专用尺寸覆盖（max-width 1280px）
     dlg.style.setProperty('--dialog-width', 'min(96vw,' + w + 'px)');
-    dlg.style.setProperty('--dialog-height', 'min(82vh, 680px)'); // 固定高度，左右栏内部各自滚动
   }
   // 左栏占比随字段数自适应
   var split = mask.querySelector('.wb-detail-split');
   if (split) split.style.gridTemplateColumns = _wbLeftPct(fields) + '% 1fr';
+  // 高度自适应：先 auto 测量内容自然高度，再封顶 82vh（内容少时弹窗矮，多时左右栏内部滚动）
+  requestAnimationFrame(function() {
+    if (!dlg || !split) return;
+    dlg.style.setProperty('--dialog-height', 'auto');
+    requestAnimationFrame(function() {
+      // 左右栏各自内容高度取 max（左栏是嵌套滚动容器，scrollHeight 才含溢出内容），再留 head/foot 余量
+      var l = split.querySelector('.wb-detail-left');
+      var r = split.querySelector('.wb-detail-right');
+      var contentH = Math.max(l ? l.scrollHeight : 0, r ? r.scrollHeight : 0, split.scrollHeight || 0);
+      var maxH = Math.round(window.innerHeight * 0.82);
+      dlg.style.setProperty('--dialog-height', Math.min(contentH + 130, maxH) + 'px');
+    });
+  });
 }
 
 // 键值行
