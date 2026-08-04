@@ -14,9 +14,14 @@ async function allowedActions(role, status, fixture, userId, userDept) {
   if (role === 'RD' && status === 'REQUESTED') actions.push('ACCEPT');
   if (status === 'REQUESTED' && fixture.requested_by === userId) actions.push('CANCEL');
   if (role === 'RD' && status === 'ACCEPTED') {
-    var cntDrawing = await D.countFilesByCategory(fixture.id, 'design_drawing');
-    var cntPhoto = await D.countFilesByCategory(fixture.id, 'fixture_photo');
-    if (cntDrawing && cntDrawing.cnt > 0 && cntPhoto && cntPhoto.cnt > 0) actions.push('MAKE');
+    var pool = D.pool();
+    var [rows] = await pool.execute(
+      "SELECT category, COUNT(*) AS cnt FROM fixture_files WHERE fixture_id=? AND category IN ('design_drawing','fixture_photo') GROUP BY category",
+      [fixture.id]
+    );
+    var hasDrawing = false, hasPhoto = false;
+    rows.forEach(function(r) { if (r.category === 'design_drawing' && r.cnt > 0) hasDrawing = true; if (r.category === 'fixture_photo' && r.cnt > 0) hasPhoto = true; });
+    if (hasDrawing && hasPhoto) actions.push('MAKE');
   }
   if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && status === 'VERIFY_PENDING') actions.push('VERIFY');
   if (isMECustodyQA(role) && status === 'TRANSFERRED') actions.push('USE');

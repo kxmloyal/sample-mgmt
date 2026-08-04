@@ -1,8 +1,8 @@
 // subsystems/workbench/db/workbench-queries.js
 // 统一工作台查询：合并样品 + 治具活跃数据，排除 RETIRED
-// 排序由前端处理，SQL 层不做 ORDER BY 以节省服务端开销
+// 外层排序（dwell_hours DESC）后用 LIMIT/OFFSET 分页，避免服务端全量传输
 
-var unifiedWorkbenchSQL = `
+var unionSQL = `
   SELECT
     s.sample_no AS item_no,
     s.name,
@@ -100,4 +100,10 @@ var unifiedWorkbenchSQL = `
   WHERE f.status NOT IN ('RETIRED')
 `;
 
-module.exports = { unifiedWorkbenchSQL };
+// 分页数据查询（停留时间降序，逾期项排最前）
+var unifiedWorkbenchSQL = 'SELECT * FROM (' + unionSQL + ') AS wb ORDER BY dwell_hours DESC LIMIT ? OFFSET ?';
+
+// 总数查询（用于分页器）
+var unifiedWorkbenchCountSQL = 'SELECT COUNT(*) AS total FROM (' + unionSQL + ') AS wb';
+
+module.exports = { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL };

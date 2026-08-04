@@ -2,7 +2,7 @@
 // 全局工作台后端 — 合并查询 + 积压阈值配置（ADMIN 可修改，全局生效）
 
 var D = require('../../../db');
-var { unifiedWorkbenchSQL } = require('../db/workbench-queries');
+var { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL } = require('../db/workbench-queries');
 var pool = D.pool();
 
 // 默认阈值（小时）：3天边界 warn=72h，7天边界 bad=168h
@@ -23,11 +23,19 @@ function register(app) {
   var requireAuth = app.locals.requireAuth;
   var currentUser = app.locals.currentUser;
 
-  // GET /api/workbench — 合并样品+治具活跃数据
+  // GET /api/workbench — 合并样品+治具活跃数据（分页，默认200条，上限500）
   app.get('/api/workbench', requireAuth, async function(req, res) {
     try {
-      var [rows] = await pool.execute(unifiedWorkbenchSQL);
+      var limit = Math.min(parseInt(req.query.limit || '200', 10) || 200, 500);
+      var offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+
+      // 用 pool.query() 代替 execute()，因为 UNION 子查询与 prepared statement 不兼容
+      var [[rows], [countRow]] = await Promise.all([
+        pool.query(unifiedWorkbenchSQL, [limit, offset]),
+        pool.query(unifiedWorkbenchCountSQL)
+      ]);
       var items = rows;
+      var total = countRow[0] ? countRow[0].total : 0;
 
       // 后端支持按 item_type / dept 预筛选
       if (req.query.item_type) {
@@ -37,7 +45,7 @@ function register(app) {
         items = items.filter(function(r) { return r.resp_dept === req.query.dept; });
       }
 
-      res.json({ items: items, summary: { total: items.length } });
+      res.json({ items: items, total: total, limit: limit, offset: offset });
     } catch (err) {
       console.error('[workbench] 查询失败:', err.message);
       res.status(500).json({ error: '获取工作台数据失败：' + err.message });

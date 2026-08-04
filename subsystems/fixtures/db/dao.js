@@ -124,8 +124,8 @@ module.exports = function createDao(deps) {
     return one('SELECT f.*, rd.display_name AS verified_rd_name, me.display_name AS verified_me_name, md.display_name AS made_by_name, ub.display_name AS used_by_name, rb.display_name AS repaired_by_name, rc.display_name AS repair_confirmed_by_name, ret.display_name AS retired_by_name, imp.display_name AS improved_by_name FROM fixtures f LEFT JOIN users rd ON rd.id = f.verified_rd LEFT JOIN users me ON me.id = f.verified_me LEFT JOIN users md ON md.id = f.made_by LEFT JOIN users ub ON ub.id = f.used_by LEFT JOIN users rb ON rb.id = f.repaired_by LEFT JOIN users rc ON rc.id = f.repair_confirmed_by LEFT JOIN users ret ON ret.id = f.retired_by LEFT JOIN users imp ON imp.id = f.improved_by WHERE f.id=?', [id]);
   }
 
-  function listFixtureLogs() { return q('SELECT fl.*,u.username,u.display_name FROM fixture_logs fl LEFT JOIN users u ON u.id=fl.user_id ORDER BY fl.id DESC'); }
-  function getFixtureLogsByFixtureId(fixtureId) { return q('SELECT fl.*,u.username,u.display_name FROM fixture_logs fl LEFT JOIN users u ON u.id=fl.user_id WHERE fl.fixture_id=? ORDER BY fl.id DESC', [fixtureId]); }
+  function listFixtureLogs() { return q('SELECT fl.*,u.username,u.display_name FROM fixture_logs fl LEFT JOIN users u ON u.id=fl.user_id ORDER BY fl.id DESC LIMIT 500'); }
+  function getFixtureLogsByFixtureId(fixtureId) { return q('SELECT fl.*,u.username,u.display_name FROM fixture_logs fl LEFT JOIN users u ON u.id=fl.user_id WHERE fl.fixture_id=? ORDER BY fl.id DESC LIMIT 500', [fixtureId]); }
   function listOverdueMaintenanceFixtures() { return q('SELECT * FROM fixtures WHERE retired_at IS NULL AND next_maintenance_at IS NOT NULL AND next_maintenance_at <= NOW() ORDER BY next_maintenance_at ASC'); }
   function listUpcomingMaintenanceFixtures() { return q('SELECT * FROM fixtures WHERE retired_at IS NULL AND next_maintenance_at IS NOT NULL AND next_maintenance_at > NOW() AND next_maintenance_at <= DATE_ADD(NOW(), INTERVAL 7 DAY) ORDER BY next_maintenance_at ASC'); }
 
