@@ -36,7 +36,7 @@ async function doLogin() {
 // ---- 导航 ----
 function buildFixtureNav() {
   var nav = [
-    { id: 'dashboard', label: '看板' },
+    { id: 'dashboard', label: '治具看板' },
     { id: 'list', label: '治具清单' },
     { id: 'new', label: '新建申请' },
     { id: 'scan', label: '扫码台' },

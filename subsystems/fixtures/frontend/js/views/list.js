@@ -68,9 +68,9 @@ async function loadFixtureList() {
       html += '<div class="empty">' + (hasFilter ? '未找到匹配的治具，请调整筛选条件' : '暂无治具数据') + '</div>';
     } else {
       html += '<table class="fx-list-table"><colgroup>' +
-        '<col style="width:42px"><col style="width:110px"><col style="width:130px"><col style="width:80px"><col style="width:90px"><col style="width:72px"><col style="width:60px"><col style="width:80px"><col style="width:100px"><col style="width:84px">' +
+        '<col style="width:42px"><col style="width:110px"><col style="width:130px"><col style="width:80px"><col style="width:90px"><col style="width:72px"><col style="width:60px"><col style="width:80px"><col style="width:84px"><col style="width:84px"><col style="width:100px"><col style="width:84px">' +
         '</colgroup>' +
-        '<thead><tr><th>#<span class="col-rsz"></span></th>' + th('编号', 'fixture_no') + th('名称', 'name') + '<th>规格<span class="col-rsz"></span></th><th>部门<span class="col-rsz"></span></th><th>储位<span class="col-rsz"></span></th><th>图片<span class="col-rsz"></span></th><th>状态<span class="col-rsz"></span></th>' + th('更新时间', 'updated_at') + '<th>操作<span class="col-rsz"></span></th></tr></thead><tbody>';
+        '<thead><tr><th>#<span class="col-rsz"></span></th>' + th('编号', 'fixture_no') + th('名称', 'name') + '<th>规格<span class="col-rsz"></span></th><th>部门<span class="col-rsz"></span></th><th>储位<span class="col-rsz"></span></th><th>图片<span class="col-rsz"></span></th><th>状态<span class="col-rsz"></span></th><th>归还状态<span class="col-rsz"></span></th><th>保养状态<span class="col-rsz"></span></th>' + th('更新时间', 'updated_at') + '<th>操作<span class="col-rsz"></span></th></tr></thead><tbody>';
       fixtures.forEach(function (f, i) {
         var cls = isOverdue(f) ? 'overdue-row' : '';
         var photoHtml;
@@ -78,7 +78,7 @@ async function loadFixtureList() {
           photoHtml = '<img src="/uploads/fixtures/' + f.first_photo + '" width="32" height="32" style="object-fit:cover;border-radius:4px" onerror="this.style.display=\'none\'" />';
           if (f.photo_count > 1) photoHtml += ' <small class="muted">+' + (f.photo_count - 1) + '</small>';
         } else { photoHtml = '<span class="muted">—</span>'; }
-        html += '<tr class="' + cls + '" onclick="showFixtureDetail(' + f.id + ')"><td class="muted" data-label="序号">' + (p.offset + i + 1) + '</td><td data-label="编号"><b>' + fixtureNoVersion(f) + '</b></td><td data-label="名称">' + e(f.name || '—') + '</td><td data-label="规格">' + e(f.spec || '—') + '</td><td data-label="部门">' + e(f.requested_dept || '—') + '</td><td class="muted" data-label="储位">' + e(f.storage_location || '—') + '</td><td data-label="图片">' + photoHtml + '</td><td data-label="状态">' + statusBadge(f) + '</td><td data-label="更新时间"><small>' + fmt(f.updated_at) + '</small></td><td data-label="操作"><a class="link" onclick="event.stopPropagation();showFixtureDetail(' + f.id + ')">详情</a></td></tr>';
+        html += '<tr class="' + cls + '" onclick="showFixtureDetail(' + f.id + ')"><td class="muted" data-label="序号">' + (p.offset + i + 1) + '</td><td data-label="编号"><b>' + fixtureNoVersion(f) + '</b></td><td data-label="名称">' + e(f.name || '—') + '</td><td data-label="规格">' + e(f.spec || '—') + '</td><td data-label="部门">' + e(f.requested_dept || '—') + '</td><td class="muted" data-label="储位">' + e(f.storage_location || '—') + '</td><td data-label="图片">' + photoHtml + '</td><td data-label="状态">' + statusBadge(f) + '</td><td data-label="归还状态">' + returnBadge(f) + '</td><td data-label="保养状态">' + maintBadge(f) + '</td><td data-label="更新时间"><small>' + fmt(f.updated_at) + '</small></td><td data-label="操作"><a class="link" onclick="event.stopPropagation();showFixtureDetail(' + f.id + ')">详情</a></td></tr>';
       });
       html += '</tbody></table>';
     }
