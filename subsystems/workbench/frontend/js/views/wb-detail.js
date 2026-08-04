@@ -3,8 +3,8 @@
 // 依赖：openModal/closeModal（modal.js）、api()（api-base.js）、ACTION_CN、e()
 // 详情数据来自子系统既有接口：样品 /api/samples/:id（含 logs）、治具 /api/fixtures/:id + /api/fixtures/:id/logs
 
-// 日志折叠状态（默认显示最近 6 条，超出折叠）
-var _wbTlExpanded = false;
+// 日志折叠状态（默认全部展开，可手动收起为最近 6 条）
+var _wbTlExpanded = true;
 var _wbTlMax = 6;
 var _wbTlAllLogs = [];
 
