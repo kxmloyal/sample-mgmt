@@ -1,23 +1,25 @@
 // sample-list-render.js — 样品列表渲染（表头、行、分页、列宽拖拽）
-// 依赖：samplePager/_sampleBuildParams/_sampleIsOverdue (samples.js), renderChips/statusBadge/e/fmt/sampleTypeLabel
+// 依赖：samplePager/_sampleBuildParams/_sampleIsOverdue (samples.js), renderChips/statusBadge/e/fmt/sampleTypeLabel/inspectBadge
 
 /** 构建样品列表表头 HTML（含 colgroup 列宽定义） */
 function _sampleHeaderCols(isOverdue) {
-  var cols = ['编号', '名称', '机型/站别', '图片', '规格', '类型', '状态', '制作', '发行', '保管部门/储位'];
+  var cols = ['#','编号', '名称', '机型/站别', '图片', '规格', '类型', '状态', '复检状态', '制作', '发行', '保管部门/储位'];
   if (isOverdue) cols.push('复检到期');
   cols.push('操作');
   var ths = cols.map(function(c) { return '<th>' + c + '<span class="col-rsz"></span></th>'; }).join('');
   var cg = '<colgroup>' +
+    '<col style="width:42px">' +
     '<col style="width:100px">' + '<col style="width:130px">' + '<col style="width:90px">' +
     '<col style="width:52px">' + '<col style="width:80px">' + '<col style="width:70px">' +
-    '<col style="width:84px">' + '<col style="width:78px">' + '<col style="width:78px">' +
+    '<col style="width:84px">' + '<col style="width:84px">' +
+    '<col style="width:78px">' + '<col style="width:78px">' +
     '<col style="width:110px">' + (isOverdue ? '<col style="width:84px">' : '') +
     '<col style="width:120px">' + '</colgroup>';
   return cg + '<thead><tr>' + ths + '</tr></thead>';
 }
 
 /** 构建单行数据 HTML */
-function _sampleRowHtml(s, isOverdue) {
+function _sampleRowHtml(s, isOverdue, i) {
   var img = s.produced_image || s.image
     ? '<img src="' + e(s.produced_image || s.image) + '" width="40" style="border-radius:4px"/>' : '—';
   var typeCell = s.sample_type
@@ -35,6 +37,7 @@ function _sampleRowHtml(s, isOverdue) {
     overdueCell = '<td data-label="复检到期" class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>';
   }
   return '<tr>' +
+    '<td data-label="序号" class="muted">' + (typeof i !== 'undefined' ? (samplePager.offset + i + 1) : '') + '</td>' +
     '<td data-label="编号">' + e(s.sample_no) + '</td>' +
     '<td data-label="名称">' + e(s.name || '—') + '</td>' +
     '<td data-label="机型/站别" class="muted">' + e(s.model || '—') + (s.station ? ' · ' + e(s.station) : '') + '</td>' +
@@ -42,6 +45,7 @@ function _sampleRowHtml(s, isOverdue) {
     '<td data-label="规格" class="muted">' + e(s.spec || '—') + '</td>' +
     '<td data-label="类型">' + typeCell + '</td>' +
     '<td data-label="状态">' + statusBadge(s) + '</td>' +
+    '<td data-label="复检状态">' + inspectBadge(s) + '</td>' +
     '<td data-label="制作" class="muted">' + fmt(s.produced_at) + '</td>' +
     '<td data-label="发行" class="muted">' + fmt(s.released_at) + '</td>' +
     '<td data-label="保管/储位" class="muted">' + e(s.custody_dept || '—') + '/' + e(s.storage_location || '—') + '</td>' +
@@ -73,8 +77,8 @@ function _renderSampleList(list, isOverdue, pager) {
   var box = $('#s-list');
   if (!list.length) { box.innerHTML = '<div class="empty">' + (isOverdue ? '无逾期/即将到期样品' : '无样品') + '</div>'; return; }
   var cols = _sampleHeaderCols(isOverdue);
-  var rows = list.map(function(s) { return _sampleRowHtml(s, isOverdue); }).join('');
-  var minWidth = isOverdue ? 1000 : 920;
+  var rows = list.map(function(s, i) { return _sampleRowHtml(s, isOverdue, i); }).join('');
+  var minWidth = isOverdue ? 1150 : 1050;
   var html = '<div class="card" style="padding:0"><table class="samples-table" style="min-width:' + minWidth + 'px">' + cols + '<tbody>' + rows + '</tbody></table></div>';
   if (pager && pager.total > pager.limit) {
     var totalPages = Math.ceil(pager.total / pager.limit);

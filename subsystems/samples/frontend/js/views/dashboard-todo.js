@@ -1,6 +1,6 @@
 // dashboard-todo.js — Dashboard 待办列表（角色定制优先级 + 分页 + 卡片筛选）
-// 快捷操作由 dashboard.js 的 _renderQuickActions 渲染；本文件仅负责待办
 // renderTodo(d) 由 dashboard.js 的 viewDashboard 延迟调用（确保 #dash-todo DOM 就绪）
+// 依赖：statusBadge/inspectBadge（list-inspect.js）
 var _todoPager = { limit: 10, offset: 0, total: 0 };
 var _todoData = [];
 
@@ -36,14 +36,14 @@ function _renderTodoTable() {
     return;
   }
   var pageList = filtered.slice(_todoPager.offset, _todoPager.offset + _todoPager.limit);
-  var rows = pageList.map(function(s) {
+  var rows = pageList.map(function(s, i) {
     var info = _getTodoInfo(s);
     var img = (s.produced_image || s.image) ? '<img src="' + e(s.produced_image || s.image) + '" width="40" height="40" style="border-radius:4px;object-fit:cover" loading="lazy"/>' : '—';
     // 待办行单击进详情(viewDetail),"去处理"按钮 stopPropagation 防冒泡;info.cls 优先级样式从 td 移到 tr(Task4 CSS 配合调整)
-    return '<tr class="dash-todo-row ' + info.cls + '" onclick="viewDetail(\'' + s.id + '\')" style="cursor:pointer"><td>' + e(s.sample_no) + '</td><td>' + e(s.name || '—') + '</td><td>' + img + '</td><td class="muted">' + e(s.spec || '—') + '</td><td>' + info.type + '</td><td>' + statusBadge(s) + '</td><td><a class="link" onclick="event.stopPropagation();goScan(\'' + e(s.sample_no) + '\')">去处理</a></td></tr>';
+    return '<tr class="dash-todo-row ' + info.cls + '" onclick="viewDetail(\'' + s.id + '\')" style="cursor:pointer"><td class="muted">' + (_todoPager.offset + i + 1) + '</td><td>' + e(s.sample_no) + '</td><td>' + e(s.name || '—') + '</td><td>' + img + '</td><td class="muted">' + e(s.spec || '—') + '</td><td>' + info.type + '</td><td>' + statusBadge(s) + '</td><td>' + inspectBadge(s) + '</td><td><a class="link" onclick="event.stopPropagation();goScan(\'' + e(s.sample_no) + '\')">去处理</a></td></tr>';
   }).join('');
   var pagerHtml = _renderPager(_todoPager, 'goTodoPage');
-  box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 12px">' + title + '</h3><div style="overflow-x:auto"><table><tr><th>编号</th><th>名称</th><th>图片</th><th>规格</th><th>待办类型</th><th>状态</th><th>操作</th></tr>' + rows + '</table></div>' + pagerHtml + '</div>';
+  box.innerHTML = '<div class="card" style="margin-top:16px"><h3 style="margin:0 0 12px">' + title + '</h3><div style="overflow-x:auto"><table><tr><th>#</th><th>编号</th><th>名称</th><th>图片</th><th>规格</th><th>待办类型</th><th>状态</th><th>复检状态</th><th>操作</th></tr>' + rows + '</table></div>' + pagerHtml + '</div>';
 }
 
 // 待办分页跳转（由 _renderPager 的 onclick 调用）
