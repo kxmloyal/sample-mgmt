@@ -1,4 +1,4 @@
-/** BUNDLE vbmse3gs6j — 16 files */
+/** BUNDLE vbmse7pdhj — 16 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -1007,6 +1007,9 @@ async function renderFixtureScan() {
   html += '<div id="scan-result"></div></div>';
   document.getElementById('view').innerHTML = html;
   document.getElementById('scan-code').focus();
+  // 支持 #/scan?no=FJ-000011 直达预填（工作台下钻跳转用）
+  var m = (location.hash || '').match(/[?&]no=([^&]+)/);
+  if (m) { document.getElementById('scan-code').value = decodeURIComponent(m[1]); doScanFix(); }
 }
 
 var _fxContinuous = false;
@@ -1296,7 +1299,7 @@ var VIEWS = {
 };
 function routeFixture() {
   var h = location.hash || '#/dashboard';
-  var page = h.replace('#/', '');
+  var page = h.replace('#/', '').split('?')[0];
   if (!VIEWS[page]) page = 'dashboard';
   var fn = VIEWS[page];
   if (fn) fn();

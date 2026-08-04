@@ -25,6 +25,9 @@ function viewScan(){
   bindScanInput();
   refocusScan();
   injectWizardCSS();
+  // 支持 #/scan?no=SM-000011 直达预填（工作台下钻跳转用）
+  var m = (location.hash || '').match(/[?&]no=([^&]+)/);
+  if (m) { $('#scan-code').value = decodeURIComponent(m[1]); doScan(); }
 }
 async function doScan(){
   var code=$('#scan-code').value.trim();

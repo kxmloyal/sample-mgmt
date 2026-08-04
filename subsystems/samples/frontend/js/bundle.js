@@ -1,4 +1,4 @@
-/** BUNDLE vbmse3moc8 — 24 files */
+/** BUNDLE vbmse7pdhj — 24 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -1305,6 +1305,9 @@ function viewScan(){
   bindScanInput();
   refocusScan();
   injectWizardCSS();
+  // 支持 #/scan?no=SM-000011 直达预填（工作台下钻跳转用）
+  var m = (location.hash || '').match(/[?&]no=([^&]+)/);
+  if (m) { $('#scan-code').value = decodeURIComponent(m[1]); doScan(); }
 }
 async function doScan(){
   var code=$('#scan-code').value.trim();

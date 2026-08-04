@@ -16,6 +16,9 @@ async function renderFixtureScan() {
   html += '<div id="scan-result"></div></div>';
   document.getElementById('view').innerHTML = html;
   document.getElementById('scan-code').focus();
+  // 支持 #/scan?no=FJ-000011 直达预填（工作台下钻跳转用）
+  var m = (location.hash || '').match(/[?&]no=([^&]+)/);
+  if (m) { document.getElementById('scan-code').value = decodeURIComponent(m[1]); doScanFix(); }
 }
 
 var _fxContinuous = false;

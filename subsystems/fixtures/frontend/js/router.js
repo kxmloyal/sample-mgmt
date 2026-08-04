@@ -28,7 +28,7 @@ var VIEWS = {
 };
 function routeFixture() {
   var h = location.hash || '#/dashboard';
-  var page = h.replace('#/', '');
+  var page = h.replace('#/', '').split('?')[0];
   if (!VIEWS[page]) page = 'dashboard';
   var fn = VIEWS[page];
   if (fn) fn();
