@@ -97,14 +97,27 @@ function _fixtureOverdue(item) {
     var ef = new Date(item.expected_finish_at).getTime();
     if (ef < now) { hours = Math.round((now - ef) / 3600000); reason = '制作超期'; }
   } else if (s === 'REPAIRING_ME' || s === 'REPAIRING_RD' || s === 'IMPROVING') {
-    if (item.repair_requested_at) {
-      hours = Math.round((now - new Date(item.repair_requested_at).getTime()) / 3600000);
+    // 维修/改善优先检查 expected_finish_at，未超期则不算积压
+    if (item.expected_finish_at) {
+      var ef2 = new Date(item.expected_finish_at).getTime();
+      if (ef2 < now) {
+        hours = Math.round((now - ef2) / 3600000);
+        if (s === 'REPAIRING_ME') reason = 'ME维修超期';
+        else if (s === 'REPAIRING_RD') reason = 'RD维修超期';
+        else reason = '改善超期';
+      }
+      // else: 未超期，hours=0, reason='' — 正常
     } else {
-      hours = item.dwell_hours || 0;
+      // 无预计完成时间则按报修时间作为兜底
+      if (item.repair_requested_at) {
+        hours = Math.round((now - new Date(item.repair_requested_at).getTime()) / 3600000);
+      } else {
+        hours = item.dwell_hours || 0;
+      }
+      if (s === 'REPAIRING_ME') reason = 'ME维修中';
+      else if (s === 'REPAIRING_RD') reason = 'RD维修中';
+      else reason = '改善中';
     }
-    if (s === 'REPAIRING_ME') reason = 'ME维修中';
-    else if (s === 'REPAIRING_RD') reason = 'RD维修中';
-    else reason = '改善中';
   } else if (item.next_maintenance_at && new Date(item.next_maintenance_at).getTime() < now) {
     hours = Math.round((now - new Date(item.next_maintenance_at).getTime()) / 3600000);
     reason = '保养逾期';
