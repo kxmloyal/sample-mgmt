@@ -66,7 +66,8 @@ const sessionStore = new (MySQLStoreFactory(session))({
     }
   }
 });
-app.use(session({
+// 静态资源跳过 session 中间件，避免每次 JS/CSS/图片请求都查 sessions 表
+const sessionMiddleware = session({
   secret: SESSION_SECRET,
   store: sessionStore,
   resave: false,
@@ -77,7 +78,11 @@ app.use(session({
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production'
   }
-}));
+});
+app.use((req, res, next) => {
+  if (/\.(js|css|png|jpg|gif|svg|ico|woff2?)$/.test(req.path)) return next();
+  sessionMiddleware(req, res, next);
+});
 // 根路径 → 门户首页（必须在 express.static 之前注册）
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 // 共享前端模块静态服务（框架层，子系统通用）

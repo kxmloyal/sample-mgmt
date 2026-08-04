@@ -47,10 +47,25 @@ async function migrateFixtureMaintenance(pool) {
   }
 }
 
+async function migratePerfIndexes(pool) {
+  // P0 性能索引：消除全表扫描，优化 overdue/保养逾期/归还逾期查询
+  var indexes = [
+    'ALTER TABLE fixtures ADD INDEX idx_fixtures_next_maint (next_maintenance_at)',
+    'ALTER TABLE fixtures ADD INDEX idx_fixtures_retired (retired_at)',
+    'ALTER TABLE fixtures ADD INDEX idx_fixtures_status_return (status, expected_return_at)',
+    'ALTER TABLE samples ADD INDEX idx_samples_status_inspect (status, next_inspect_at)'
+  ];
+  for (var i = 0; i < indexes.length; i++) {
+    try { await pool.execute(indexes[i]); }
+    catch (e) { if (e.code !== 'ER_DUP_KEYNAME' && e.code !== 'ER_DUP_INDEX') throw e; }
+  }
+}
+
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
   await migrateFixtureFiles(pool);
   await migrateFixtureMaintenance(pool);
+  await migratePerfIndexes(pool);
 }
 
 module.exports = { runMigrations };
