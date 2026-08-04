@@ -91,17 +91,17 @@ app.use('/shared/frontend', express.static(path.join(__dirname, 'shared', 'front
   etag: true,
   setHeaders: function(res, filePath) {
     if (/\.js$/.test(filePath)) {
-      res.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'no-cache');
+      res.set('Cache-Control', 'public, max-age=604800, immutable');
     }
   }
 }));
 // 子系统前端静态服务（每个子系统独立 SPA 入口）
 app.use('/subsystems', express.static(path.join(__dirname, 'subsystems'), {
-  maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
+  maxAge: '7d',
   etag: true,
   setHeaders: function(res, filePath) {
     if (/\.(js|css)$/.test(filePath)) {
-      res.set('Cache-Control', process.env.NODE_ENV === 'production' ? 'public, max-age=604800, immutable' : 'no-cache');
+      res.set('Cache-Control', 'public, max-age=604800, immutable');
     }
   }
 }));
