@@ -102,6 +102,8 @@ app.use('/subsystems', express.static(path.join(__dirname, 'subsystems'), {
   setHeaders: function(res, filePath) {
     if (/\.(js|css)$/.test(filePath)) {
       res.set('Cache-Control', 'public, max-age=604800, immutable');
+    } else if (/\.html?$/.test(filePath)) {
+      res.set('Cache-Control', 'no-cache');
     }
   }
 }));
