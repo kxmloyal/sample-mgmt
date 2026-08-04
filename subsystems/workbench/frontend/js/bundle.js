@@ -1,4 +1,4 @@
-/** BUNDLE vbmsebyf56 — 8 files */
+/** BUNDLE vbmsedj3me — 8 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -576,12 +576,39 @@ async function openWbDetail(item) {
   }
 }
 
-// 组装弹窗 HTML：基本信息区 + 时间线
+// 自适应窗口宽（信息密度驱动）：960~1280px
+function _wbWidth(fieldCount, logCount) {
+  var w = 960 + fieldCount * 24 + Math.min(logCount, 20) * 3;
+  return Math.min(1280, Math.max(960, w));
+}
+
+// 左栏（基本信息）占比：随字段数 34%~50%
+function _wbLeftPct(fieldCount) {
+  return Math.min(50, Math.max(34, 34 + fieldCount * 2));
+}
+
+// 统计实际渲染的基本信息字段数（用于宽度自适应）
+function _countWbFields(detail, item) {
+  var n = 0;
+  if (detail.sample_no || detail.fixture_no || item.item_no) n++;
+  if (detail.name) n++;
+  n += 2; // 类型 + 阶段（恒有值）
+  if (detail.spec) n++;
+  if (detail.model) n++;
+  if (item.resp_dept) n++;
+  if (item.apply_dept) n++;
+  (_KEY_DATES[item.item_type] || []).forEach(function(f) { if (detail[f.k]) n++; });
+  return n;
+}
+
+// 组装弹窗 HTML：左右分栏（左=基本信息，右=流转日志）+ 内容密度自适应
 function _renderWbDetail(detail, logs, item) {
   var typeLabel = item.item_type === 'sample' ? '样品' : '治具';
   var stageLabel = STATUS[detail.status] || detail.status || '-';
   _wbTlAllLogs = logs; // 供折叠/展开切换使用
-  var html = '<div class="wb-detail-info">' +
+
+  var fields = _countWbFields(detail, item);
+  var leftHtml = '<div class="wb-detail-info">' +
     _kv('编号', detail.sample_no || detail.fixture_no || item.item_no) +
     _kv('名称', detail.name) +
     _kv('类型', typeLabel) +
@@ -591,9 +618,14 @@ function _renderWbDetail(detail, logs, item) {
     _kv('负责部门', item.resp_dept) +
     _kv('申请部门', item.apply_dept) +
     _keyDates(detail, item.item_type) +
-    '</div>' +
-    '<h4 class="wb-detail-tl-title">流转日志</h4>' +
+    '</div>';
+  var rightHtml = '<h4 class="wb-detail-tl-title">流转日志</h4>' +
     _renderTimeline(logs, item);
+
+  var html = '<div class="wb-detail-split">' +
+    '<div class="wb-detail-left">' + leftHtml + '</div>' +
+    '<div class="wb-detail-right">' + rightHtml + '</div>' +
+    '</div>';
 
   var foot = '<div style="display:flex;gap:8px">' +
     '<fluent-button appearance="accent" size="small" onclick="' + _openWbScanJs(item) + '">前往处理 →</fluent-button>' +
@@ -601,9 +633,17 @@ function _renderWbDetail(detail, logs, item) {
     '</div>';
 
   var mask = openModal('详细信息 · ' + (detail.sample_no || detail.fixture_no || item.item_no), html, { foot: foot });
-  // 弹窗加宽至 1100px（工作台详情信息量大，充分利用宽屏空间）
+  // 自适应：通过 fluent-dialog 的 CSS 变量控制面板尺寸（style.width 进不了 shadow DOM）
   var dlg = mask.querySelector('fluent-dialog');
-  if (dlg) { dlg.style.width = 'min(96vw,1100px)'; dlg.style.maxWidth = '1100px'; }
+  var w = _wbWidth(fields, logs.length);
+  if (dlg) {
+    dlg.setAttribute('data-wb-detail', '1'); // 触发 module.css 专用尺寸覆盖（max-width 1280px）
+    dlg.style.setProperty('--dialog-width', 'min(96vw,' + w + 'px)');
+    dlg.style.setProperty('--dialog-height', 'min(82vh, 680px)'); // 固定高度，左右栏内部各自滚动
+  }
+  // 左栏占比随字段数自适应
+  var split = mask.querySelector('.wb-detail-split');
+  if (split) split.style.gridTemplateColumns = _wbLeftPct(fields) + '% 1fr';
 }
 
 // 键值行
