@@ -61,7 +61,7 @@
 /* ===== 工作台下钻详情弹窗（.wb-detail-* 与 .wb-tl-* 仅工作台使用，模块样式隔离） ===== */
 /* 左右分栏容器：gridTemplateColumns 由 JS 按信息密度自适应（34%~50% / 1fr） */
 .wb-detail-split{display:grid;grid-template-columns:40% 1fr;height:100%;min-height:0}
-.wb-detail-left{border-right:1px solid var(--line);min-width:0;overflow-y:auto;background:var(--bg)}
+.wb-detail-left{border-right:1px solid var(--line);min-width:0;overflow:visible;background:var(--bg)}
 .wb-detail-right{min-width:0;overflow-y:auto;display:flex;flex-direction:column}
 /* 信息区：左栏内单列键值（左右分栏下每栏宽度有限，单列更易读） */
 .wb-detail-info{display:grid;grid-template-columns:1fr;gap:8px;padding:14px 18px}
