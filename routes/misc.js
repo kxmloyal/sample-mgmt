@@ -17,15 +17,6 @@ function register(app) {
     );
   });
 
-  // 角色快捷操作映射（dashboard 用）
-  var ROLE_ACTIONS = {
-    ADMIN: [{t:'新建样品',h:'#/new'},{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'},{t:'用户管理',h:'#/users'}],
-    RD: [{t:'新建样品',h:'#/new'},{t:'扫码台',h:'#/scan'}],
-    QA: [{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'}],
-    ME: [{t:'扫码台',h:'#/scan'},{t:'生命周期看板',h:'#/board'}],
-    CUSTODY: [{t:'扫码台',h:'#/scan'}]
-  };
-
   // 看板
   app.get('/api/dashboard', requireAuth, async (req, res) => {
     const u = await currentUser(req);
@@ -38,7 +29,7 @@ function register(app) {
     var byStatus = { NEW: 0, PRODUCED: 0, RELEASED: 0, IN_CUSTODY: 0, RETURNING: 0, RETIRED: 0 };
     var total = 0;
     for (var _i = 0; _i < rows.length; _i++) { var r = rows[_i]; byStatus[r.status] = Number(r.cnt); total += Number(r.cnt); }
-    res.json({ byStatus, total, overdue, dueSoon, myPending, role: u.role, dept: u.dept, display_name: u.display_name, roleActions: ROLE_ACTIONS[u.role] || [] });
+    res.json({ byStatus, total, overdue, dueSoon, myPending, role: u.role, dept: u.dept, display_name: u.display_name });
   });
 
   // 日志（ADMIN 专属）

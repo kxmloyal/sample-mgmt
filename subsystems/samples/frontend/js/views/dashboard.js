@@ -1,5 +1,5 @@
 // dashboard.js — 样品看板（统计卡片 + 比例条 + 预警区块 + 错误处理）
-// 待办和快捷操作见 dashboard-todo.js（renderTodo 由本文件 viewDashboard 延迟调用）
+// 待办见 dashboard-todo.js（renderTodo 由本文件 viewDashboard 延迟调用）
 var _kbFilter = 0;   // 卡片筛选索引：0=总数(默认全部待办)，1..6=STAT_ORDER 排序后各状态
 var _kbStats = [];   // _renderStats 填充排序后 [[label,count,key],...]，供 dashboard-todo.js 查索引→状态键
 var _dashOverduePager = { limit: 5, offset: 0, total: 0 };
@@ -41,7 +41,6 @@ async function viewDashboard() {
     var d = await api('GET', '/api/dashboard');
     var h = '';
     h += _renderStats(d);
-    h += _renderQuickActions(d.roleActions || []);
     h += _renderOverdue(d.overdue || []);
     h += _renderDueSoon(d.dueSoon || []);
     h += '<div id="dash-todo"></div>';
@@ -95,15 +94,6 @@ function barDrill(key, el) {
 
 // filterKbStat 定义在 dashboard-todo.js（与 _renderTodoTable 同文件，原 filterTodo 位置）
 // _kbFilter/_kbStats 由本文件定义（_renderStats 填充），filterKbStat 跨文件读写
-
-// 快捷操作 fallback（dashboard-todo.js 加载后由 renderTodo 覆盖为富样式）
-function _renderQuickActions(actions) {
-  if (!actions || !actions.length) return '';
-  var btns = actions.map(function(a) {
-    return '<fluent-button appearance="accent" onclick="location.hash=\'' + a.h + '\'">' + a.t + '</fluent-button>';
-  }).join('');
-  return '<div class="dash-actions" style="margin-top:16px">' + btns + '</div>';
-}
 
 // 复检逾期预警（红色区块，5 条/页）
 function _renderOverdue(list) {
