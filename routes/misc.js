@@ -57,6 +57,28 @@ function register(app) {
     res.json(created);
   });
 
+  // 修改用户（ADMIN 专属）：姓名 / 密码，至少一项；账号 username 不可变
+  app.put('/api/users/:id', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '无权限' });
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: '无效用户 ID' });
+    const target = await D.getUserById(id);
+    if (!target) return res.status(404).json({ error: '用户不存在' });
+    const { display_name, password } = req.body || {};
+    const fields = {};
+    if (display_name !== undefined) {
+      if (typeof display_name !== 'string' || display_name.length > 50) return res.status(400).json({ error: '姓名长度需 ≤50 字符' });
+      fields.display_name = display_name.trim();
+    }
+    if (password !== undefined) {
+      if (typeof password !== 'string' || !password.trim()) return res.status(400).json({ error: '密码不能为空' });
+      fields.password_hash = bcrypt.hashSync(password, 10);
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: '请至少提供姓名或新密码' });
+    res.json(await D.updateUser(id, fields));
+  });
+
   // RD 用户列表（供退回指派选择）
   app.get('/api/rd-users', requireAuth, async (req, res) => {
     const users = await D.listUsers();
