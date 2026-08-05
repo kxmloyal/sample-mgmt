@@ -1,6 +1,15 @@
 const { getApp, login } = require('./helpers/setup');
 
-beforeAll(async () => { await getApp(); });
+beforeAll(async () => {
+  await getApp();
+  // 新增强制校验：预置测试用机型（幂等：409 已存在也接受）
+  const { agent } = await login('rd01', 'rd123');
+  const codes = ['SF1225', 'SF9225', 'MX1234', 'MY1234'];
+  for (const code of codes) {
+    const r = await agent.post('/api/samples/models').send({ code: code, full_name: '测试机型 ' + code });
+    if (r.status !== 200 && r.status !== 409) throw new Error('预置机型失败: ' + code + ' → ' + r.body.error);
+  }
+}, 30000);
 
 async function seedSample() {
   const { agent } = await login('rd01', 'rd123');
@@ -273,7 +282,7 @@ describe('POST /api/samples — with limit fields', () => {
     const res = await agent
       .post('/api/samples')
       .send({
-        name: '限度样品OK', spec: 'OK-SPEC', model: 'LM1234', station: '马达组',
+        name: '限度样品OK', spec: 'OK-SPEC', model: 'MX1234', station: '马达组',
         notes: 'test limit sample',
         sample_type: 'OK', limit_item: 'A', source_type: 'T',
         valid_until: '2027-01-01', card_version: 'A1',
