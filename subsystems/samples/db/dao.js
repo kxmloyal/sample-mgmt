@@ -31,7 +31,7 @@ module.exports = function createDao(deps) {
   async function createSample(data, conn) {
     var token = crypto.randomBytes(8).toString('hex');
     var sbRd = data.signed_by_rd || '';
-    var sql = 'INSERT INTO samples (sample_no,name,spec,model,station,image,qr_token,status,created_by,notes,sample_type,limit_item,source_type,valid_until,card_version,test_standard,test_data,signed_by_rd,signed_by_qa,replaces) VALUES (?,?,?,?,?,?,?,?,\'NEW\',?,?,?,?,?,?,?,?,?,?,?)';
+    var sql = 'INSERT INTO samples (sample_no,name,spec,model,station,image,qr_token,status,created_by,notes,sample_type,limit_item,source_type,valid_until,card_version,test_standard,test_data,signed_by_rd,signed_by_qa,replaces) VALUES (?,?,?,?,?,?,?,\'NEW\',?,?,?,?,?,?,?,?,?,?,?,?)';
     var lastErr;
     for (var i = 0; i < 3; i++) {
       var ns = await nextSampleNo({
