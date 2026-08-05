@@ -45,6 +45,7 @@ async function seed() {
   console.log('\n当前账号列表:');
   for (const u of await listUsers()) console.log(`  ${u.username}\t${u.role}\t${u.dept}`);
   console.log('\n种子完成。默认密码见上方账号列表对应项。');
+  process.exit(0);
 }
 
 seed().catch(e => { console.error(e); process.exit(1); });

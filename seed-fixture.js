@@ -220,8 +220,8 @@ async function seed() {
     transferred_at: daysAgo(112),
     used_by: mfg01.id, used_at: daysAgo(110),
     use_location: '制造部·AOI区', expected_return_days: 365,
-    repair_type: 'ME', repair_requested_by: mfg01.id, repair_requested_at: daysAgo(2),
-    repair_note: '光源亮度衰减，需更换LED环形灯',
+    repair_type: 'ME', repair_requested_by: mfg01.id, repair_requested_at: daysAgo(10),
+    repair_note: '光源亮度衰减，需更换LED环形灯（无预计完成时间，按报修日兜底）',
     maintenance_cycle_days: 30, last_maintenance_at: daysAgo(60), next_maintenance_at: daysAgo(30),
     storage_location: '生技部·维修区'
   });
@@ -245,8 +245,8 @@ async function seed() {
     used_by: me01.id, used_at: daysAgo(80),
     use_location: '生技部·调试室', expected_return_days: 365,
     repair_type: 'RD', repair_requested_by: me01.id, repair_requested_at: daysAgo(5),
-    repair_note: '探头接触不良，信号衰减严重',
-    expected_finish_at: daysFromNow(5),
+    repair_note: '探头接触不良，信号衰减严重，已超过预计完成时间',
+    expected_finish_at: daysAgo(8),
     maintenance_cycle_days: 60, last_maintenance_at: daysAgo(30), next_maintenance_at: daysFromNow(30),
     storage_location: '研发中心·维修区'
   });
@@ -361,7 +361,8 @@ async function seed() {
   var all = await query('SELECT status, COUNT(*) as cnt FROM fixtures GROUP BY status ORDER BY status');
   all.forEach(function(r) { console.log('  ' + r.status + ': ' + r.cnt + ' 个'); });
   console.log('\n日志总数：' + (await query('SELECT COUNT(*) as cnt FROM fixture_logs'))[0].cnt + ' 条');
-  console.log('\n治具种子完成，请访问 http://localhost:3000/fixture.html 验证。');
+  console.log('\n治具种子完成，请访问 http://localhost:4000/subsystems/fixtures/frontend/index.html 验证。');
+  process.exit(0);
 }
 
 seed().catch(function(e) { console.error(e); process.exit(1); });

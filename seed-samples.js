@@ -234,7 +234,8 @@ async function seed() {
   all[0].forEach(function(r) { console.log('    ' + r.status + ': ' + r.cnt + ' 个'); });
   var logs = await pool.execute('SELECT COUNT(*) as cnt FROM scan_logs');
   console.log('  操作日志: ' + logs[0][0].cnt + ' 条');
-  console.log('\n样品种子完成，请访问 http://localhost:3000/index.html 验证。');
+  console.log('\n样品种子完成，请访问 http://localhost:4000/subsystems/samples/frontend/index.html 验证。');
+  process.exit(0);
 }
 
 seed().catch(function(e) { console.error(e); process.exit(1); });

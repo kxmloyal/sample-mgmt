@@ -1,6 +1,6 @@
 // 端到端流程测试：研发建样→制作→品保发行(周期)→保管(储位)
 require('dotenv').config(); const D = require('./db');
-const BASE = 'http://localhost:' + (process.env.PORT || '3000');
+const BASE = 'http://localhost:' + (process.env.PORT || '4000');
 const cookies = {};
 
 async function call(method, path, body, who) {
@@ -22,11 +22,12 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
 
 (async () => {
   await D.init();
-  // 登录三角色 + ME
+  // 登录三角色 + ME + ADMIN（日志接口为 ADMIN 专属）
   await login('rd', 'rd01', 'rd123');
   await login('qa', 'qa01', 'qa123');
   await login('store', 'mfg01', 'mfg123');
   await login('me', 'me01', 'me123');
+  await login('admin', 'admin', 'admin123');
 
   // 1) 研发新建样品
   const mk = await call('POST', '/api/samples', { name: '测试样品-X', spec: 'SPEC-X' }, 'rd');
@@ -60,7 +61,7 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
   assert(dash.status === 200 && dash.data.byStatus.IN_CUSTODY >= 1, '看板统计保管中≥1: ' + JSON.stringify(dash.data.byStatus));
 
   // 6) 日志应包含 4 条（CREATE/PRODUCE/RELEASE/CUSTODY）
-  const logs = await call('GET', '/api/logs', null, 'qa');
+  const logs = await call('GET', '/api/logs', null, 'admin');
   const acts = logs.data.map(l => l.action);
   assert(acts.includes('PRODUCE') && acts.includes('RELEASE') && acts.includes('CUSTODY'), '操作日志含 PRODUCE/RELEASE/CUSTODY: ' + acts.join(','));
 
@@ -81,7 +82,7 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
   assert(resRetired.status === 200 && resRetired.data.allowedActions.length === 0, '已作废样品 resolve allowedActions=[]');
 
   // 11) 日志应包含 RETURN_REQUEST / RETIRE_ONLY
-  const logs2 = await call('GET', '/api/logs', null, 'qa');
+  const logs2 = await call('GET', '/api/logs', null, 'admin');
   const acts2 = logs2.data.map(l => l.action);
   assert(acts2.includes('RETURN_REQUEST') && acts2.includes('RETIRE_ONLY'), '操作日志含 RETURN_REQUEST/RETIRE_ONLY: ' + acts2.join(','));
 
@@ -130,4 +131,5 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
   assert(sc.status === 200 && sc.data.sample.status === 'PRODUCED', '替代品确认制作→PRODUCED: ' + newNo);
 
   console.log('\n端到端流程测试完成。退出码:', process.exitCode || 0);
+  process.exit(process.exitCode || 0);
 })().catch(e => { console.error(e); process.exit(1); });

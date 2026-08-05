@@ -1,5 +1,5 @@
 // test_fixture_files.js — 治具文件管理 E2E 测试
-var BASE = 'http://127.0.0.1:4006';
+var BASE = 'http://localhost:' + (process.env.PORT || '4000');
 
 async function rq(method, url, body, cks) {
   var headers = {};
@@ -62,11 +62,11 @@ async function main() {
   // 获取列表，找 ACCEPTED 或 REQUESTED 的治具
   var list = await rq('GET', '/api/fixtures', null, cks);
   ok(list, '获取治具列表');
-  var fix = list.body.find(function(f) { return f.status === 'ACCEPTED'; });
+  var fix = list.body.fixtures.find(function(f) { return f.status === 'ACCEPTED'; });
 
   if (!fix) {
     // 没有 ACCEPTED 的，则找一个 REQUESTED 并接收
-    var reqFix = list.body.find(function(f) { return f.status === 'REQUESTED'; });
+    var reqFix = list.body.fixtures.find(function(f) { return f.status === 'REQUESTED'; });
     if (!reqFix) {
       // 创建新治具
       var me = await rq('POST', '/api/login', { username: 'me01', password: 'me123' });
@@ -105,6 +105,13 @@ async function main() {
   }, cks);
   ok(up2, '上传请购单');
 
+  // 测试4b: 上传实物照片（MAKE 需 design_drawing + fixture_photo 两类文件）
+  var up2b = await uploadFile('/api/fixtures/' + fix.id + '/files', {
+    file: { buffer: Buffer.from('fake png data'), filename: '实物照片.png', contentType: 'image/png' },
+    category: 'fixture_photo'
+  }, cks);
+  ok(up2b, '上传实物照片');
+
   // 测试5: 获取文件列表（有文件）
   var files2 = await rq('GET', '/api/fixtures/' + fix.id + '/files', null, cks);
   ok(files2, '获取文件列表（有文件）');
@@ -139,6 +146,7 @@ async function main() {
 
   console.log('\n=== 结果: ' + passed + ' 通过, ' + failed + ' 失败 ===');
   if (failed > 0) process.exit(1);
+  process.exit(0);
 }
 
 main().catch(function(e) { console.error('测试异常: ' + e.message); process.exit(1); });
