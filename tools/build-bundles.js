@@ -13,7 +13,8 @@ const BUNDLE_VER = 'b' + Date.now().toString(36);
 const INIT = {
   samples:  "window.addEventListener('hashchange',route);boot();",
   fixtures: "window.addEventListener('hashchange',routeFixture);bootFixture();",
-  workbench:"window.addEventListener('hashchange',route);boot();"
+  workbench:"window.addEventListener('hashchange',route);boot();",
+  projects: "window.addEventListener('hashchange',route);boot('项目追踪');"
 };
 
 const sourcesPath = path.join(__dirname, 'bundle-sources.json');

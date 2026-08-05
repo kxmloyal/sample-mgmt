@@ -1,0 +1,36 @@
+/* module.css — 项目追踪专属样式（不修改 app.css 共享定义） */
+.pk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.pk-panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.pk-panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.pk-panel h3{font-size:14px;font-weight:600;color:var(--text);margin:0 0 10px}
+.pk-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;color:var(--text)}
+.pk-row .pk-name{width:80px;color:var(--muted)}
+.pk-bar{height:8px;border-radius:4px;background:var(--line);flex:1;overflow:hidden}
+.pk-bar i{display:block;height:100%;border-radius:4px;background:var(--brand)}
+.pk-count{margin-left:auto;font-weight:600;min-width:24px;text-align:right}
+.pk-trend{display:flex;align-items:flex-end;gap:6px;height:110px;padding-top:6px}
+.pk-trend .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.pk-trend .bar{width:100%;max-width:34px;background:var(--brand);border-radius:4px 4px 0 0;min-height:2px;transition:height .2s}
+.pk-trend .wk{font-size:11px;color:var(--muted)}
+.pk-trend .num{font-size:11px;color:var(--text)}
+.pk-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.pk-filters fluent-select{width:150px}
+.pk-table{width:100%;border-collapse:collapse}
+.pk-table th,.pk-table td{padding:8px 10px;font-size:13px;text-align:left;border-bottom:1px solid var(--line)}
+.pk-table th{color:var(--muted);font-weight:600;background:var(--bg)}
+.pk-row-overdue{background:#fef2f2}
+.pk-kanban{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.pk-col{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px}
+.pk-col h4{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.pk-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.pk-card:active{cursor:grabbing}
+.pk-card .t{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.pk-card .m{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.pk-card.dragging{opacity:.5;transform:rotate(2deg)}
+.pk-tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
+.pk-tag.h{color:#b91c1c;border-color:#fecaca;background:#fef2f2}
+.pk-tag.m{color:#92400e;border-color:#fde68a;background:#fffbeb}
+.pk-tag.l{color:#1e40af;border-color:#bfdbfe;background:#eff6ff}
+@media(max-width:1199px){.pk-panels{grid-template-columns:1fr}}
+@media(max-width:767px){.pk-kanban{grid-template-columns:1fr 1fr}}
+@media(max-width:576px){.pk-kanban{grid-template-columns:1fr}.pk-filters fluent-select{width:100%}}
