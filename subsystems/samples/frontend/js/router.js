@@ -19,6 +19,8 @@ function setActive(k){document.querySelectorAll('#nav button').forEach(b=>b.clas
 const VIEWS={dashboard:viewDashboard,samples:viewSamples,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,users:viewUsers};
 function route(){
   const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
+  const navItem=NAV.find(n=>n.k===k);
+  if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||viewDashboard; setActive(k);
   const meta={dashboard:'样品看板',samples:'样品列表',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',users:'用户管理'};
   $('#page-title').textContent=meta[k]||'';
