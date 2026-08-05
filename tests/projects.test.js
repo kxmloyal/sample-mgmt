@@ -188,3 +188,44 @@ describe('任务依赖/附件/关联', () => {
     expect(list.body.some(l => l.ref_type === 'sample')).toBe(true);
   });
 });
+
+// ===== Task 7：看板统计 + 趋势 + CSV 导出 + 工作流配置 =====
+describe('看板统计/导出/工作流配置', () => {
+  test('看板统计聚合（项目数/任务数/完成率/三维分布）', async () => {
+    const res = await pm.agent.get('/api/projects/stats');
+    expect(res.status).toBe(200);
+    expect(res.body.project_count).toBeGreaterThan(0);
+    expect(typeof res.body.completion_rate).toBe('number');
+    expect(Array.isArray(res.body.category_dist)).toBe(true);
+    expect(Array.isArray(res.body.trend)).toBe(true);
+  });
+  test('跨项目任务列表 + OVERDUE 派生筛选', async () => {
+    const res = await pm.agent.get('/api/projects/tasks?status=OVERDUE');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+  test('CSV 导出（UTF-8 BOM + 列头）', async () => {
+    const res = await pm.agent.get('/api/projects/tasks/export');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.text.charCodeAt(0)).toBe(0xFEFF); // BOM
+    expect(res.text).toContain('项目名称');
+    expect(res.text).toContain('任务名称');
+  });
+  test('工作流配置读取/更新（ADMIN 行锁）', async () => {
+    const get = await pm.agent.get('/api/projects/workflow');
+    expect(get.status).toBe(200);
+    expect(get.body.states.NOT_STARTED).toBeTruthy();
+    const put = await admin.agent.put('/api/projects/workflow').send({
+      states: Object.assign(get.body.states, { NOT_STARTED: { label: '未开始', color: '#92400e', bg: '#fffbeb' } }),
+      transitions: get.body.transitions, initial: get.body.initial
+    });
+    expect(put.status).toBe(200);
+    const get2 = await pm.agent.get('/api/projects/workflow');
+    expect(get2.body.states.NOT_STARTED.label).toBe('未开始');
+  });
+  test('非 ADMIN 改工作流 → 403', async () => {
+    const res = await pm.agent.put('/api/projects/workflow').send({ states: {}, transitions: [], initial: 'NOT_STARTED' });
+    expect(res.status).toBe(403);
+  });
+});
