@@ -66,9 +66,11 @@ if (opts.model) { where.push('model = ?'); params.push(opts.model); }
 
 | 方法 | 路径 | 入参 | 成功返回 | 失败 |
 |---|---|---|---|---|
-| GET | `/api/samples/models` | — | `[{id,code,full_name,created_at}]` | 403 非 RD/ADMIN |
-| POST | `/api/samples/models` | `{code, full_name}` | 新行 | 400 字段缺失/code<6 位；409 code 或 full_name 重复 |
+| GET | `/api/samples/models` | — | `[{id,code,full_name,created_at}]` | 401 未登录（所有登录角色可读，新建表单与筛选下拉共用） |
+| POST | `/api/samples/models` | `{code, full_name}` | 新行 | 400 字段缺失/code<6 位；403 非 RD/ADMIN；409 code 或 full_name 重复 |
 | DELETE | `/api/samples/models/:id` | — | `{ok:true}` | 404 不存在；403 非 RD/ADMIN；409 被样品引用 |
+
+权限：GET 仅需 `requireAuth`（任何登录角色，供新建表单与列表筛选取数）；POST/DELETE 额外校验 `req.user.role ∈ [RD, ADMIN]`，否则 403。
 
 校验规则（POST）：
 - `code`：必填、trim 后长度 ≥6、≤20，大写化处理
@@ -104,9 +106,16 @@ if (!m) return res.status(400).json({ error: '机型不存在，请先在机型�
 
 顶层函数 ≤10，单文件 ≤400 行（预计 ~80 行）。
 
-### 5.2 manifest 导航新增
+### 5.2 前端导航新增（router.js + manifest 同步）
 
-在 `navigation` 数组「新建样品」（key: new）之后插入：
+前端导航由 `subsystems/samples/frontend/js/router.js` **硬编码驱动**（非 manifest 渲染），需改三处并保持与 manifest 声明一致：
+
+`router.js`：
+- `NAV` 数组在 `{k:'new',...}` 之后插入 `{k:'models',t:'机型列表',roles:['ADMIN','RD']}`
+- `VIEWS` 增加 `models:viewModels`
+- `meta` 增加 `models:'机型列表'`
+
+`manifest.json` `navigation` 在「新建样品」（key: new）之后同步插入（供门户/后端校验一致性）：
 
 ```json
 {
@@ -163,25 +172,26 @@ node tools/build-bundles.js
 
 | 操作 | 角色 |
 |---|---|
-| 进入机型列表页 / 新增 / 删除 | 仅 RD、ADMIN（后端 403 兜底，前端菜单按 roles 渲染） |
+| 进入机型列表页 / 新增 / 删除 | 仅 RD、ADMIN（后端 POST/DELETE 403 兜底，前端菜单按 NAV roles 渲染） |
+| 读取机型列表（新建下拉 / 筛选下拉数据源） | 所有登录角色（GET requireAuth 即可） |
 | 新建样品（含下拉选机型） | RD、ADMIN（现有逻辑） |
 | 列表筛选按机型 | 所有可见样品列表的角色（QA/CUSTODY/ME/ADMIN/RD） |
 
 ## 7. 测试计划
 
-新增 `tests/models.test.js`（沿用 samples.test.js 的 MariaDB 直连 + jest 模式）：
+新增 `tests/models.test.js`（沿用 samples.test.js 的 `helpers/setup.js` supertest + jest 模式）：
 
 1. 新增机型成功（code ≥6、full_name 非空）
 2. code 不足 6 位 → 400
 3. code / full_name 重复 → 409
-4. 非 RD/ADMIN（QA/ME/CUSTODY 登录）访问 models 接口 → 403
+4. 非 RD/ADMIN（qa01 登录）GET models → 200；POST models → 403
 5. 删除未被引用机型 → ok
 6. 删除被引用机型（先用该 code 建样品）→ 409
 7. `GET /api/samples?model=<code>` 只返回该机型样品
 
 回归：
 
-- `tests/samples.test.js`：直接 POST 新建样例前必须先 `POST /api/samples/models` 建对应机型（新增强制校验）；或为存量测试机型批量预置
+- `tests/samples.test.js`：`beforeAll` 预置测试用机型（幂等：POST 已存在返回 409 也视为成功），覆盖 seedSample/直接 POST 用到的全部 code（`SF1225`/`SF9225`/`MX1234`/`MY1234` 等），避免每个用例单独建机型
 - `tests/sample-code.test.js`：纯函数不受影响，跑通即可
 
 ## 8. 兼容性与回归范围
