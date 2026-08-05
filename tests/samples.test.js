@@ -183,19 +183,16 @@ describe('POST /api/scan - INSPECT action', () => {
     await rndAgent.post('/api/scan').send({ code: sample.sample_no, image: 'data:image/png;base64,iVBORw0KGgo=' });
     const { agent: qaAgent } = await login('qa01', 'qa123');
     await qaAgent.post('/api/scan').send({ code: sample.sample_no, cycleDays: 30, sample_type: 'OK', limit_item: 'A' });
-    // 强制设 next_inspect_at 为过去
-    const D = require('../db');
-    await D.ready;
-    D.db().run('UPDATE samples SET next_inspect_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', sample.id]);
-    const fs = require('fs');
-    fs.writeFileSync(require('path').join(__dirname, '..', 'data', process.env.TEST_MODE ? 'test.db.sqlite' : 'sample.db.sqlite'), Buffer.from(D.db().export()));
+    // 强制设 next_inspect_at 为过去（MariaDB 直连 UPDATE）
+    const { pool } = require('../db');
+    await pool().execute('UPDATE samples SET next_inspect_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', sample.id]);
     // QA 扫码复检
     const res = await qaAgent
       .post('/api/scan')
       .send({ code: sample.sample_no, image: 'data:image/png;base64,iVBORw0KGgo=', note: '复检通过' });
     expect(res.status).toBe(200);
     expect(res.body.action).toBe('INSPECT');
-  });
+  }, 15000);
 
   it('should reject INSPECT without image', async () => {
     const { sample } = await seedSample();
@@ -203,16 +200,13 @@ describe('POST /api/scan - INSPECT action', () => {
     await rndAgent.post('/api/scan').send({ code: sample.sample_no, image: 'data:image/png;base64,iVBORw0KGgo=' });
     const { agent: qaAgent } = await login('qa01', 'qa123');
     await qaAgent.post('/api/scan').send({ code: sample.sample_no, cycleDays: 30, sample_type: 'OK', limit_item: 'A' });
-    // 强制设 next_inspect_at 为过去
-    const D = require('../db');
-    await D.ready;
-    D.db().run('UPDATE samples SET next_inspect_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', sample.id]);
-    const fs = require('fs');
-    fs.writeFileSync(require('path').join(__dirname, '..', 'data', process.env.TEST_MODE ? 'test.db.sqlite' : 'sample.db.sqlite'), Buffer.from(D.db().export()));
+    // 强制设 next_inspect_at 为过去（MariaDB 直连 UPDATE）
+    const { pool } = require('../db');
+    await pool().execute('UPDATE samples SET next_inspect_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', sample.id]);
     // 不带 image 应该报 400
     const res = await qaAgent.post('/api/scan').send({ code: sample.sample_no, note: 'no photo' });
     expect(res.status).toBe(400);
-  });
+  }, 15000);
 });
 
 describe('GET /api/samples — filtering & sorting', () => {
