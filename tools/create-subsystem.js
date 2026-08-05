@@ -1,12 +1,15 @@
 // tools/create-subsystem.js — 子系统脚手架 CLI
 // 用法: node tools/create-subsystem.js <id> <name> [描述]
-// 交互补全: 状态机 / 文件管理（可选能力）
+// 交互补全: 状态机 / 文件管理（可选能力；非 TTY 时自动用默认值）
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { generateSubsystem } = require('./subsystem-templates');
 
 const ROOT = path.join(__dirname, '..');
+
+// 单例 readline：复用同一实例，避免管道输入被多次创建/关闭的实例丢弃
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
 function validateId(id) {
   if (!id) return 'id 必填';
@@ -17,14 +20,20 @@ function validateId(id) {
 
 function prompt(q) {
   return new Promise(function (resolve) {
-    var rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(q, function (ans) { rl.close(); resolve(ans.trim()); });
+    rl.question(q, function (ans) { resolve(ans.trim()); });
   });
 }
 
 async function askYesNo(q) {
+  if (!process.stdin.isTTY) { console.log(q + ' [y/N] 非交互模式，默认否'); return false; }
   var a = await prompt(q + ' [y/N] ');
   return /^[yY]/.test(a);
+}
+
+async function askStates() {
+  if (!process.stdin.isTTY) { console.log('状态列表：非交互模式，跳过'); return []; }
+  var s = await prompt('状态列表（逗号分隔，首个为初始态，如 DRAFT,ACTIVE,CLOSED）: ');
+  return s.split(/[,，]/).map(function (x) { return x.trim(); }).filter(Boolean);
 }
 
 async function writeFiles(id, files) {
@@ -59,11 +68,7 @@ async function main() {
   if (!name) { console.error('✗ name 必填（用法: node tools/create-subsystem.js <id> <name> [描述]）'); process.exit(1); }
 
   var withState = await askYesNo('需要状态机（状态/流转声明）吗？');
-  var states = [];
-  if (withState) {
-    var s = await prompt('状态列表（逗号分隔，首个为初始态，如 DRAFT,ACTIVE,CLOSED）: ');
-    states = s.split(/[,，]/).map(function (x) { return x.trim(); }).filter(Boolean);
-  }
+  var states = withState ? await askStates() : [];
   var withFiles = await askYesNo('需要文件管理（附件上传）吗？');
 
   var ctx = { id: id, name: name, description: desc, icon: 'chart', version: '1.0.0',
