@@ -74,9 +74,12 @@
 ├── docs/
 │   ├── deploy-baota.md    # 宝塔部署文档
 │   ├── operation-manual.md # 用户操作说明书
-│   └── superpowers/
-│       ├── specs/         # brainstorming 产出的设计文档
-│       └── plans/         # writing-plans 产出的实现计划
+│   ├── subsystem-management-guide.md # 子系统管理指南
+│   ├── RELEASE-v2.0.0.md  # v2.0.0 发布说明
+│   ├── archive/           # 已完成迭代的设计文档与实现计划归档
+│   └── superpowers/       # 当前有效规范与计划
+│       ├── specs/         # brainstorming 产出的设计文档(迭代完成后归档)
+│       └── plans/         # writing-plans 产出的实现计划(迭代完成后归档)
 ├── .env.example           # 环境变量模板(含 MariaDB 连接配置)
 ├── .gitignore
 └── package.json
@@ -117,6 +120,8 @@ npm start           # 启动,访问 http://localhost:4000(端口可通过 .env �
 ```
 
 **例外**:简单 bug 修复、单行配置改动、纯文档更新可跳过 1-3,但仍需第 5-6 步。
+
+> 迭代完成部署后,将已实施的设计文档/实现计划归档至 `docs/archive/`,当前有效文档保留在 `docs/superpowers/`。
 
 ## 6. 全链路变更规则(强制)
 
@@ -376,9 +381,10 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 │   │   └── app.css              # 仅保留共享样式（布局/基础组件/CSS 变量）
 │   └── uploads/                 # 上传目录
 └── docs/
+    ├── archive/           # 历史设计文档与实现计划归档(已完成迭代)
     └── superpowers/
-        ├── specs/               # 设计文档
-        └── plans/               # 实现计划
+        ├── specs/         # 当前有效设计规范与文档
+        └── plans/         # 当前有效实现计划
 ```
 
 ### 17.3 manifest.json 完整规范

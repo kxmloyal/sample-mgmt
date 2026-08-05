@@ -206,8 +206,9 @@ logger.js                   日志系统（Winston，按天轮转）
 seed.js                     种子：6 个角色账号
 seed-samples.js             样品全量测试数据（15个，6种状态）
 seed-fixture.js             治具全量测试数据（15个，12种状态）
-seed-rich.js                丰富样品演示数据（旧版，仅参考）
-test_flow.js                端到端流程测试
+test_flow.js                样品端到端流程测试（建样→制作→发行→保管→退回→替代）
+test_fixture_flow.js        治具生命周期 E2E 测试（申请→接收→上传文件→制作→单人验证→领用→改善→报废）
+test_fixture_files.js       治具文件管理 E2E 测试（上传/下载/删除/权限）
 shared/                     框架共享层
   ├── middleware/           鉴权 + 上传中间件
   ├── state-machine.js      通用状态机引擎
@@ -237,10 +238,8 @@ public/
 docs/
   ├── deploy-baota.md        宝塔部署文档
   ├── operation-manual.md    用户操作说明书
-  └── superpowers/           设计文档与实现计划
-scripts/
-  ├── to-production.sh       演示 → 生产模式切换
-  └── to-demo.sh             生产 → 演示模式切换
+  ├── archive/               历史设计文档与实现计划（已完成迭代归档）
+  └── superpowers/           当前有效的设计规范与计划
 tools/
   ├── build-bundles.js       JS 合并构建（三子系统 JS → 单 bundle + 版本号）
   ├── bundle-sources.json    bundle 源文件清单（依赖顺序）
@@ -283,13 +282,6 @@ GET /health → { "status":"ok","uptime":123,"timestamp":"...","memory":...,"db"
 - Helmet（XSS/MIME sniff/clickjack/HSTS）
 - Session Cookie：httpOnly + sameSite strict
 - 文件上传：jpg/png/gif/webp ≤5MB
-
-## 演示/生产切换
-
-```bash
-bash scripts/to-production.sh   # 移除登录页演示账号提示
-bash scripts/to-demo.sh         # 恢复演示提示
-```
 
 ## 代码检查
 
