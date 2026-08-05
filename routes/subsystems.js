@@ -79,7 +79,7 @@ function register(app) {
     }
   });
 
-  // ★ 创建新子系统（ADMIN 专属）— 生成目录骨架 + manifest.json + 模板文件
+  // ★ 创建新子系统（ADMIN 专属）— 调共用模板生成完整骨架 + 面板自定义覆盖
   app.post('/api/subsystems', requireAuth, async function (req, res) {
     var u = await currentUser(req);
     if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可操作' });
@@ -89,46 +89,36 @@ function register(app) {
     var subsystemDir = path.join(__dirname, '..', 'subsystems', id);
     if (fs.existsSync(subsystemDir)) return res.status(409).json({ error: '子系统 ' + id + ' 已存在' });
     try {
-      // 创建目录
-      ['backend', 'db', 'frontend/js/views', 'frontend/css', 'seed'].forEach(function(d) {
-        fs.mkdirSync(path.join(subsystemDir, d), { recursive: true });
+      const { generateSubsystem } = require('../tools/subsystem-templates');
+      // 组装 ctx：显式传入面板字段，缺失用模板默认
+      var ctx = {
+        id: id, name: name, description: description || '',
+        icon: icon || 'chart', version: version || '1.0.0',
+        withStateMachine: !!stateMachine,
+        states: stateMachine && stateMachine.states ? Object.keys(stateMachine.states) : [],
+        withFiles: !!files,
+        roles: roles
+      };
+      var out = generateSubsystem(ctx);
+      // 创建目录 + 写入全部模板文件
+      Object.keys(out.files).forEach(function (rel) {
+        var fp = path.join(subsystemDir, rel);
+        fs.mkdirSync(path.dirname(fp), { recursive: true });
+        fs.writeFileSync(fp, out.files[rel], 'utf8');
       });
-      // 写入 manifest.json
-      var manifest = JSON.stringify({
-        id: id, name: name, description: description || '', version: version || '1.0.0',
-        icon: icon || '_default',
-        route: route || { prefix: '/api/' + id, entry: '/subsystems/' + id + '/frontend/index.html', hashBase: '/' + id },
-        database: { tables: [] },
-        roles: roles || { use: ['ADMIN'] },
-        navigation: navigation || [{ key: 'home', label: '首页', icon: 'chart', view: 'renderHome', roles: ['ADMIN'] }],
-        stateMachine: stateMachine || null,
-        files: files || null
-      }, null, 2);
-      fs.writeFileSync(path.join(subsystemDir, 'manifest.json'), manifest, 'utf8');
-      // 写入模板文件
-      fs.writeFileSync(path.join(subsystemDir, 'backend', 'index.js'),
-        '// subsystems/' + id + '/backend/index.js\n' +
-        'function register(app) {\n  var requireAuth = app.locals.requireAuth;\n' +
-        '  app.get(\'/api/' + id + '/ping\', requireAuth, function(req, res) {\n' +
-        '    res.json({ msg: \'pong\', module: \'' + id + '\' });\n  });\n}\n' +
-        'async function initDB() { return true; }\n' +
-        'async function seed() { return true; }\n' +
-        'module.exports = { register, initDB, seed };\n');
-      fs.writeFileSync(path.join(subsystemDir, 'db', 'schema.sql'),
-        '-- subsystems/' + id + '/db/schema.sql\n-- 建表 DDL（使用 CREATE TABLE IF NOT EXISTS）\n');
-      fs.writeFileSync(path.join(subsystemDir, 'frontend', 'index.html'),
-        '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" />' +
-        '<link rel="stylesheet" href="/css/app.css" /><title>' + name + '</title></head><body>' +
-        '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)">' +
-        '<div style="background:#fff;border-radius:16px;padding:40px;text-align:center;box-shadow:var(--shadow)">' +
-        '<h1>' + name + '</h1><p style="color:var(--muted)">子系统已就绪</p>' +
-        '<a href="/portal.html">← 返回门户</a></div></div></body></html>');
-      fs.writeFileSync(path.join(subsystemDir, 'frontend', 'css', 'module.css'),
-        '/* subsystems/' + id + '/frontend/css/module.css — 子系统专属样式 */\n');
-      fs.writeFileSync(path.join(subsystemDir, 'seed', 'seed.js'),
-        '// subsystems/' + id + '/seed/seed.js\nmodule.exports = async function seed(pool) { /* TODO */ };\n');
+      // 面板自定义 manifest 覆盖（route/roles/navigation/stateMachine/files 以面板提交为准）
+      if (route || roles || navigation || stateMachine || files) {
+        var manifestPath = path.join(subsystemDir, 'manifest.json');
+        var m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        if (route) m.route = route;
+        if (roles) m.roles = roles;
+        if (navigation) m.navigation = navigation;
+        if (stateMachine) m.stateMachine = stateMachine;
+        if (files) m.files = files;
+        fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2), 'utf8');
+      }
       // 更新 registry
-      var newManifest = JSON.parse(manifest);
+      var newManifest = JSON.parse(fs.readFileSync(path.join(subsystemDir, 'manifest.json'), 'utf8'));
       registry[id] = newManifest;
       res.status(201).json({ ok: true, id: id });
     } catch (e) {
