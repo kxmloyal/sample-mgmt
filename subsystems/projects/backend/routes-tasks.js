@@ -1,8 +1,10 @@
 // subsystems/projects/backend/routes-tasks.js — 任务/子任务/评论/依赖/附件/关联/流转
 // Task 2：POST 创建任务（支撑项目 CRUD 测试）；Task 3：列表/详情/编辑（乐观锁）/删除（级联）
+// Task 4：POST /status 状态流转（CAS + 状态机 + 伪角色 ASSIGNEE/MEMBER + 依赖校验 + OVERDUE 自动延期互斥）
 // 详情中的子任务/依赖/评论/附件/关联/日志由 Task 5/6 补全，本 Task 仅返回任务对象，避免引用未定义函数。
 const D = require('../../../db');
 const perm = require('./permissions');
+const wf = require('./workflow-config');
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -88,6 +90,52 @@ function register(app) {
         await D.deleteTaskCascade(conn, tid);
         await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title }), u.id);
         res.json({ ok: 1 });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // 状态流转（CAS 条件更新 + 状态机配置 + 依赖校验 + 同事务留痕 + 触发 OVERDUE 自动延期互斥）
+  app.post('/api/projects/tasks/:tid/status', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const action = (req.body.action || '').trim();
+      if (!action) return res.status(400).json({ error: 'action 必填' });
+      await D.withTransaction(async conn => {
+        // 事务内读取最新配置（缓解新旧混合）
+        const cfg = await wf.loadWorkflow(conn);
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        const tr = cfg.transitions.find(x => x.action === action && x.from === t.status);
+        if (!tr) {
+          // CAS 语义：action 合法但当前状态不匹配 = 状态已并发变更 → 409；action 不存在 → 400
+          const any = cfg.transitions.find(x => x.action === action);
+          return res.status(any ? 409 : 400).json({ error: any ? '任务状态已变更，请刷新后重试' : '当前状态不允许该操作' });
+        }
+        if (!await wf.resolveRole(conn, tr.role, u, t))
+          return res.status(403).json({ error: '无权限执行该操作' });
+        // 依赖校验：进入 IN_PROGRESS/DONE 前，前置任务须全部 DONE
+        if (tr.to === 'IN_PROGRESS' || tr.to === 'DONE') {
+          const pending = await D.fetchOne(conn,
+            'SELECT COUNT(*) AS c FROM project_task_deps d JOIN project_tasks p ON p.id=d.depends_on_id ' +
+            'WHERE d.task_id=? AND p.status<>\'DONE\'', [tid]);
+          if (pending && pending.c > 0) return res.status(409).json({ error: '存在未完成的前置任务，禁止流转' });
+        }
+        // 自动延期批量（与手动流转同事务，CAS 保证互斥：已超期则手动流转必然 409）
+        await conn.execute(
+          "UPDATE project_tasks SET status='OVERDUE', version=version+1 WHERE id=? AND status IN ('NOT_STARTED','IN_PROGRESS') AND planned_date < CURDATE()",
+          [tid]);
+        // 手动流转 CAS（WHERE status=读取时的旧值，affectedRows=0 → 并发冲突）
+        const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
+          [tr.to, tid, t.status]);
+        if (r[0].affectedRows === 0) return res.status(409).json({ error: '任务状态已变更，请刷新后重试' });
+        // DONE 附加：progress=100 + actual_date 回写（首次完成记录）
+        if (tr.to === 'DONE') {
+          await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
+        }
+        await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action }), u.id);
+        const nt = await D.getTask(conn, tid);
+        res.json({ task: nt, message: tr.label });
       });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });

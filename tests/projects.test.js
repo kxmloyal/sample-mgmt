@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const { getApp, login } = require('./helpers/setup');
 
 let app, admin, pm;
-let pid, rd2; // 修正1：pid/rd2 提升为文件级（Task 2 创建，Task 3/4 复用）
+let pid, rd2, tid, ver; // 修正1：pid/rd2 提升为文件级（Task 2 创建，Task 3/4 复用）；tid/ver 亦文件级（Task 4 流转 describe 复用）
 async function makeUser(u) {
   const D = require('../db');
   // ⚠️ 必须 await：getUserByUsername 返回 Promise（非 await 恒真，导致 createUser 永不执行）
@@ -59,7 +59,6 @@ describe('项目 CRUD 与成员管理', () => {
 });
 
 describe('任务 CRUD 与乐观锁', () => {
-  let tid, ver;
   test('owner 创建任务', async () => {
     const res = await pm.agent.post('/api/projects/' + pid + '/tasks').send({
       title: '任务A', description: 'd', category: '质量', priority: 'H',
@@ -92,5 +91,30 @@ describe('任务 CRUD 与乐观锁', () => {
     const rd = await makeUser({ username: 'rd-proj4', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发4' });
     const res = await rd.agent.put('/api/projects/tasks/' + tid).send({ title: 'hack', version: 2 });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('状态机流转与并发', () => {
+  let flowId;
+  test('START：NOT_STARTED → IN_PROGRESS', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + tid + '/status').send({ action: 'START' });
+    expect(res.status).toBe(200);
+    expect(res.body.task.status).toBe('IN_PROGRESS');
+    flowId = res.body.task.version;
+  });
+  test('非法转移（DONE 未完成规则）→ 400；无前置任务直接 DONE 需 COMPLETE', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + tid + '/status').send({ action: 'COMPLETE' });
+    expect(res.status).toBe(200); // 无依赖任务可直接完成
+    expect(res.body.task.status).toBe('DONE');
+  });
+  test('ASSIGNEE 伪角色：仅责任人可流转自己任务', async () => {
+    // rd-proj2 非成员：创建任务指派给自己，可流转
+    const t = await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '指派任务', assignee_id: rd2.user.id, priority: 'M' });
+    const res = await rd2.agent.post('/api/projects/tasks/' + t.body.id + '/status').send({ action: 'START' });
+    expect(res.status).toBe(200);
+  });
+  test('CAS 并发冲突：过期 version 流转 → 409', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + tid + '/status').send({ action: 'START' });
+    expect(res.status).toBe(409); // 已 DONE，状态不匹配 CAS
   });
 });
