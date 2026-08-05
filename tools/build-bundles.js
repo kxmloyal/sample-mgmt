@@ -20,12 +20,23 @@ const sourcesPath = path.join(__dirname, 'bundle-sources.json');
 if (!fs.existsSync(sourcesPath)) { console.error('bundle-sources.json 不存在'); process.exit(1); }
 const sources = JSON.parse(fs.readFileSync(sourcesPath, 'utf-8'));
 
+// 共享常量注入：读取 data/*.json（与 routes/misc.js /js/shared-constants.js 同源，服务端动态版保留兼容）
+// 用 var 而非 const，避免与子系统内同名声明冲突
+function sharedConstantsHeader() {
+  const limitItems = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'limit-items.json'), 'utf-8'));
+  const sourceTypes = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'source-types.json'), 'utf-8'));
+  return '/* --- shared constants (data/*.json) --- */\n' +
+    'var LIMIT_ITEMS = ' + JSON.stringify(limitItems) + ';\n' +
+    'var SOURCE_TYPES = ' + JSON.stringify(sourceTypes) + ';\n';
+}
+
 for (const [id, scripts] of Object.entries(sources)) {
   console.log('=== ' + id + ' ===');
   // 新子系统默认初始化（脚手架生成的子系统统一用 route/boot）
   const init = INIT[id] || "window.addEventListener('hashchange',route);boot();";
 
   let out = '/** BUNDLE v' + BUNDLE_VER + ' — ' + scripts.length + ' files */\n';
+  out += sharedConstantsHeader();
   let total = 0;
   for (const s of scripts) {
     const fp = path.join(ROOT, s);
