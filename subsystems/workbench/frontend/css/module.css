@@ -75,6 +75,7 @@
 .wb-tl-item{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:12px;line-height:1.5;min-width:0}
 .wb-tl-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--brand);transform:translateY(-1px)}
 .wb-tl-action{flex:none;font-weight:600;color:var(--text)}
+.wb-tl-arrow{flex:none;font-weight:700;color:var(--brand)}
 .wb-tl-who{flex:none;color:var(--muted)}
 .wb-tl-time{flex:none;color:var(--muted);white-space:nowrap}
 .wb-tl-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);min-width:0}

@@ -1,4 +1,4 @@
-/** BUNDLE vbmseoonfw — 8 files */
+/** BUNDLE vbmsfdhm3e — 8 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -103,7 +103,11 @@ var ACTION_CN = {
   // 治具操作
   ACCEPT: 'RD接收', MAKE: '制作完成', MAKE_DONE: '制作完成', CANCEL: '撤销申请',
   VERIFY: '验证移交',
+  // 历史双人验证动作（存量数据兼容，当前流程已改为单人验证）
+  VERIFY_RD: 'RD验证通过', VERIFY_ME: 'ME验证通过', VERIFY_ORG: '申请单位验证',
+  TRANSFER: '移交',
   USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成',
+  MAINTENANCE: '保养完成',
   REPAIR_ME: 'ME自行维修', REPAIR_RD_REQ: '退回RD维修',
   REPAIR_DONE: 'ME维修完成', REPAIR_RD_DONE: 'RD维修完成',
   REPAIR_CONFIRM: 'ME确认维修', RETIRE: '报废',
@@ -698,6 +702,7 @@ function _buildTimelineRows(logs) {
     var note = l.note ? '<span class="wb-tl-note" title="' + e(l.note) + '">' + e(l.note) + '</span>' : '';
     html += '<div class="wb-tl-item">' +
       '<span class="wb-tl-dot"></span>' +
+      '<span class="wb-tl-arrow">→</span>' +
       '<span class="wb-tl-action">' + e(action) + '</span>' +
       '<span class="wb-tl-who">' + e(who) + '</span>' +
       '<span class="wb-tl-time">' + time + '</span>' +

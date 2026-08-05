@@ -172,6 +172,7 @@ function _buildTimelineRows(logs) {
     var note = l.note ? '<span class="wb-tl-note" title="' + e(l.note) + '">' + e(l.note) + '</span>' : '';
     html += '<div class="wb-tl-item">' +
       '<span class="wb-tl-dot"></span>' +
+      '<span class="wb-tl-arrow">→</span>' +
       '<span class="wb-tl-action">' + e(action) + '</span>' +
       '<span class="wb-tl-who">' + e(who) + '</span>' +
       '<span class="wb-tl-time">' + time + '</span>' +
