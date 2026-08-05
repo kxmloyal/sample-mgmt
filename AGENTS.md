@@ -578,6 +578,8 @@ module.exports = { register, initDB, seed };
 
 ### 17.6 新增子系统完整流程（8 步）
 
+> 快速生成：也可用脚手架 CLI `node tools/create-subsystem.js <id> <name> [描述]`，交互式补全状态机/文件管理（非 TTY 自动用默认值），一步生成 manifest + backend + schema.sql + frontend 全套骨架。CLI 与管理面板共用 tools/subsystem-templates.js 同一模板源。
+
 ```
 第1步：创建目录
   mkdir -p subsystems/my-module/{backend,db,frontend/{js/views,css},seed}

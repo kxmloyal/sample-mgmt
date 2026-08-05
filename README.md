@@ -243,7 +243,9 @@ docs/
 tools/
   ├── build-bundles.js       JS 合并构建（三子系统 JS → 单 bundle + 版本号）
   ├── bundle-sources.json    bundle 源文件清单（依赖顺序）
-  └── .bundle-ver            当前 bundle 版本号（构建生成，gitignore）
+  ├── .bundle-ver            当前 bundle 版本号（构建生成，gitignore）
+  ├── create-subsystem.js    子系统脚手架 CLI（交互生成全套骨架）
+  └── subsystem-templates.js 子系统骨架模板（CLI 与面板共用）
 ```
 
 ## 响应式断点
