@@ -31,7 +31,7 @@ function register(app) {
   const currentUser = app.locals.currentUser;
 
   app.get('/api/samples', requireAuth, async (req, res) => {
-    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, limit, offset } = req.query;
+    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model, limit, offset } = req.query;
     const pageLimit = Math.min(parseInt(limit || '20', 10) || 20, 200);
     const pageOffset = Math.max(parseInt(offset || '0', 10) || 0, 0);
     const filterOpts = {
@@ -42,7 +42,8 @@ function register(app) {
       overdue: overdue || undefined,
       sample_type: sample_type || undefined,
       limit_item: limit_item || undefined,
-      source_type: source_type || undefined
+      source_type: source_type || undefined,
+      model: model || undefined
     };
     const [samples, total] = await Promise.all([
       D.listSamples({ ...filterOpts, limit: pageLimit, offset: pageOffset }),
@@ -65,6 +66,50 @@ function register(app) {
     }
   });
 
+  // 机型列表：GET 所有登录角色可读（新建下拉/筛选数据源）；POST/DELETE 仅 RD/ADMIN（须注册在 /:id 之前）
+  app.get('/api/samples/models', requireAuth, async (req, res) => {
+    res.json(await D.listModels());
+  });
+
+  // 下拉数据源：机型列表全称 + 存量样品 model 补集（历史值不丢，避免漏筛）
+  app.get('/api/samples/model-options', requireAuth, async (req, res) => {
+    const models = await D.listModels();
+    const legacy = await D.listLegacyModels();
+    const seen = {};
+    const out = models.map(function (m) { seen[m.code] = 1; return { value: m.code, label: m.full_name }; });
+    legacy.forEach(function (code) { if (!seen[code]) out.push({ value: code, label: code }); });
+    res.json(out);
+  });
+
+  app.post('/api/samples/models', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+      const code = ((req.body || {}).code || '').trim().toUpperCase();
+      const full_name = ((req.body || {}).full_name || '').trim();
+      if (!code) return res.status(400).json({ error: '请填写机型短码' });
+      if (code.length < 6) return res.status(400).json({ error: '机型短码至少 6 位' });
+      if (code.length > 20) return res.status(400).json({ error: '机型短码最长 20 位' });
+      if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
+      res.json(await D.createModel({ code: code, full_name: full_name, created_by: u.id }));
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
+      logger.error('新增机型失败: ' + (err.message || String(err)));
+      res.status(500).json({ error: '新增机型失败：' + (err.message || '服务器内部错误') });
+    }
+  });
+
+  app.delete('/api/samples/models/:id', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+    const m = await D.getModelById(Number(req.params.id));
+    if (!m) return res.status(404).json({ error: '机型不存在' });
+    const used = await D.countSamplesByModel(m.code);
+    if (used > 0) return res.status(409).json({ error: '该机型已被 ' + used + ' 个样品使用，禁止删除' });
+    await D.deleteModel(m.id);
+    res.json({ ok: true });
+  });
+
   app.get('/api/samples/:id', requireAuth, async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
@@ -84,6 +129,8 @@ function register(app) {
       const src = (source_type || '').toUpperCase();
       if (!['C', 'T', 'G'].includes(src)) return res.status(400).json({ error: '请选择有效的提供处（C/T/G）' });
       if (!model || model.trim().length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
+      const m = await D.getModelByCode(model.trim());
+      if (!m) return res.status(400).json({ error: '机型不存在，请先在机型列表添加该机型' });
       if (!STATION_GROUPS.includes(station)) return res.status(400).json({ error: '请选择有效的组别' });
       const s = await D.createSample({
         name: name.trim(), spec: spec || '', model: model.trim(), station,
