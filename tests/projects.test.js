@@ -1,9 +1,10 @@
-// tests/projects.test.js — 项目追踪：项目 CRUD + 成员管理（Task 2）
+// tests/projects.test.js — 项目追踪：项目 CRUD + 成员管理（Task 2）+ 任务 CRUD 与乐观锁（Task 3）
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const { getApp, login } = require('./helpers/setup');
 
 let app, admin, pm;
+let pid, rd2; // 修正1：pid/rd2 提升为文件级（Task 2 创建，Task 3/4 复用）
 async function makeUser(u) {
   const D = require('../db');
   // ⚠️ 必须 await：getUserByUsername 返回 Promise（非 await 恒真，导致 createUser 永不执行）
@@ -22,7 +23,6 @@ beforeAll(async () => {
 }, 30000);
 
 describe('项目 CRUD 与成员管理', () => {
-  let pid;
   test('PM 创建项目 → 自动成为 owner', async () => {
     const res = await pm.agent.post('/api/projects').send({ name: 'P-测试项目', description: 'desc' });
     expect(res.status).toBe(201);
@@ -38,7 +38,7 @@ describe('项目 CRUD 与成员管理', () => {
     expect(create.status).toBe(403);
   });
   test('owner 添加成员、转让 owner、移除成员', async () => {
-    const rd2 = await makeUser({ username: 'rd-proj2', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发2' });
+    rd2 = await makeUser({ username: 'rd-proj2', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发2' });
     const add = await pm.agent.post('/api/projects/' + pid + '/members').send({ user_id: rd2.user.id });
     expect(add.status).toBe(201);
     const transfer = await pm.agent.put('/api/projects/' + pid + '/members/' + rd2.user.id).send({ is_owner: 1 });
@@ -55,5 +55,42 @@ describe('项目 CRUD 与成员管理', () => {
     await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '任务A', priority: 'M', category: '质量' });
     const del = await pm.agent.delete('/api/projects/' + pid);
     expect(del.status).toBe(409);
+  });
+});
+
+describe('任务 CRUD 与乐观锁', () => {
+  let tid, ver;
+  test('owner 创建任务', async () => {
+    const res = await pm.agent.post('/api/projects/' + pid + '/tasks').send({
+      title: '任务A', description: 'd', category: '质量', priority: 'H',
+      assignee_id: pm.user.id, planned_date: '2026-08-20'
+    });
+    expect(res.status).toBe(201);
+    tid = res.body.id;
+  });
+  test('任务列表带状态与字段', async () => {
+    const res = await pm.agent.get('/api/projects/' + pid + '/tasks');
+    expect(res.status).toBe(200);
+    const t = res.body.find(x => x.id === tid);
+    expect(t.title).toBe('任务A');
+    expect(t.status).toBe('NOT_STARTED');
+    expect(t.version).toBe(0);
+    ver = t.version;
+  });
+  test('乐观锁：version 不匹配 → 409', async () => {
+    const ok = await pm.agent.put('/api/projects/tasks/' + tid).send({ title: '任务A-改', version: ver });
+    expect(ok.status).toBe(200);
+    const conflict = await pm.agent.put('/api/projects/tasks/' + tid).send({ title: '任务A-又改', version: ver });
+    expect(conflict.status).toBe(409);
+  });
+  test('DONE 规则：progress 必为 100', async () => {
+    // 修正2：上用例已成功 PUT 一次（version 0→1），任务当前 version 恰为 1；发当前版本号才会命中 DONE 规则 400
+    const res = await pm.agent.put('/api/projects/tasks/' + tid).send({ title: '任务A-改', status: 'DONE', progress: 50, version: 1 });
+    expect(res.status).toBe(400);
+  });
+  test('普通角色编辑他人任务 → 403', async () => {
+    const rd = await makeUser({ username: 'rd-proj4', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发4' });
+    const res = await rd.agent.put('/api/projects/tasks/' + tid).send({ title: 'hack', version: 2 });
+    expect(res.status).toBe(403);
   });
 });
