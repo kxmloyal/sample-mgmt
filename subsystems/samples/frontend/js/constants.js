@@ -1,7 +1,7 @@
 // constants.js — 样品子系统常量
 // ROLE/STATUS/ACTION_CN/$ 在 shared/frontend/api-base.js 中定义
 const CONFIRM_ACTIONS=new Set(['RELEASE','INSPECT','CUSTODY']);
-const STATIONS=['马达组','扇叶组','成品组','调机样'];
+const STATIONS=['马达组','扇叶组','成品组','品保部','SMT','供应商'];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 // 打印尺寸预设（宽度 mm），scale = width / 100
 var PRINT_SIZES=[
