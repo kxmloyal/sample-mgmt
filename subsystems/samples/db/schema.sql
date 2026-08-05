@@ -55,3 +55,14 @@ CREATE TABLE IF NOT EXISTS scan_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_logs_sample (sample_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 机型主数据（2026-08-05）：新建样品规格/型号下拉数据源，仅 RD/ADMIN 维护
+CREATE TABLE IF NOT EXISTS sample_models (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(20) NOT NULL,
+  full_name VARCHAR(200) NOT NULL,
+  created_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_model_code (code),
+  UNIQUE KEY uk_model_full_name (full_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

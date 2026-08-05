@@ -18,6 +18,10 @@
       {
         "name": "scan_logs",
         "schema": "db/schema.sql"
+      },
+      {
+        "name": "sample_models",
+        "schema": "db/schema.sql"
       }
     ]
   },

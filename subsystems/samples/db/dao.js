@@ -77,6 +77,7 @@ module.exports = function createDao(deps) {
     if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
     if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
     if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
+    if (opts.model) { where.push('model = ?'); params.push(opts.model); }
     var orderBy = 'ORDER BY id DESC';
     if (opts.sort === 'created_at') orderBy = 'ORDER BY created_at ASC';
     else if (opts.sort === '-created_at') orderBy = 'ORDER BY created_at DESC';
@@ -99,6 +100,7 @@ module.exports = function createDao(deps) {
     if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
     if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
     if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
+    if (opts.model) { where.push('model = ?'); params.push(opts.model); }
     var sql = 'SELECT COUNT(*) as total FROM samples' + (where.length ? ' WHERE ' + where.join(' AND ') : '');
     return q(sql, params).then(function(rows) { return rows[0].total; });
   }
@@ -140,5 +142,14 @@ module.exports = function createDao(deps) {
     return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
   }
 
-  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listMyPendingSamples, addLog, listLogsBySample, listLogs };
+  // 机型主数据
+  function listModels() { return q('SELECT * FROM sample_models ORDER BY code ASC'); }
+  function getModelById(id) { return one('SELECT * FROM sample_models WHERE id = ?', [id]); }
+  function getModelByCode(code) { return one('SELECT * FROM sample_models WHERE code = ?', [code]); }
+  function createModel(data) { return run('INSERT INTO sample_models (code,full_name,created_by) VALUES (?,?,?)', [data.code, data.full_name, data.created_by || null]).then(function () { return getModelByCode(data.code); }); }
+  function deleteModel(id) { return run('DELETE FROM sample_models WHERE id=?', [id]); }
+  function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE model = ?', [code]).then(function (rows) { return rows[0].c; }); }
+  function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
+
+  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
 };
