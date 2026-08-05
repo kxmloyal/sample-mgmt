@@ -22,8 +22,8 @@ const sources = JSON.parse(fs.readFileSync(sourcesPath, 'utf-8'));
 
 for (const [id, scripts] of Object.entries(sources)) {
   console.log('=== ' + id + ' ===');
-  const init = INIT[id];
-  if (!init) { console.log('  无 init，跳过'); continue; }
+  // 新子系统默认初始化（脚手架生成的子系统统一用 route/boot）
+  const init = INIT[id] || "window.addEventListener('hashchange',route);boot();";
 
   let out = '/** BUNDLE v' + BUNDLE_VER + ' — ' + scripts.length + ' files */\n';
   let total = 0;
