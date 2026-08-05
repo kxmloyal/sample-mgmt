@@ -53,5 +53,19 @@
     "subsystems/workbench/frontend/js/views/wb-detail.js",
     "subsystems/workbench/frontend/js/views/threshold.js",
     "subsystems/workbench/frontend/js/router.js"
+  ],
+  "projects": [
+    "shared/frontend/shared/utils.js",
+    "shared/frontend/api-base.js",
+    "shared/frontend/modal.js",
+    "subsystems/projects/frontend/js/constants.js",
+    "subsystems/projects/frontend/js/api.js",
+    "subsystems/projects/frontend/js/views/dashboard.js",
+    "subsystems/projects/frontend/js/views/kanban.js",
+    "subsystems/projects/frontend/js/views/list.js",
+    "subsystems/projects/frontend/js/views/projects.js",
+    "subsystems/projects/frontend/js/views/task-detail.js",
+    "subsystems/projects/frontend/js/views/workflow.js",
+    "subsystems/projects/frontend/js/router.js"
   ]
 }

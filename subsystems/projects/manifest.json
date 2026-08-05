@@ -1,0 +1,60 @@
+{
+  "id": "projects",
+  "name": "项目追踪",
+  "description": "多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出",
+  "version": "1.0.0",
+  "icon": "kanban",
+  "route": {
+    "prefix": "/api/projects",
+    "entry": "/subsystems/projects/frontend/index.html",
+    "hashBase": "/projects"
+  },
+  "database": {
+    "tables": [
+      { "name": "projects", "schema": "db/schema.sql" },
+      { "name": "project_tasks", "schema": "db/schema.sql" },
+      { "name": "project_subtasks", "schema": "db/schema.sql" },
+      { "name": "project_task_comments", "schema": "db/schema.sql" },
+      { "name": "project_task_deps", "schema": "db/schema.sql" },
+      { "name": "project_members", "schema": "db/schema.sql" },
+      { "name": "project_task_files", "schema": "db/schema.sql" },
+      { "name": "project_task_links", "schema": "db/schema.sql" },
+      { "name": "project_logs", "schema": "db/schema.sql" },
+      { "name": "project_workflow", "schema": "db/schema.sql" }
+    ]
+  },
+  "roles": {
+    "use": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"],
+    "admin": ["ADMIN"]
+  },
+  "navigation": [
+    { "key": "dashboard", "label": "项目看板", "icon": "chart", "view": "renderProjectDashboard", "roles": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "kanban", "label": "任务看板", "icon": "columns", "view": "renderTaskKanban", "roles": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "list", "label": "任务列表", "icon": "list", "view": "renderTaskList", "roles": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "projects", "label": "项目列表", "icon": "folder", "view": "renderProjects", "roles": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "workflow", "label": "状态机管理", "icon": "settings", "view": "renderWorkflow", "roles": ["ADMIN"] }
+  ],
+  "stateMachine": {
+    "initial": "NOT_STARTED",
+    "states": {
+      "NOT_STARTED": { "label": "未开始", "color": "#92400e", "bg": "#fffbeb" },
+      "IN_PROGRESS": { "label": "进行中", "color": "#1d4ed8", "bg": "#eff6ff" },
+      "DONE":        { "label": "已完成", "color": "#065f46", "bg": "#ecfdf5" },
+      "OVERDUE":     { "label": "已延期", "color": "#b91c1c", "bg": "#fef2f2" }
+    },
+    "transitions": [
+      { "from": "NOT_STARTED", "to": "IN_PROGRESS", "action": "START", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "开始处理" },
+      { "from": "IN_PROGRESS", "to": "DONE", "action": "COMPLETE", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "标记完成" },
+      { "from": "NOT_STARTED", "to": "OVERDUE", "action": "AUTO_OVERDUE", "role": ["SYSTEM"], "label": "自动延期" },
+      { "from": "IN_PROGRESS", "to": "OVERDUE", "action": "AUTO_OVERDUE", "role": ["SYSTEM"], "label": "自动延期" }
+    ]
+  },
+  "files": {
+    "enabled": true,
+    "uploadDir": "public/uploads/projects",
+    "maxSize": 10485760,
+    "categories": [
+      { "key": "attachment", "label": "任务附件", "extensions": ["pdf", "jpg", "jpeg", "png", "doc", "docx", "xls", "xlsx", "zip"] }
+    ]
+  }
+}
