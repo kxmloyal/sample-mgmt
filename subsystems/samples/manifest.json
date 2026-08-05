@@ -75,6 +75,16 @@
       ]
     },
     {
+      "key": "models",
+      "label": "机型列表",
+      "icon": "cube",
+      "view": "viewModels",
+      "roles": [
+        "ADMIN",
+        "RD"
+      ]
+    },
+    {
       "key": "scan",
       "label": "扫码台",
       "icon": "qr",
