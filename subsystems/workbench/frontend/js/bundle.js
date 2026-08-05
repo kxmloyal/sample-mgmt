@@ -1,4 +1,4 @@
-/** BUNDLE vbmsfdhm3e — 8 files */
+/** BUNDLE vbmsfdmf0k — 8 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -571,6 +571,8 @@ async function openWbDetail(item) {
       detail = await api('GET', '/api/fixtures/' + item.id);
       logs = await api('GET', '/api/fixtures/' + item.id + '/logs');
     }
+    // 后端按 id DESC（最新在上），时间线需正序展示流转方向（最早在上），此处反转
+    logs = (logs || []).slice().reverse();
     _renderWbDetail(detail, logs, item);
   } catch (err) {
     openModal('详细信息', '<div style="padding:20px">' +
@@ -678,7 +680,7 @@ function _keyDates(detail, type) {
   return html;
 }
 
-// 流转日志时间线（两列紧凑布局 + 折叠；按时间倒序，数据已按 id DESC 排序）
+// 流转日志时间线（两列紧凑布局 + 折叠；正序：最早在上，行间箭头标注流转方向）
 function _renderTimeline(logs, item) {
   if (!logs || !logs.length) {
     return '<div class="wb-detail-empty">暂无流转记录</div>';
@@ -691,23 +693,25 @@ function _renderTimeline(logs, item) {
   return html;
 }
 
-// 生成时间线行（受折叠状态控制：默认最近 _wbTlMax 条）
+// 生成时间线行（正序：最早在上；受折叠状态控制，默认最近 _wbTlMax 条）
 function _buildTimelineRows(logs) {
-  var shown = _wbTlExpanded ? logs : logs.slice(0, _wbTlMax);
+  var shown = _wbTlExpanded ? logs : logs.slice(-_wbTlMax);
   var html = '';
-  shown.forEach(function(l) {
+  shown.forEach(function(l, i) {
     var action = ACTION_CN[l.action] || l.action || '-';
     var who = l.display_name || l.username || (ROLE[l.role] || l.role || '') + (l.dept ? ' · ' + l.dept : '');
     var time = l.created_at ? String(l.created_at).slice(0, 16).replace('T', ' ') : '';
     var note = l.note ? '<span class="wb-tl-note" title="' + e(l.note) + '">' + e(l.note) + '</span>' : '';
     html += '<div class="wb-tl-item">' +
+      '<span class="wb-tl-idx">#' + i + '</span>' +
       '<span class="wb-tl-dot"></span>' +
-      '<span class="wb-tl-arrow">→</span>' +
       '<span class="wb-tl-action">' + e(action) + '</span>' +
       '<span class="wb-tl-who">' + e(who) + '</span>' +
       '<span class="wb-tl-time">' + time + '</span>' +
       note +
       '</div>';
+    // 行间垂直箭头：标注流转方向（最后一行不画）
+    if (i < shown.length - 1) html += '<div class="wb-tl-flow">⬇</div>';
   });
   return html;
 }
@@ -718,7 +722,7 @@ function toggleWbTimeline() {
   var tl = document.querySelector('.wb-timeline');
   var more = document.querySelector('.wb-tl-more');
   if (!tl) return;
-  var logs = _wbTlExpanded ? _wbTlAllLogs : (_wbTlAllLogs || []).slice(0, _wbTlMax);
+  var logs = _wbTlExpanded ? _wbTlAllLogs : (_wbTlAllLogs || []).slice(-_wbTlMax);
   tl.innerHTML = _buildTimelineRows(logs || []);
   if (more) {
     var btn = more.querySelector('button');
