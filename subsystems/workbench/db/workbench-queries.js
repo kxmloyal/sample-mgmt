@@ -42,7 +42,7 @@ var unionSQL = `
     s.created_at,
     s.updated_at
   FROM samples s
-  WHERE s.status NOT IN ('RETIRED')
+  WHERE s.status IN ('NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING')
 
   UNION ALL
 
@@ -99,7 +99,7 @@ var unionSQL = `
     f.created_at,
     f.updated_at
   FROM fixtures f
-  WHERE f.status NOT IN ('RETIRED')
+  WHERE f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE')
 `;
 
 // 分页数据查询（停留时间降序，逾期项排最前）
