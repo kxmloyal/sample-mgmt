@@ -1,4 +1,4 @@
-/** BUNDLE vbmsfer3pq — 8 files */
+/** BUNDLE vbmsfhivww — 8 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -679,7 +679,7 @@ function _keyDates(detail, type) {
   return html;
 }
 
-// 流转日志时间线（两列紧凑布局 + 折叠；倒序：最新在上，行间箭头标注记录次序）
+// 流转日志时间线（两列紧凑布局 + 折叠；倒序：最新在上，行间箭头标注流转方向）
 function _renderTimeline(logs, item) {
   if (!logs || !logs.length) {
     return '<div class="wb-detail-empty">暂无流转记录</div>';
@@ -709,8 +709,8 @@ function _buildTimelineRows(logs) {
       '<span class="wb-tl-time">' + time + '</span>' +
       note +
       '</div>';
-    // 行间垂直箭头（左侧轴线对齐圆点）：标注记录次序，指向更早记录（最后一行不画）
-    if (i < shown.length - 1) html += '<div class="wb-tl-flow">⬇</div>';
+    // 行间垂直箭头（左侧轴线对齐圆点）：倒序下流转方向向上，指向更新记录（最后一行不画）
+    if (i < shown.length - 1) html += '<div class="wb-tl-flow">⬆</div>';
   });
   return html;
 }
