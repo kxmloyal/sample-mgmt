@@ -5,6 +5,7 @@
 function _buildQueryParams(baseParams) {
   var q = $('#f-q').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
+  var mo = $('#f-model').value;
   var p = baseParams || '';
   if (q) p += '&q=' + encodeURIComponent(q);
   if (dept) p += '&dept=' + encodeURIComponent(dept);
@@ -12,6 +13,7 @@ function _buildQueryParams(baseParams) {
   if (tp) p += '&sample_type=' + tp;
   if (li) p += '&limit_item=' + li;
   if (src) p += '&source_type=' + src;
+  if (mo) p += '&model=' + encodeURIComponent(mo);
   return p;
 }
 
@@ -45,12 +47,14 @@ function renderChips() {
   var chips = $('#f-chips'); if (!chips) return;
   var html = '', st = $('#f-status').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
+  var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
   if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + (stLabels[st] || st) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + dept + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + sampleTypeLabel(tp) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + liLabel + ' ✕</span>'; }
   if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + srcLabel + ' ✕</span>'; }
+  if (mo) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-model\').value=\'\';loadSamples()">机型 ' + e(mo) + ' ✕</span>';
   if (sort) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
   if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';

@@ -14,6 +14,10 @@ function debounceSearch() { clearTimeout(_debounceTimer); _debounceTimer = setTi
 
 async function viewSamples() {
   var v = $('#view');
+  var modelOpts = '<fluent-option value="">全部机型</fluent-option>';
+  try {
+    (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
+  } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option><fluent-option value="研发中心">研发中心</fluent-option><fluent-option value="品保文管中心">品保文管中心</fluent-option><fluent-option value="制造部">制造部</fluent-option><fluent-option value="FQC">FQC</fluent-option><fluent-option value="生技部">生技部</fluent-option>';
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
@@ -23,6 +27,7 @@ async function viewSamples() {
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-source" onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
+    '<fluent-select id="f-model" onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
     '<fluent-select id="f-sort" onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
