@@ -6,7 +6,7 @@ async function seedSample() {
   const { agent } = await login('rd01', 'rd123');
   const res = await agent
     .post('/api/samples')
-    .send({ name: '测试样品', spec: '规格A', model: 'M1', station: '站1', notes: 'test' });
+    .send({ name: '测试样品', spec: '规格A', model: 'SF1225', station: '马达组', source_type: 'T', notes: 'test' });
   expect(res.status).toBe(200);
   return { agent, sample: res.body };
 }
@@ -16,7 +16,7 @@ async function seedSampleWithLimit() {
   const res = await agent
     .post('/api/samples')
     .send({
-      name: '限度测试样', spec: 'T-SPEC', model: 'TM', station: '站T',
+      name: '限度测试样', spec: 'T-SPEC', model: 'SF9225', station: '成品组',
       sample_type: 'OK', limit_item: 'A', source_type: 'T',
       valid_until: '2027-06-01', card_version: 'A1',
       test_standard: '标准V1', test_data: ''
@@ -40,7 +40,7 @@ describe('POST /api/samples', () => {
     const { agent } = await login('admin', 'admin123');
     const res = await agent
       .post('/api/samples')
-      .send({ name: '新建样品1', spec: '规格X', model: 'MX', station: 'SX', notes: 'test' });
+      .send({ name: '新建样品1', spec: '规格X', model: 'MX1234', station: '马达组', source_type: 'T', notes: 'test' });
     expect(res.status).toBe(200);
     expect(res.body.sample_no).toBeDefined();
     expect(res.body.qr_token).toBeDefined();
@@ -51,7 +51,7 @@ describe('POST /api/samples', () => {
     const { agent } = await login('rd01', 'rd123');
     const res = await agent
       .post('/api/samples')
-      .send({ name: '新建样品2', spec: '规格Y', model: 'MY', station: 'SY', notes: 'test' });
+      .send({ name: '新建样品2', spec: '规格Y', model: 'MY1234', station: '马达组', source_type: 'T', notes: 'test' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('NEW');
   });
@@ -273,7 +273,7 @@ describe('POST /api/samples — with limit fields', () => {
     const res = await agent
       .post('/api/samples')
       .send({
-        name: '限度样品OK', spec: 'OK-SPEC', model: 'LM', station: '站OK',
+        name: '限度样品OK', spec: 'OK-SPEC', model: 'LM1234', station: '马达组',
         notes: 'test limit sample',
         sample_type: 'OK', limit_item: 'A', source_type: 'T',
         valid_until: '2027-01-01', card_version: 'A1',
@@ -292,7 +292,7 @@ describe('POST /api/samples — with limit fields', () => {
     const { agent } = await login('rd01', 'rd123');
     const res = await agent
       .post('/api/samples')
-      .send({ name: '普通样品', spec: 'ordinary', notes: 'no limit' });
+      .send({ name: '普通样品', spec: 'ordinary', model: 'SF1225', station: '马达组', source_type: 'T', notes: 'no limit' });
     expect(res.status).toBe(200);
     expect(res.body.sample_type).toBe('');
     expect(res.body.limit_item).toBe('');
