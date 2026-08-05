@@ -29,8 +29,8 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
   await login('me', 'me01', 'me123');
   await login('admin', 'admin', 'admin123');
 
-  // 1) 研发新建样品
-  const mk = await call('POST', '/api/samples', { name: '测试样品-X', spec: 'SPEC-X' }, 'rd');
+  // 1) 研发新建样品（model 必填：强制机型校验，2026-08-05 新增）
+  const mk = await call('POST', '/api/samples', { name: '测试样品-X', spec: 'SPEC-X', model: 'SF1225' }, 'rd');
   assert(mk.status === 200 && mk.data.sample_no, '研发新建样品成功: ' + (mk.data && mk.data.sample_no));
   const no = mk.data.sample_no;
 
@@ -88,10 +88,10 @@ function assert(cond, msg) { if (!cond) { console.error('  ✗ FAIL:', msg); pro
 
   // ---- ME 角色 + RETIRE_RECREATE + RECREATE 流程 ----
 
-  // 12) 研发新建另一个样品
+  // 12) 研发新建另一个样品（model 必填：强制机型校验）
   const rdInfo = await call('GET', '/api/me', null, 'rd');
   const rdId = String(rdInfo.data.id);
-  const mk2 = await call('POST', '/api/samples', { name: '测试样品-Y', spec: 'SPEC-Y' }, 'rd');
+  const mk2 = await call('POST', '/api/samples', { name: '测试样品-Y', spec: 'SPEC-Y', model: 'SF1225' }, 'rd');
   assert(mk2.status === 200 && mk2.data.sample_no, '研发新建样品Y: ' + (mk2.data && mk2.data.sample_no));
   const no2 = mk2.data.sample_no;
 
