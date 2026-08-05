@@ -1,4 +1,4 @@
-/** BUNDLE vbmsfdhm3e — 24 files */
+/** BUNDLE vbmsfubln1 — 24 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -184,7 +184,7 @@ function closeModal(mask){mask.remove();var all=document.querySelectorAll('.moda
 // constants.js — 样品子系统常量
 // ROLE/STATUS/ACTION_CN/$ 在 shared/frontend/api-base.js 中定义
 const CONFIRM_ACTIONS=new Set(['RELEASE','INSPECT','CUSTODY']);
-const STATIONS=['马达组','扇叶组','成品组','调机样'];
+const STATIONS=['马达组','扇叶组','成品组','品保部','SMT','供应商'];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 // 打印尺寸预设（宽度 mm），scale = width / 100
 var PRINT_SIZES=[
@@ -472,15 +472,17 @@ function _getTodoInfo(s) {
 // new.js — 新建样品、打印标签、下载二维码、删除样品
 function viewNew(){
   const v=$('#view');
-  const stationOpts='<fluent-option value="">请选择站别</fluent-option>'+STATIONS.map(x=>'<fluent-option value="'+x+'">'+x+'</fluent-option>').join('');
+  const groupOpts='<fluent-option value="">请选择组别</fluent-option>'+STATIONS.map(x=>'<fluent-option value="'+x+'">'+x+'</fluent-option>').join('');
+  const sourceOpts='<fluent-option value="">请选择提供处</fluent-option><fluent-option value="C">客供(C)</fluent-option><fluent-option value="T">元山(T)</fluent-option><fluent-option value="G">塔岗(G)</fluent-option>';
   const limitOpts='<fluent-option value="">不适用</fluent-option>'+(typeof LIMIT_ITEMS!=='undefined'?LIMIT_ITEMS:[]).map(x=>'<fluent-option value="'+x.code+'">'+x.label+'</fluent-option>').join('');
   v.innerHTML='<div class="card" style="max-width:960px">'+
     '<div class="new-grid">'+
     '<div class="new-col">'+
     '<div class="new-col-title">基础信息</div>'+
     '<label>样品名称 *</label><fluent-text-field id="n-name" placeholder="如 1225震动样"></fluent-text-field>'+
-    '<label>机型</label><fluent-text-field id="n-model" placeholder="如 1225 / X200 等"></fluent-text-field>'+
-    '<label>站别</label><fluent-select id="n-station">'+stationOpts+'</fluent-select>'+
+    '<label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select>'+
+    '<label>机型 *（6位编码，自动取前6位）</label><fluent-text-field id="n-model" maxlength="10" placeholder="如 YD9015"></fluent-text-field>'+
+    '<label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select>'+
     '<label>规格/型号</label><fluent-text-field id="n-spec" placeholder="如 容量/尺寸等"></fluent-text-field>'+
     '<label>备注</label><textarea id="n-notes" rows="3"></textarea>'+
     '</div>'+
@@ -488,14 +490,41 @@ function viewNew(){
     '<div class="new-col-title">限度样品信息（选填）</div>'+
     '<label>样品类型</label><fluent-select id="n-type"><fluent-option value="">不适用</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>'+
     '<label>限度项目</label><fluent-select id="n-limit-item">'+limitOpts+'</fluent-select>'+
-    '<label>来源</label><fluent-select id="n-source"><fluent-option value="">不适用</fluent-option><fluent-option value="C">客供(C)</fluent-option><fluent-option value="T">元山(T)</fluent-option><fluent-option value="G">塔岗(G)</fluent-option></fluent-select>'+
-    '<label>版次</label><fluent-text-field id="n-card-version" placeholder="如 01" style="width:80px"></fluent-text-field>'+
-    '<span class="muted" style="font-size:11px">发行时自动填01，重新发行自动+1，也可手动输入</span>'+
+    '<label>版次（01~99，默认01）</label><fluent-text-field id="n-card-version" value="01" maxlength="2" style="width:80px"></fluent-text-field>'+
+    '<span class="muted" style="font-size:11px">样品编号生成后固定，不再随版次变化</span>'+
     '<label>标准范围</label><textarea id="n-test-standard" rows="3"></textarea>'+
     '</div>'+
     '</div>'+
+    '<div id="n-preview" class="muted" style="margin-top:12px;font-size:13px"></div>'+
     '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
     '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
+  _bindPreview();
+}
+
+// ═══ 编号实时预览（防抖 300ms，只读接口，不落库）═══
+var _previewTimer=null;
+function _bindPreview(){
+  ['n-source','n-station'].forEach(function(id){
+    const el=$('#'+id);
+    if(el) el.addEventListener('change',_schedulePreview);
+  });
+  const m=$('#n-model');
+  if(m) m.addEventListener('input',_schedulePreview);
+}
+function _schedulePreview(){
+  clearTimeout(_previewTimer);
+  _previewTimer=setTimeout(_refreshPreview,300);
+}
+async function _refreshPreview(){
+  const box=$('#n-preview');
+  if(!box) return;
+  const src=$('#n-source').value, model=$('#n-model').value, station=$('#n-station').value;
+  if(!src||!station){ box.textContent=''; return; }
+  if(model.length>0&&model.length<6){ box.textContent='机型编码至少 6 位'; return; }
+  try{
+    const r=await api('GET','/api/samples/code-preview?source_type='+encodeURIComponent(src)+'&model='+encodeURIComponent(model)+'&station='+encodeURIComponent(station));
+    box.textContent='编号预览：'+r.sample_no;
+  }catch(e){ box.textContent=''; }
 }
 async function submitNew(){
   $('#n-msg').textContent='';
@@ -504,12 +533,12 @@ async function submitNew(){
       name:$('#n-name').value,
       model:$('#n-model').value,
       station:$('#n-station').value,
+      source_type:$('#n-source').value,
+      card_version:$('#n-card-version').value||'01',
       spec:$('#n-spec').value,
       notes:$('#n-notes').value,
       sample_type:$('#n-type').value,
       limit_item:$('#n-limit-item').value,
-      source_type:$('#n-source').value,
-      card_version:$('#n-card-version').value,
       test_standard:$('#n-test-standard').value
     };
     const s=await api('POST','/api/samples',payload);
