@@ -41,7 +41,7 @@ async function openWbDetail(item) {
       detail = await api('GET', '/api/fixtures/' + item.id);
       logs = await api('GET', '/api/fixtures/' + item.id + '/logs');
     }
-    // 后端按 id DESC（最新在上），时间线倒序展示（最新 #0 在最上），直接使用无需反转
+    // 后端按 id DESC（最新在上），时间线倒序展示（最新 #N 在最上），直接使用无需反转
     _renderWbDetail(detail, logs || [], item);
   } catch (err) {
     openModal('详细信息', '<div style="padding:20px">' +
@@ -163,8 +163,10 @@ function _renderTimeline(logs, item) {
 }
 
 // 生成时间线行（倒序：最新在上；受折叠状态控制，默认最近 _wbTlMax 条）
+// 序号 = 该记录在完整流程中的步骤号（#0 为最早/第一步），倒序显示下从上到下递减，折叠不重编号
 function _buildTimelineRows(logs) {
   var shown = _wbTlExpanded ? logs : logs.slice(0, _wbTlMax);
+  var total = _wbTlAllLogs.length || shown.length;
   var html = '';
   shown.forEach(function(l, i) {
     var action = ACTION_CN[l.action] || l.action || '-';
@@ -172,7 +174,7 @@ function _buildTimelineRows(logs) {
     var time = l.created_at ? String(l.created_at).slice(0, 16).replace('T', ' ') : '';
     var note = l.note ? '<span class="wb-tl-note" title="' + e(l.note) + '">' + e(l.note) + '</span>' : '';
     html += '<div class="wb-tl-item">' +
-      '<span class="wb-tl-idx">#' + i + '</span>' +
+      '<span class="wb-tl-idx">#' + (total - 1 - i) + '</span>' +
       '<span class="wb-tl-dot"></span>' +
       '<span class="wb-tl-action">' + e(action) + '</span>' +
       '<span class="wb-tl-who">' + e(who) + '</span>' +
