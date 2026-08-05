@@ -29,16 +29,17 @@ module.exports = function createDao(deps) {
       var params = [ns, data.name || null, data.spec || null, data.model || null, data.station || null, data.image || null, token, data.created_by || null, data.notes || null, data.sample_type || '', data.limit_item || '', data.source_type || '', data.valid_until || '', data.card_version || '', data.test_standard || '', data.test_data || '', sbRd, data.signed_by_qa || '', data.replaces || null];
       try {
         if (conn) {
-          await conn.execute('SAVEPOINT sp_create_sample');
+          // SAVEPOINT 类语句不走 prepared 协议（conn.execute 不支持），须用 conn.query
+          await conn.query('SAVEPOINT sp_create_sample');
           await conn.execute(sql, params);
-          await conn.execute('RELEASE SAVEPOINT sp_create_sample');
+          await conn.query('RELEASE SAVEPOINT sp_create_sample');
         } else {
           await run(sql, params);
         }
         return await fetchOne(conn, 'SELECT * FROM samples WHERE sample_no = ?', [ns]);
       } catch (e) {
         if (e.code === 'ER_DUP_ENTRY' || e.errno === 1062) {
-          if (conn) { try { await conn.execute('ROLLBACK TO SAVEPOINT sp_create_sample'); } catch (_) {} }
+          if (conn) { try { await conn.query('ROLLBACK TO SAVEPOINT sp_create_sample'); } catch (_) {} }
           lastErr = e; continue;
         }
         throw e;
