@@ -1,5 +1,6 @@
 // subsystems/samples/db/dao.js — 样品数据访问层（工厂模式）
 const crypto = require('crypto');
+const { generateSampleCode } = require('./sample-code');
 
 module.exports = function createDao(deps) {
   var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
@@ -13,19 +14,32 @@ module.exports = function createDao(deps) {
     return one(sql, params);
   }
 
-  async function nextSampleNo(conn) {
-    var row = await fetchOne(conn, 'SELECT COALESCE(MAX(id), 0) AS m FROM samples');
-    return 'SM-' + String(row.m + 1).padStart(6, '0');
+  // 生成 13 位结构化编码（如 G-YD9015-Q-001-01）；旧 SM-XXXXXX 逻辑已废弃，保留注释
+  // data: { source_type, model, station, card_version }；conn 存在走事务连接，否则用连接池 q
+  async function nextSampleNo(data, conn) {
+    return await generateSampleCode({
+      source_type: data.source_type,
+      model: data.model,
+      station: data.station,
+      card_version: data.card_version || '01',
+      conn: conn,
+      query: q
+    });
   }
 
   // createSample: SAVEPOINT 重试解决并发 UNIQUE 冲突
   async function createSample(data, conn) {
     var token = crypto.randomBytes(8).toString('hex');
     var sbRd = data.signed_by_rd || '';
-    var sql = 'INSERT INTO samples (sample_no,name,spec,model,station,image,qr_token,status,created_by,notes,sample_type,limit_item,source_type,valid_until,card_version,test_standard,test_data,signed_by_rd,signed_by_qa,replaces) VALUES (?,?,?,?,?,?,?,\'NEW\',?,?,?,?,?,?,?,?,?,?,?,?)';
+    var sql = 'INSERT INTO samples (sample_no,name,spec,model,station,image,qr_token,status,created_by,notes,sample_type,limit_item,source_type,valid_until,card_version,test_standard,test_data,signed_by_rd,signed_by_qa,replaces) VALUES (?,?,?,?,?,?,?,?,\'NEW\',?,?,?,?,?,?,?,?,?,?,?)';
     var lastErr;
     for (var i = 0; i < 3; i++) {
-      var ns = await nextSampleNo(conn);
+      var ns = await nextSampleNo({
+        source_type: data.source_type || '',
+        model: data.model || '',
+        station: data.station || '',
+        card_version: data.card_version || '01'
+      }, conn);
       var params = [ns, data.name || null, data.spec || null, data.model || null, data.station || null, data.image || null, token, data.created_by || null, data.notes || null, data.sample_type || '', data.limit_item || '', data.source_type || '', data.valid_until || '', data.card_version || '', data.test_standard || '', data.test_data || '', sbRd, data.signed_by_qa || '', data.replaces || null];
       try {
         if (conn) {
