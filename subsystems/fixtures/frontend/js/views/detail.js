@@ -115,13 +115,13 @@ function _cardSummary() {
     '<div class="overview-card"><div class="title">' + _icon('log') + ' 操作日志</div><div id="fix-detail-logs-mini" style="font-size:12px;min-height:20px"></div></div>';
 }
 
-// ═══ 日志 Tab ═══
+// ═══ 日志 Tab（响应式：桌面自适应列宽，窄屏转卡片 data-label） ═══
 function buildLogsTab() {
   var html = '<div style="padding:8px 14px 0">';
   if (!_fixLogs.length) { html += '<div class="empty" style="padding:24px">暂无操作日志</div>'; return html + '</div>'; }
-  html += '<div class="detail-logs-wrap"><table style="font-size:12px"><thead><tr><th>时间</th><th>操作</th><th>部门</th><th>备注</th></tr></thead><tbody>' +
+  html += '<div class="detail-logs-wrap"><table class="detail-log-tab"><thead><tr><th>时间</th><th>操作</th><th>部门</th><th>备注</th></tr></thead><tbody>' +
     _fixLogs.map(function(l) {
-      return '<tr><td class="muted">' + fmt(l.created_at) + '</td><td>' + (ACTION_CN[l.action] || l.action) + '</td><td class="muted">' + e(l.dept || '—') + '</td><td class="muted">' + e(l.note || '—') + '</td></tr>';
+      return '<tr><td data-label="时间"><small>' + fmt(l.created_at) + '</small></td><td data-label="操作">' + (ACTION_CN[l.action] || l.action) + '</td><td data-label="部门" class="muted">' + e(l.dept || '—') + '</td><td data-label="备注" class="muted">' + e(l.note || '—') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   return html + '</div>';
 }

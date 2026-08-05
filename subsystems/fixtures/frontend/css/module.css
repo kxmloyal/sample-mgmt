@@ -18,3 +18,30 @@
 .b-maint-soon { background: #fef9c3; color: #854d0e; }
 .b-ret-ok { background: #dcfce7; color: #166534; }
 .b-ret-soon { background: #fef9c3; color: #854d0e; }
+
+/* ===== 操作日志表格响应式（2026-08-05：自适应列宽 + 窄屏转卡片） ===== */
+/* 独立日志页：列宽自适应（时间固定窄，操作/用户/部门按内容，备注弹性占余量；col-rsz 拖拽仍可用） */
+.fx-dash-table{table-layout:auto;min-width:560px}
+.fx-dash-table th{white-space:nowrap}
+.fx-dash-table td:nth-child(1){white-space:nowrap}
+.fx-dash-table td:nth-child(5){white-space:normal;word-break:break-all}
+/* 日志页搜索工具栏：窄屏可换行占满 */
+.fx-log-toolbar{gap:8px;flex-wrap:wrap}
+/* 详情弹窗日志 Tab（.detail-log-tab）：桌面自适应列宽，备注弹性换行 */
+.detail-log-tab{width:100%;table-layout:auto;border-collapse:collapse;font-size:12px}
+.detail-log-tab th{text-align:left;padding:8px 10px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap}
+.detail-log-tab td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.detail-log-tab td:nth-child(1){white-space:nowrap}
+.detail-log-tab td:last-child{white-space:normal;word-break:break-all}
+.detail-log-tab tr:last-child td{border-bottom:none}
+/* 窄屏（<768px）：详情日志 Tab 转卡片式（data-label 前置标签） */
+@media(max-width:767px){
+  .fx-dash-table{min-width:0}
+  .detail-log-tab thead{display:none}
+  .detail-log-tab,.detail-log-tab tbody,.detail-log-tab tr,.detail-log-tab td{display:block}
+  .detail-log-tab tr{padding:8px 0;border-bottom:1px solid var(--line)}
+  .detail-log-tab td{padding:2px 0;text-align:left}
+  .detail-log-tab td::before{content:attr(data-label);font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
+  .detail-log-tab tr:last-child td{border-bottom:none}
+  .fx-log-toolbar fluent-text-field{width:100%}
+}

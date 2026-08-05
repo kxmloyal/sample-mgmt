@@ -1,4 +1,4 @@
-/** BUNDLE vbmsfdhm3e — 16 files */
+/** BUNDLE vbmsfk71z1 — 16 files */
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -686,13 +686,13 @@ function _cardSummary() {
     '<div class="overview-card"><div class="title">' + _icon('log') + ' 操作日志</div><div id="fix-detail-logs-mini" style="font-size:12px;min-height:20px"></div></div>';
 }
 
-// ═══ 日志 Tab ═══
+// ═══ 日志 Tab（响应式：桌面自适应列宽，窄屏转卡片 data-label） ═══
 function buildLogsTab() {
   var html = '<div style="padding:8px 14px 0">';
   if (!_fixLogs.length) { html += '<div class="empty" style="padding:24px">暂无操作日志</div>'; return html + '</div>'; }
-  html += '<div class="detail-logs-wrap"><table style="font-size:12px"><thead><tr><th>时间</th><th>操作</th><th>部门</th><th>备注</th></tr></thead><tbody>' +
+  html += '<div class="detail-logs-wrap"><table class="detail-log-tab"><thead><tr><th>时间</th><th>操作</th><th>部门</th><th>备注</th></tr></thead><tbody>' +
     _fixLogs.map(function(l) {
-      return '<tr><td class="muted">' + fmt(l.created_at) + '</td><td>' + (ACTION_CN[l.action] || l.action) + '</td><td class="muted">' + e(l.dept || '—') + '</td><td class="muted">' + e(l.note || '—') + '</td></tr>';
+      return '<tr><td data-label="时间"><small>' + fmt(l.created_at) + '</small></td><td data-label="操作">' + (ACTION_CN[l.action] || l.action) + '</td><td data-label="部门" class="muted">' + e(l.dept || '—') + '</td><td data-label="备注" class="muted">' + e(l.note || '—') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   return html + '</div>';
 }
@@ -1218,13 +1218,14 @@ function renderFixtureLogsFiltered(search) {
       return (l.note && l.note.toLowerCase().indexOf(s) !== -1) || (ACTION_CN[l.action] || '').toLowerCase().indexOf(s) !== -1 || (l.dept || '').toLowerCase().indexOf(s) !== -1;
     });
   }
-  var html = '<div class="row" style="margin-bottom:12px">';
-  html += '<fluent-text-field placeholder="搜索操作/部门/备注…" value="' + e(search) + '" oninput="renderFixtureLogsFiltered(this.value)" style="width:220px"></fluent-text-field>';
+  var html = '<div class="row fx-log-toolbar">';
+  html += '<fluent-text-field placeholder="搜索操作/部门/备注…" value="' + e(search) + '" oninput="renderFixtureLogsFiltered(this.value)" style="width:min(220px,100%)"></fluent-text-field>';
   html += '</div>';
   html += '<div class="card" style="padding:0">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">';
   html += '<span style="font-weight:600;font-size:14px">操作日志 (<b>' + logs.length + '</b>)</span></div>';
-  html += '<table class="fx-dash-table"><colgroup><col style="width:150px"><col style="width:100px"><col style="width:100px"><col style="width:100px"><col style="width:auto"></colgroup><thead><tr><th>时间<span class="col-rsz"></span></th><th>操作<span class="col-rsz"></span></th><th>用户<span class="col-rsz"></span></th><th>部门<span class="col-rsz"></span></th><th>备注<span class="col-rsz"></span></th></tr></thead><tbody>';
+  // 列宽自适应：时间/操作/用户/部门按内容（min-width 兜底），备注列弹性占余量（col-rsz 拖拽仍可用）
+  html += '<table class="fx-dash-table"><colgroup><col style="width:110px"><col style="min-width:90px"><col style="min-width:80px"><col style="min-width:90px"><col style="width:auto;min-width:180px"></colgroup><thead><tr><th>时间<span class="col-rsz"></span></th><th>操作<span class="col-rsz"></span></th><th>用户<span class="col-rsz"></span></th><th>部门<span class="col-rsz"></span></th><th>备注<span class="col-rsz"></span></th></tr></thead><tbody>';
   logs.forEach(function (l) {
     html += '<tr><td data-label="时间"><small>' + fmt(l.created_at) + '</small></td><td data-label="操作">' + (ACTION_CN[l.action] || l.action) + '</td><td data-label="用户">' + e(l.display_name || l.username || '—') + '</td><td data-label="部门">' + e(l.dept || '—') + '</td><td data-label="备注">' + e(l.note || '—') + '</td></tr>';
   });
