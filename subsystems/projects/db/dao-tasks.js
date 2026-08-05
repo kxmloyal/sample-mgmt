@@ -69,5 +69,89 @@ module.exports = function createTaskDao(deps) {
     await conn.execute('DELETE FROM project_tasks WHERE id=?', [tid]);
   }
 
-  return { createTask, listProjectTasks, getTask, updateTask, deleteTask, listAllTasks, deleteTaskCascade };
+  // ===== 子任务（三态：NOT_STARTED/IN_PROGRESS/DONE，无 OVERDUE） =====
+  async function createSubtask(data, conn) {
+    const sql = 'INSERT INTO project_subtasks (task_id,title,assignee_id,planned_date,created_by) VALUES (?,?,?,?,?)';
+    const params = [data.task_id, data.title, data.assignee_id || null, data.planned_date || null, data.created_by];
+    if (conn) {
+      const r = await conn.execute(sql, params);
+      return { id: r[0].insertId };
+    }
+    await run(sql, params); // 无事务仅执行；调用方需 insertId 必须传 conn
+    return { id: 0 };
+  }
+  async function listSubtasks(conn, taskId) {
+    return fetchAll(conn, 'SELECT * FROM project_subtasks WHERE task_id=? ORDER BY id', [taskId]);
+  }
+  async function updateSubtask(conn, id, data, version) {
+    // 乐观锁：WHERE id AND version；匹配成功则 version+1，返回 affectedRows（0=版本冲突）
+    const sets = [], params = [];
+    const fields = ['title', 'assignee_id', 'planned_date'];
+    for (const f of fields) {
+      if (data[f] !== undefined) { sets.push(f + '=?'); params.push(data[f]); }
+    }
+    if (sets.length === 0) return { changed: 1 };
+    sets.push('version=version+1');
+    params.push(id, version);
+    const sql = 'UPDATE project_subtasks SET ' + sets.join(',') + ' WHERE id=? AND version=?';
+    if (conn) {
+      const r = await conn.execute(sql, params);
+      return { changed: r[0].affectedRows };
+    }
+    await run(sql, params); // 无事务仅执行；调用方需 affectedRows 必须传 conn
+    return { changed: 1 };
+  }
+  async function deleteSubtask(conn, id) {
+    const sql = 'DELETE FROM project_subtasks WHERE id=?';
+    if (conn) {
+      const r = await conn.execute(sql, [id]);
+      return { changed: r[0].affectedRows };
+    }
+    await run(sql, [id]); // 无事务仅执行
+    return { changed: 1 };
+  }
+  // 子任务 CAS：按 status 条件更新（前端无需回传 version）
+  // 落地修正：不递增 version——CAS 以 status 字段做并发控制，与乐观锁编辑（version）两套机制独立，
+  // 否则流转后 version 被抬高，前端按创建时的 version:0 编辑必然 409（计划 Step 1 测试已锁定该语义）
+  async function casSubtaskStatus(conn, id, fromStatus, to) {
+    const doneAt = to === 'DONE' ? (await conn.execute('SELECT NOW() AS n'))[0][0].n : null;
+    const sql = 'UPDATE project_subtasks SET status=?, done_at=? WHERE id=? AND status=?';
+    const params = [to, doneAt, id, fromStatus];
+    if (conn) {
+      const r = await conn.execute(sql, params);
+      return { changed: r[0].affectedRows };
+    }
+    await run(sql, params); // 无事务仅执行；CAS 需 affectedRows，调用方必须传 conn
+    return { changed: 1 };
+  }
+
+  // ===== 评论 =====
+  async function createComment(conn, taskId, content, operatorId) {
+    const sql = 'INSERT INTO project_task_comments (task_id,content,operator_id) VALUES (?,?,?)';
+    const params = [taskId, content, operatorId];
+    if (conn) {
+      const r = await conn.execute(sql, params);
+      return { id: r[0].insertId };
+    }
+    await run(sql, params); // 无事务仅执行；调用方需 insertId 必须传 conn
+    return { id: 0 };
+  }
+  async function listTaskComments(conn, taskId) {
+    return fetchAll(conn,
+      'SELECT c.*, u.display_name AS operator_name FROM project_task_comments c LEFT JOIN users u ON u.id=c.operator_id ' +
+      'WHERE c.task_id=? ORDER BY c.id', [taskId]);
+  }
+  async function deleteComment(conn, id) {
+    const sql = 'DELETE FROM project_task_comments WHERE id=?';
+    if (conn) {
+      const r = await conn.execute(sql, [id]);
+      return { changed: r[0].affectedRows };
+    }
+    await run(sql, [id]); // 无事务仅执行
+    return { changed: 1 };
+  }
+
+  return { createTask, listProjectTasks, getTask, updateTask, deleteTask, listAllTasks, deleteTaskCascade,
+    createSubtask, listSubtasks, updateSubtask, deleteSubtask, casSubtaskStatus,
+    createComment, listTaskComments, deleteComment };
 };

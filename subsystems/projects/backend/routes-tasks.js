@@ -1,7 +1,8 @@
 // subsystems/projects/backend/routes-tasks.js — 任务/子任务/评论/依赖/附件/关联/流转
 // Task 2：POST 创建任务（支撑项目 CRUD 测试）；Task 3：列表/详情/编辑（乐观锁）/删除（级联）
 // Task 4：POST /status 状态流转（CAS + 状态机 + 伪角色 ASSIGNEE/MEMBER + 依赖校验 + OVERDUE 自动延期互斥）
-// 详情中的子任务/依赖/评论/附件/关联/日志由 Task 5/6 补全，本 Task 仅返回任务对象，避免引用未定义函数。
+// Task 5：子任务（三态 CAS 流转）+ 评论（作者/ADMIN/PM 可删，同事务留痕）；详情补全 subtasks/comments 字段
+// 详情中的依赖/附件/关联/日志由 Task 6 补全，未实现的方法不调用避免 500。
 const D = require('../../../db');
 const perm = require('./permissions');
 const wf = require('./workflow-config');
@@ -48,13 +49,17 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 任务详情（子任务/依赖/评论/附件/关联/日志由 Task 5/6 补全，本 Task 仅返回任务对象）
+  // 任务详情（Task 5 补全 subtasks/comments；依赖/附件/关联/日志留待 Task 6）
   app.get('/api/projects/tasks/:tid', requireAuth, async (req, res) => {
     try {
       const tid = Number(req.params.tid);
       const t = await D.getTask(null, tid);
       if (!t) return res.status(404).json({ error: '任务不存在' });
-      res.json({ task: t });
+      const [subtasks, comments] = await Promise.all([
+        D.listSubtasks(null, tid),
+        D.listTaskComments(null, tid)
+      ]);
+      res.json({ task: t, subtasks, comments });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -136,6 +141,124 @@ function register(app) {
         await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action }), u.id);
         const nt = await D.getTask(conn, tid);
         res.json({ task: nt, message: tr.label });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ===== 子任务（Task 5） =====
+  // 子任务列表/创建
+  app.get('/api/projects/tasks/:tid/subtasks', requireAuth, async (req, res) => {
+    try {
+      const list = await D.listSubtasks(null, Number(req.params.tid));
+      res.json(list);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.post('/api/projects/tasks/:tid/subtasks', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const title = (req.body.title || '').trim();
+      if (!title) return res.status(400).json({ error: '子任务名称必填' });
+      await D.withTransaction(async conn => {
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        const s = await D.createSubtask({ task_id: tid, title, assignee_id: req.body.assignee_id, planned_date: req.body.planned_date, created_by: u.id }, conn);
+        await D.addProjectLog(conn, 'subtask', s.id, 'CREATE', JSON.stringify({ title }), u.id);
+        res.status(201).json({ id: s.id });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // 子任务编辑（乐观锁）
+  app.put('/api/projects/tasks/:tid/subtasks/:sid', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const sid = Number(req.params.sid);
+      await D.withTransaction(async conn => {
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        const r = await D.updateSubtask(conn, sid, req.body, Number(req.body.version));
+        if (r.changed === 0) return res.status(409).json({ error: '数据已被他人修改，请刷新后重试' });
+        await D.addProjectLog(conn, 'subtask', sid, 'UPDATE', '', u.id);
+        res.json({ ok: 1 });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // 子任务删除
+  app.delete('/api/projects/tasks/:tid/subtasks/:sid', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const sid = Number(req.params.sid);
+      await D.withTransaction(async conn => {
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!await canEditTask(conn, u, t, false)) return res.status(403).json({ error: '无权操作该任务' });
+        await D.deleteSubtask(conn, sid);
+        await D.addProjectLog(conn, 'subtask', sid, 'DELETE', '', u.id);
+        res.json({ ok: 1 });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // 子任务状态流转（CAS，三态）
+  app.post('/api/projects/tasks/:tid/subtasks/:sid/status', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const sid = Number(req.params.sid);
+      const action = (req.body.action || '').trim();
+      const MAP = { START: { from: 'NOT_STARTED', to: 'IN_PROGRESS' }, COMPLETE: { from: 'IN_PROGRESS', to: 'DONE' } };
+      const m = MAP[action];
+      if (!m) return res.status(400).json({ error: '非法子任务操作' });
+      await D.withTransaction(async conn => {
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        const r = await D.casSubtaskStatus(conn, sid, m.from, m.to);
+        if (r.changed === 0) return res.status(409).json({ error: '子任务状态已变更，请刷新后重试' });
+        await D.addProjectLog(conn, 'subtask', sid, 'STATUS_CHANGE', JSON.stringify(m), u.id);
+        const s = await D.fetchOne(conn, 'SELECT * FROM project_subtasks WHERE id=?', [sid]);
+        res.json(s);
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  // 评论列表/发表/删除（作者/ADMIN/PM 可删）
+  app.get('/api/projects/tasks/:tid/comments', requireAuth, async (req, res) => {
+    try {
+      const list = await D.listTaskComments(null, Number(req.params.tid));
+      res.json(list);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.post('/api/projects/tasks/:tid/comments', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const content = (req.body.content || '').trim();
+      if (!content) return res.status(400).json({ error: '评论内容必填' });
+      await D.withTransaction(async conn => {
+        const t = await D.getTask(conn, tid);
+        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        const c = await D.createComment(conn, tid, content, u.id);
+        await D.addProjectLog(conn, 'comment', c.id, 'COMMENT', JSON.stringify({ content }), u.id);
+        res.status(201).json({ id: c.id });
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.delete('/api/projects/tasks/:tid/comments/:cid', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const cid = Number(req.params.cid);
+      await D.withTransaction(async conn => {
+        const c = await D.fetchOne(conn, 'SELECT * FROM project_task_comments WHERE id=?', [cid]);
+        if (!c) return res.status(404).json({ error: '评论不存在' });
+        if (u.role !== 'ADMIN' && u.role !== 'PM' && c.operator_id !== u.id)
+          return res.status(403).json({ error: '仅作者或管理员可删除' });
+        await D.deleteComment(conn, cid);
+        await D.addProjectLog(conn, 'comment', cid, 'DELETE', '', u.id);
+        res.json({ ok: 1 });
       });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });

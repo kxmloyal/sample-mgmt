@@ -118,3 +118,37 @@ describe('状态机流转与并发', () => {
     expect(res.status).toBe(409); // 已 DONE，状态不匹配 CAS
   });
 });
+
+describe('子任务与评论', () => {
+  let sid;
+  test('创建子任务', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + tid + '/subtasks').send({ title: '子任务1', planned_date: '2026-08-10' });
+    expect(res.status).toBe(201);
+    sid = res.body.id;
+  });
+  test('子任务流转 CAS（START → DONE 需按序）', async () => {
+    const s1 = await pm.agent.post('/api/projects/tasks/' + tid + '/subtasks/' + sid + '/status').send({ action: 'START' });
+    expect(s1.status).toBe(200);
+    expect(s1.body.status).toBe('IN_PROGRESS');
+    const s2 = await pm.agent.post('/api/projects/tasks/' + tid + '/subtasks/' + sid + '/status').send({ action: 'COMPLETE' });
+    expect(s2.status).toBe(200);
+    expect(s2.body.status).toBe('DONE');
+  });
+  test('子任务编辑乐观锁', async () => {
+    const ok = await pm.agent.put('/api/projects/tasks/' + tid + '/subtasks/' + sid).send({ title: '子任务1-改', version: 0 });
+    expect(ok.status).toBe(200);
+    const conflict = await pm.agent.put('/api/projects/tasks/' + tid + '/subtasks/' + sid).send({ title: '改2', version: 0 });
+    expect(conflict.status).toBe(409);
+  });
+  test('发表评论并展示', async () => {
+    const c = await pm.agent.post('/api/projects/tasks/' + tid + '/comments').send({ content: '进展：样品测试完成' });
+    expect(c.status).toBe(201);
+    const list = await pm.agent.get('/api/projects/tasks/' + tid + '/comments');
+    expect(list.body.some(x => x.content === '进展：样品测试完成')).toBe(true);
+  });
+  test('非成员不能评论', async () => {
+    const rd = await makeUser({ username: 'rd-proj5', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发5' });
+    const res = await rd.agent.post('/api/projects/tasks/' + tid + '/comments').send({ content: 'x' });
+    expect(res.status).toBe(403);
+  });
+});
