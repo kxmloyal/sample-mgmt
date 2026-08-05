@@ -23,3 +23,16 @@
 .nf-actions fluent-button{min-width:180px}
 .new-grid>.new-col{min-width:0}
 @media(max-width:767px){.nf-grid{grid-template-columns:1fr}}
+
+/* 用户编辑弹窗（2026-08-05） */
+.ue-form{display:flex;flex-direction:column;gap:16px;padding:20px 24px;max-width:420px}
+.ue-user-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.ue-avatar{width:42px;height:42px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex:none}
+.ue-meta{min-width:0}
+.ue-name{font-size:15px;font-weight:600;color:var(--text)}
+.ue-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.ue-field{min-width:0}
+.ue-field .ue-label{display:block;font-size:13px;font-weight:600;color:var(--text);margin:0 0 6px}
+.ue-field fluent-text-field{width:100%;min-width:0}
+.ue-hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+@media(max-width:576px){.ue-form{padding:16px}}
