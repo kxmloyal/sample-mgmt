@@ -41,9 +41,8 @@ async function openWbDetail(item) {
       detail = await api('GET', '/api/fixtures/' + item.id);
       logs = await api('GET', '/api/fixtures/' + item.id + '/logs');
     }
-    // 后端按 id DESC（最新在上），时间线需正序展示流转方向（最早在上），此处反转
-    logs = (logs || []).slice().reverse();
-    _renderWbDetail(detail, logs, item);
+    // 后端按 id DESC（最新在上），时间线倒序展示（最新 #0 在最上），直接使用无需反转
+    _renderWbDetail(detail, logs || [], item);
   } catch (err) {
     openModal('详细信息', '<div style="padding:20px">' +
       '<div style="color:var(--bad);margin-bottom:12px">加载失败：' + e(err.message) + '</div>' +
@@ -150,7 +149,7 @@ function _keyDates(detail, type) {
   return html;
 }
 
-// 流转日志时间线（两列紧凑布局 + 折叠；正序：最早在上，行间箭头标注流转方向）
+// 流转日志时间线（两列紧凑布局 + 折叠；倒序：最新在上，行间箭头标注记录次序）
 function _renderTimeline(logs, item) {
   if (!logs || !logs.length) {
     return '<div class="wb-detail-empty">暂无流转记录</div>';
@@ -163,9 +162,9 @@ function _renderTimeline(logs, item) {
   return html;
 }
 
-// 生成时间线行（正序：最早在上；受折叠状态控制，默认最近 _wbTlMax 条）
+// 生成时间线行（倒序：最新在上；受折叠状态控制，默认最近 _wbTlMax 条）
 function _buildTimelineRows(logs) {
-  var shown = _wbTlExpanded ? logs : logs.slice(-_wbTlMax);
+  var shown = _wbTlExpanded ? logs : logs.slice(0, _wbTlMax);
   var html = '';
   shown.forEach(function(l, i) {
     var action = ACTION_CN[l.action] || l.action || '-';
@@ -180,7 +179,7 @@ function _buildTimelineRows(logs) {
       '<span class="wb-tl-time">' + time + '</span>' +
       note +
       '</div>';
-    // 行间垂直箭头：标注流转方向（最后一行不画）
+    // 行间垂直箭头（左侧轴线对齐圆点）：标注记录次序，指向更早记录（最后一行不画）
     if (i < shown.length - 1) html += '<div class="wb-tl-flow">⬇</div>';
   });
   return html;
@@ -192,7 +191,7 @@ function toggleWbTimeline() {
   var tl = document.querySelector('.wb-timeline');
   var more = document.querySelector('.wb-tl-more');
   if (!tl) return;
-  var logs = _wbTlExpanded ? _wbTlAllLogs : (_wbTlAllLogs || []).slice(-_wbTlMax);
+  var logs = _wbTlExpanded ? _wbTlAllLogs : (_wbTlAllLogs || []).slice(0, _wbTlMax);
   tl.innerHTML = _buildTimelineRows(logs || []);
   if (more) {
     var btn = more.querySelector('button');
