@@ -2,6 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const D = require('../../../db');
+const { STATION_GROUPS, generateSampleCode } = require('../db/sample-code');
 const { logger } = require('../../../logger');
 
 const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
@@ -50,6 +51,20 @@ function register(app) {
     res.json({ samples, total, limit: pageLimit, offset: pageOffset });
   });
 
+  // 编号预览（只读，不落库；须注册在 /:id 之前）——生成后编号以提交实际结果为准
+  app.get('/api/samples/code-preview', requireAuth, async (req, res) => {
+    const { source_type, model, station, card_version } = req.query;
+    try {
+      const sample_no = await generateSampleCode({
+        source_type, model, station, card_version,
+        query: async (sql, params) => (await D.pool().execute(sql, params || []))[0]
+      });
+      res.json({ sample_no });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   app.get('/api/samples/:id', requireAuth, async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
@@ -66,12 +81,16 @@ function register(app) {
         sample_type, limit_item, source_type, valid_until, card_version,
         test_standard, test_data } = req.body || {};
       if (!name || !name.trim()) return res.status(400).json({ error: '请填写样品名称' });
+      const src = (source_type || '').toUpperCase();
+      if (!['C', 'T', 'G'].includes(src)) return res.status(400).json({ error: '请选择有效的提供处（C/T/G）' });
+      if (!model || model.trim().length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
+      if (!STATION_GROUPS.includes(station)) return res.status(400).json({ error: '请选择有效的组别' });
       const s = await D.createSample({
-        name: name.trim(), spec: spec || '', model: model || '', station: station || '',
+        name: name.trim(), spec: spec || '', model: model.trim(), station,
         notes: notes || '', image: '', created_by: u.id,
         sample_type: sample_type || '', limit_item: limit_item || '',
-        source_type: source_type || '', valid_until: valid_until || '',
-        card_version: card_version || '', test_standard: test_standard || '',
+        source_type: src, valid_until: valid_until || '',
+        card_version: (card_version || '').trim() || '01', test_standard: test_standard || '',
         test_data: test_data || '',
         signed_by_rd: u.display_name || u.username,
         signed_by_qa: ''
@@ -79,6 +98,8 @@ function register(app) {
       await D.addLog({ sample_id: s.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建样品' });
       res.json(s);
     } catch (err) {
+      // 流水号达 999 上限等运行时编码错误降级为 400
+      if (err.message && err.message.includes('上限')) return res.status(400).json({ error: err.message });
       logger.error('新建样品失败: ' + (err.message || String(err)));
       res.status(500).json({ error: '新建样品失败：' + (err.message || '服务器内部错误') });
     }

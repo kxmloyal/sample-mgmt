@@ -85,3 +85,44 @@ describe('generateSampleCode', () => {
       .rejects.toThrow('已达上限');
   });
 });
+
+describe('GET /api/samples/code-preview', () => {
+  const { getApp, login } = require('./helpers/setup');
+  beforeAll(async () => { await getApp(); });
+
+  it('返回预览编号', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/samples/code-preview?source_type=T&model=YD9015&station=%E6%89%87%E5%8F%B6%E7%BB%84&card_version=01');
+    expect(res.status).toBe(200);
+    expect(res.body.sample_no).toMatch(/^T-YD9015-S-\d{3}-01$/);
+  });
+
+  it('组别无效返回 400', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/samples/code-preview?source_type=T&model=YD9015&station=%E8%B0%83%E6%9C%BA%E6%A0%B7');
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/samples 必填校验', () => {
+  const { getApp, login } = require('./helpers/setup');
+  beforeAll(async () => { await getApp(); });
+
+  it('缺 source_type 返回 400', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.post('/api/samples').send({ name: '无来源样品', model: 'YD9015', station: '扇叶组' });
+    expect(res.status).toBe(400);
+  });
+
+  it('机型不足 6 位返回 400', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.post('/api/samples').send({ name: '短机型样品', model: 'YD901', station: '扇叶组', source_type: 'T' });
+    expect(res.status).toBe(400);
+  });
+
+  it('组别无效返回 400', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.post('/api/samples').send({ name: '旧站别样品', model: 'YD9015', station: '调机样', source_type: 'T' });
+    expect(res.status).toBe(400);
+  });
+});
