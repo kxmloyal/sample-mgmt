@@ -92,6 +92,12 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 - 筛选（关键词/状态/部门）+ 每页条数选择器（10/20/50/100）
 - colgroup + col-rsz 列宽拖拽 + data-label 响应式
 
+### 治具操作日志
+
+- 独立操作日志页（左侧导航「操作日志」）：全量日志 + 关键词搜索（操作/部门/备注）
+- 列宽自适应（时间列固定、备注列弹性占余量）+ col-rsz 列宽拖拽
+- 移动端自动转为 data-label 卡片式布局；详情弹窗「操作日志」Tab 同步支持
+
 ---
 
 ## 全局工作台
@@ -103,8 +109,9 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 - **统计卡片**：总计 + 各部门卡片，互斥三档积压（≤3 天 / 3~7 天 / 7 天以上），标签随阈值动态显示
 - **卡片交互**：单击部门卡筛选该部门数据、再次单击取消；双击/总计卡清除筛选
 - **统一列表**：编号/名称/类型/阶段/负责部门/申请部门/停留时长/积压状态，支持类型 + 积压等级筛选
+- **信息下钻**：点击列表行打开详情弹窗——左栏基本信息、右栏流转日志时间线（倒序最新在上 + 流程步骤号 + ⬆ 流向箭头 + 折叠）；弹窗宽高随信息密度自适应；「前往处理」跳转对应子系统扫码台并预填编号
 - **阈值设置**（仅 ADMIN）：可自定义 3 天 / 7 天边界（支持快捷预设 3/7、5/10、7/14、10/30 天），保存后全局生效（存 `workbench_settings` 表），所有用户即时按新阈值渲染
-- **逾期判定**：样品 NEW/PRODUCED 阈值放大 3 倍（制样中更宽松）；RELEASED/IN_CUSTODY 按复检日；治具按维修请求日
+- **逾期判定**：样品 NEW/PRODUCED 阈值放大 3 倍（制样中更宽松）；RELEASED/IN_CUSTODY 按复检日；治具维修/改善状态优先按 `expected_finish_at`（有值且未到期→正常，到期按超出天数），无该值则按报修日兜底
 
 ---
 
@@ -163,22 +170,32 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples/:id/card/print` | GET | 是 | 打印标示卡 |
 | `/api/fixtures` | GET | 是 | 治具列表（筛选/排序/分页）|
 | `/api/fixtures` | POST | 是 | 新建治具申请 |
+| `/api/fixtures/scan` | GET/POST | 是 | 治具扫码台（解析/执行状态机）|
+| `/api/fixtures/dashboard` | GET | 是 | 治具看板数据 |
+| `/api/fixtures/logs` | GET | 是 | 治具操作日志（全量，可搜索）|
 | `/api/fixtures/:id` | GET | 是 | 治具详情 + 操作日志 |
 | `/api/fixtures/:id` | PUT | 是 | 更新治具（状态机流转）|
+| `/api/fixtures/:id/logs` | GET | 是 | 单治具操作日志 |
 | `/api/fixtures/:id/retire` | PUT | 是(ADMIN) | 治具报废 |
 | `/api/fixtures/:id/qrcode` | GET | 是 | 治具二维码 |
+| `/api/fixtures/:id/files` | GET/POST | 是 | 治具附件列表/上传 |
+| `/api/fixtures/:id/files/:fileId` | DELETE | 是 | 删除治具附件 |
+| `/api/fixtures/:id/files/:fileId/preview` / `download` | GET | 是 | 附件预览/下载 |
 | `/api/resolve` | GET | 是 | 解析扫码内容 |
 | `/api/scan` | POST | 是 | 执行扫码操作（状态机）|
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
-| `/api/fixture-dashboard` | GET | 是 | 治具看板数据 |
-| `/api/logs` | GET | 是 | 操作日志（最近 500 条）|
+| `/api/workbench` | GET | 是 | 工作台合并数据（样品 + 治具积压）|
+| `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
+| `/api/subsystems` | GET | 是 | 已注册子系统清单（门户渲染）|
+| `/api/rd-users` | GET | 是 | RD 用户列表（退回指派选择）|
+| `/api/logs` | GET | 是(ADMIN) | 全量操作日志 |
 | `/api/users` | GET/POST | 是(ADMIN) | 用户管理 |
 | `/card/:sample_no` | GET | **否** | 匿名数字标示卡 |
 | `/health` | GET | 否 | 健康检查 |
 
 ## 技术栈
 
-Node.js + Express · MariaDB(MySQL) via mysql2 · express-session + bcryptjs · qrcode · Fluent Web Components · 原生 HTML/CSS/JS 单页（无构建）。
+Node.js + Express · MariaDB(MySQL) via mysql2 · express-session + bcryptjs · qrcode · Fluent Web Components · 原生 HTML/CSS/JS 单页（源文件无框架；前端 JS 由 `tools/build-bundles.js` 合并为单 bundle，版本号破缓存）。
 
 ## 目录
 
@@ -224,6 +241,10 @@ docs/
 scripts/
   ├── to-production.sh       演示 → 生产模式切换
   └── to-demo.sh             生产 → 演示模式切换
+tools/
+  ├── build-bundles.js       JS 合并构建（三子系统 JS → 单 bundle + 版本号）
+  ├── bundle-sources.json    bundle 源文件清单（依赖顺序）
+  └── .bundle-ver            当前 bundle 版本号（构建生成，gitignore）
 ```
 
 ## 响应式断点
