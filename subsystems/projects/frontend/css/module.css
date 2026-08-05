@@ -34,3 +34,4 @@
 @media(max-width:1199px){.pk-panels{grid-template-columns:1fr}}
 @media(max-width:767px){.pk-kanban{grid-template-columns:1fr 1fr}}
 @media(max-width:576px){.pk-kanban{grid-template-columns:1fr}.pk-filters fluent-select{width:100%}}
+.pk-col.drag-over{border-color:var(--brand);background:#f0fdfa}
