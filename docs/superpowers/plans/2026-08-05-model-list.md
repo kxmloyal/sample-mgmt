@@ -439,12 +439,14 @@ sudo -A -u www git -c user.name=357346987 -c user.email=357346987@qq.com commit 
 
 ```js
   try {
-    const opts = await api('GET', '/api/samples/model-options');
+    // 新建下拉仅用机型主数据 /api/samples/models（不含补集），与设计文档 5.3 一致；
+    // model-options（含补集）仅用于列表筛选，避免新建误选已删除机型
+    const opts = await api('GET', '/api/samples/models');
     const sel = $('#n-spec');
     if (!opts.length) {
       sel.innerHTML = '<fluent-option value="">暂无机型，请先到机型列表添加</fluent-option>';
     } else {
-      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; }).join('');
+      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.code) + '">' + e(o.full_name) + '</fluent-option>'; }).join('');
       sel.addEventListener('change', function () {
         $('#n-model').value = sel.value;
         _schedulePreview();

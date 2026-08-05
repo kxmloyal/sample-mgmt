@@ -28,12 +28,13 @@ async function viewNew(){
     '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
     '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
   try {
-    const opts = await api('GET', '/api/samples/model-options');
+    // 新建下拉仅用机型主数据（不含补集），已删除机型不会出现在此处，杜绝误选
+    const opts = await api('GET', '/api/samples/models');
     const sel = $('#n-spec');
     if (!opts.length) {
       sel.innerHTML = '<fluent-option value="">暂无机型，请先到机型列表添加</fluent-option>';
     } else {
-      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; }).join('');
+      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.code) + '">' + e(o.full_name) + '</fluent-option>'; }).join('');
       sel.addEventListener('change', function () {
         $('#n-model').value = sel.value;
         _schedulePreview();
