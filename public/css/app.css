@@ -31,6 +31,9 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-wei
 /* Fluent 控件宽度修正(模块1) */
 fluent-text-field{width:100%;box-sizing:border-box}
 fluent-button[appearance="accent"]{width:auto}
+/* fluent-select 下拉面板限高：滚动条只作用在下拉菜单内部，避免撑出页面滚动条 */
+/* 组件内部 .listbox max-height 依赖 var(--max-height)（JS 展开时设置），无兜底值，此处强制限高 */
+fluent-select::part(listbox){max-height:min(320px,40vh)!important;overflow-y:auto}
 /* login */
 #login{display:flex;align-items:center;justify-content:center;min-height:100vh}
 .login-card{background:var(--panel);padding:34px;width:360px;border-radius:16px;box-shadow:var(--shadow)}
