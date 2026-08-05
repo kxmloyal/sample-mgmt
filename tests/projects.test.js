@@ -152,3 +152,39 @@ describe('子任务与评论', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('任务依赖/附件/关联', () => {
+  let depTaskId, depTargetId;
+  test('添加前置依赖 + 环检测', async () => {
+    depTaskId = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '被阻塞任务', priority: 'H' })).body.id;
+    depTargetId = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '前置任务', priority: 'H' })).body.id;
+    const add = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/deps').send({ depends_on_id: depTargetId });
+    expect(add.status).toBe(201);
+    // 环检测：前置任务再依赖被阻塞任务 → 400
+    const cycle = await pm.agent.post('/api/projects/tasks/' + depTargetId + '/deps').send({ depends_on_id: depTaskId });
+    expect(cycle.status).toBe(400);
+  });
+  test('前置未 DONE，被阻塞任务流转 → 409', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/status').send({ action: 'START' });
+    expect(res.status).toBe(409);
+  });
+  test('前置完成后可流转', async () => {
+    await pm.agent.post('/api/projects/tasks/' + depTargetId + '/status').send({ action: 'START' });
+    const done = await pm.agent.post('/api/projects/tasks/' + depTargetId + '/status').send({ action: 'COMPLETE' });
+    expect(done.status).toBe(200);
+    const start = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/status').send({ action: 'START' });
+    expect(start.status).toBe(200);
+  });
+  test('上传附件（multipart）', async () => {
+    const res = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/files')
+      .attach('file', Buffer.from('hello'), 'note.txt');
+    expect(res.status).toBe(201);
+    expect(res.body.file_name).toBe('note.txt');
+  });
+  test('关联样品/治具', async () => {
+    const link = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/links').send({ ref_type: 'sample', ref_id: 1 });
+    expect(link.status).toBe(201);
+    const list = await pm.agent.get('/api/projects/tasks/' + depTaskId + '/links');
+    expect(list.body.some(l => l.ref_type === 'sample')).toBe(true);
+  });
+});

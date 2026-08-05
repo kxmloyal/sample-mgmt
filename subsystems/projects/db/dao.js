@@ -93,6 +93,8 @@ module.exports = function createDao(deps) {
 
   // ===== 任务域（已拆分至 dao-tasks.js，防容量超限；导出名与拆分前完全一致）=====
   const taskDao = require('./dao-tasks')({ q, one, run, nowISO, fetchOne, fetchAll });
+  // ===== 任务域扩展（Task 6：依赖/附件/关联/日志；独立文件防 dao-tasks.js 超预警线）=====
+  const extraDao = require('./dao-extras')({ q, one, run, nowISO, fetchOne, fetchAll });
 
   // ===== 留痕（全 Task 共用）=====
   async function addProjectLog(conn, entityType, entityId, action, detail, operatorId) {
@@ -103,5 +105,5 @@ module.exports = function createDao(deps) {
   }
 
   return Object.assign({ fetchOne, fetchAll, createProject, listProjects, getProject, updateProject,
-    deleteProject, countProjectTasks, listMembers, addMember, setOwner, removeMember, addProjectLog }, taskDao);
+    deleteProject, countProjectTasks, listMembers, addMember, setOwner, removeMember, addProjectLog }, taskDao, extraDao);
 };
