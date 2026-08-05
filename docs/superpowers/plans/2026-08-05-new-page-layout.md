@@ -220,3 +220,45 @@ Expected: 5 项全部通过。若发现布局缺陷（如 label 间距异常）�
 - [ ] **Step 2: 输出变更记录**
 
 文件/接口/配置变更清单 + 兼容性影响（零接口变化、零数据库变化）+ 部署/回滚步骤（回滚 = 撤销 commit）+ 上线 1~3 周期监控提示（新建流程是否正常、窄屏终端可读性）。
+
+---
+
+### Task 5: 响应式横向溢出修复（计划外补充，commit a5c8190）
+
+> 背景：Task 3 视觉回归（1032px 与 700px 视口）后，用户实测报告"会出现左右滚动栏"。browser_use 诊断确认任何 ≥768px 视口 `.card` 内部横向滚动（见设计文档 6.1）。
+
+**Files:**
+- Modify: `subsystems/samples/frontend/css/module.css`（.nf-grid 块更新 + 追加 2 条规则）
+- Modify: `subsystems/samples/frontend/index.html`（module.css 版本号 `20260804c` → `20260805a`）
+
+- [ ] **Step 1: 更新 module.css 的 .nf-grid 块为最终版本**
+
+将 `.nf-grid` 块（原 L17-22）替换为：
+
+```css
+.nf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.nf-grid>div{min-width:0}
+.nf-grid fluent-text-field,.nf-grid fluent-select,.nf-grid textarea{margin-bottom:0;width:100%;min-width:0}
+.nf-full{grid-column:1/-1}
+.nf-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:18px;padding-top:14px}
+.nf-actions fluent-button{min-width:180px}
+.new-grid>.new-col{min-width:0}
+@media(max-width:767px){.nf-grid{grid-template-columns:1fr}}
+```
+
+（纯 CSS 修改，**无需重建 JS bundle**，AGENTS.md 19.4 例外；/tmp 副本 + `sudo -A cp` + `chown www:www` 部署）
+
+- [ ] **Step 2: 更新 index.html 的 module.css 版本号**
+
+`module.css?v=20260804c` → `module.css?v=20260805a`（强制浏览器刷新新样式）。
+
+- [ ] **Step 3: 多视口回归验证（browser_use）**
+
+同源 iframe 逐视口（768/820/900/1000/1100/1280/1440/1920/700px）测量 `.card` 的 scrollWidth vs clientWidth，全部为 0；抽查字段同行/全宽布局与选中联动不破坏。
+
+- [ ] **Step 4: Commit**
+
+```bash
+sudo -A -u www git -c user.name=357346987 -c user.email=357346987@qq.com add subsystems/samples/frontend/css/module.css subsystems/samples/frontend/index.html
+sudo -A -u www git -c user.name=357346987 -c user.email=357346987@qq.com commit -m "fix(samples): 新建页横向溢出——minmax(0,1fr)+fluent组件min-width:0，768px+视口不再出滚动条"
+```

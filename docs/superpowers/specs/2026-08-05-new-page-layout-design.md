@@ -63,16 +63,20 @@
 新增到 `subsystems/samples/frontend/css/module.css`（**禁止**写入 app.css）：
 
 ```css
-.nf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
-.nf-grid fluent-text-field,.nf-grid fluent-select,.nf-grid textarea{margin-bottom:0}
+.nf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.nf-grid>div{min-width:0}
+.nf-grid fluent-text-field,.nf-grid fluent-select,.nf-grid textarea{margin-bottom:0;width:100%;min-width:0}
 .nf-full{grid-column:1/-1}
 .nf-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:18px;padding-top:14px}
 .nf-actions fluent-button{min-width:180px}
+.new-grid>.new-col{min-width:0}
 @media(max-width:767px){.nf-grid{grid-template-columns:1fr}}
 ```
 
 要点：
+- 列宽用 `repeat(2,minmax(0,1fr))` 而非 `1fr 1fr`（后者 = `minmax(auto,1fr)`，会被内容最小宽度撑开）；fluent 组件覆盖 `min-width:0;width:100%` 以抵消 Fluent UI 固有 `min-width:250px`，避免列撑破卡片（见 6.1）
 - `.nf-grid fluent-*{margin-bottom:0}` 覆盖 app.css L66 `.new-grid fluent-*{margin-bottom:8px}`（列内改用 gap 控制间距）
+- `.nf-grid>div{min-width:0}` 与 `.new-grid>.new-col{min-width:0}` 允许 grid 项收缩，不被内容最小宽度撑开
 - 字段全宽通过 `.nf-full{grid-column:1/-1}` 实现
 - `.nf-actions` 复用 `--line`/`--card-radius` 等共享 token，无硬编码色值
 - 移动优先：默认 2 列，`max-width:767px` 降级 1 列
@@ -86,6 +90,22 @@
 | 底部操作条 | 窄屏 `flex-wrap` 自动换行堆叠 |
 
 遵循项目 5 档断点体系（XS/SM/MD/LG/XL），不硬编码 px 宽度。
+
+### 6.1 响应式溢出修复记录（commit a5c8190，2026-08-05）
+
+**现象**：任何 ≥768px 视口下 `.card` 内部出现横向滚动条。
+
+**根因（browser_use 诊断定位）**：三层撑开链——
+1. `fluent-select` 宿主固有 `min-width:250px`（Fluent UI web components 默认样式）
+2. `.nf-grid` 列定义 `1fr 1fr`（= `minmax(auto,1fr)`）被内容最小宽度撑到 250px/列 → `.new-col` 548px
+3. `.new-grid` 双列最小 1112px > `.card` 内容区 924px（max-width:960px）→ 任意 ≥768px 视口恒溢出，被 `.card{overflow-x:auto}` 吸收为卡片内横向滚动条
+
+**修复**（见第 5 节最终 CSS）：
+- `.nf-grid` 列改 `repeat(2,minmax(0,1fr))`（允许列压缩到 0）
+- `.nf-grid>div{min-width:0}` + `.new-grid>.new-col{min-width:0}`（grid 项可收缩）
+- fluent 组件 `width:100%;min-width:0`（抵消固有 250px 最小宽）
+
+**验证**：768/820/900/1000/1100/1280/1440/1920/700px 九档视口 `.card` 溢出量全为 0；字段同行与 `.nf-full` 全宽布局保持；选中联动正常。`.new-grid`/`.new-col` 共享类未改，双系统无影响。
 
 ## 7. 交互与兼容性
 
