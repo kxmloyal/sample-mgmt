@@ -1,5 +1,5 @@
 // new.js — 新建样品、打印标签、下载二维码、删除样品
-function viewNew(){
+async function viewNew(){
   const v=$('#view');
   const groupOpts='<fluent-option value="">请选择组别</fluent-option>'+STATIONS.map(x=>'<fluent-option value="'+x+'">'+x+'</fluent-option>').join('');
   const sourceOpts='<fluent-option value="">请选择提供处</fluent-option><fluent-option value="C">客供(C)</fluent-option><fluent-option value="T">元山(T)</fluent-option><fluent-option value="G">塔岗(G)</fluent-option>';
@@ -10,9 +10,9 @@ function viewNew(){
     '<div class="new-col-title">基础信息</div>'+
     '<label>样品名称 *</label><fluent-text-field id="n-name" placeholder="如 1225震动样"></fluent-text-field>'+
     '<label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select>'+
-    '<label>机型 *（6位编码，自动取前6位）</label><fluent-text-field id="n-model" maxlength="10" placeholder="如 YD9015"></fluent-text-field>'+
+    '<label>机型 *</label><fluent-text-field id="n-model" disabled placeholder="选择机型后自动填入"></fluent-text-field>'+
     '<label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select>'+
-    '<label>规格/型号</label><fluent-text-field id="n-spec" placeholder="可参考BOM表的机型全称"></fluent-text-field>'+
+    '<label>规格/型号 *</label><fluent-select id="n-spec"><fluent-option value="">请选择机型</fluent-option></fluent-select>'+
     '<label>备注</label><textarea id="n-notes" rows="3"></textarea>'+
     '</div>'+
     '<div class="new-col">'+
@@ -27,6 +27,19 @@ function viewNew(){
     '<div id="n-preview" class="muted" style="margin-top:12px;font-size:13px"></div>'+
     '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
     '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
+  try {
+    const opts = await api('GET', '/api/samples/model-options');
+    const sel = $('#n-spec');
+    if (!opts.length) {
+      sel.innerHTML = '<fluent-option value="">暂无机型，请先到机型列表添加</fluent-option>';
+    } else {
+      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; }).join('');
+      sel.addEventListener('change', function () {
+        $('#n-model').value = sel.value;
+        _schedulePreview();
+      });
+    }
+  } catch (_) { /* 下拉加载失败保持仅提示项 */ }
   _bindPreview();
 }
 
@@ -64,7 +77,7 @@ async function submitNew(){
       station:$('#n-station').value,
       source_type:$('#n-source').value,
       card_version:$('#n-card-version').value||'01',
-      spec:$('#n-spec').value,
+      spec: $('#n-spec').selectedOptions && $('#n-spec').selectedOptions.length ? $('#n-spec').selectedOptions[0].text : '',
       notes:$('#n-notes').value,
       sample_type:$('#n-type').value,
       limit_item:$('#n-limit-item').value,
