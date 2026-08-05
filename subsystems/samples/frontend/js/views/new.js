@@ -8,25 +8,32 @@ async function viewNew(){
     '<div class="new-grid">'+
     '<div class="new-col">'+
     '<div class="new-col-title">基础信息</div>'+
-    '<label>样品名称 *</label><fluent-text-field id="n-name" placeholder="如 1225震动样"></fluent-text-field>'+
-    '<label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select>'+
-    '<label>机型 *</label><fluent-text-field id="n-model" disabled placeholder="选择机型后自动填入"></fluent-text-field>'+
-    '<label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select>'+
-    '<label>规格/型号 *</label><fluent-select id="n-spec"><fluent-option value="">请选择机型</fluent-option></fluent-select>'+
-    '<label>备注</label><textarea id="n-notes" rows="3"></textarea>'+
+    '<div class="nf-grid">'+
+    '<div><label>规格/型号 *</label><fluent-select id="n-spec"><fluent-option value="">请选择机型</fluent-option></fluent-select></div>'+
+    '<div><label>样品名称 *</label><fluent-text-field id="n-name" placeholder="如 1225震动样"></fluent-text-field></div>'+
+    '<div class="nf-full"><label>机型编码（选择规格/型号后自动填入）</label><fluent-text-field id="n-model" disabled placeholder="选择机型后自动填入"></fluent-text-field></div>'+
+    '<div><label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select></div>'+
+    '<div><label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select></div>'+
+    '<div class="nf-full"><label>备注</label><textarea id="n-notes" rows="3"></textarea></div>'+
+    '</div>'+
     '</div>'+
     '<div class="new-col">'+
     '<div class="new-col-title">限度样品信息（选填）</div>'+
-    '<label>样品类型</label><fluent-select id="n-type"><fluent-option value="">不适用</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>'+
-    '<label>限度项目</label><fluent-select id="n-limit-item">'+limitOpts+'</fluent-select>'+
-    '<label>版次（01~99，默认01）</label><fluent-text-field id="n-card-version" value="01" maxlength="2" style="width:80px"></fluent-text-field>'+
-    '<span class="muted" style="font-size:11px">样品编号生成后固定，不再随版次变化</span>'+
-    '<label>标准范围</label><textarea id="n-test-standard" rows="3"></textarea>'+
+    '<div class="nf-grid">'+
+    '<div><label>样品类型</label><fluent-select id="n-type"><fluent-option value="">不适用</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select></div>'+
+    '<div><label>限度项目</label><fluent-select id="n-limit-item">'+limitOpts+'</fluent-select></div>'+
+    '<div><label>版次（01~99，默认01）</label><fluent-text-field id="n-card-version" value="01" maxlength="2"></fluent-text-field></div>'+
+    '<div><span class="muted" style="font-size:11px;display:block;margin-top:10px">样品编号生成后固定，不再随版次变化</span></div>'+
+    '<div class="nf-full"><label>标准范围</label><textarea id="n-test-standard" rows="3"></textarea></div>'+
     '</div>'+
     '</div>'+
-    '<div id="n-preview" class="muted" style="margin-top:12px;font-size:13px"></div>'+
-    '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
-    '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
+    '</div>'+
+    '<div class="nf-actions">'+
+    '<div id="n-preview" class="muted" style="font-size:13px"></div>'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+    '<fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button>'+
+    '<span id="n-msg" class="muted"></span>'+
+    '</div></div></div>';
   try {
     // 新建下拉仅用机型主数据（不含补集），已删除机型不会出现在此处，杜绝误选
     const opts = await api('GET', '/api/samples/models');
