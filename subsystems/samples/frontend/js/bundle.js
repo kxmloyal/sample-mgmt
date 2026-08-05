@@ -1,4 +1,4 @@
-/** BUNDLE vbmsfvlk6y — 24 files */
+/** BUNDLE vbmsfxbi3u — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -473,7 +473,7 @@ function _getTodoInfo(s) {
 
 /* --- subsystems/samples/frontend/js/views/new.js --- */
 // new.js — 新建样品、打印标签、下载二维码、删除样品
-function viewNew(){
+async function viewNew(){
   const v=$('#view');
   const groupOpts='<fluent-option value="">请选择组别</fluent-option>'+STATIONS.map(x=>'<fluent-option value="'+x+'">'+x+'</fluent-option>').join('');
   const sourceOpts='<fluent-option value="">请选择提供处</fluent-option><fluent-option value="C">客供(C)</fluent-option><fluent-option value="T">元山(T)</fluent-option><fluent-option value="G">塔岗(G)</fluent-option>';
@@ -484,9 +484,9 @@ function viewNew(){
     '<div class="new-col-title">基础信息</div>'+
     '<label>样品名称 *</label><fluent-text-field id="n-name" placeholder="如 1225震动样"></fluent-text-field>'+
     '<label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select>'+
-    '<label>机型 *（6位编码，自动取前6位）</label><fluent-text-field id="n-model" maxlength="10" placeholder="如 YD9015"></fluent-text-field>'+
+    '<label>机型 *</label><fluent-text-field id="n-model" disabled placeholder="选择机型后自动填入"></fluent-text-field>'+
     '<label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select>'+
-    '<label>规格/型号</label><fluent-text-field id="n-spec" placeholder="可参考BOM表的机型全称"></fluent-text-field>'+
+    '<label>规格/型号 *</label><fluent-select id="n-spec"><fluent-option value="">请选择机型</fluent-option></fluent-select>'+
     '<label>备注</label><textarea id="n-notes" rows="3"></textarea>'+
     '</div>'+
     '<div class="new-col">'+
@@ -501,6 +501,19 @@ function viewNew(){
     '<div id="n-preview" class="muted" style="margin-top:12px;font-size:13px"></div>'+
     '<div style="margin-top:16px"><fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button></div>'+
     '<div id="n-msg" class="muted" style="margin-top:10px"></div></div>';
+  try {
+    const opts = await api('GET', '/api/samples/model-options');
+    const sel = $('#n-spec');
+    if (!opts.length) {
+      sel.innerHTML = '<fluent-option value="">暂无机型，请先到机型列表添加</fluent-option>';
+    } else {
+      sel.innerHTML = '<fluent-option value="">请选择机型</fluent-option>' + opts.map(function (o) { return '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; }).join('');
+      sel.addEventListener('change', function () {
+        $('#n-model').value = sel.value;
+        _schedulePreview();
+      });
+    }
+  } catch (_) { /* 下拉加载失败保持仅提示项 */ }
   _bindPreview();
 }
 
@@ -538,7 +551,7 @@ async function submitNew(){
       station:$('#n-station').value,
       source_type:$('#n-source').value,
       card_version:$('#n-card-version').value||'01',
-      spec:$('#n-spec').value,
+      spec: $('#n-spec').selectedOptions && $('#n-spec').selectedOptions.length ? $('#n-spec').selectedOptions[0].text : '',
       notes:$('#n-notes').value,
       sample_type:$('#n-type').value,
       limit_item:$('#n-limit-item').value,
@@ -582,6 +595,10 @@ function debounceSearch() { clearTimeout(_debounceTimer); _debounceTimer = setTi
 
 async function viewSamples() {
   var v = $('#view');
+  var modelOpts = '<fluent-option value="">全部机型</fluent-option>';
+  try {
+    (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
+  } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option><fluent-option value="研发中心">研发中心</fluent-option><fluent-option value="品保文管中心">品保文管中心</fluent-option><fluent-option value="制造部">制造部</fluent-option><fluent-option value="FQC">FQC</fluent-option><fluent-option value="生技部">生技部</fluent-option>';
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
@@ -591,6 +608,7 @@ async function viewSamples() {
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-source" onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
+    '<fluent-select id="f-model" onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
     '<fluent-select id="f-sort" onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
@@ -630,6 +648,7 @@ async function deleteSample(id) {
 function _buildQueryParams(baseParams) {
   var q = $('#f-q').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
+  var mo = $('#f-model').value;
   var p = baseParams || '';
   if (q) p += '&q=' + encodeURIComponent(q);
   if (dept) p += '&dept=' + encodeURIComponent(dept);
@@ -637,6 +656,7 @@ function _buildQueryParams(baseParams) {
   if (tp) p += '&sample_type=' + tp;
   if (li) p += '&limit_item=' + li;
   if (src) p += '&source_type=' + src;
+  if (mo) p += '&model=' + encodeURIComponent(mo);
   return p;
 }
 
@@ -670,12 +690,14 @@ function renderChips() {
   var chips = $('#f-chips'); if (!chips) return;
   var html = '', st = $('#f-status').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
+  var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
   if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + (stLabels[st] || st) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + dept + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + sampleTypeLabel(tp) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + liLabel + ' ✕</span>'; }
   if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + srcLabel + ' ✕</span>'; }
+  if (mo) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-model\').value=\'\';loadSamples()">机型 ' + e(mo) + ' ✕</span>';
   if (sort) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
   if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
@@ -1492,6 +1514,51 @@ async function addUser(){
 }
 
 
+/* --- subsystems/samples/frontend/js/views/models.js --- */
+// models.js — 机型列表管理（仅 RD/ADMIN 可见，后端 POST/DELETE 403 兜底）
+function viewModels() {
+  const v = $('#view');
+  v.innerHTML = '<div class="filters">' +
+    '<fluent-text-field id="m-code" placeholder="机型短码（≥6位，如 YD9015）" style="flex:1.5"></fluent-text-field>' +
+    '<fluent-text-field id="m-full-name" placeholder="机型全称（如 YD9015 低噪声马达）" style="flex:2"></fluent-text-field>' +
+    '<fluent-button appearance="accent" size="small" onclick="addModel()">新增机型</fluent-button>' +
+    '</div><div id="m-list"></div>';
+  loadModels();
+}
+
+async function loadModels() {
+  const list = await api('GET', '/api/samples/models');
+  $('#m-list').innerHTML = '<div class="card" style="padding:0"><table>' +
+    '<tr><th>机型短码</th><th>机型全称</th><th>创建时间</th><th style="width:80px">操作</th></tr>' +
+    (list.length ? list.map(function (m) {
+      return '<tr><td><b>' + e(m.code) + '</b></td><td>' + e(m.full_name) + '</td><td class="muted">' + e((m.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+        '<td><a class="link" onclick="deleteModel(' + m.id + ',\'' + m.code + '\')">删除</a></td></tr>';
+    }).join('') : '<tr><td colspan="4" class="empty">暂无机型，请先新增</td></tr>') +
+    '</table></div>';
+}
+
+async function addModel() {
+  const code = $('#m-code').value.trim().toUpperCase();
+  const full_name = $('#m-full-name').value.trim();
+  if (!code || !full_name) { toast('请填写机型短码和全称', 'err'); return; }
+  try {
+    await api('POST', '/api/samples/models', { code: code, full_name: full_name });
+    toast('机型已新增', 'ok');
+    $('#m-code').value = ''; $('#m-full-name').value = '';
+    loadModels();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function deleteModel(id, code) {
+  if (!confirm('确认删除机型 ' + code + ' ？')) return;
+  try {
+    await api('DELETE', '/api/samples/models/' + id);
+    toast('机型已删除', 'ok');
+    loadModels();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+
 /* --- subsystems/samples/frontend/js/views/help-data.js --- */
 // help-data.js — 帮助数据（10个功能模块），按模块组织
 var HELP_DATA=[
@@ -1711,6 +1778,7 @@ const NAV=[
   {k:'dashboard',t:'样品看板',roles:['ADMIN','RD','ME','QA','CUSTODY']},
   {k:'samples',t:'样品列表',roles:['ADMIN','RD','ME','QA','CUSTODY']},
   {k:'new',t:'新建样品+打印码',roles:['ADMIN','RD']},
+  {k:'models',t:'机型列表',roles:['ADMIN','RD']},
   {k:'scan',t:'扫码台',roles:['ADMIN','RD','ME','QA','CUSTODY']},
   {k:'logs',t:'操作日志',roles:['ADMIN','RD','ME','QA','CUSTODY']},
   {k:'users',t:'用户管理',roles:['ADMIN']},
@@ -1723,11 +1791,11 @@ function buildNav(){
 }
 function setActive(k){document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));}
 
-const VIEWS={dashboard:viewDashboard,samples:viewSamples,new:viewNew,scan:viewScan,logs:viewLogs,users:viewUsers};
+const VIEWS={dashboard:viewDashboard,samples:viewSamples,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,users:viewUsers};
 function route(){
   const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
   const v=VIEWS[k]||viewDashboard; setActive(k);
-  const meta={dashboard:'样品看板',samples:'样品列表',new:'新建样品',scan:'扫码台',logs:'操作日志',users:'用户管理'};
+  const meta={dashboard:'样品看板',samples:'样品列表',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',users:'用户管理'};
   $('#page-title').textContent=meta[k]||'';
   $('#page-actions').innerHTML='';
   v();
