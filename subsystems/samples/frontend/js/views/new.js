@@ -12,7 +12,7 @@ function viewNew(){
     '<label>提供处 *</label><fluent-select id="n-source">'+sourceOpts+'</fluent-select>'+
     '<label>机型 *（6位编码，自动取前6位）</label><fluent-text-field id="n-model" maxlength="10" placeholder="如 YD9015"></fluent-text-field>'+
     '<label>组别 *</label><fluent-select id="n-station">'+groupOpts+'</fluent-select>'+
-    '<label>规格/型号</label><fluent-text-field id="n-spec" placeholder="如 容量/尺寸等"></fluent-text-field>'+
+    '<label>规格/型号</label><fluent-text-field id="n-spec" placeholder="可参考BOM表的机型全称"></fluent-text-field>'+
     '<label>备注</label><textarea id="n-notes" rows="3"></textarea>'+
     '</div>'+
     '<div class="new-col">'+
