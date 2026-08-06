@@ -6,12 +6,12 @@ async function renderWorkflow() {
   const stateHtml = Object.keys(wf.states).map(k => {
     const s = wf.states[k];
     return '<div class="pk-row"><span class="pk-name">' + k + '</span>' +
-      '<input id="wf-st-' + k + '" value="' + s.label + '" style="flex:1;min-width:120px">' +
+      '<input id="wf-st-' + k + '" value="' + esc(s.label) + '" style="flex:1;min-width:120px">' +
       '<input type="color" id="wf-c-' + k + '" value="' + (s.color || '#000000') + '"></div>';
   }).join('');
   const trHtml = wf.transitions.map((t, i) =>
     '<div class="pk-row"><span class="pk-name">' + (t.from || '') + ' → ' + (t.to || '') + '</span>' +
-    '<input id="wf-tr-' + i + '" value="' + (t.label || '') + '" style="flex:1;min-width:120px"></div>').join('');
+    '<input id="wf-tr-' + i + '" value="' + esc(t.label || '') + '" style="flex:1;min-width:120px"></div>').join('');
   v.innerHTML =
     '<div class="pk-panel"><h3>状态定义</h3>' + stateHtml + '</div>' +
     '<div class="pk-panel" style="margin-top:14px"><h3>转移规则</h3>' + trHtml + '</div>' +

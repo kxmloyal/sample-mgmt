@@ -31,16 +31,17 @@ module.exports = function createExtraDao(deps) {
     await run(sql, params); // 无事务仅执行
     return { changed: 1 };
   }
-  // 环检测：沿 depends_on_id 向上单向链（uk_dep 唯一约束，每任务至多一个前置），若回到 taskId 则为环
+  // W1 修复：全路径环检测（fetchAll 遍历所有前置分支，防多前置任务时单链 fetchOne 漏检循环依赖）
   async function hasCycle(conn, taskId, dependsOnId) {
-    let cur = dependsOnId;
+    const stack = [dependsOnId];
     const visited = new Set();
-    while (cur) {
+    while (stack.length) {
+      const cur = stack.pop();
       if (cur === taskId) return true;
-      if (visited.has(cur)) return false; // 防御：既有数据存在环时终止遍历
+      if (visited.has(cur)) continue; // 防御：既有数据存在环时终止遍历
       visited.add(cur);
-      const row = await fetchOne(conn, 'SELECT depends_on_id FROM project_task_deps WHERE task_id=?', [cur]);
-      cur = row ? row.depends_on_id : null;
+      const rows = await fetchAll(conn, 'SELECT depends_on_id FROM project_task_deps WHERE task_id=?', [cur]);
+      for (const r of rows) stack.push(r.depends_on_id);
     }
     return false;
   }

@@ -9,12 +9,12 @@ async function renderProjects() {
   const canManage = me.role === 'ADMIN' || me.role === 'PM';
   $('#proj-list').innerHTML = list.map(p =>
     '<fluent-card class="kb-stat" data-k="' + p.id + '">' +
-    '<span class="n" style="font-size:16px;color:var(--brand)">' + p.name + '</span>' +
+    '<span class="n" style="font-size:16px;color:var(--brand)">' + esc(p.name) + '</span>' +
     '<span class="l">任务 ' + p.task_count + ' · 完成 ' + p.done_count + '</span>' +
     (canManage
       ? '<span class="kb-x"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projEdit(' + p.id + ')">编辑</fluent-button> ' +
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projMembers(' + p.id + ')">成员</fluent-button> ' +
-        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ',\'' + p.name + '\')">删除</fluent-button></span>'
+        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ')">删除</fluent-button></span>'
       : '') +
     '</fluent-card>').join('');
   // 单击项目卡 → 跳任务列表并筛选该项目
@@ -43,8 +43,8 @@ async function projEdit(id) {
 }
 
 // 删除项目（有任务时后端 409 保护）
-async function projDel(id, name) {
-  if (!confirm('确认删除项目「' + name + '」？（项目下有任务时将被拒绝）')) return;
+async function projDel(id) {
+  if (!confirm('确认删除该项目？（项目下有任务时将被拒绝）')) return;
   try { await api('DELETE', PApi.projects(id)); showToast('已删除'); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -57,7 +57,7 @@ async function projMembers(id) {
     api('GET', '/api/projects/users')
   ]);
   const lines = mem.map(m =>
-    '<div class="pk-row"><span class="pk-name">' + (m.display_name || m.username) + '</span>' +
+    '<div class="pk-row"><span class="pk-name">' + esc(m.display_name || m.username) + '</span>' +
     '<span>' + (m.is_owner ? '负责人' : '成员') + '</span>' +
     (m.is_owner
       ? ''

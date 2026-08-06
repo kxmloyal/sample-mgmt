@@ -57,10 +57,18 @@ function register(app) {
   });
 
   // ===== 附件（Task 6） =====
-  // 上传附件（multer 单文件，事务内落库 + 留痕）
-  app.post('/api/projects/tasks/:tid/files', requireAuth,
-    createUploader({ uploadDir: 'public/uploads/projects', maxSize: 10485760 }).single('file'),
-    async (req, res) => {
+  // C3 修复：扩展名白名单（与 manifest files.categories 一致）+ multer 错误 JSON 化（类型/大小超限 400 而非 500 HTML）
+  const projUploader = createUploader({
+    uploadDir: 'public/uploads/projects', maxSize: 10485760,
+    allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'zip']
+  });
+  // 上传附件（multer 单文件，事务内落库 + 留痕；multer 错误经回调转 JSON 400）
+  app.post('/api/projects/tasks/:tid/files', requireAuth, (req, res, next) => {
+    projUploader.single('file')(req, res, function (err) {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
+  }, async (req, res) => {
       try {
         const u = await currentUser(req);
         const tid = Number(req.params.tid);

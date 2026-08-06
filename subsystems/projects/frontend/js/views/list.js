@@ -36,11 +36,11 @@ async function lkLoad() {
   const tbody = document.querySelector('#lk-table tbody');
   tbody.innerHTML = rows.map(t =>
     '<tr class="' + (t.status === 'OVERDUE' ? 'pk-row-overdue' : '') + '">' +
-    '<td>' + t.project_name + '</td>' +
-    '<td><a href="#/tasks/' + t.id + '">' + t.title + '</a></td>' +
+    '<td>' + esc(t.project_name) + '</td>' +
+    '<td><a href="#/tasks/' + t.id + '">' + esc(t.title) + '</a></td>' +
     '<td>' + (CATEGORY_CN[t.category] || t.category) + '</td>' +
     '<td><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' + (PRIORITY_CN[t.priority] || t.priority) + '</span></td>' +
-    '<td>' + (t.assignee_name || '未指派') + '</td>' +
+    '<td>' + (esc(t.assignee_name) || '未指派') + '</td>' +
     '<td>' + (TASK_STATUS_CN[t.status] || t.status) + '</td>' +
     '<td>' + t.progress + '%</td>' +
     '<td>' + fmt(t.planned_date) + '</td>' +

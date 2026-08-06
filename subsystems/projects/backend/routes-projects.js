@@ -114,6 +114,9 @@ function register(app) {
         const acc = await perm.getProjectAccess(conn, id, u.id);
         if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权管理成员' });
         if (req.body.is_owner) {
+          // W3 修复：目标必须是项目成员，防 setOwner 的 clear 生效 + set 0 行导致项目 owner 被清空
+          const tgt = await D.fetchOne(conn, 'SELECT 1 AS x FROM project_members WHERE project_id=? AND user_id=?', [id, uid]);
+          if (!tgt) return res.status(400).json({ error: '目标用户不是项目成员' });
           await D.setOwner(conn, id, uid);
           await D.addProjectLog(conn, 'member', id, 'UPDATE', JSON.stringify({ owner: uid }), u.id);
         } else {
@@ -135,6 +138,8 @@ function register(app) {
       await D.withTransaction(async conn => {
         const acc = await perm.getProjectAccess(conn, id, u.id);
         if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权管理成员' });
+        // W2 修复：与 PUT 一致，owner 不可移除自己（防 DELETE 别名绕过保护）
+        if (acc.isOwner && u.id === uid) return res.status(400).json({ error: '不能移除自己（负责人）' });
         await D.removeMember(conn, id, uid);
         await D.addProjectLog(conn, 'member', id, 'DELETE', JSON.stringify({ user_id: uid }), u.id);
         res.json({ ok: 1 });

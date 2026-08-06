@@ -77,8 +77,8 @@ function register(app) {
         if (!t) return res.status(404).json({ error: '任务不存在' });
         if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权编辑该任务' });
         const body = req.body || {};
-        // DONE 规则：progress 强制 100（设计文档 §4.10）
-        if (body.status === 'DONE' && Number(body.progress) !== 100) return res.status(400).json({ error: '标记完成后进度必须为 100%' });
+        // C1 修复：状态只能通过 /status 流转接口变更，编辑接口禁止改 status（防绕过状态机/CAS/依赖校验/留痕）
+        if (body.status !== undefined) return res.status(400).json({ error: '状态请通过状态流转操作变更' });
         const r = await D.updateTask(conn, tid, body, Number(body.version));
         if (r.changed === 0) return res.status(409).json({ error: '数据已被他人修改，请刷新后重试' });
         await D.addProjectLog(conn, 'task', tid, 'UPDATE', JSON.stringify({ fields: Object.keys(body).filter(k => k !== 'version') }), u.id);

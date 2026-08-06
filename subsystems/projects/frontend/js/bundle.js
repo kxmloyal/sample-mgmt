@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgrxvr1 — 12 files */
+/** BUNDLE vbmsgt0zjk — 12 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -191,6 +191,9 @@ const CATEGORY_CN = { device: '设备', quality: '质量', process: '流程', sa
 const TASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', OVERDUE: '已延期' };
 const SUBTASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成' };
 
+// C2 修复：HTML 转义（所有用户输入字段渲染必须经 esc，防存储型 XSS）
+function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, function(m){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]; }); }
+
 
 /* --- subsystems/projects/frontend/js/api.js --- */
 // api.js — 项目追踪 API 封装（复用共享 api()，仅收敛端点字符串）
@@ -296,10 +299,10 @@ async function kbLoad() {
       '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
       'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
       'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
-      '<div class="t">' + t.title + '</div>' +
+      '<div class="t">' + esc(t.title) + '</div>' +
       '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
-      (PRIORITY_CN[t.priority] || t.priority) + '</span>' +
-      '<span>' + (t.assignee_name || '未指派') + '</span>' +
+      esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
+      '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
       '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div></div>').join('');
   }
 }
@@ -383,11 +386,11 @@ async function lkLoad() {
   const tbody = document.querySelector('#lk-table tbody');
   tbody.innerHTML = rows.map(t =>
     '<tr class="' + (t.status === 'OVERDUE' ? 'pk-row-overdue' : '') + '">' +
-    '<td>' + t.project_name + '</td>' +
-    '<td><a href="#/tasks/' + t.id + '">' + t.title + '</a></td>' +
+    '<td>' + esc(t.project_name) + '</td>' +
+    '<td><a href="#/tasks/' + t.id + '">' + esc(t.title) + '</a></td>' +
     '<td>' + (CATEGORY_CN[t.category] || t.category) + '</td>' +
     '<td><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' + (PRIORITY_CN[t.priority] || t.priority) + '</span></td>' +
-    '<td>' + (t.assignee_name || '未指派') + '</td>' +
+    '<td>' + (esc(t.assignee_name) || '未指派') + '</td>' +
     '<td>' + (TASK_STATUS_CN[t.status] || t.status) + '</td>' +
     '<td>' + t.progress + '%</td>' +
     '<td>' + fmt(t.planned_date) + '</td>' +
@@ -407,12 +410,12 @@ async function renderProjects() {
   const canManage = me.role === 'ADMIN' || me.role === 'PM';
   $('#proj-list').innerHTML = list.map(p =>
     '<fluent-card class="kb-stat" data-k="' + p.id + '">' +
-    '<span class="n" style="font-size:16px;color:var(--brand)">' + p.name + '</span>' +
+    '<span class="n" style="font-size:16px;color:var(--brand)">' + esc(p.name) + '</span>' +
     '<span class="l">任务 ' + p.task_count + ' · 完成 ' + p.done_count + '</span>' +
     (canManage
       ? '<span class="kb-x"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projEdit(' + p.id + ')">编辑</fluent-button> ' +
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projMembers(' + p.id + ')">成员</fluent-button> ' +
-        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ',\'' + p.name + '\')">删除</fluent-button></span>'
+        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ')">删除</fluent-button></span>'
       : '') +
     '</fluent-card>').join('');
   // 单击项目卡 → 跳任务列表并筛选该项目
@@ -441,8 +444,8 @@ async function projEdit(id) {
 }
 
 // 删除项目（有任务时后端 409 保护）
-async function projDel(id, name) {
-  if (!confirm('确认删除项目「' + name + '」？（项目下有任务时将被拒绝）')) return;
+async function projDel(id) {
+  if (!confirm('确认删除该项目？（项目下有任务时将被拒绝）')) return;
   try { await api('DELETE', PApi.projects(id)); showToast('已删除'); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -455,7 +458,7 @@ async function projMembers(id) {
     api('GET', '/api/projects/users')
   ]);
   const lines = mem.map(m =>
-    '<div class="pk-row"><span class="pk-name">' + (m.display_name || m.username) + '</span>' +
+    '<div class="pk-row"><span class="pk-name">' + esc(m.display_name || m.username) + '</span>' +
     '<span>' + (m.is_owner ? '负责人' : '成员') + '</span>' +
     (m.is_owner
       ? ''
@@ -523,7 +526,7 @@ async function tdLoad() {
   }
   const canEdit = ['ADMIN', 'PM'].includes(me.role);
   $('#td-info').innerHTML =
-    '<h3>' + t.title + '</h3>' +
+    '<h3>' + esc(t.title) + '</h3>' +
     '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[t.status] || t.status) +
     ' · 进度 ' + t.progress + '%</span></div>' +
     '<div class="pk-row"><span class="pk-name">项目</span><span>' + projName + '</span></div>' +
@@ -532,36 +535,36 @@ async function tdLoad() {
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + (assigneeName || '未指派') + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">计划日期</span><span>' + fmt(t.planned_date) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">实际日期</span><span>' + fmt(t.actual_date) + '</span></div>' +
-    (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + t.description + '</span></div>' : '') +
-    (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + t.solution + '</span></div>' : '') +
-    (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + t.notes + '</span></div>' : '') +
+    (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + esc(t.description) + '</span></div>' : '') +
+    (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + esc(t.solution) + '</span></div>' : '') +
+    (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + esc(t.notes) + '</span></div>' : '') +
     (canEdit ? '<div class="pk-filters"><fluent-button appearance="secondary" size="small" onclick="tdEdit()">编辑</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button></div>' : '');
   // 子任务（三态 + CAS 流转按钮：START/COMPLETE）
   $('#td-subs').innerHTML = d.subtasks.map(s =>
-    '<div class="pk-row"><span class="pk-name">' + s.title + '</span>' +
+    '<div class="pk-row"><span class="pk-name">' + esc(s.title) + '</span>' +
     '<span>' + (SUBTASK_STATUS_CN[s.status] || s.status) + '</span>' +
     (s.status === 'NOT_STARTED' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'START\')">开始</fluent-button>' : '') +
     (s.status === 'IN_PROGRESS' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
     '</div>').join('') || '<span class="pk-name">无子任务</span>';
   // 依赖（前置任务列表）
   $('#td-deps').innerHTML = d.deps.map(x =>
-    '<div class="pk-row"><span class="pk-name">↳ ' + x.depends_on_title + '</span></div>').join('') || '<span class="pk-name">无前置依赖</span>';
+    '<div class="pk-row"><span class="pk-name">↳ ' + esc(x.depends_on_title) + '</span></div>').join('') || '<span class="pk-name">无前置依赖</span>';
   // 评论（输入框 + 列表）
   $('#td-comments').innerHTML =
     '<div class="pk-filters"><input id="td-cmt" placeholder="写评论…" style="flex:1;min-width:180px">' +
     '<fluent-button appearance="accent" size="small" onclick="tdAddComment()">发送</fluent-button></div>' +
-    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + c.content + '</span></div>').join('');
+    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + esc(c.content) + '</span></div>').join('');
   // 附件（下载链接前缀 /uploads/projects/，静态服务挂载点）
   $('#td-files').innerHTML =
     '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + f.file_name + '</a></span></div>').join('');
+    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span></div>').join('');
   // 关联（样品/治具）
   $('#td-links').innerHTML = d.links.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.ref_type === 'sample' ? '样品' : '治具') + '</span>' +
-    '<span>' + (l.ref_no || l.ref_id) + ' ' + (l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
+    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
   // 操作日志
   $('#td-logs').innerHTML = d.logs.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');
@@ -631,12 +634,12 @@ async function renderWorkflow() {
   const stateHtml = Object.keys(wf.states).map(k => {
     const s = wf.states[k];
     return '<div class="pk-row"><span class="pk-name">' + k + '</span>' +
-      '<input id="wf-st-' + k + '" value="' + s.label + '" style="flex:1;min-width:120px">' +
+      '<input id="wf-st-' + k + '" value="' + esc(s.label) + '" style="flex:1;min-width:120px">' +
       '<input type="color" id="wf-c-' + k + '" value="' + (s.color || '#000000') + '"></div>';
   }).join('');
   const trHtml = wf.transitions.map((t, i) =>
     '<div class="pk-row"><span class="pk-name">' + (t.from || '') + ' → ' + (t.to || '') + '</span>' +
-    '<input id="wf-tr-' + i + '" value="' + (t.label || '') + '" style="flex:1;min-width:120px"></div>').join('');
+    '<input id="wf-tr-' + i + '" value="' + esc(t.label || '') + '" style="flex:1;min-width:120px"></div>').join('');
   v.innerHTML =
     '<div class="pk-panel"><h3>状态定义</h3>' + stateHtml + '</div>' +
     '<div class="pk-panel" style="margin-top:14px"><h3>转移规则</h3>' + trHtml + '</div>' +

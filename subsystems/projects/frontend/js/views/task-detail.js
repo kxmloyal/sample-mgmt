@@ -35,7 +35,7 @@ async function tdLoad() {
   }
   const canEdit = ['ADMIN', 'PM'].includes(me.role);
   $('#td-info').innerHTML =
-    '<h3>' + t.title + '</h3>' +
+    '<h3>' + esc(t.title) + '</h3>' +
     '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[t.status] || t.status) +
     ' · 进度 ' + t.progress + '%</span></div>' +
     '<div class="pk-row"><span class="pk-name">项目</span><span>' + projName + '</span></div>' +
@@ -44,36 +44,36 @@ async function tdLoad() {
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + (assigneeName || '未指派') + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">计划日期</span><span>' + fmt(t.planned_date) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">实际日期</span><span>' + fmt(t.actual_date) + '</span></div>' +
-    (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + t.description + '</span></div>' : '') +
-    (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + t.solution + '</span></div>' : '') +
-    (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + t.notes + '</span></div>' : '') +
+    (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + esc(t.description) + '</span></div>' : '') +
+    (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + esc(t.solution) + '</span></div>' : '') +
+    (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + esc(t.notes) + '</span></div>' : '') +
     (canEdit ? '<div class="pk-filters"><fluent-button appearance="secondary" size="small" onclick="tdEdit()">编辑</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button></div>' : '');
   // 子任务（三态 + CAS 流转按钮：START/COMPLETE）
   $('#td-subs').innerHTML = d.subtasks.map(s =>
-    '<div class="pk-row"><span class="pk-name">' + s.title + '</span>' +
+    '<div class="pk-row"><span class="pk-name">' + esc(s.title) + '</span>' +
     '<span>' + (SUBTASK_STATUS_CN[s.status] || s.status) + '</span>' +
     (s.status === 'NOT_STARTED' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'START\')">开始</fluent-button>' : '') +
     (s.status === 'IN_PROGRESS' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
     '</div>').join('') || '<span class="pk-name">无子任务</span>';
   // 依赖（前置任务列表）
   $('#td-deps').innerHTML = d.deps.map(x =>
-    '<div class="pk-row"><span class="pk-name">↳ ' + x.depends_on_title + '</span></div>').join('') || '<span class="pk-name">无前置依赖</span>';
+    '<div class="pk-row"><span class="pk-name">↳ ' + esc(x.depends_on_title) + '</span></div>').join('') || '<span class="pk-name">无前置依赖</span>';
   // 评论（输入框 + 列表）
   $('#td-comments').innerHTML =
     '<div class="pk-filters"><input id="td-cmt" placeholder="写评论…" style="flex:1;min-width:180px">' +
     '<fluent-button appearance="accent" size="small" onclick="tdAddComment()">发送</fluent-button></div>' +
-    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + c.content + '</span></div>').join('');
+    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + esc(c.content) + '</span></div>').join('');
   // 附件（下载链接前缀 /uploads/projects/，静态服务挂载点）
   $('#td-files').innerHTML =
     '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + f.file_name + '</a></span></div>').join('');
+    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span></div>').join('');
   // 关联（样品/治具）
   $('#td-links').innerHTML = d.links.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.ref_type === 'sample' ? '样品' : '治具') + '</span>' +
-    '<span>' + (l.ref_no || l.ref_id) + ' ' + (l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
+    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
   // 操作日志
   $('#td-logs').innerHTML = d.logs.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');

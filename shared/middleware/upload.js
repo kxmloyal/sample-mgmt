@@ -10,6 +10,7 @@ const fs = require('fs');
  * @param {number} opts.maxSize - 单文件最大字节数（默认 10MB）
  * @param {Function} opts.filename - 文件名生成函数 (req, file) => string
  * @param {string[]} opts.allowedMimes - 允许的 MIME 类型
+ * @param {string[]} opts.allowedExtensions - 允许的扩展名白名单（小写，不含点；未配置默认放行以兼容既有调用方）
  */
 function createUploader(opts) {
   const dir = path.join(__dirname, '..', '..', opts.uploadDir || 'public/uploads');
@@ -25,9 +26,15 @@ function createUploader(opts) {
     }),
     limits: { fileSize: opts.maxSize || 10485760 },
     fileFilter: function (req, file, cb) {
-      if (!opts.allowedMimes || opts.allowedMimes.length === 0) return cb(null, true);
-      if (opts.allowedMimes.includes(file.mimetype)) return cb(null, true);
-      cb(new Error('不支持的文件类型: ' + file.mimetype));
+      // C3 修复：扩展名白名单（配置后严格校验，防上传可执行 HTML 等至静态目录）
+      if (opts.allowedExtensions && opts.allowedExtensions.length) {
+        const ext = path.extname(file.originalname).toLowerCase().replace(/^\./, '');
+        if (!opts.allowedExtensions.includes(ext)) return cb(new Error('不支持的文件类型: ' + (file.originalname || '')));
+      }
+      if (opts.allowedMimes && opts.allowedMimes.length && !opts.allowedMimes.includes(file.mimetype)) {
+        return cb(new Error('不支持的文件类型: ' + file.mimetype));
+      }
+      cb(null, true);
     }
   });
 }

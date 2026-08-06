@@ -177,9 +177,9 @@ describe('任务依赖/附件/关联', () => {
   });
   test('上传附件（multipart）', async () => {
     const res = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/files')
-      .attach('file', Buffer.from('hello'), 'note.txt');
+      .attach('file', Buffer.from('hello'), 'note.pdf');
     expect(res.status).toBe(201);
-    expect(res.body.file_name).toBe('note.txt');
+    expect(res.body.file_name).toBe('note.pdf');
   });
   test('关联样品/治具', async () => {
     const link = await pm.agent.post('/api/projects/tasks/' + depTaskId + '/links').send({ ref_type: 'sample', ref_id: 1 });
@@ -227,5 +227,47 @@ describe('看板统计/导出/工作流配置', () => {
   test('非 ADMIN 改工作流 → 403', async () => {
     const res = await pm.agent.put('/api/projects/workflow').send({ states: {}, transitions: [], initial: 'NOT_STARTED' });
     expect(res.status).toBe(403);
+  });
+});
+
+// ===== 审查修复回归（C1/C3/W1/W2/W3 反例） =====
+describe('审查修复回归（C1/C3/W1/W2/W3）', () => {
+  test('C1：编辑接口禁止改 status（防绕过状态机）→ 400', async () => {
+    const res = await pm.agent.put('/api/projects/tasks/' + tid).send({ title: 'hack-status', status: 'OVERDUE', version: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('状态');
+  });
+  test('C3：上传白名单内扩展名（.pdf）→ 201', async () => {
+    const t = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '上传目标', priority: 'M' })).body.id;
+    const ok = await pm.agent.post('/api/projects/tasks/' + t + '/files')
+      .attach('file', Buffer.from('%PDF-1.4'), 'report.pdf');
+    expect(ok.status).toBe(201);
+    expect(ok.body.file_name).toBe('report.pdf');
+  });
+  test('C3：上传白名单外扩展名（.html）→ 400', async () => {
+    const t2 = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '上传目标2', priority: 'M' })).body.id;
+    const res = await pm.agent.post('/api/projects/tasks/' + t2 + '/files')
+      .attach('file', Buffer.from('<script>alert(1)</script>'), 'evil.html');
+    expect(res.status).toBe(400);
+  });
+  test('W1：3 节点环 A→B→C→A → 400（全路径 DFS 检测）', async () => {
+    const a = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '环A', priority: 'M' })).body.id;
+    const b = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '环B', priority: 'M' })).body.id;
+    const c = (await pm.agent.post('/api/projects/' + pid + '/tasks').send({ title: '环C', priority: 'M' })).body.id;
+    expect((await pm.agent.post('/api/projects/tasks/' + a + '/deps').send({ depends_on_id: b })).status).toBe(201);
+    expect((await pm.agent.post('/api/projects/tasks/' + b + '/deps').send({ depends_on_id: c })).status).toBe(201);
+    const cyc = await pm.agent.post('/api/projects/tasks/' + c + '/deps').send({ depends_on_id: a });
+    expect(cyc.status).toBe(400);
+  });
+  test('W2：owner 通过 DELETE 别名移除自己 → 400', async () => {
+    const res = await rd2.agent.delete('/api/projects/' + pid + '/members/' + rd2.user.id);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('不能移除自己');
+  });
+  test('W3：转让 owner 给非成员 → 400（防 owner 被清空）', async () => {
+    const outsider = await makeUser({ username: 'rd-proj6', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发6' });
+    const res = await rd2.agent.put('/api/projects/' + pid + '/members/' + outsider.user.id).send({ is_owner: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('不是项目成员');
   });
 });

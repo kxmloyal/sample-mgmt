@@ -40,10 +40,10 @@ async function kbLoad() {
       '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
       'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
       'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
-      '<div class="t">' + t.title + '</div>' +
+      '<div class="t">' + esc(t.title) + '</div>' +
       '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
-      (PRIORITY_CN[t.priority] || t.priority) + '</span>' +
-      '<span>' + (t.assignee_name || '未指派') + '</span>' +
+      esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
+      '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
       '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div></div>').join('');
   }
 }

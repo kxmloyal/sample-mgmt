@@ -21,7 +21,8 @@ module.exports = function createTaskDao(deps) {
   async function updateTask(conn, id, data, version) {
     // 乐观锁：WHERE id AND version；匹配成功则 version+1，返回 affectedRows（0=版本冲突）
     const sets = [], params = [];
-    const fields = ['title', 'description', 'category', 'priority', 'assignee_id', 'planned_date', 'status', 'progress', 'solution', 'notes', 'actual_date'];
+    // C1 修复：剔除 status（状态仅能经 /status 流转接口变更，DAO 层兜底防绕过）
+    const fields = ['title', 'description', 'category', 'priority', 'assignee_id', 'planned_date', 'progress', 'solution', 'notes', 'actual_date'];
     for (const f of fields) {
       if (data[f] !== undefined) { sets.push(f + '=?'); params.push(data[f]); }
     }
