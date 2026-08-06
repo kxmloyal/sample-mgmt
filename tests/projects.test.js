@@ -410,3 +410,22 @@ describe('缺陷#2 用户列表权限放宽', () => {
     expect(res.body[0]).not.toHaveProperty('password_hash');
   });
 });
+
+
+// ===== 迭代1：缺陷#3 CSV 导出复用筛选（routes-stats.js） =====
+describe('缺陷#3 CSV 导出复用筛选', () => {
+  test('导出带筛选参数仅包含匹配行', async () => {
+    const proj = await pm.agent.post('/api/projects').send({ name: 'export-proj' + Date.now() });
+    expect(proj.status).toBe(201);
+    const myPid = proj.body.id;
+    const hi = await pm.agent.post('/api/projects/' + myPid + '/tasks').send({ title: '任务-导出高', priority: 'H' });
+    const lo = await pm.agent.post('/api/projects/' + myPid + '/tasks').send({ title: '任务-导出低', priority: 'L' });
+    expect(hi.status).toBe(201);
+    expect(lo.status).toBe(201);
+    const res = await pm.agent.get('/api/projects/tasks/export?priority=H&project_id=' + myPid);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.text).toContain('任务-导出高');
+    expect(res.text).not.toContain('任务-导出低');
+  });
+});

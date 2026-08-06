@@ -38,9 +38,13 @@ function register(app) {
   });
 
   // CSV 导出（UTF-8 BOM；列：项目名称/任务名称/类别/优先级/责任人/状态/进度/计划日期/实际日期/描述/方案/备注）
+  // 缺陷#3 修复：复用列表筛选参数（q/category/priority/status/assignee_id/project_id），与 AGENTS.md §21 列表导出标准一致
   app.get('/api/projects/tasks/export', requireAuth, async (req, res) => {
     try {
-      const rows = await D.listAllTasks(null, {});
+      const filters = { project_id: req.query.project_id, category: req.query.category,
+        priority: req.query.priority, status: req.query.status, assignee_id: req.query.assignee_id,
+        q: req.query.q };
+      const rows = await D.listAllTasks(null, Object.fromEntries(Object.entries(filters).filter(([, v]) => v)));
       const head = ['项目名称', '任务名称', '类别', '优先级', '责任人', '状态', '进度(%)', '计划完成日期', '实际完成日期', '描述', '解决方案', '备注'];
       const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
       const lines = [head.map(esc).join(',')];
