@@ -37,6 +37,15 @@ async function init() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // ★ 门户卡片排序偏好表（框架级，AGENTS.md §21 门户个性化）
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_portal_prefs (
+        user_id INT PRIMARY KEY,
+        portal_order JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_portal_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     // ★ 子系统 DDL 已迁移至 subsystems/*/db/schema.sql，由下方自动扫描加载
   } finally {
     conn.release();
@@ -94,6 +103,7 @@ const dbRef = {
   }
 };
 const users = require('./db/users')({ q, one, dbRef });
+const portalPrefs = require('./db/portal-prefs')({ q, one, dbRef });
 
 // ★ Phase 6: 自动扫描 subsystems/*/db/dao.js 工厂函数并实例化
 // 各子系统 DAO 接受 { q, one, run, nowISO } 参数，通过展平暴露给 D.fnName()
@@ -136,5 +146,5 @@ const ready = init(); // 兼容 server.js D.ready.then(...)
 function withTransaction(fn) { return txWithTransaction(getPool(), fn); }
 module.exports = {
   init, ready, pool: getPool, nowISO, withTransaction,
-  ...users, ...allDaoExports, ...fixtureFiles
+  ...users, ...portalPrefs, ...allDaoExports, ...fixtureFiles
 };

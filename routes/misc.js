@@ -174,6 +174,36 @@ function register(app) {
     res.json(rds);
   });
 
+  // 门户卡片排序偏好（框架级，用户级个性化；AGENTS.md §21）
+  // GET：返回当前用户偏好；无记录返回 { order: [] }
+  app.get('/api/portal/prefs', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    const order = await D.getPortalPrefs(u.id);
+    res.json({ order });
+  });
+
+  // PUT：保存偏好（order 为子系统 id 有序数组）；order=[] 或 null 表示清除恢复默认
+  // 校验：数组、去重（保序）、仅允许已注册子系统 id（实时扫描 subsystems/）
+  app.put('/api/portal/prefs', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    const body = req.body || {};
+    if (body.order == null || (Array.isArray(body.order) && body.order.length === 0)) {
+      await D.deletePortalPrefs(u.id);
+      return res.json({ ok: true, order: [] });
+    }
+    if (!Array.isArray(body.order)) return res.status(400).json({ error: 'order 必须为子系统 id 数组' });
+    const seen = {};
+    const ids = [];
+    body.order.forEach(id => {
+      if (typeof id === 'string' && !seen[id]) { seen[id] = true; ids.push(id); }
+    });
+    const { scanSubsystems } = require('./subsystems');
+    const validIds = Object.keys(scanSubsystems());
+    if (!ids.every(id => validIds.includes(id))) return res.status(400).json({ error: 'order 包含未注册的子系统 id' });
+    await D.upsertPortalPrefs(u.id, ids);
+    res.json({ ok: true, order: ids });
+  });
+
   // 健康检查
   app.get('/health', (req, res) => {
     const pool = D.pool();
