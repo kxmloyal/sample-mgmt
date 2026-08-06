@@ -167,14 +167,16 @@ function register(app) {
     return res.json({ ok: true, action: 'import', created, skipped, errors });
   });
 
-  // RD 用户列表（供退回指派选择）
+  // RD 用户列表（供退回指派选择；ADMIN/RD/QA 可查，其余角色 403）
   app.get('/api/rd-users', requireAuth, async (req, res) => {
+    const u = await currentUser(req);
+    if (!['ADMIN', 'RD', 'QA'].includes(u.role)) return res.status(403).json({ error: '无权限' });
     const users = await D.listUsers();
-    const rds = users.filter(u => u.role === 'RD').map(u => ({ id: u.id, display_name: u.display_name || u.username, dept: u.dept }));
+    const rds = users.filter(x => x.role === 'RD').map(x => ({ id: x.id, display_name: x.display_name || x.username, dept: x.dept }));
     res.json(rds);
   });
 
-  // 门户卡片排序偏好（框架级，用户级个性化；AGENTS.md §21）
+  // 门户卡片排序偏好（框架级，用户级个性化；AGENTS.md §22）
   // GET：返回当前用户偏好；无记录返回 { order: [] }
   app.get('/api/portal/prefs', requireAuth, async (req, res) => {
     const u = await currentUser(req);

@@ -276,3 +276,55 @@ describe('POST /api/users/import', () => {
     if (impIds.length) await adminAgent.post('/api/users/batch').send({ action: 'delete', ids: impIds });
   });
 });
+
+// —— GET /api/rd-users（2026-08-06 权限加固：ADMIN/RD/QA 可查，其余 403）——
+describe('GET /api/rd-users — 角色限制', () => {
+  it('should return 401 when not logged in', async () => {
+    const res = await request(await getApp()).get('/api/rd-users');
+    expect(res.status).toBe(401);
+  });
+
+  it('should allow ADMIN', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('should allow RD', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(200);
+  });
+
+  it('should allow QA', async () => {
+    const { agent } = await login('qa01', 'qa123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(200);
+  });
+
+  it('should reject CUSTODY', async () => {
+    const { agent } = await login('mfg01', 'mfg123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(403);
+  });
+
+  it('should reject ME', async () => {
+    const { agent } = await login('me01', 'me123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(403);
+  });
+
+  it('should return only safe fields (id/display_name/dept)', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/rd-users');
+    expect(res.status).toBe(200);
+    for (const x of res.body) {
+      expect(typeof x.id).toBe('number');
+      expect(x.display_name).toBeTruthy();
+      expect(x.role).toBeUndefined();
+      expect(x.username).toBeUndefined();
+      expect(x.password_hash).toBeUndefined();
+    }
+  });
+});
