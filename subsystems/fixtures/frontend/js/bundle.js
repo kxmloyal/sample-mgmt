@@ -1,4 +1,4 @@
-/** BUNDLE vbmsh8gvcd — 16 files */
+/** BUNDLE vbmshb63ly — 16 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -903,7 +903,7 @@ async function loadFixtureList() {
     if (fixtureListState.status) parts.push('status=' + encodeURIComponent(fixtureListState.status));
     if (fixtureListState.dept) parts.push('dept=' + encodeURIComponent(fixtureListState.dept));
     if (fixtureListState.search) parts.push('search=' + encodeURIComponent(fixtureListState.search));
-    if (fixtureListState.col) parts.push('col=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
+    if (fixtureListState.col) parts.push('sort=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
     var offset = (fixtureListState.pageNo - 1) * fixtureListState.page;
     parts.push('limit=' + fixtureListState.page + '&offset=' + offset);
     var qs = parts.join('&');
@@ -918,7 +918,8 @@ async function loadFixtureList() {
     html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + deptList.map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
     html += '<span style="display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="muted">排序</span><select onchange="toggleFixtureSort(this.value)" style="min-width:80px;max-width:120px"><option value="">默认</option><option value="fixture_no"' + (fixtureListState.col === 'fixture_no' ? ' selected' : '') + '>编号</option><option value="name"' + (fixtureListState.col === 'name' ? ' selected' : '') + '>名称</option><option value="updated_at"' + (fixtureListState.col === 'updated_at' ? ' selected' : '') + '>更新时间</option></select></span>';
     html += '<select onchange="changeFixturePageSize(this.value)" style="max-width:110px"><option value="10"' + (fixtureListState.page === 10 ? ' selected' : '') + '>10条/页</option><option value="20"' + (fixtureListState.page === 20 ? ' selected' : '') + '>20条/页</option><option value="50"' + (fixtureListState.page === 50 ? ' selected' : '') + '>50条/页</option><option value="100"' + (fixtureListState.page === 100 ? ' selected' : '') + '>100条/页</option></select>';
-    html += '<fluent-button appearance="accent" onclick="clearAllFilters()">清除</fluent-button></div>';
+    html += '<fluent-button appearance="accent" onclick="clearAllFilters()">清除</fluent-button>';
+    html += '<fluent-button appearance="neutral" onclick="exportFixturesCsv()">导出 CSV</fluent-button></div>';
 
     // chips
     var chips = [];
@@ -969,6 +970,16 @@ async function loadFixtureList() {
     document.getElementById('view').innerHTML = html;
     setTimeout(function() { _initColResize(document.querySelector('.fx-list-table')); }, 0);
   } catch (e) { document.getElementById('view').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>'; }
+}
+
+// 导出当前筛选/排序结果 CSV（复用列表筛选参数，忽略分页；AGENTS.md §21 列表导出标准）
+function exportFixturesCsv() {
+  var parts = [];
+  if (fixtureListState.status) parts.push('status=' + encodeURIComponent(fixtureListState.status));
+  if (fixtureListState.dept) parts.push('dept=' + encodeURIComponent(fixtureListState.dept));
+  if (fixtureListState.search) parts.push('search=' + encodeURIComponent(fixtureListState.search));
+  if (fixtureListState.col) parts.push('sort=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
+  location.href = '/api/fixtures/export?' + parts.join('&');
 }
 
 

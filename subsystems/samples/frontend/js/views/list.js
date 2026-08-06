@@ -29,7 +29,8 @@ async function viewSamples() {
     '<fluent-select id="f-source" onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
     '<fluent-select id="f-model" onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
     '<fluent-select id="f-sort" onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
-    '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button></div>' +
+    '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
+    '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
     '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>' +
@@ -56,4 +57,10 @@ async function deleteSample(id) {
     toast('样品已取消', 'ok');
     loadSamples();
   } catch (e) { toast(e.message, 'err'); }
+}
+
+// 导出当前筛选结果 CSV（复用列表筛选参数，忽略分页；AGENTS.md §21 列表导出标准）
+function exportSamplesCsv() {
+  var qs = (_sampleBuildParams ? _sampleBuildParams() : _buildQueryParams('')).replace(/^&/, '');
+  location.href = '/api/samples/export' + (qs ? '?' + qs : '');
 }

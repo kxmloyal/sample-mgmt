@@ -31,7 +31,7 @@ async function loadFixtureList() {
     if (fixtureListState.status) parts.push('status=' + encodeURIComponent(fixtureListState.status));
     if (fixtureListState.dept) parts.push('dept=' + encodeURIComponent(fixtureListState.dept));
     if (fixtureListState.search) parts.push('search=' + encodeURIComponent(fixtureListState.search));
-    if (fixtureListState.col) parts.push('col=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
+    if (fixtureListState.col) parts.push('sort=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
     var offset = (fixtureListState.pageNo - 1) * fixtureListState.page;
     parts.push('limit=' + fixtureListState.page + '&offset=' + offset);
     var qs = parts.join('&');
@@ -46,7 +46,8 @@ async function loadFixtureList() {
     html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + deptList.map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
     html += '<span style="display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="muted">排序</span><select onchange="toggleFixtureSort(this.value)" style="min-width:80px;max-width:120px"><option value="">默认</option><option value="fixture_no"' + (fixtureListState.col === 'fixture_no' ? ' selected' : '') + '>编号</option><option value="name"' + (fixtureListState.col === 'name' ? ' selected' : '') + '>名称</option><option value="updated_at"' + (fixtureListState.col === 'updated_at' ? ' selected' : '') + '>更新时间</option></select></span>';
     html += '<select onchange="changeFixturePageSize(this.value)" style="max-width:110px"><option value="10"' + (fixtureListState.page === 10 ? ' selected' : '') + '>10条/页</option><option value="20"' + (fixtureListState.page === 20 ? ' selected' : '') + '>20条/页</option><option value="50"' + (fixtureListState.page === 50 ? ' selected' : '') + '>50条/页</option><option value="100"' + (fixtureListState.page === 100 ? ' selected' : '') + '>100条/页</option></select>';
-    html += '<fluent-button appearance="accent" onclick="clearAllFilters()">清除</fluent-button></div>';
+    html += '<fluent-button appearance="accent" onclick="clearAllFilters()">清除</fluent-button>';
+    html += '<fluent-button appearance="neutral" onclick="exportFixturesCsv()">导出 CSV</fluent-button></div>';
 
     // chips
     var chips = [];
@@ -97,4 +98,14 @@ async function loadFixtureList() {
     document.getElementById('view').innerHTML = html;
     setTimeout(function() { _initColResize(document.querySelector('.fx-list-table')); }, 0);
   } catch (e) { document.getElementById('view').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>'; }
+}
+
+// 导出当前筛选/排序结果 CSV（复用列表筛选参数，忽略分页；AGENTS.md §21 列表导出标准）
+function exportFixturesCsv() {
+  var parts = [];
+  if (fixtureListState.status) parts.push('status=' + encodeURIComponent(fixtureListState.status));
+  if (fixtureListState.dept) parts.push('dept=' + encodeURIComponent(fixtureListState.dept));
+  if (fixtureListState.search) parts.push('search=' + encodeURIComponent(fixtureListState.search));
+  if (fixtureListState.col) parts.push('sort=' + encodeURIComponent(fixtureListState.col) + '&dir=' + fixtureListState.dir);
+  location.href = '/api/fixtures/export?' + parts.join('&');
 }
