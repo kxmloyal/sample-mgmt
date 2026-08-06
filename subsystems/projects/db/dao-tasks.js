@@ -37,6 +37,12 @@ module.exports = function createTaskDao(deps) {
   async function getTask(conn, id) {
     return fetchOne(conn, "SELECT *, CASE WHEN planned_date < CURDATE() AND status IN ('NOT_STARTED','IN_PROGRESS') THEN 'OVERDUE' ELSE status END AS status_eff FROM project_tasks WHERE id=?", [id]);
   }
+  // v2：详情 JOIN 项目名与责任人名（消除前端补查）
+  async function getTaskDetail(conn, id) {
+    return fetchOne(conn,
+      'SELECT t.*, ' + STATUS_EFF + ', p.name AS project_name, u.display_name AS assignee_name, u.username AS assignee_username ' +
+      'FROM project_tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN users u ON u.id=t.assignee_id WHERE t.id=?', [id]);
+  }
   async function updateTask(conn, id, data, version) {
     // 乐观锁：WHERE id AND version；匹配成功则 version+1，返回 affectedRows（0=版本冲突）
     const sets = [], params = [];
@@ -82,10 +88,11 @@ module.exports = function createTaskDao(deps) {
   async function listAllTasksPage(conn, filters, limit, offset) {
     filters = filters || {};
     var w = buildTaskWhere(filters);
+    // 修正：LIMIT/OFFSET 经 Number() 内插（mysql2 execute 服务端 prepared 对 LIMIT ? 绑定报
+    // "Incorrect arguments to mysqld_stmt_execute"；limit/offset 已在路由层 parseInt+钳制，内插安全）
     var sql = 'SELECT t.*, ' + STATUS_EFF + ', p.name AS project_name, u.display_name AS assignee_name ' +
       'FROM project_tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN users u ON u.id=t.assignee_id WHERE 1=1' +
-      w.sql + ' ORDER BY t.id DESC LIMIT ? OFFSET ?';
-    w.params.push(limit, offset);
+      w.sql + ' ORDER BY t.id DESC LIMIT ' + Number(limit) + ' OFFSET ' + Number(offset);
     return fetchAll(conn, sql, w.params);
   }
   async function deleteTaskCascade(conn, tid) {
@@ -187,7 +194,7 @@ module.exports = function createTaskDao(deps) {
     return { changed: 1 };
   }
 
-  return { createTask, listProjectTasks, getTask, updateTask, deleteTask, listAllTasks, listAllTasksPage, countAllTasks, deleteTaskCascade,
+  return { createTask, listProjectTasks, getTask, getTaskDetail, updateTask, deleteTask, listAllTasks, listAllTasksPage, countAllTasks, deleteTaskCascade,
     createSubtask, listSubtasks, updateSubtask, deleteSubtask, casSubtaskStatus, syncSubtaskProgress,
     createComment, listTaskComments, deleteComment };
 };

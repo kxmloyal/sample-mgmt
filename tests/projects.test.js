@@ -314,3 +314,36 @@ describe('v2 依赖同项目校验', () => {
     expect(r.status).toBe(400);
   });
 });
+
+// ===== v2：详情 JOIN + 列表分页（无参兼容，Task 2） =====
+describe('v2 详情 JOIN 与分页', () => {
+  it('详情接口返回 project_name 与 assignee_name', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const p = await agent.post('/api/projects').send({ name: 'join-proj' + Date.now() });
+    const pid = p.body.id;
+    const users = await agent.get('/api/projects/users');
+    const rd = users.body.find(u => u.username === 'rd01');
+    const t = await agent.post('/api/projects/' + pid + '/tasks')
+      .send({ title: 'JOIN任务', assignee_id: rd ? rd.id : null });
+    const d = await agent.get('/api/projects/tasks/' + t.body.id);
+    expect(d.status).toBe(200);
+    expect(d.body.task.project_name).toBeTruthy();
+    if (rd) expect(d.body.task.assignee_name).toBeTruthy();
+  });
+
+  it('分页：带 limit/offset 返回 {rows,total}', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const r = await agent.get('/api/projects/tasks?limit=10&offset=0');
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.rows)).toBe(true);
+    expect(typeof r.body.total).toBe('number');
+    expect(r.body.limit).toBe(10);
+  });
+
+  it('分页：无参保持旧裸数组格式（兼容）', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const r = await agent.get('/api/projects/tasks');
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body)).toBe(true);
+  });
+});

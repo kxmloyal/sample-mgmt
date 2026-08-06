@@ -22,14 +22,19 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 跨项目任务列表（筛选）
+  // 跨项目任务列表（筛选；v2 显式传 limit/offset 走分页 {rows,total,limit,offset}，无参保持旧裸数组兼容）
   app.get('/api/projects/tasks', requireAuth, async (req, res) => {
     try {
-      const list = await D.listAllTasks(null, {
-        project_id: req.query.project_id, category: req.query.category,
-        priority: req.query.priority, status: req.query.status, assignee_id: req.query.assignee_id
-      });
-      res.json(list);
+      const filters = { project_id: req.query.project_id, category: req.query.category,
+        priority: req.query.priority, status: req.query.status, assignee_id: req.query.assignee_id };
+      if (req.query.limit !== undefined || req.query.offset !== undefined) {
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const offset = parseInt(req.query.offset) || 0;
+        const rows = await D.listAllTasksPage(null, filters, limit, offset);
+        const total = await D.countAllTasks(null, filters);
+        return res.json({ rows, total, limit, offset });
+      }
+      res.json(await D.listAllTasks(null, filters));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

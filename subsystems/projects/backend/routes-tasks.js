@@ -49,11 +49,11 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 任务详情（Task 6 补全 deps/files/links/logs，Promise.all 并行）
+  // 任务详情（Task 6 补全 deps/files/links/logs，Promise.all 并行；v2 改调 getTaskDetail JOIN 项目名/责任人）
   app.get('/api/projects/tasks/:tid', requireAuth, async (req, res) => {
     try {
       const tid = Number(req.params.tid);
-      const t = await D.getTask(null, tid);
+      const t = await D.getTaskDetail(null, tid);
       if (!t) return res.status(404).json({ error: '任务不存在' });
       const [subtasks, comments, deps, files, links, logs] = await Promise.all([
         D.listSubtasks(null, tid),
