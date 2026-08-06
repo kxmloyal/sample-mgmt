@@ -78,6 +78,8 @@ async function main() {
   var added = updateBundleSources(id);
   console.log('✓ 生成 ' + Object.keys(out.files).length + ' 个文件 → subsystems/' + id + '/');
   console.log(added ? '✓ 已追加 tools/bundle-sources.json' : '⚠ tools/bundle-sources.json 已含该子系统');
+  // 自动同步规则文件/README/子系统指南中的子系统清单标记块（AGENTS.md 17.12）
+  require('./sync-subsystem-docs').main();
   console.log('\n下一步:');
   console.log('  1) node tools/build-bundles.js');
   console.log('  2) sudo cp /tmp/bundle-' + id + '.js subsystems/' + id + '/frontend/js/bundle.js');

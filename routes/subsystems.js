@@ -46,6 +46,7 @@ function register(app) {
       return {
         id: m.id, name: m.name, description: m.description,
         icon: m.icon, version: m.version,
+        deployed: m.deployed === true,
         route: m.route,
         stateCount: m.stateMachine ? Object.keys(m.stateMachine.states).length : 0,
         navCount: m.navigation ? m.navigation.length : 0
@@ -74,6 +75,26 @@ function register(app) {
       fs.writeFileSync(path.join(subsystemDir, 'manifest.json'), JSON.stringify(newManifest, null, 2), 'utf8');
       registry[id] = newManifest;
       res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: '更新失败: ' + e.message });
+    }
+  });
+
+  // ★ 上线开关（ADMIN 专属）：仅更新 manifest.deployed，不动其余字段
+  // 切换语义：deployed=true 进入 AGENTS.md §20 上线保护（seed/jest 护栏生效）；false 解除保护允许注入测试数据
+  app.put('/api/subsystems/:id/deployed', requireAuth, async function (req, res) {
+    var u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可操作' });
+    var id = req.params.id;
+    var manifestPath = path.join(__dirname, '..', 'subsystems', id, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) return res.status(404).json({ error: '子系统不存在' });
+    var deployed = req.body.deployed === true || req.body.deployed === 'true';
+    try {
+      var m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      m.deployed = deployed;
+      fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2), 'utf8');
+      registry[id] = m;
+      res.json({ ok: true, id: id, deployed: deployed });
     } catch (e) {
       res.status(500).json({ error: '更新失败: ' + e.message });
     }

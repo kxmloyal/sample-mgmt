@@ -13,8 +13,16 @@
     "tables": []
   },
   "roles": {
-    "use": ["ADMIN", "RD", "QA", "CUSTODY", "ME"],
-    "admin": ["ADMIN"]
+    "use": [
+      "ADMIN",
+      "RD",
+      "QA",
+      "CUSTODY",
+      "ME"
+    ],
+    "admin": [
+      "ADMIN"
+    ]
   },
   "navigation": [
     {
@@ -22,7 +30,14 @@
       "label": "工作台",
       "icon": "chart",
       "view": "renderWorkbenchDashboard",
-      "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"]
+      "roles": [
+        "ADMIN",
+        "RD",
+        "QA",
+        "CUSTODY",
+        "ME"
+      ]
     }
-  ]
+  ],
+  "deployed": false
 }

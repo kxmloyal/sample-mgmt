@@ -1,4 +1,10 @@
 const { getApp, login } = require('./helpers/setup');
+const { isDeployed } = require('./helpers/deployed');
+
+// 样品子系统已上线（manifest deployed:true）：按 AGENTS.md §20 保护规则跳过全部测试（禁止数据注入）
+if (isDeployed('samples')) {
+  describe.skip('样品子系统已上线（deployed:true）', () => { it('按 AGENTS.md §20 保护规则跳过全部测试', () => {}); });
+} else {
 
 beforeAll(async () => {
   await getApp();
@@ -382,3 +388,4 @@ describe('GET /api/samples — limit filters', () => {
     for (const s of res.body.samples) expect(s.source_type).toBe('T');
   });
 });
+}

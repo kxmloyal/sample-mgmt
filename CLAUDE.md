@@ -7,6 +7,15 @@
 
 制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理、治具管理与全局工作台三大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
+**子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
+
+<!-- AUTO-SUBSYSTEMS:START -->
+- **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
+- **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
+- **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
+- **全局工作台**(`workbench`)：跨部门项目进度监控，合并样品与治具待办积压视图
+<!-- AUTO-SUBSYSTEMS:END -->
+
 完整项目指南见 [AGENTS.md](./AGENTS.md)。
 
 ## 2. Claude 工作流程(强制)
@@ -309,6 +318,15 @@ Claude 生成 manifest.json 后 MUST 自检：
 5. **禁止**在 subsystem 注册时硬编码 `server.js`（框架应自动发现）
 6. **禁止**在 `portal.html` 中硬编码新子系统卡片（应用 JS 动态渲染）
 
+### 15.6 新增子系统文档同步（强制）
+
+> 新增/删除子系统后，Claude MUST 执行：
+> 1. 运行 `node tools/sync-subsystem-docs.js`（自动重写 4 个文档的子系统清单标记块）
+> 2. 人工同步标记块外内容：AGENTS.md 概述/技术债、CLAUDE.md 概述/隔离原则/技术债、README 功能章节/API 表、指南迁移表
+> 3. 校验：`git diff` 中标记块内容与 `subsystems/*/manifest.json` 一致
+>
+> 拦截：标记块未同步 → 暂停；手改标记块 → 警告重生成。
+
 ## 16. 卡片设计系统（Claude 实施指引）
 
 > 完整规范见 [docs/superpowers/specs/2026-08-04-card-design-system.md](./docs/superpowers/specs/2026-08-04-card-design-system.md) 与 [AGENTS.md 第 18 节](./AGENTS.md#18-卡片设计系统规范强制)。
@@ -353,6 +371,32 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 `bundle.js` 不适用 AGENTS.md 第 7.1 节单文件红线（它是构建产物，非源码）；
 修改仍在原始拆分文件中进行，修改后重建即可。
+
+---
+
+
+## 18. 子系统上线保护规则（Claude 实施指引）
+
+> 完整规则见 [AGENTS.md §20](./AGENTS.md#20-子系统上线保护规则强制)。Claude 在涉及子系统数据的任务中 MUST 遵守。
+
+### 18.1 核心判断
+
+- `subsystems/<id>/manifest.json` 顶层 `"deployed": true` = 该子系统**已正式上线**，数据受保护。
+- 已上线子系统（当前：samples，2026-08-06）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
+- 未上线子系统可自由注入测试数据（seed/造数测试）。
+
+### 18.2 Claude MUST 遵守
+
+1. 对 `deployed:true` 子系统的验证只做「只读」：查询接口、页面浏览、登录；不 POST/PUT/DELETE 造数。
+2. 不运行 `npm run seed-samples`（护栏会拒绝）；不手工向 samples/scan_logs/sample_models 写 SQL。
+3. `tests/*.test.js` 中样品相关用例已被 `tests/helpers/deployed.js` 守卫自动跳过，不要绕过。
+4. 用户要求清空/批量修改已上线数据时：先备份（/www/backup/），明确告知风险，用户确认后执行。
+5. 修改 `deployed` 标记需用户明确授权。
+
+### 18.3 拦截逻辑
+
+- 用户要求向已上线子系统注入测试数据 → 拒绝并说明规则
+- 修改 manifest deployed 未经授权 → 暂停
 
 ---
 

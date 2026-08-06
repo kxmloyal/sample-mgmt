@@ -2,6 +2,15 @@
 
 含**样品管理**、**治具管理**、**全局工作台**与**项目追踪**四大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
 
+**子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
+
+<!-- AUTO-SUBSYSTEMS:START -->
+- **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
+- **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
+- **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
+- **全局工作台**(`workbench`)：跨部门项目进度监控，合并样品与治具待办积压视图
+<!-- AUTO-SUBSYSTEMS:END -->
+
 ## 五个责任主体
 
 | 阶段 | 责任方 | 主要职责 |
@@ -151,7 +160,7 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 npm install          # 安装依赖
 cp .env.example .env # 复制环境变量模板
 npm run seed         # 初始化角色账号（仅一次）
-npm run seed-samples # 样品全量测试数据（15个，6种状态全覆盖）
+npm run seed-samples # 样品全量测试数据（15个，6种状态全覆盖；⚠️ samples 已上线，护栏将拒绝执行）
 npm run seed-fixture # 治具全量测试数据（15个，12种状态全覆盖）
 npm start            # 启动，访问 http://localhost:4000（需先配置 .env 数据库连接）
 ```
@@ -176,7 +185,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | 账号 | 密码 | 角色 | 部门 |
 |------|------|------|------|
 | admin | admin123 | 管理员 | 系统 |
-| rd01 | rd123 | 研发(RD) | 研发中心 |
+| rd01 | rd123 | 研发(RD) | 研发部 |
 | qa01 | qa123 | 品保(QA) | 品保文管中心 |
 | mfg01 | mfg123 | 保管(CUSTODY) | 制造部 |
 | fqc01 | fqc123 | 保管(CUSTODY) | FQC |
@@ -189,6 +198,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/login` | POST | 否 | 登录 |
 | `/api/logout` | POST | 是 | 登出 |
 | `/api/me` | GET | 是 | 当前用户信息 |
+| `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
 | `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
@@ -217,9 +227,11 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/workbench` | GET | 是 | 工作台合并数据（样品 + 治具积压）|
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
 | `/api/subsystems` | GET | 是 | 已注册子系统清单（门户渲染）|
+| `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效 seed/jest 护栏）|
 | `/api/rd-users` | GET | 是 | RD 用户列表（退回指派选择）|
 | `/api/logs` | GET | 是(ADMIN) | 全量操作日志 |
 | `/api/users` | GET/POST | 是(ADMIN) | 用户管理 |
+| `/api/users/batch` | POST | 是(ADMIN) | 用户批量管理（delete/reset-password/update/enable/disable）|
 | `/card/:sample_no` | GET | **否** | 匿名数字标示卡 |
 | `/health` | GET | 否 | 健康检查 |
 
@@ -263,6 +275,7 @@ data/
   └── source-types.json      来源类型
 public/
   ├── portal.html            门户首页（统一入口）
+  ├── admin-users.html       用户管理（框架级独立页，仅 ADMIN；含批量管理/PM 角色）
   ├── admin-subsystems.html  子系统管理面板
   ├── css/app.css            全局共享样式
   └── uploads/               样品/治具图片与文件上传目录

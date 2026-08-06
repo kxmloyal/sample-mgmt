@@ -7,10 +7,13 @@
 
 **制造品质管理系统**:含样品管理、治具管理与全局工作台三大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。**架构基础：子系统插件协议（见第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架，无需修改框架核心代码。
 
-**子系统**:
-- **样品管理**:覆盖样品「发行 → 确认 → 生命周期管理 → 分发」全流程
-- **治具管理**:覆盖治具「申请 → 制作 → 验证移交 → 领用 → 维修 → 报废」全流程
-- **全局工作台**:跨部门监控样品/治具项目进度（待办/积压 3 档），积压阈值仅 ADMIN 可改（全局生效）
+**子系统**(清单由 `node tools/sync-subsystem-docs.js` 自动维护，勿手改):
+<!-- AUTO-SUBSYSTEMS:START -->
+- **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
+- **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
+- **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
+- **全局工作台**(`workbench`)：跨部门项目进度监控，合并样品与治具待办积压视图
+<!-- AUTO-SUBSYSTEMS:END -->
 
 **五个责任主体**:
 - 研发工程:建样、制作治具、扫码确认制作、维修治具、创建替代品
@@ -56,10 +59,13 @@
 │   ├── state-machine.js   # 通用状态机引擎
 │   ├── file-manager.js    # 通用文件管理 DAO
 │   └── frontend/          # 共享前端模块(api-base.js / modal.js / shared/utils.js)
-├── subsystems/            # ★ 所有子系统(插件协议,见第 17 节)
-│   ├── samples/           # 样品管理(backend/ db/ frontend/ seed/ manifest.json)
-│   ├── fixtures/          # 治具管理(同上)
-│   └── workbench/         # 全局工作台(跨部门积压监控 + 阈值设置)
+<!-- AUTO-SUBSYSTEMS-TREE:START -->
+├── subsystems/            # ★ 所有子系统(插件协议,见 AGENTS.md 第 17 节)
+│   ├── fixtures/          # 治具管理(backend/ db/ frontend/ seed/ manifest.json)
+│   ├── projects/          # 项目追踪(backend/ db/ frontend/ seed/ manifest.json)
+│   ├── samples/          # 样品管理(backend/ db/ frontend/ seed/ manifest.json)
+│   └── workbench/          # 全局工作台(backend/ db/ frontend/ seed/ manifest.json)
+<!-- AUTO-SUBSYSTEMS-TREE:END -->
 ├── logger.js              # 日志系统(Winston)
 ├── seed.js                # 种子:6 个角色账号
 ├── seed-samples.js        # 样品全量测试数据:15 个,6 种状态全覆盖
@@ -100,7 +106,7 @@ npm start           # 启动,访问 http://localhost:4000(端口可通过 .env �
 | 账号 | 密码 | 角色 | 部门 |
 |---|---|---|---|
 | admin | admin123 | 管理员 | 系统 |
-| rd01 | rd123 | 研发(RD) | 研发中心 |
+| rd01 | rd123 | 研发(RD) | 研发部 |
 | qa01 | qa123 | 品保(QA) | 品保文管中心 |
 | mfg01 | mfg123 | 保管(CUSTODY) | 制造部 |
 | fqc01 | fqc123 | 保管(CUSTODY) | FQC |
@@ -485,6 +491,7 @@ manifest.json 是**单一事实来源**。框架通过读取它自动完成：�
 | `name` | string | 是 | 显示名称 |
 | `description` | string | 是 | 描述文本 |
 | `version` | string | 是 | 语义化版本号 |
+| `deployed` | boolean | 否 | 上线标记：`true`=已正式上线，受 §20 保护规则约束（默认未上线）|
 | `icon` | string | 是 | 图标标识 |
 | `route.prefix` | string | 是 | API 路径前缀 |
 | `route.entry` | string | 是 | 前端入口页面路径 |
@@ -724,6 +731,33 @@ module.exports = { register, initDB, seed };
 }
 ```
 
+### 17.12 新增子系统文档同步规则（强制）
+
+> 新增/删除子系统时，除 `subsystems/<id>/` 目录与 manifest 外，MUST 同步维护规则文件与相关文档。
+> 自动化：`tools/sync-subsystem-docs.js` 扫描 `subsystems/*/manifest.json`（单一事实来源），自动重写各文档标记块。
+
+**自动维护的标记块**（禁止手改，由脚本生成）：
+
+| 标记块 | 位置 | 内容 |
+|---|---|---|
+| `<!-- AUTO-SUBSYSTEMS:START/END -->` | AGENTS.md / CLAUDE.md / README.md / docs/subsystem-management-guide.md | 子系统清单（名称+描述） |
+| `<!-- AUTO-SUBSYSTEMS-TREE:START/END -->` | AGENTS.md | 目录结构 subsystems/ 子树 |
+
+**执行时机（MUST）**：
+- 通过脚手架新增子系统：`node tools/create-subsystem.js <id> <name>` 已自动调用同步脚本
+- 通过管理面板或手动新增/删除子系统：MUST 手动运行 `node tools/sync-subsystem-docs.js`（无 sudo 时用 `sudo -u www`）
+
+**标记块外的人工同步项（AI MUST 同步）**：
+- AGENTS.md 第 1 节子系统概述（如「三大子系统」措辞）、第 14 节技术债、API 表
+- CLAUDE.md 第 1 节、第 5.1 节隔离原则、第 11 节技术债
+- README.md 各子系统功能章节、API 表
+- docs/subsystem-management-guide.md 迁移表
+
+**AI 拦截规则**：
+- 新增/删除子系统后标记块未同步 → 暂停，要求运行同步脚本
+- 手改标记块内内容 → 警告，要求用脚本重新生成
+- 跳过文档同步项直接交付 → 拒绝
+
 ## 18. 卡片设计系统规范（强制）
 
 > 完整规范见 `docs/superpowers/specs/2026-08-04-card-design-system.md`。
@@ -842,6 +876,47 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 - 直接修改 `index.html` 手动添加/删除 `<script src>` 而不重建 bundle → 拒绝，要求执行构建流程
 - 在 bundle 之外新增独立 `<script>` 标签 → 拒绝，应合并到 bundle 中
 - 修改 bundle 已覆盖的单个 JS 文件后未重建 → 警告，提示重建
+
+---
+
+
+## 20. 子系统上线保护规则（强制）
+
+> 背景：2026-08-06 样品管理（samples）正式部署上线。本规则对**所有已标记上线的子系统**统一生效，新增子系统默认未上线。
+
+### 20.1 上线标记（单一事实来源）
+
+- 子系统的 `manifest.json` 顶层字段 `"deployed": true` 即代表该子系统**已正式上线**（单一事实来源，见 §17.3）。
+- 未设置或 `false` = 未上线（开发中），可自由注入测试数据。
+- 上线/下线标记变更 MUST 经用户明确授权，不得擅自修改。
+
+### 20.2 已上线子系统的硬性禁令（MUST）
+
+对任何 `deployed: true` 的子系统：
+
+1. **禁止注入测试数据**：禁止运行 seed 脚本、造数测试脚本、手工 SQL INSERT 等方式向该子系统数据表写入测试数据。
+2. **禁止批量清理/修改线上数据**：禁止 TRUNCATE/DELETE/UPDATE 线上数据，除非用户明确要求且先备份。
+3. **禁止在其上跑数据写入类自动化测试**：`tests/*.test.js` 中涉及该子系统数据写入的用例 MUST 跳过（护栏：`tests/helpers/deployed.js` + 各测试文件顶部守卫）。
+4. **测试策略**：对已上线子系统的验证仅允许「只读验证」（查询接口、页面浏览、登录）；数据写入类验证 MUST 使用独立测试库或 mock。
+5. **seed 护栏**：`seed-samples.js` 等种子脚本启动时读取 manifest，若 `deployed:true` 直接拒绝执行并退出。
+
+### 20.3 新增子系统默认值
+
+- 新子系统 manifest MUST 不写 `deployed`（默认未上线）或显式 `"deployed": false`。
+- 正式上线流程：用户授权 → 设置 `"deployed": true` → 同步更新 §20.4 清单 → 全链路通知（含测试脚本护栏）。
+
+### 20.4 已上线子系统清单（人工维护，与 manifest 一致）
+
+| 子系统 | id | 上线日期 | 受保护数据表 |
+|---|---|---|---|
+| 样品管理 | samples | 2026-08-06 | samples / scan_logs / sample_models |
+
+### 20.5 AI 拦截逻辑
+
+- 请求向 `deployed:true` 子系统注入测试数据 / 跑造数测试 → 拒绝，要求改用只读验证或独立测试库
+- 请求清空/批量改已上线子系统数据而无备份 → 标记高危，中止
+- 修改 manifest `deployed` 标记未经用户授权 → 暂停，要求确认
+- 运行 `npm run seed-samples` 且 samples 已上线 → 护栏拒绝，脚本自动退出
 
 ---
 

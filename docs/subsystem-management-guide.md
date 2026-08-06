@@ -16,6 +16,15 @@ server.js 启动
   └── 4. GET /api/subsystems → portal.html 动态渲染卡片
 ```
 
+**当前子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
+
+<!-- AUTO-SUBSYSTEMS:START -->
+- **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
+- **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
+- **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
+- **全局工作台**(`workbench`)：跨部门项目进度监控，合并样品与治具待办积压视图
+<!-- AUTO-SUBSYSTEMS:END -->
+
 **核心文件**：
 
 | 文件 | 职责 |

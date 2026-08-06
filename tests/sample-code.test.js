@@ -1,5 +1,6 @@
 // tests/sample-code.test.js — 样品 13 位编码模块单测
 const { SOURCE_CODES, GROUP_CODES, STATION_GROUPS, PATTERN, parseSampleCode, generateSampleCode } = require('../subsystems/samples/db/sample-code');
+const { isDeployed } = require('./helpers/deployed');
 
 describe('SOURCE_CODES / GROUP_CODES', () => {
   it('提供处映射 C/T/G', () => {
@@ -128,7 +129,7 @@ describe('POST /api/samples 必填校验', () => {
 });
 
 
-describe('扫码台与 13 位编码兼容', () => {
+(isDeployed('samples') ? describe.skip : describe)('扫码台与 13 位编码兼容', () => {
   const { getApp, login } = require('./helpers/setup');
   beforeAll(async () => { await getApp(); });
 

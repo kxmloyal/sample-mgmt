@@ -6,6 +6,8 @@
 <title>子系统管理</title>
 <link rel="stylesheet" href="/css/app.css?v=20260805b" />
 <style>
+/* 独立框架页：覆盖 app.css 整页滚动锁死（html,body overflow:hidden 仅用于子系统 SPA 内部滚动） */
+html,body{height:auto;min-height:100%;overflow:auto}
 .subsys-admin{max-width:900px;margin:0 auto;padding:20px}
 .subsys-admin h1{margin:0 0 4px}
 .subsys-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
@@ -15,13 +17,26 @@
 .subsys-row .sinfo{flex:1;min-width:0}
 .subsys-row .sinfo h3{margin:0 0 2px;font-size:15px}
 .subsys-row .sinfo .meta{font-size:12px;color:var(--muted)}
-.subsys-row .sacts{display:flex;gap:8px;flex-shrink:0}
+.subsys-row .sacts{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
 #subsys-form{display:none;background:var(--panel);border-radius:12px;padding:28px;box-shadow:var(--shadow);margin-top:16px}
 #subsys-form h3{margin:0 0 16px}
 .form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .form-row label{flex:1;min-width:140px}
 #subsys-form button{margin-top:8px}
 .form-status{font-size:13px;margin-top:8px}
+/* ===== 宽屏/响应式适配（2026-08-06，对齐项目断点体系 LG≥1200 / XL≥1600）===== */
+/* LG 起：容器放宽至 1500px，列表双列网格充分利用宽度 */
+@media(min-width:1200px){
+  .subsys-admin{max-width:1500px;padding:28px 34px}
+  .subsys-list{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+}
+/* XS/SM（<768px）：头部与行内容纵向堆叠，按钮左对齐 */
+@media(max-width:767px){
+  .subsys-header{flex-direction:column;align-items:flex-start;gap:12px}
+  .subsys-header > div:last-child{width:100%;justify-content:space-between}
+  .subsys-row{flex-direction:column;align-items:stretch;gap:12px}
+  .subsys-row .sacts{justify-content:flex-start}
+}
 </style>
 </head>
 <body>
@@ -50,6 +65,9 @@ async function load() {
     list.innerHTML = subs.map(function(m) {
       var icon = ICONS[m.icon] || ICONS._default;
       var stateInfo = m.stateCount ? m.stateCount + ' 状态' : '无状态机';
+      var deployBtn = m.deployed
+        ? '<button class="btn ghost sm" style="color:#065f46;border-color:#065f46" onclick="toggleDeploy(\'' + m.id + '\',false)" title="已上线：禁止注入测试数据/seed/清库（AGENTS.md §20）">🟢 已上线</button>'
+        : '<button class="btn ghost sm" style="color:#92400e;border-color:#92400e" onclick="toggleDeploy(\'' + m.id + '\',true)" title="未上线：无测试数据保护">⚪ 未上线</button>';
       return '<div class="subsys-row">' +
         '<div class="sicon">' + icon + '</div>' +
         '<div class="sinfo">' +
@@ -57,6 +75,7 @@ async function load() {
           '<div class="meta">' + m.id + ' · v' + m.version + ' · ' + stateInfo + ' · ' + m.navCount + ' 导航</div>' +
         '</div>' +
         '<div class="sacts">' +
+          deployBtn +
           '<button class="btn ghost sm" onclick="editManifest(\'' + m.id + '\')">编辑</button>' +
           '<button class="btn ghost sm" onclick="exportManifest(\'' + m.id + '\')">导出</button>' +
         '</div>' +
@@ -65,6 +84,22 @@ async function load() {
   } catch (e) {
     list.innerHTML = '<div style="color:#dc2626;text-align:center;padding:20px">加载失败: ' + e.message + '</div>';
   }
+}
+
+// 上线/下线开关（2026-08-06）：切换 manifest.deployed，双向
+async function toggleDeploy(id, toOnline) {
+  var msg = toOnline
+    ? '确认上线「' + id + '」？\n上线后该子系统进入上线保护：禁止注入测试数据 / 跑 seed / 清库（AGENTS.md §20）。'
+    : '确认下线「' + id + '」？\n下线将解除测试数据保护，seed 与自动化测试护栏失效，可重新注入测试数据。';
+  if (!confirm(msg)) return;
+  try {
+    var res = await fetch('/api/subsystems/' + id + '/deployed', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ deployed: toOnline })
+    });
+    if (!res.ok) { var err = await res.json(); throw new Error(err.error); }
+    load();
+  } catch (e) { alert('操作失败: ' + e.message); }
 }
 
 function showForm() {
