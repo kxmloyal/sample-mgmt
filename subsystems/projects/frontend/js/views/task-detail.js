@@ -35,6 +35,8 @@ async function tdLoadSection(kind) {
   else if (kind === 'links') body.innerHTML = renderTdLinks(d);
   else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
 }
+// v2：详情局部刷新（info 主卡 + 当前 tab，替代全量重渲染）
+function tdRefresh() { tdLoadSection('info'); tdSwitchTab(_tdTab); }
 // v2：主信息卡（project_name/assignee_name 来自详情 JOIN，无前端补查；含进度条 + 编辑/子任务/依赖/关联/删除按钮区）
 function renderTdInfo(d) {
   const t = d.task;
@@ -54,6 +56,8 @@ function renderTdInfo(d) {
     (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + esc(t.description) + '</span></div>' : '') +
     (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + esc(t.solution) + '</span></div>' : '') +
     (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + esc(t.notes) + '</span></div>' : '') +
+    (d.deps && d.deps.length ? '<div class="pk-row"><span class="pk-name">前置依赖</span><span>' +
+      d.deps.map(x => esc(x.depends_on_title) + (canEdit ? ' <fluent-button size="small" appearance="neutral" onclick="tdDepDel(' + x.depends_on_id + ')">移除</fluent-button>' : '')).join('；') + '</span></div>' : '') +
     (canEdit ? '<div class="pk-filters"><fluent-button appearance="secondary" size="small" onclick="tdEdit()">编辑</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
@@ -143,7 +147,7 @@ async function tdEditSave(version) {
     description: $('#te-desc').value, solution: $('#te-solution').value, notes: $('#te-notes').value,
     version: version
   };
-  try { await api('PUT', PApi.task(_tid), body); showToast('已保存'); pCloseModal(); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('PUT', PApi.task(_tid), body); showToast('已保存'); pCloseModal(); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 // v2：加子任务弹窗（标题 + 责任人 + 日期）
@@ -164,7 +168,7 @@ async function tdAddSubSave() {
   if (!title) return showToast('子任务名称必填', 'err');
   try {
     await api('POST', PApi.taskSub(_tid), { title: title, assignee_id: Number($('#ts-assignee').value) || null, planned_date: $('#ts-date').value || null });
-    showToast('已创建'); pCloseModal(); tdLoadSection('info'); tdSwitchTab(_tdTab);
+    showToast('已创建'); pCloseModal(); tdRefresh();
   } catch (e) { showToast(e.message, 'err'); }
 }
 // v2：加依赖弹窗（同项目任务下拉，显示标题+状态，禁选自己与已依赖项）
@@ -184,7 +188,7 @@ async function tdAddDep() {
             '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
 }
 async function tdAddDepSave() {
-  try { await api('POST', PApi.taskDeps(_tid), { depends_on_id: Number($('#td-dep').value) }); showToast('已添加'); pCloseModal(); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('POST', PApi.taskDeps(_tid), { depends_on_id: Number($('#td-dep').value) }); showToast('已添加'); pCloseModal(); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 // v2：关联样品/治具弹窗（类型下拉 + 编号关键字搜索，结果 ≤10 条）
@@ -214,12 +218,12 @@ async function tdLinkSearch() {
 async function tdAddLinkSave() {
   const refId = Number($('#tl-target').value);
   if (!refId) return showToast('请先选择对象', 'err');
-  try { await api('POST', PApi.taskLinks(_tid), { ref_type: $('#tl-type').value, ref_id: refId }); showToast('已关联'); pCloseModal(); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('POST', PApi.taskLinks(_tid), { ref_type: $('#tl-type').value, ref_id: refId }); showToast('已关联'); pCloseModal(); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 // 子任务流转（CAS：后端按当前状态条件更新）
 async function tdSubAction(sid, action) {
-  try { await api('POST', PApi.taskSub(_tid, sid) + '/status', { action }); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('POST', PApi.taskSub(_tid, sid) + '/status', { action }); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 // v2：子任务编辑弹窗（标题 + 责任人 + 日期）
@@ -243,29 +247,29 @@ async function tdSubEditSave(sid, version) {
   if (!title) return showToast('子任务名称必填', 'err');
   try {
     await api('PUT', PApi.taskSub(_tid, sid), { title: title, assignee_id: Number($('#tse-assignee').value) || null, planned_date: $('#tse-date').value || null, version: version });
-    showToast('已保存'); pCloseModal(); tdLoadSection('info'); tdSwitchTab(_tdTab);
+    showToast('已保存'); pCloseModal(); tdRefresh();
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function tdSubDel(sid) {
-  try { await api('DELETE', PApi.taskSub(_tid, sid)); showToast('已删除'); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('DELETE', PApi.taskSub(_tid, sid)); showToast('已删除'); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdDepDel(depId) {
-  try { await api('DELETE', PApi.taskDeps(_tid, depId)); showToast('已移除'); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('DELETE', PApi.taskDeps(_tid, depId)); showToast('已移除'); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdCmtDel(cid) {
-  try { await api('DELETE', PApi.taskComments(_tid) + '/' + cid); showToast('已删除'); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('DELETE', PApi.taskComments(_tid) + '/' + cid); showToast('已删除'); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdFileDel(fid) {
-  try { await api('DELETE', PApi.taskFiles(_tid, fid)); showToast('已删除'); tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('DELETE', PApi.taskFiles(_tid, fid)); showToast('已删除'); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdAddComment() {
   const content = $('#td-cmt').value.trim();
   if (!content) return;
-  try { await api('POST', PApi.taskComments(_tid), { content }); $('#td-cmt').value = ''; tdLoadSection('info'); tdSwitchTab(_tdTab); }
+  try { await api('POST', PApi.taskComments(_tid), { content }); $('#td-cmt').value = ''; tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 // 附件上传：FormData + fetch（credentials 带 session cookie），校验响应状态码
@@ -277,7 +281,7 @@ async function tdUploadFile() {
   try {
     const r = await fetch(PApi.taskFiles(_tid), { method: 'POST', credentials: 'include', body: fd });
     if (!r.ok) { let d = {}; try { d = await r.json(); } catch (e) {} throw new Error(d.error || ('上传失败 ' + r.status)); }
-    showToast('上传成功'); tdLoadSection('info'); tdSwitchTab(_tdTab);
+    showToast('上传成功'); tdRefresh();
   } catch (e) { showToast(e.message, 'err'); }
 }
 // v2：删除任务（ADMIN/PM/成员；级联）
