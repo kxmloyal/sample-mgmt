@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgp88y6 — 12 files */
+/** BUNDLE vbmsgrxvr1 — 12 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -213,8 +213,11 @@ const PApi = {
 // dashboard.js — 项目看板：统计卡（kb-stat 共享组件）+ 三维分布 + 近 8 周趋势
 async function renderProjectDashboard() {
   const v = $('#view');
+  if (!v) return;
   v.innerHTML = '<div class="pk-stats" id="pk-stats"></div><div class="pk-panels" id="pk-panels"></div>';
   const s = await api('GET', PApi.stats);
+  // 竞态守卫：await 期间视图可能已被切换，节点脱离 document 后直接返回
+  if (!v.isConnected) return;
   const stats = [
     { k: 'projects', n: s.project_count, l: '项目数', c: 'var(--brand)' },
     { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)' },
@@ -499,10 +502,17 @@ async function renderTaskDetail(tid) {
   await tdLoad();
 }
 
-// 加载详情数据并渲染 6 区块（责任人姓名：详情接口无 JOIN，从跨项目列表补齐）
+// 加载详情数据并渲染 6 区块（项目名/责任人姓名：详情接口无 JOIN，从项目列表/跨项目列表补查）
 async function tdLoad() {
   const d = await api('GET', PApi.task(_tid));
   const t = d.task;
+  // 项目名称映射（详情接口仅含 project_id）
+  let projName = t.project_id;
+  try {
+    const projs = await api('GET', PApi.projects());
+    const pp = projs.find(p => p.id === t.project_id);
+    if (pp) projName = pp.name;
+  } catch (e) { /* 补查失败时显示项目 ID */ }
   let assigneeName = t.assignee_name;
   if (!assigneeName && t.assignee_id) {
     try {
@@ -516,7 +526,7 @@ async function tdLoad() {
     '<h3>' + t.title + '</h3>' +
     '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[t.status] || t.status) +
     ' · 进度 ' + t.progress + '%</span></div>' +
-    '<div class="pk-row"><span class="pk-name">项目</span><span>' + t.project_id + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">项目</span><span>' + projName + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">类别</span><span>' + (CATEGORY_CN[t.category] || t.category) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">优先级</span><span>' + (PRIORITY_CN[t.priority] || t.priority) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + (assigneeName || '未指派') + '</span></div>' +
@@ -680,6 +690,19 @@ function route(){
   $('#page-title').textContent=meta[k]||'';
   $('#page-actions').innerHTML='';
   v();
+}
+// 渲染顶部导航菜单（按角色过滤）
+function buildNav(){
+  $('#nav').innerHTML = NAV.filter(n=>n.roles.includes(me.role)).map(n =>
+    '<button data-k="' + n.k + '" onclick="location.hash=\'#/' + n.k + '\'">' + n.t + '</button>').join('');
+}
+// api-base.js 的 boot()/doLogin() 均调用 showApp()，必须提供实现（登录后初始化界面）
+function showApp(){
+  $('#me-label').textContent = (me.display_name || me.username) + ' · ' + (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  buildNav();
+  route();
 }
 
 

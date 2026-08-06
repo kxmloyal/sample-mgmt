@@ -14,10 +14,17 @@ async function renderTaskDetail(tid) {
   await tdLoad();
 }
 
-// 加载详情数据并渲染 6 区块（责任人姓名：详情接口无 JOIN，从跨项目列表补齐）
+// 加载详情数据并渲染 6 区块（项目名/责任人姓名：详情接口无 JOIN，从项目列表/跨项目列表补查）
 async function tdLoad() {
   const d = await api('GET', PApi.task(_tid));
   const t = d.task;
+  // 项目名称映射（详情接口仅含 project_id）
+  let projName = t.project_id;
+  try {
+    const projs = await api('GET', PApi.projects());
+    const pp = projs.find(p => p.id === t.project_id);
+    if (pp) projName = pp.name;
+  } catch (e) { /* 补查失败时显示项目 ID */ }
   let assigneeName = t.assignee_name;
   if (!assigneeName && t.assignee_id) {
     try {
@@ -31,7 +38,7 @@ async function tdLoad() {
     '<h3>' + t.title + '</h3>' +
     '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[t.status] || t.status) +
     ' · 进度 ' + t.progress + '%</span></div>' +
-    '<div class="pk-row"><span class="pk-name">项目</span><span>' + t.project_id + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">项目</span><span>' + projName + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">类别</span><span>' + (CATEGORY_CN[t.category] || t.category) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">优先级</span><span>' + (PRIORITY_CN[t.priority] || t.priority) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + (assigneeName || '未指派') + '</span></div>' +

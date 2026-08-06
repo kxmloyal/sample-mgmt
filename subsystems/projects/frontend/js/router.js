@@ -28,3 +28,16 @@ function route(){
   $('#page-actions').innerHTML='';
   v();
 }
+// 渲染顶部导航菜单（按角色过滤）
+function buildNav(){
+  $('#nav').innerHTML = NAV.filter(n=>n.roles.includes(me.role)).map(n =>
+    '<button data-k="' + n.k + '" onclick="location.hash=\'#/' + n.k + '\'">' + n.t + '</button>').join('');
+}
+// api-base.js 的 boot()/doLogin() 均调用 showApp()，必须提供实现（登录后初始化界面）
+function showApp(){
+  $('#me-label').textContent = (me.display_name || me.username) + ' · ' + (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  buildNav();
+  route();
+}
