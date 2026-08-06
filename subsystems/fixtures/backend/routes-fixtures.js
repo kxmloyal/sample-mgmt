@@ -5,6 +5,7 @@ var AM = require('./fixture-actions-make');
 var { doAccept, doCancel, doReturn, doUse, doMaintenance } = require('./fixture-actions-cycle');
 var AR = require('./fixture-actions-repair');
 var AS = require('./fixture-actions-special');
+var { toCsv, sendCsv } = require('../../../shared/csv');
 
 function register(app) {
   var requireAuth = app.locals.requireAuth;
@@ -41,6 +42,56 @@ function register(app) {
       fixtures.forEach(function(f) { f.first_photo = photoMap[f.id] || null; });
     }
     res.json({ fixtures: fixtures, total: total, limit: limit, offset: offset });
+  });
+
+  // 导出清单 CSV（复用列表筛选/排序参数，忽略分页取全量；AGENTS.md §21 列表导出标准）
+  var FIXTURE_STATUS_CN = {
+    REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
+    VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位验证',
+    TRANSFERRED: '已移交', IN_USE: '领用中', IMPROVING: '改善中',
+    REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '维修完成',
+    RETIRED: '已废弃'
+  };
+  var FIXTURE_SOON_DAYS = 7;
+
+  // 到期状态中文（与前端 fixture-inspect.js 判定一致）：statusField 限制状态（归还仅 IN_USE）
+  function fixtureDueCn(statusField, dateField, overdueLabel) {
+    return function (v, row) {
+      if (row == null || !row[dateField]) return '—';
+      if (statusField && row.status !== statusField) return '—';
+      var t = new Date(row[dateField]).getTime();
+      if (t < Date.now()) return overdueLabel + Math.ceil((Date.now() - t) / 86400000) + '天';
+      if (t <= Date.now() + FIXTURE_SOON_DAYS * 86400000) return '近7天到期';
+      return '正常';
+    };
+  }
+
+  // 时间列格式化：兼容 mysql2 返回的 Date 对象与字符串，输出 YYYY-MM-DD HH:mm（与列表展示一致）
+  function fmtDT(v) {
+    if (v == null || v === '') return '';
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return '';
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  app.get('/api/fixtures/export', requireAuth, async function (req, res) {
+    var _a = req.query, status = _a.status, dept = _a.dept, search = _a.search,
+        overdue = _a.overdue, sort = _a.sort, dir = _a.dir;
+    var fixtures = await D.listFixtures({ status: status, dept: dept, search: search, overdue: overdue, sort: sort, dir: dir });
+    var cols = [
+      { key: 'fixture_no', label: '编号' },
+      { key: 'name', label: '名称' },
+      { key: 'spec', label: '规格' },
+      { key: 'requested_dept', label: '部门' },
+      { key: 'storage_location', label: '储位' },
+      { key: 'status', label: '状态', fmt: function (v) { return FIXTURE_STATUS_CN[v] || v; } },
+      { key: 'expected_return_at', label: '归还状态', fmt: fixtureDueCn('IN_USE', 'expected_return_at', '超期') },
+      { key: 'next_maintenance_at', label: '保养状态', fmt: fixtureDueCn(null, 'next_maintenance_at', '逾期') },
+      { key: 'updated_at', label: '更新时间', fmt: fmtDT }
+    ];
+    var stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    sendCsv(res, 'fixtures-' + stamp + '.csv', toCsv(fixtures, cols));
   });
 
   // 新建申请
