@@ -49,8 +49,7 @@ SELECT SUBSTRING(sample_no, 3, 6),
 FROM samples
 WHERE sample_no REGEXP '^[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-[0-9]{3}-[0-9]{2}$'
 GROUP BY SUBSTRING(sample_no, 3, 6)
-AS new
-ON DUPLICATE KEY UPDATE cur_seq = GREATEST(cur_seq, new.cur_seq);
+ON DUPLICATE KEY UPDATE cur_seq = GREATEST(cur_seq, VALUES(cur_seq));
 ```
 
 - 使用 MySQL 8.0 别名语法（`VALUES()` 已弃用），`GREATEST` 保证幂等安全

@@ -37,16 +37,23 @@
 
 ## 3. 流水号生成算法
 
-1. 前缀 = `提供处-机型-组别-`（11 位，如 `T-SF1225-M-`）。
-2. 查询该前缀下现有最大流水号：
-   `SELECT MAX(CAST(SUBSTRING(sample_no, 12, 3) AS UNSIGNED)) FROM samples WHERE LEFT(sample_no, 11) = ?`
-3. 下一个流水号 = 最大值 + 1，不足 3 位左侧补零（`001` 起）。
-4. **上限 999**：某「提供处+机型+组别」组合已达 999 后，新申请报错 `该组合已达上限 999`，需更换机型/提供处。
+1. 前缀 = 机型 6 位（如 `SF1225`），流水号在**整个机型内唯一**（跨提供处 C/T/G、跨组别 S/M/A/Q/E/I 共享 001~999 空间）。
+2. 取号（原子自增，无竞态）：
+   `INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 1) ON DUPLICATE KEY UPDATE cur_seq = cur_seq + 1`
+   随后 `SELECT cur_seq` 取值。
+3. 下一个流水号 = `cur_seq`，不足 3 位左侧补零（`001` 起）。
+4. **上限 999**：某机型已达 999 后，新申请报错 `该机型已达上限 999`，需更换机型。
 
 ### 并发处理
 
-- 流水号采用「MAX+1」计算，存在并发竞态（两个请求可能取到相同流水号）。
-- 兜底：`samples.sample_no` 为 UNIQUE 索引，`dao.js createSample` 对唯一键冲突（`ER_DUP_ENTRY`）以 SAVEPOINT 重试最多 3 次；事务路径使用 `conn.query` 执行 SAVEPOINT（prepared 协议不支持）。
+- 序列表原子自增消除 MAX+1 并发竞态；同机型并发创建时由 InnoDB 行锁串行化。
+- 序号与 `createSample` 同事务：SAVEPOINT 回滚时序号一并回滚，重试不跳号、编号连续。
+- 兜底：`samples.sample_no` 为 UNIQUE 索引，`dao.js createSample` 对唯一键冲突（`ER_DUP_ENTRY`）以 SAVEPOINT 重试最多 3 次。
+- 手工删除样品后 `cur_seq` 不回退（不回号，安全）；外部直接 INSERT 带编号不更新序列表（已知限制）。
+
+### 编号预览（不消耗序号）
+
+`GET /api/samples/code-preview` 走只读模拟（存量机型 MAX+1），不写 `sample_seqs`；实际编号以提交后 `generateSampleCode` 结果为准。
 
 ## 4. 完整编号正则
 
@@ -84,6 +91,7 @@
 3. 排查下游：新建/预览接口（`routes-samples.js`）、扫码（`routes-scan.js`）、前端列表/详情/标示卡展示、测试用例（seed 数据、`tests/`）；
 4. 组别/提供处新增映射需同步前端下拉数据源，避免编码生成与界面可选值不一致；
 5. 流水号算法变更（如改为独立序列表）需评估并发与回滚方案，禁止直接删除 MAX+1 逻辑。
+6. 序列表（`sample_seqs`）为流水号唯一事实来源：新建/预览/扫码逻辑改动 MUST 评估序列表一致性；部署顺序为「schema.sql 建表（重启自动）→ 初始化脚本回填存量 MAX → 新代码生效」。
 
 ## 8. 关联文件
 
@@ -93,3 +101,5 @@
 | `subsystems/samples/db/dao.js` | `nextSampleNo`/`createSample`（含并发重试） |
 | `subsystems/samples/backend/routes-samples.js` | 新建样品、编号预览、机型主数据校验 |
 | `subsystems/samples/backend/routes-scan.js` | 扫码按编号/二维码精确匹配 |
+| `subsystems/samples/db/init-sample-seqs.js` | 序列表初始化 CLI（dry-run / 实际执行，幂等） |
+| `sample_seqs` 表（schema.sql） | 机型级流水号原子自增的事实来源 |
