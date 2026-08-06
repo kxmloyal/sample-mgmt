@@ -35,3 +35,9 @@
 @media(max-width:767px){.pk-kanban{grid-template-columns:1fr 1fr}}
 @media(max-width:576px){.pk-kanban{grid-template-columns:1fr}.pk-filters fluent-select{width:100%}}
 .pk-col.drag-over{border-color:var(--brand);background:#f0fdfa}
+/* Task 10：详情页表单/链接/项目卡按钮区样式 */
+.pk-row input[type=text],.pk-row input[type=color]{height:28px;border:1px solid var(--line);border-radius:6px;padding:0 8px}
+.pk-row input[type=color]{width:40px;padding:2px}
+.pk-panel a{color:var(--brand);text-decoration:none}
+.pk-panel a:hover{text-decoration:underline}
+.kb-x{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}

@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgoxp0i — 12 files */
+/** BUNDLE vbmsgp88y6 — 12 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -342,19 +342,316 @@ async function kbDrop(e) {
 
 
 /* --- subsystems/projects/frontend/js/views/list.js --- */
+// list.js — 任务列表：跨项目筛选（项目/状态）+ CSV 导出 + 延期行高亮
+async function renderTaskList() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-select id="lk-project"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-select id="lk-status"><fluent-option value="">全部状态</fluent-option>' +
+    '<fluent-option value="NOT_STARTED">未开始</fluent-option><fluent-option value="IN_PROGRESS">进行中</fluent-option>' +
+    '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
+    '<fluent-button appearance="secondary" onclick="lkLoad()">查询</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="location.href=\'/api/projects/tasks/export\'">导出 CSV</fluent-button></div>' +
+    '<table class="pk-table" id="lk-table"><thead><tr>' +
+    '<th>项目</th><th>任务</th><th>类别</th><th>优先级</th><th>责任人</th><th>状态</th><th>进度</th><th>计划日期</th><th>操作</th>' +
+    '</tr></thead><tbody></tbody></table>';
+  const projects = await api('GET', PApi.projects());
+  const sel = $('#lk-project');
+  for (const p of projects) {
+    const opt = document.createElement('fluent-option');
+    opt.value = String(p.id); opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+  // 支持 #/list?project=xxx 跳转预选项目
+  const qs = new URLSearchParams(location.hash.split('?')[1] || '');
+  if (qs.get('project')) sel.value = qs.get('project');
+  await lkLoad();
+}
+
+// 加载筛选条件下的跨项目任务列表（URL 写死 /api/projects/tasks，避免 /tasks/0 拼接 hack）
+async function lkLoad() {
+  const qs = new URLSearchParams();
+  const pid = $('#lk-project').value;
+  if (pid) qs.set('project_id', pid);
+  const st = $('#lk-status').value;
+  if (st) qs.set('status', st);
+  const rows = await api('GET', '/api/projects/tasks' + (qs.toString() ? '?' + qs : ''));
+  const tbody = document.querySelector('#lk-table tbody');
+  tbody.innerHTML = rows.map(t =>
+    '<tr class="' + (t.status === 'OVERDUE' ? 'pk-row-overdue' : '') + '">' +
+    '<td>' + t.project_name + '</td>' +
+    '<td><a href="#/tasks/' + t.id + '">' + t.title + '</a></td>' +
+    '<td>' + (CATEGORY_CN[t.category] || t.category) + '</td>' +
+    '<td><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' + (PRIORITY_CN[t.priority] || t.priority) + '</span></td>' +
+    '<td>' + (t.assignee_name || '未指派') + '</td>' +
+    '<td>' + (TASK_STATUS_CN[t.status] || t.status) + '</td>' +
+    '<td>' + t.progress + '%</td>' +
+    '<td>' + fmt(t.planned_date) + '</td>' +
+    '<td><a href="#/tasks/' + t.id + '">详情</a></td></tr>').join('');
+}
 
 
 /* --- subsystems/projects/frontend/js/views/projects.js --- */
+// projects.js — 项目列表：卡片式展示 + 新建/编辑/删除 + 成员管理弹窗
+// 权限：新建/编辑/删除/成员管理仅 ADMIN/PM（后端再校验 owner）；其他角色只读浏览
+async function renderProjects() {
+  const v = $('#view');
+  v.innerHTML = '<div class="pk-filters">' +
+    '<fluent-button appearance="accent" onclick="projCreate()">新建项目</fluent-button></div>' +
+    '<div class="pk-stats" id="proj-list"></div>';
+  const list = await api('GET', PApi.projects());
+  const canManage = me.role === 'ADMIN' || me.role === 'PM';
+  $('#proj-list').innerHTML = list.map(p =>
+    '<fluent-card class="kb-stat" data-k="' + p.id + '">' +
+    '<span class="n" style="font-size:16px;color:var(--brand)">' + p.name + '</span>' +
+    '<span class="l">任务 ' + p.task_count + ' · 完成 ' + p.done_count + '</span>' +
+    (canManage
+      ? '<span class="kb-x"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projEdit(' + p.id + ')">编辑</fluent-button> ' +
+        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projMembers(' + p.id + ')">成员</fluent-button> ' +
+        '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ',\'' + p.name + '\')">删除</fluent-button></span>'
+      : '') +
+    '</fluent-card>').join('');
+  // 单击项目卡 → 跳任务列表并筛选该项目
+  document.querySelectorAll('#proj-list .kb-stat').forEach(el => {
+    el.onclick = () => location.hash = '#/list?project=' + el.dataset.k;
+  });
+}
+
+// 新建项目弹窗（prompt 简化输入）
+async function projCreate() {
+  const name = prompt('项目名称（必填）');
+  if (name === null) return;
+  const desc = prompt('项目描述（可空）') || '';
+  try { await api('POST', PApi.projects(), { name, description: desc }); showToast('创建成功'); renderProjects(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// 编辑项目弹窗
+async function projEdit(id) {
+  const p = await api('GET', PApi.projects(id));
+  const name = prompt('项目名称', p.name);
+  if (name === null) return;
+  const desc = prompt('项目描述', p.description || '') || '';
+  try { await api('PUT', PApi.projects(id), { name, description: desc }); showToast('已保存'); renderProjects(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// 删除项目（有任务时后端 409 保护）
+async function projDel(id, name) {
+  if (!confirm('确认删除项目「' + name + '」？（项目下有任务时将被拒绝）')) return;
+  try { await api('DELETE', PApi.projects(id)); showToast('已删除'); renderProjects(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// 成员管理弹窗（成员列表 + 添加下拉 + 转让 owner + 移除）
+// 用户列表走子系统接口 /api/projects/users（共享 /api/users 仅 ADMIN，PM 无权）
+async function projMembers(id) {
+  const [mem, users] = await Promise.all([
+    api('GET', PApi.projects(id) + '/members'),
+    api('GET', '/api/projects/users')
+  ]);
+  const lines = mem.map(m =>
+    '<div class="pk-row"><span class="pk-name">' + (m.display_name || m.username) + '</span>' +
+    '<span>' + (m.is_owner ? '负责人' : '成员') + '</span>' +
+    (m.is_owner
+      ? ''
+      : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + id + ',' + m.user_id + ')">转让</fluent-button> ' +
+        '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + id + ',' + m.user_id + ')">移除</fluent-button>') +
+    '</div>').join('');
+  const opts = users.filter(u => !mem.some(m => m.user_id === u.id))
+    .map(u => '<fluent-option value="' + u.id + '">' + (u.display_name || u.username) + '</fluent-option>').join('');
+  openModal('成员管理', lines +
+    '<div class="pk-filters"><fluent-select id="mem-user">' + opts + '</fluent-select>' +
+    '<fluent-button appearance="accent" onclick="memAdd(' + id + ')">添加</fluent-button></div>');
+}
+async function memAdd(id) {
+  const uid = $('#mem-user').value;
+  if (!uid) return showToast('请选择用户');
+  try { await api('POST', PApi.projects(id) + '/members', { user_id: Number(uid) }); showToast('已添加'); projMembers(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function memTransfer(id, uid) {
+  try { await api('PUT', PApi.projects(id) + '/members/' + uid, { is_owner: 1 }); showToast('已转让'); projMembers(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function memRemove(id, uid) {
+  if (!confirm('确认移除该成员？')) return;
+  try { await api('DELETE', PApi.projects(id) + '/members/' + uid); showToast('已移除'); projMembers(id); }
+  catch (e) { showToast(e.message, 'err'); }
+}
 
 
 /* --- subsystems/projects/frontend/js/views/task-detail.js --- */
+// task-detail.js — 任务详情：主信息卡 + 子任务（三态流转）+ 依赖 + 评论 + 附件 + 关联 + 留痕
+let _tid = 0;
+async function renderTaskDetail(tid) {
+  _tid = tid;
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-panel" id="td-info">加载中…</div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>子任务</h3><div id="td-subs"></div></div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>依赖</h3><div id="td-deps"></div></div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>评论</h3><div id="td-comments"></div></div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>附件</h3><div id="td-files"></div></div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>关联对象</h3><div id="td-links"></div></div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>操作日志</h3><div id="td-logs"></div></div>';
+  await tdLoad();
+}
+
+// 加载详情数据并渲染 6 区块（责任人姓名：详情接口无 JOIN，从跨项目列表补齐）
+async function tdLoad() {
+  const d = await api('GET', PApi.task(_tid));
+  const t = d.task;
+  let assigneeName = t.assignee_name;
+  if (!assigneeName && t.assignee_id) {
+    try {
+      const all = await api('GET', '/api/projects/tasks');
+      const row = all.find(x => x.id === _tid);
+      if (row) assigneeName = row.assignee_name;
+    } catch (e) { /* 补查失败时显示用户 ID */ }
+  }
+  const canEdit = ['ADMIN', 'PM'].includes(me.role);
+  $('#td-info').innerHTML =
+    '<h3>' + t.title + '</h3>' +
+    '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[t.status] || t.status) +
+    ' · 进度 ' + t.progress + '%</span></div>' +
+    '<div class="pk-row"><span class="pk-name">项目</span><span>' + t.project_id + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">类别</span><span>' + (CATEGORY_CN[t.category] || t.category) + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">优先级</span><span>' + (PRIORITY_CN[t.priority] || t.priority) + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">责任人</span><span>' + (assigneeName || '未指派') + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">计划日期</span><span>' + fmt(t.planned_date) + '</span></div>' +
+    '<div class="pk-row"><span class="pk-name">实际日期</span><span>' + fmt(t.actual_date) + '</span></div>' +
+    (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + t.description + '</span></div>' : '') +
+    (t.solution ? '<div class="pk-row"><span class="pk-name">方案</span><span>' + t.solution + '</span></div>' : '') +
+    (t.notes ? '<div class="pk-row"><span class="pk-name">备注</span><span>' + t.notes + '</span></div>' : '') +
+    (canEdit ? '<div class="pk-filters"><fluent-button appearance="secondary" size="small" onclick="tdEdit()">编辑</fluent-button>' +
+      '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
+      '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
+      '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button></div>' : '');
+  // 子任务（三态 + CAS 流转按钮：START/COMPLETE）
+  $('#td-subs').innerHTML = d.subtasks.map(s =>
+    '<div class="pk-row"><span class="pk-name">' + s.title + '</span>' +
+    '<span>' + (SUBTASK_STATUS_CN[s.status] || s.status) + '</span>' +
+    (s.status === 'NOT_STARTED' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'START\')">开始</fluent-button>' : '') +
+    (s.status === 'IN_PROGRESS' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
+    '</div>').join('') || '<span class="pk-name">无子任务</span>';
+  // 依赖（前置任务列表）
+  $('#td-deps').innerHTML = d.deps.map(x =>
+    '<div class="pk-row"><span class="pk-name">↳ ' + x.depends_on_title + '</span></div>').join('') || '<span class="pk-name">无前置依赖</span>';
+  // 评论（输入框 + 列表）
+  $('#td-comments').innerHTML =
+    '<div class="pk-filters"><input id="td-cmt" placeholder="写评论…" style="flex:1;min-width:180px">' +
+    '<fluent-button appearance="accent" size="small" onclick="tdAddComment()">发送</fluent-button></div>' +
+    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + c.content + '</span></div>').join('');
+  // 附件（下载链接前缀 /uploads/projects/，静态服务挂载点）
+  $('#td-files').innerHTML =
+    '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
+    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + f.file_name + '</a></span></div>').join('');
+  // 关联（样品/治具）
+  $('#td-links').innerHTML = d.links.map(l =>
+    '<div class="pk-row"><span class="pk-name">' + (l.ref_type === 'sample' ? '样品' : '治具') + '</span>' +
+    '<span>' + (l.ref_no || l.ref_id) + ' ' + (l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
+  // 操作日志
+  $('#td-logs').innerHTML = d.logs.map(l =>
+    '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');
+}
+
+// 编辑任务（prompt 简化；MUST 回传 version 供乐观锁校验，否则后端 409）
+async function tdEdit() {
+  const d = await api('GET', PApi.task(_tid));
+  const t = d.task;
+  const title = prompt('任务名称', t.title);
+  if (title === null) return;
+  const priority = prompt('优先级 H/M/L', t.priority || 'M');
+  const body = { title, priority, version: t.version };
+  try { await api('PUT', PApi.task(_tid), body); showToast('已保存'); tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+// 子任务流转（CAS：后端按当前状态条件更新）
+async function tdSubAction(sid, action) {
+  try { await api('POST', PApi.taskSub(_tid, sid) + '/status', { action }); tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function tdAddSub() {
+  const title = prompt('子任务名称');
+  if (!title) return;
+  try { await api('POST', PApi.taskSub(_tid), { title }); tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function tdAddDep() {
+  const depId = prompt('前置任务 ID');
+  if (!depId) return;
+  try { await api('POST', PApi.taskDeps(_tid), { depends_on_id: Number(depId) }); tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function tdAddLink() {
+  const refType = prompt('关联类型 sample/fixture', 'sample');
+  const refId = prompt('对象 ID');
+  if (!refId) return;
+  try { await api('POST', PApi.taskLinks(_tid), { ref_type: refType, ref_id: Number(refId) }); tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+async function tdAddComment() {
+  const content = $('#td-cmt').value.trim();
+  if (!content) return;
+  try { await api('POST', PApi.taskComments(_tid), { content }); $('#td-cmt').value = ''; tdLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+// 附件上传：FormData + fetch（credentials 带 session cookie），校验响应状态码
+async function tdUploadFile() {
+  const f = $('#td-file').files[0];
+  if (!f) return showToast('请选择文件');
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    const r = await fetch(PApi.taskFiles(_tid), { method: 'POST', credentials: 'include', body: fd });
+    if (!r.ok) { let d = {}; try { d = await r.json(); } catch (e) {} throw new Error(d.error || ('上传失败 ' + r.status)); }
+    showToast('上传成功'); tdLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
 
 
 /* --- subsystems/projects/frontend/js/views/workflow.js --- */
+// workflow.js — 状态机管理：读取/保存 4 态 + 转移规则（仅 ADMIN；PUT 后端校验角色）
+async function renderWorkflow() {
+  const v = $('#view');
+  if (me.role !== 'ADMIN') { v.innerHTML = '<p>仅管理员可访问</p>'; return; }
+  const wf = await api('GET', PApi.workflow);
+  const stateHtml = Object.keys(wf.states).map(k => {
+    const s = wf.states[k];
+    return '<div class="pk-row"><span class="pk-name">' + k + '</span>' +
+      '<input id="wf-st-' + k + '" value="' + s.label + '" style="flex:1;min-width:120px">' +
+      '<input type="color" id="wf-c-' + k + '" value="' + (s.color || '#000000') + '"></div>';
+  }).join('');
+  const trHtml = wf.transitions.map((t, i) =>
+    '<div class="pk-row"><span class="pk-name">' + (t.from || '') + ' → ' + (t.to || '') + '</span>' +
+    '<input id="wf-tr-' + i + '" value="' + (t.label || '') + '" style="flex:1;min-width:120px"></div>').join('');
+  v.innerHTML =
+    '<div class="pk-panel"><h3>状态定义</h3>' + stateHtml + '</div>' +
+    '<div class="pk-panel" style="margin-top:14px"><h3>转移规则</h3>' + trHtml + '</div>' +
+    '<div class="pk-filters" style="margin-top:14px"><fluent-button appearance="accent" onclick="wfSave()">保存配置</fluent-button></div>';
+  window._wf = wf; // 暂存当前配置供 wfSave 读取（仅标签/颜色可改，拓扑与角色不可变）
+}
+
+// 保存配置：汇总 4 态 label/color + 转移 label，PUT 后端持久化（initial 一并回传）
+async function wfSave() {
+  const wf = window._wf;
+  const states = {};
+  for (const k of Object.keys(wf.states)) {
+    states[k] = { label: $('#wf-st-' + k).value, color: $('#wf-c-' + k).value, bg: wf.states[k].bg };
+  }
+  const transitions = wf.transitions.map((t, i) =>
+    Object.assign({}, t, { label: $('#wf-tr-' + i).value }));
+  try {
+    await api('PUT', PApi.workflow, { states, transitions, initial: wf.initial });
+    showToast('配置已保存并生效'); renderWorkflow();
+  } catch (e) { showToast(e.message, 'err'); }
+}
 
 
 /* --- subsystems/projects/frontend/js/router.js --- */
-// router.js — 项目追踪导航菜单与哈希路由
+// router.js — 项目追踪导航菜单与哈希路由（含任务详情路由 #/tasks/:id）
 const NAV=[
   {k:'dashboard',t:'项目看板',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'kanban',t:'任务看板',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
@@ -364,7 +661,17 @@ const NAV=[
 ];
 const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,workflow:renderWorkflow};
 function route(){
-  const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
+  const raw=location.hash.replace('#/','');
+  const parts=raw.split('/');
+  const k=parts[0]||'dashboard';
+  // 任务详情：#/tasks/:id（不在导航内，清空导航高亮与页头动作区）
+  if(k==='tasks'&&parts[1]){
+    document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',false));
+    $('#page-title').textContent='任务详情';
+    $('#page-actions').innerHTML='';
+    renderTaskDetail(Number(parts[1]));
+    return;
+  }
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||renderProjectDashboard;

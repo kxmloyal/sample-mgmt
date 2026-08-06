@@ -1,4 +1,4 @@
-// subsystems/projects/backend/routes-stats.js — 看板聚合/趋势/导出/工作流配置（Task 7 实现）
+// subsystems/projects/backend/routes-stats.js — 看板聚合/趋势/导出/工作流配置 + 子系统用户列表（Task 7 实现 + Task 10 补充）
 const D = require('../../../db');
 const wf = require('./workflow-config');
 
@@ -10,6 +10,15 @@ function register(app) {
   app.get('/api/projects/stats', requireAuth, async (req, res) => {
     try {
       res.json(await D.statsDashboard());
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // 用户列表（ADMIN/PM；项目成员管理弹窗选择用户用；共享 /api/users 仅 ADMIN，故子系统提供）
+  app.get('/api/projects/users', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      if (u.role !== 'ADMIN' && u.role !== 'PM') return res.status(403).json({ error: '无权限' });
+      res.json(await D.fetchAll(null, 'SELECT id,username,display_name FROM users ORDER BY id'));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
