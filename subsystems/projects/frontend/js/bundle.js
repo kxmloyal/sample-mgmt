@@ -1,4 +1,4 @@
-/** BUNDLE vbmshpkpgk — 14 files */
+/** BUNDLE vbmshpu1kt — 15 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -286,11 +286,12 @@ async function renderProjectDashboard() {
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
+// 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
 var _kbMine = false;
 async function kbToggleMine() {
   _kbMine = !_kbMine;
   $('#kb-mine').classList.toggle('active', _kbMine);
-  kbLoad();
+  kbApplyFilters();
 }
 // v2：新建任务弹窗（看板选中项目自动带入）
 async function kbCreate() {
@@ -330,7 +331,12 @@ async function renderTaskKanban() {
   const v = $('#view');
   v.innerHTML =
     '<div class="pk-filters">' +
-    '<fluent-select id="kb-project" onchange="kbLoad()"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-select id="kb-project" onchange="kbApplyFilters()"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-select id="kb-category" onchange="kbApplyFilters()"><fluent-option value="">全部类别</fluent-option>' +
+    CATEGORY_KEYS.map(k => '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="kb-priority" onchange="kbApplyFilters()"><fluent-option value="">全部优先级</fluent-option>' +
+    PRIORITY_KEYS.map(k => '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="kb-assignee" onchange="kbApplyFilters()"><fluent-option value="">全部责任人</fluent-option></fluent-select>' +
     '<fluent-button appearance="accent" onclick="kbCreate()">新建任务</fluent-button>' +
     '<fluent-button appearance="secondary" id="kb-mine" onclick="kbToggleMine()">我的任务</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="kbLoad()">刷新</fluent-button></div>' +
@@ -342,16 +348,29 @@ async function renderTaskKanban() {
     opt.value = String(p.id); opt.textContent = p.name;
     sel.appendChild(opt);
   }
+  // 责任人下拉（缺陷#2 修复后全员可访问）
+  const users = await api('GET', '/api/projects/users').catch(function () { return []; });
+  const selA = $('#kb-assignee');
+  for (const u of users) {
+    const opt = document.createElement('fluent-option');
+    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    selA.appendChild(opt);
+  }
+  // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）
+  kbRestoreFromHash();
   await kbLoad();
 }
 
-// 加载当前筛选下的任务并分组渲染 4 列；全部项目走跨项目列表端点（避免 /api/projects//tasks 双斜杠 404）
+// 加载当前筛选下的任务并分组渲染 4 列（统一走跨项目列表端点，支持多维筛选参数）
 async function kbLoad() {
-  const pid = $('#kb-project').value;
+  const f = kbFilters();
   const qs = new URLSearchParams();
-  if (pid) qs.set('project_id', pid);
+  if (f.project_id) qs.set('project_id', f.project_id);
+  if (f.category) qs.set('category', f.category);
+  if (f.priority) qs.set('priority', f.priority);
+  if (f.assignee_id) qs.set('assignee_id', f.assignee_id);
   if (_kbMine) qs.set('assignee_id', me.id);
-  const url = (pid ? PApi.projectTasks(pid) : '/api/projects/tasks') + (qs.toString() ? '?' + qs : '');
+  const url = '/api/projects/tasks' + (qs.toString() ? '?' + qs : '');
   const tasks = await api('GET', url);
   const rows = Array.isArray(tasks) ? tasks : [];
   const cols = [
@@ -374,8 +393,8 @@ async function kbLoad() {
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
         (st === 'IN_PROGRESS'
           ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
-      // v2：全部项目视图显示项目名标签（pid 空 = 全部项目）
-      const projTag = (pid === '' || !pid) ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
+      // v2：全部项目视图显示项目名标签（project_id 空 = 全部项目）
+      const projTag = !f.project_id ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
       return '<div class="pk-card' + (st === 'OVERDUE' ? ' pk-card-overdue' : '') + '" draggable="true" data-id="' + t.id + '" data-status="' + st + '" ' +
         'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
         'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
@@ -434,6 +453,46 @@ async function kbDrop(e) {
     showToast('流转成功');
   } catch (err) { showToast(err.message, 'err'); }
   kbLoad();
+}
+
+
+/* --- subsystems/projects/frontend/js/views/kanban-filter.js --- */
+// kanban-filter.js — 任务看板多维筛选（类别/优先级/责任人）+ 筛选 URL 化（A2/A4）
+// 独立文件原因：kanban.js 顶层函数已达 10 个（§7.2 ≤10），筛选函数隔离于此保持各文件不超限
+function kbFilters() {
+  return {
+    project_id: $('#kb-project').value,
+    category: $('#kb-category').value,
+    priority: $('#kb-priority').value,
+    assignee_id: $('#kb-assignee').value
+  };
+}
+
+// A4 筛选状态 URL 化：查询时把筛选写入 hash（进入页面时 kbRestoreFromHash 恢复）
+function kbApplyFilters() {
+  const f = kbFilters();
+  const qs = new URLSearchParams();
+  if (f.project_id) qs.set('project', f.project_id);
+  if (f.category) qs.set('category', f.category);
+  if (f.priority) qs.set('priority', f.priority);
+  if (f.assignee_id) qs.set('assignee', f.assignee_id);
+  if (_kbMine) qs.set('mine', '1');
+  location.hash = '#/kanban' + (qs.toString() ? '?' + qs : '');
+  kbLoad();
+}
+
+// 从 hash 恢复筛选（进入页面时调用；程序化赋值下拉不触发 change 事件，故末尾须由调用方显式 kbLoad）
+function kbRestoreFromHash() {
+  const qs = new URLSearchParams(location.hash.split('?')[1] || '');
+  const set = function (id, v) { if (v) $(id).value = v; };
+  set('#kb-project', qs.get('project'));
+  set('#kb-category', qs.get('category'));
+  set('#kb-priority', qs.get('priority'));
+  set('#kb-assignee', qs.get('assignee'));
+  if (qs.get('mine') === '1' && !_kbMine) {
+    _kbMine = true;
+    $('#kb-mine').classList.add('active');
+  }
 }
 
 

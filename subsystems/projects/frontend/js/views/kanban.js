@@ -2,11 +2,12 @@
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
+// 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
 var _kbMine = false;
 async function kbToggleMine() {
   _kbMine = !_kbMine;
   $('#kb-mine').classList.toggle('active', _kbMine);
-  kbLoad();
+  kbApplyFilters();
 }
 // v2：新建任务弹窗（看板选中项目自动带入）
 async function kbCreate() {
@@ -46,7 +47,12 @@ async function renderTaskKanban() {
   const v = $('#view');
   v.innerHTML =
     '<div class="pk-filters">' +
-    '<fluent-select id="kb-project" onchange="kbLoad()"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-select id="kb-project" onchange="kbApplyFilters()"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-select id="kb-category" onchange="kbApplyFilters()"><fluent-option value="">全部类别</fluent-option>' +
+    CATEGORY_KEYS.map(k => '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="kb-priority" onchange="kbApplyFilters()"><fluent-option value="">全部优先级</fluent-option>' +
+    PRIORITY_KEYS.map(k => '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="kb-assignee" onchange="kbApplyFilters()"><fluent-option value="">全部责任人</fluent-option></fluent-select>' +
     '<fluent-button appearance="accent" onclick="kbCreate()">新建任务</fluent-button>' +
     '<fluent-button appearance="secondary" id="kb-mine" onclick="kbToggleMine()">我的任务</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="kbLoad()">刷新</fluent-button></div>' +
@@ -58,16 +64,29 @@ async function renderTaskKanban() {
     opt.value = String(p.id); opt.textContent = p.name;
     sel.appendChild(opt);
   }
+  // 责任人下拉（缺陷#2 修复后全员可访问）
+  const users = await api('GET', '/api/projects/users').catch(function () { return []; });
+  const selA = $('#kb-assignee');
+  for (const u of users) {
+    const opt = document.createElement('fluent-option');
+    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    selA.appendChild(opt);
+  }
+  // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）
+  kbRestoreFromHash();
   await kbLoad();
 }
 
-// 加载当前筛选下的任务并分组渲染 4 列；全部项目走跨项目列表端点（避免 /api/projects//tasks 双斜杠 404）
+// 加载当前筛选下的任务并分组渲染 4 列（统一走跨项目列表端点，支持多维筛选参数）
 async function kbLoad() {
-  const pid = $('#kb-project').value;
+  const f = kbFilters();
   const qs = new URLSearchParams();
-  if (pid) qs.set('project_id', pid);
+  if (f.project_id) qs.set('project_id', f.project_id);
+  if (f.category) qs.set('category', f.category);
+  if (f.priority) qs.set('priority', f.priority);
+  if (f.assignee_id) qs.set('assignee_id', f.assignee_id);
   if (_kbMine) qs.set('assignee_id', me.id);
-  const url = (pid ? PApi.projectTasks(pid) : '/api/projects/tasks') + (qs.toString() ? '?' + qs : '');
+  const url = '/api/projects/tasks' + (qs.toString() ? '?' + qs : '');
   const tasks = await api('GET', url);
   const rows = Array.isArray(tasks) ? tasks : [];
   const cols = [
@@ -90,8 +109,8 @@ async function kbLoad() {
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
         (st === 'IN_PROGRESS'
           ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
-      // v2：全部项目视图显示项目名标签（pid 空 = 全部项目）
-      const projTag = (pid === '' || !pid) ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
+      // v2：全部项目视图显示项目名标签（project_id 空 = 全部项目）
+      const projTag = !f.project_id ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
       return '<div class="pk-card' + (st === 'OVERDUE' ? ' pk-card-overdue' : '') + '" draggable="true" data-id="' + t.id + '" data-status="' + st + '" ' +
         'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
         'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +

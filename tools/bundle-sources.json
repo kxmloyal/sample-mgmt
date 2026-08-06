@@ -61,6 +61,7 @@
     "subsystems/projects/frontend/js/api.js",
     "subsystems/projects/frontend/js/views/dashboard.js",
     "subsystems/projects/frontend/js/views/kanban.js",
+    "subsystems/projects/frontend/js/views/kanban-filter.js",
     "subsystems/projects/frontend/js/views/list.js",
     "subsystems/projects/frontend/js/views/list-batch.js",
     "subsystems/projects/frontend/js/views/list-filter.js",
