@@ -1,7 +1,7 @@
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
-// v2：看板「我的任务」筛选状态
+// v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
 var _kbMine = false;
 async function kbToggleMine() {
   _kbMine = !_kbMine;
@@ -79,20 +79,24 @@ async function kbLoad() {
   const board = $('#pk-kanban');
   board.innerHTML = cols.map(c =>
     '<div class="pk-col" data-status="' + c.k + '" ondragover="kbDragOver(event)" ondrop="kbDrop(event)">' +
-    '<h4>' + c.t + '<span>' + rows.filter(x => x.status_eff === c.k).length + '</span></h4>' +
+    '<h4>' + c.t + '<span>' + rows.filter(x => (x.status_eff || x.status) === c.k).length + '</span></h4>' +
     '<div id="kb-col-' + c.k + '"></div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
-    el.innerHTML = rows.filter(x => x.status_eff === c.k).map(t => {
+    el.innerHTML = rows.filter(x => (x.status_eff || x.status) === c.k).map(t => {
+      const st = t.status_eff || t.status;
       // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
-      const ops = (t.status_eff === 'NOT_STARTED'
+      const ops = (st === 'NOT_STARTED'
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
-        (t.status_eff === 'IN_PROGRESS'
+        (st === 'IN_PROGRESS'
           ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
-      return '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status_eff + '" ' +
+      // v2：全部项目视图显示项目名标签（pid 空 = 全部项目）
+      const projTag = (pid === '' || !pid) ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
+      return '<div class="pk-card' + (st === 'OVERDUE' ? ' pk-card-overdue' : '') + '" draggable="true" data-id="' + t.id + '" data-status="' + st + '" ' +
         'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
         'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
-        '<div class="t">' + esc(t.title) + '</div>' +
+        '<div class="t">' + projTag + esc(t.title) + '</div>' +
+        '<div class="pk-progress"><span class="pk-progress-bar" style="width:' + Math.min(t.progress || 0, 100) + '%"></span></div>' +
         '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
         esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
         '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +

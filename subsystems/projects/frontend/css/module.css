@@ -43,3 +43,12 @@
 .pk-panel a{color:var(--brand);text-decoration:none}
 .pk-panel a:hover{text-decoration:underline}
 .kb-x{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+/* v2：看板进度条 / 项目标签 / 逾期卡片 / 详情 tabs */
+.pk-progress{display:inline-block;height:6px;background:var(--line,#e2e8f0);border-radius:3px;overflow:hidden;margin:4px 0;vertical-align:middle}
+.pk-progress-bar{display:block;height:100%;background:var(--brand,#0f766e);border-radius:3px;transition:width .2s ease}
+.pk-proj-tag{font-size:11px;color:var(--muted,#64748b);background:var(--bg-soft,#f1f5f9);border-radius:4px;padding:1px 6px;margin-right:6px}
+.pk-card-overdue{border-left:3px solid var(--bad,#dc2626)!important}
+.pk-tabs{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 10px}
+.pk-form{display:flex;flex-direction:column;gap:8px;min-width:320px;max-width:560px}
+.pk-form label{font-size:12px;color:var(--muted,#64748b)}
+.pk-form fluent-text-area{min-height:70px}
