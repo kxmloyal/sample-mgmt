@@ -1,5 +1,5 @@
 // tests/sample-code.test.js — 样品 13 位编码模块单测
-const { SOURCE_CODES, GROUP_CODES, STATION_GROUPS, PATTERN, parseSampleCode, generateSampleCode } = require('../subsystems/samples/db/sample-code');
+const { SOURCE_CODES, GROUP_CODES, STATION_GROUPS, PATTERN, parseSampleCode, generateSampleCode, previewSampleCode } = require('../subsystems/samples/db/sample-code');
 const { isDeployed } = require('./helpers/deployed');
 
 describe('SOURCE_CODES / GROUP_CODES', () => {
@@ -38,52 +38,107 @@ describe('parseSampleCode', () => {
   });
 });
 
-describe('generateSampleCode', () => {
-  const fakeQuery = (max) => async () => [{ m: max }];
+describe('generateSampleCode（序列表原子取号，机型级递增）', () => {
+  // 序列表 mock：INSERT..ON DUPLICATE 调用使 cur+1，SELECT cur_seq 返回当前值
+  function makeSeqQuery() {
+    var cur = 0;
+    return async function (sql) {
+      if (sql.indexOf('ON DUPLICATE') > -1) { cur += 1; return []; }
+      if (sql.indexOf('SELECT cur_seq') > -1) { return [{ cur_seq: cur }]; }
+      return [];
+    };
+  }
 
-  it('同组合流水号递增', async () => {
+  it('同机型跨提供处/组别共享递增', async () => {
     const seqs = [];
-    async function dbQuery() {
-      const max = seqs.length ? Math.max(...seqs.map(Number)) : 0;
-      return [{ m: max }];
-    }
-    for (let i = 0; i < 3; i++) {
-      const code = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: dbQuery });
-      seqs.push(parseSampleCode(code).seq);
-    }
+    // 同一机型 SF1225 下，不同提供处/组别连续取号 → 流水号全局递增
+    const q = makeSeqQuery();
+    seqs.push(parseSampleCode(await generateSampleCode({ source_type: 'T', model: 'SF1225', station: '扇叶组', card_version: '01', query: q })).seq);
+    seqs.push(parseSampleCode(await generateSampleCode({ source_type: 'G', model: 'SF1225', station: '马达组', card_version: '01', query: q })).seq);
+    seqs.push(parseSampleCode(await generateSampleCode({ source_type: 'C', model: 'SF1225', station: '品保部', card_version: '01', query: q })).seq);
     expect(seqs).toEqual(['001', '002', '003']);
+    expect(await generateSampleCode({ source_type: 'T', model: 'SF1225', station: '扇叶组', card_version: '01', query: q }))
+      .toBe('T-SF1225-S-004-01');
+  });
+
+  it('不同机型各自独立递增', async () => {
+    const q1 = makeSeqQuery(); // 机型 A
+    const q2 = makeSeqQuery(); // 机型 B
+    const a1 = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: q1 });
+    const b1 = await generateSampleCode({ source_type: 'T', model: 'SF1225', station: '扇叶组', card_version: '01', query: q2 });
+    expect(a1).toBe('T-YD9015-S-001-01');
+    expect(b1).toBe('T-SF1225-S-001-01');
   });
 
   it('机型不足 6 位抛错', async () => {
-    await expect(generateSampleCode({ source_type: 'T', model: 'YD901', station: '扇叶组', card_version: '01', query: fakeQuery(0) }))
+    await expect(generateSampleCode({ source_type: 'T', model: 'YD901', station: '扇叶组', card_version: '01', query: makeSeqQuery() }))
       .rejects.toThrow('机型编码至少 6 位');
   });
 
   it('机型超 6 位取前 6 位', async () => {
-    const code = await generateSampleCode({ source_type: 'T', model: 'SF-1225-A', station: '马达组', card_version: '01', query: fakeQuery(0) });
+    const code = await generateSampleCode({ source_type: 'T', model: 'SF-1225-A', station: '马达组', card_version: '01', query: makeSeqQuery() });
     expect(code).toBe('T-SF-122-M-001-01');
   });
 
   it('组别无效抛错', async () => {
-    await expect(generateSampleCode({ source_type: 'T', model: 'YD9015', station: '调机样', card_version: '01', query: fakeQuery(0) }))
+    await expect(generateSampleCode({ source_type: 'T', model: 'YD9015', station: '调机样', card_version: '01', query: makeSeqQuery() }))
       .rejects.toThrow('组别无效');
   });
 
   it('提供处无效抛错', async () => {
-    await expect(generateSampleCode({ source_type: 'X', model: 'YD9015', station: '扇叶组', card_version: '01', query: fakeQuery(0) }))
+    await expect(generateSampleCode({ source_type: 'X', model: 'YD9015', station: '扇叶组', card_version: '01', query: makeSeqQuery() }))
       .rejects.toThrow('提供处无效');
   });
 
   it('版次默认 01，数字版本取数字块', async () => {
-    const c1 = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '', query: fakeQuery(0) });
+    const c1 = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '', query: makeSeqQuery() });
     expect(c1).toBe('T-YD9015-S-001-01');
-    const c2 = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: 'V2.0', query: fakeQuery(0) });
+    const c2 = await generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: 'V2.0', query: makeSeqQuery() });
     expect(c2).toBe('T-YD9015-S-001-02');
   });
 
-  it('流水号 999 溢出抛错', async () => {
-    await expect(generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: fakeQuery(999) }))
-      .rejects.toThrow('已达上限');
+  it('机型级流水号 999 溢出抛错', async () => {
+    var cur = 999;
+    const q = async function (sql) {
+      if (sql.indexOf('ON DUPLICATE') > -1) { cur += 1; return []; }
+      if (sql.indexOf('SELECT cur_seq') > -1) { return [{ cur_seq: cur }]; }
+      return [];
+    };
+    await expect(generateSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: q }))
+      .rejects.toThrow('该机型已达上限 999');
+  });
+});
+
+describe('previewSampleCode（只读预览，不消耗序号）', () => {
+  const { previewSampleCode } = require('../subsystems/samples/db/sample-code');
+
+  it('只读查询：SQL 不含 ON DUPLICATE / INSERT，不写 sample_seqs', async () => {
+    const q = async function (sql) {
+      expect(sql).not.toContain('ON DUPLICATE');
+      expect(sql).not.toContain('INSERT');
+      expect(sql).toContain('SUBSTRING(sample_no, 3, 6)');
+      return [{ m: 0 }];
+    };
+    const code = await previewSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: q });
+    expect(code).toBe('T-YD9015-S-001-01');
+  });
+
+  it('预览按存量 MAX+1 续号', async () => {
+    const q = async function () { return [{ m: 7 }]; };
+    const code = await previewSampleCode({ source_type: 'G', model: 'SF9225', station: '成品组', card_version: '02', query: q });
+    expect(code).toBe('G-SF9225-A-008-02');
+  });
+
+  it('机型 999 上限预览提示', async () => {
+    const q = async function () { return [{ m: 999 }]; };
+    await expect(previewSampleCode({ source_type: 'T', model: 'YD9015', station: '扇叶组', card_version: '01', query: q }))
+      .rejects.toThrow('该机型已达上限 999');
+  });
+
+  it('机型不足 6 位抛错', async () => {
+    const q = async function () { return [{ m: 0 }]; };
+    await expect(previewSampleCode({ source_type: 'T', model: 'YD901', station: '扇叶组', card_version: '01', query: q }))
+      .rejects.toThrow('机型编码至少 6 位');
   });
 });
 
