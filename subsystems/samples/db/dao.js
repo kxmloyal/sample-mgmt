@@ -14,8 +14,8 @@ module.exports = function createDao(deps) {
     return one(sql, params);
   }
 
-  // 生成 13 位结构化编码（如 G-YD9015-Q-001-01）；旧 SM-XXXXXX 逻辑已废弃，保留注释
-  // data: { source_type, model, station, card_version }；conn 存在走事务连接，否则用连接池 q
+  // 生成 13 位结构化编码（如 G-YD9015-Q-001-01）；流水号按机型级递增（sample_seqs 序列表原子自增）
+  // data: { source_type, model, station, card_version }；conn 存在走事务连接（序号随事务回滚），否则用连接池 q（独立提交，失败跳号但安全）
   async function nextSampleNo(data, conn) {
     return await generateSampleCode({
       source_type: data.source_type,
