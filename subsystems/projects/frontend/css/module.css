@@ -27,6 +27,8 @@
 .pk-card .t{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
 .pk-card .m{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
 .pk-card.dragging{opacity:.5;transform:rotate(2deg)}
+/* P2 修复：卡片流转按钮区（移动端无拖拽的兜底入口） */
+.pk-card .ops{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .pk-tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
 .pk-tag.h{color:#b91c1c;border-color:#fecaca;background:#fef2f2}
 .pk-tag.m{color:#92400e;border-color:#fde68a;background:#fffbeb}

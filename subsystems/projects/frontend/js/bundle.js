@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgt0zjk — 12 files */
+/** BUNDLE vbmsgusrye — 12 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -228,10 +228,10 @@ async function renderProjectDashboard() {
     { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8' },
     { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)' }
   ];
+  // P1-1 修复：遵循共享 kb-stat 规范（fluent-card + .n/.l + --stat-color，数字 26px 粗体 + ::before 竖色条）
   $('#pk-stats').innerHTML = stats.map(x =>
-    '<fluent-card class="kb-stat"><span class="kb-bar" style="background:' + x.c + '"></span>' +
-    '<span class="kb-n" style="color:' + x.c + '">' + x.n + '</span>' +
-    '<span class="kb-l">' + x.l + '</span></fluent-card>').join('');
+    '<fluent-card class="kb-stat" style="--stat-color:' + x.c + '"><span class="n">' + x.n + '</span>' +
+    '<span class="l">' + x.l + '</span></fluent-card>').join('');
   // 三维分布（类别/优先级）+ 完成率 + 趋势
   const dist = (arr, cn, base) => arr.map(x =>
     '<div class="pk-row"><span class="pk-name">' + (cn[x.category || x.priority] || x.category || x.priority) + '</span>' +
@@ -244,8 +244,8 @@ async function renderProjectDashboard() {
     '<div class="col"><span class="bar" style="height:' + Math.max(4, Math.round(x.c / maxTrend * 90)) + 'px"></span>' +
     '<span class="num">' + x.c + '</span><span class="wk">' + x.wk.slice(5) + '</span></div>').join('');
   $('#pk-panels').innerHTML =
-    '<div class="pk-panel"><h3>类别分布</h3>' + dist(s.category_dist, CATEGORY_CN, maxCat) + '</div>' +
-    '<div class="pk-panel"><h3>优先级分布</h3>' + dist(s.priority_dist, PRIORITY_CN, maxPr) + '</div>' +
+    '<div class="pk-panel"><h3>类别分布</h3>' + (dist(s.category_dist, CATEGORY_CN, maxCat) || '<span class="pk-name">暂无数据</span>') + '</div>' +
+    '<div class="pk-panel"><h3>优先级分布</h3>' + (dist(s.priority_dist, PRIORITY_CN, maxPr) || '<span class="pk-name">暂无数据</span>') + '</div>' +
     '<div class="pk-panel"><h3>完成率</h3><div class="pk-row"><span class="pk-name">整体</span>' +
     '<div class="pk-bar"><i style="width:' + s.completion_rate + '%"></i></div>' +
     '<span class="pk-count">' + s.completion_rate + '%</span></div>' +
@@ -259,6 +259,7 @@ async function renderProjectDashboard() {
 /* --- subsystems/projects/frontend/js/views/kanban.js --- */
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
+// 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 async function renderTaskKanban() {
   const v = $('#view');
   v.innerHTML =
@@ -295,16 +296,30 @@ async function kbLoad() {
     '<div id="kb-col-' + c.k + '"></div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
-    el.innerHTML = rows.filter(x => x.status === c.k).map(t =>
-      '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
-      'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
-      'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
-      '<div class="t">' + esc(t.title) + '</div>' +
-      '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
-      esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
-      '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
-      '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div></div>').join('');
+    el.innerHTML = rows.filter(x => x.status === c.k).map(t => {
+      // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
+      const ops = (t.status === 'NOT_STARTED'
+        ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
+        (t.status === 'IN_PROGRESS'
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
+      return '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
+        'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
+        'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
+        '<div class="t">' + esc(t.title) + '</div>' +
+        '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
+        esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
+        '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
+        '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div>' +
+        (ops ? '<div class="ops">' + ops + '</div>' : '') + '</div>';
+    }).join('');
   }
+}
+
+// 卡片按钮流转（与拖拽 kbDrop 共用状态机接口，后端 CAS 兜底）
+async function kbAction(id, action) {
+  try { await api('POST', PApi.task(id) + '/status', { action }); showToast('流转成功'); }
+  catch (err) { showToast(err.message, 'err'); }
+  kbLoad();
 }
 
 function kbDragStart(e) {
@@ -359,9 +374,10 @@ async function renderTaskList() {
     '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
     '<fluent-button appearance="secondary" onclick="lkLoad()">查询</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="location.href=\'/api/projects/tasks/export\'">导出 CSV</fluent-button></div>' +
-    '<table class="pk-table" id="lk-table"><thead><tr>' +
+    // P2 修复：表格外包共享 .card 容器，overflow-x:auto 兜底窄屏横向溢出
+    '<div class="card" style="padding:8px 0;overflow-x:auto"><table class="pk-table" id="lk-table"><thead><tr>' +
     '<th>项目</th><th>任务</th><th>类别</th><th>优先级</th><th>责任人</th><th>状态</th><th>进度</th><th>计划日期</th><th>操作</th>' +
-    '</tr></thead><tbody></tbody></table>';
+    '</tr></thead><tbody></tbody></table></div>';
   const projects = await api('GET', PApi.projects());
   const sel = $('#lk-project');
   for (const p of projects) {
@@ -369,13 +385,23 @@ async function renderTaskList() {
     opt.value = String(p.id); opt.textContent = p.name;
     sel.appendChild(opt);
   }
-  // 支持 #/list?project=xxx 跳转预选项目
+  // 支持 #/list?project=xxx 跳转预选项目：fluent-select 选项异步注册，重试赋值直到生效后再加载
   const qs = new URLSearchParams(location.hash.split('?')[1] || '');
-  if (qs.get('project')) sel.value = qs.get('project');
-  await lkLoad();
+  const prePid = qs.get('project');
+  if (prePid) {
+    let tries = 0;
+    (function attempt() {
+      sel.value = prePid;
+      if (sel.value === prePid || ++tries >= 10) { lkLoad(); }
+      else setTimeout(attempt, 60);
+    })();
+  } else {
+    await lkLoad();
+  }
 }
 
 // 加载筛选条件下的跨项目任务列表（URL 写死 /api/projects/tasks，避免 /tasks/0 拼接 hack）
+// 仅读下拉值（用户选择为准）；hash 的 project 参数只用于进入页面时的初始预选
 async function lkLoad() {
   const qs = new URLSearchParams();
   const pid = $('#lk-project').value;
@@ -673,37 +699,43 @@ const NAV=[
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
 const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',workflow:'状态机管理'};
 function route(){
+  // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');
-  const parts=raw.split('/');
-  const k=parts[0]||'dashboard';
+  const k=raw.split('?')[0].split('/')[0]||'dashboard';
   // 任务详情：#/tasks/:id（不在导航内，清空导航高亮与页头动作区）
-  if(k==='tasks'&&parts[1]){
+  if(k==='tasks'&&raw.split('?')[0].split('/')[1]){
     document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',false));
     $('#page-title').textContent='任务详情';
     $('#page-actions').innerHTML='';
-    renderTaskDetail(Number(parts[1]));
+    renderTaskDetail(Number(raw.split('?')[0].split('/')[1]));
     return;
   }
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||renderProjectDashboard;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));
-  const meta={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',workflow:'状态机管理'};
-  $('#page-title').textContent=meta[k]||'';
+  $('#page-title').textContent=META[k]||'';
   $('#page-actions').innerHTML='';
   v();
 }
-// 渲染顶部导航菜单（按角色过滤）
+// 渲染侧边导航菜单（按角色过滤；.nav button 样式来自 app.css 共享侧边栏）
 function buildNav(){
-  $('#nav').innerHTML = NAV.filter(n=>n.roles.includes(me.role)).map(n =>
-    '<button data-k="' + n.k + '" onclick="location.hash=\'#/' + n.k + '\'">' + n.t + '</button>').join('');
+  const nav=$('#nav');nav.innerHTML='';
+  NAV.filter(n=>n.roles.includes(me.role)).forEach(n=>{
+    const b=document.createElement('button');
+    b.textContent=n.t;b.dataset.k=n.k;
+    b.onclick=()=>{location.hash='#/'+n.k;};
+    nav.appendChild(b);
+  });
 }
-// api-base.js 的 boot()/doLogin() 均调用 showApp()，必须提供实现（登录后初始化界面）
+// api-base.js 的 boot()/doLogin() 均调用 showApp()（登录后初始化界面，填充侧边栏用户信息）
 function showApp(){
-  $('#me-label').textContent = (me.display_name || me.username) + ' · ' + (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  $('#me-name').textContent = me.display_name || me.username;
+  $('#me-role').textContent = (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
   buildNav();
   route();
 }

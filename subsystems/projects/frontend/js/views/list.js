@@ -9,9 +9,10 @@ async function renderTaskList() {
     '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
     '<fluent-button appearance="secondary" onclick="lkLoad()">查询</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="location.href=\'/api/projects/tasks/export\'">导出 CSV</fluent-button></div>' +
-    '<table class="pk-table" id="lk-table"><thead><tr>' +
+    // P2 修复：表格外包共享 .card 容器，overflow-x:auto 兜底窄屏横向溢出
+    '<div class="card" style="padding:8px 0;overflow-x:auto"><table class="pk-table" id="lk-table"><thead><tr>' +
     '<th>项目</th><th>任务</th><th>类别</th><th>优先级</th><th>责任人</th><th>状态</th><th>进度</th><th>计划日期</th><th>操作</th>' +
-    '</tr></thead><tbody></tbody></table>';
+    '</tr></thead><tbody></tbody></table></div>';
   const projects = await api('GET', PApi.projects());
   const sel = $('#lk-project');
   for (const p of projects) {
@@ -19,13 +20,23 @@ async function renderTaskList() {
     opt.value = String(p.id); opt.textContent = p.name;
     sel.appendChild(opt);
   }
-  // 支持 #/list?project=xxx 跳转预选项目
+  // 支持 #/list?project=xxx 跳转预选项目：fluent-select 选项异步注册，重试赋值直到生效后再加载
   const qs = new URLSearchParams(location.hash.split('?')[1] || '');
-  if (qs.get('project')) sel.value = qs.get('project');
-  await lkLoad();
+  const prePid = qs.get('project');
+  if (prePid) {
+    let tries = 0;
+    (function attempt() {
+      sel.value = prePid;
+      if (sel.value === prePid || ++tries >= 10) { lkLoad(); }
+      else setTimeout(attempt, 60);
+    })();
+  } else {
+    await lkLoad();
+  }
 }
 
 // 加载筛选条件下的跨项目任务列表（URL 写死 /api/projects/tasks，避免 /tasks/0 拼接 hack）
+// 仅读下拉值（用户选择为准）；hash 的 project 参数只用于进入页面时的初始预选
 async function lkLoad() {
   const qs = new URLSearchParams();
   const pid = $('#lk-project').value;

@@ -6,33 +6,41 @@
 <meta name="theme-color" content="#0f766e">
 <title>项目追踪</title>
 <link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/subsystems/projects/frontend/css/module.css?v=20260805a">
+<link rel="stylesheet" href="/subsystems/projects/frontend/css/module.css?v=20260806a">
 </head>
 <body>
+<fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
 <div id="login" style="display:none">
-  <div class="login-box">
-    <h2>项目追踪 · 登录</h2>
-    <input id="lg-user" placeholder="账号"><input id="lg-pass" type="password" placeholder="密码">
-    <div id="lg-err" class="lg-err"></div>
-    <button onclick="doLogin()">登录</button>
+  <div class="login-card">
+    <h1>项目追踪</h1>
+    <p class="sub">多项目 · 任务追踪 · 看板协作</p>
+    <fluent-text-field id="lg-user" placeholder="如 pm01 / admin" appearance="outline"></fluent-text-field>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
+    <div class="login-err" id="lg-err"></div>
   </div>
 </div>
 <div id="app" style="display:none">
-  <header class="topbar">
-    <div class="brand">项目追踪</div>
-    <nav id="nav"></nav>
-    <div class="top-right">
-      <span id="me-label"></span>
-      <button onclick="doLogout()">退出</button>
+  <div class="side">
+    <div class="logo">项目追踪</div>
+    <div class="nav" id="nav"></div>
+    <div class="me">
+      <div><b id="me-name"></b></div>
+      <div id="me-role" class="muted"></div>
+      <div class="me-actions">
+        <a class="btn sm" href="/portal.html">← 返回门户</a>
+        <button class="me-link" onclick="doLogout()">退出登录</button>
+      </div>
     </div>
-  </header>
-  <main class="content">
-    <div class="page-head"><h1 id="page-title"></h1><div id="page-actions"></div></div>
+  </div>
+  <div class="main">
+    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div></div>
     <div id="view"></div>
-  </main>
+  </div>
 </div>
-<div id="toast" class="toast"></div>
+</fluent-provider>
+<div class="toast" id="toast"></div>
 <script type="module" src="/vendor/fluentui-web-components.js"></script>
-<script src="/subsystems/projects/frontend/js/bundle.js?v=bmsgt0zjk" defer></script>
+<script src="/subsystems/projects/frontend/js/bundle.js?v=bmsgusrye" defer></script>
 </body>
 </html>

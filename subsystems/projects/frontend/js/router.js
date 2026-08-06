@@ -7,37 +7,43 @@ const NAV=[
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
 const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',workflow:'状态机管理'};
 function route(){
+  // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');
-  const parts=raw.split('/');
-  const k=parts[0]||'dashboard';
+  const k=raw.split('?')[0].split('/')[0]||'dashboard';
   // 任务详情：#/tasks/:id（不在导航内，清空导航高亮与页头动作区）
-  if(k==='tasks'&&parts[1]){
+  if(k==='tasks'&&raw.split('?')[0].split('/')[1]){
     document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',false));
     $('#page-title').textContent='任务详情';
     $('#page-actions').innerHTML='';
-    renderTaskDetail(Number(parts[1]));
+    renderTaskDetail(Number(raw.split('?')[0].split('/')[1]));
     return;
   }
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||renderProjectDashboard;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));
-  const meta={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',workflow:'状态机管理'};
-  $('#page-title').textContent=meta[k]||'';
+  $('#page-title').textContent=META[k]||'';
   $('#page-actions').innerHTML='';
   v();
 }
-// 渲染顶部导航菜单（按角色过滤）
+// 渲染侧边导航菜单（按角色过滤；.nav button 样式来自 app.css 共享侧边栏）
 function buildNav(){
-  $('#nav').innerHTML = NAV.filter(n=>n.roles.includes(me.role)).map(n =>
-    '<button data-k="' + n.k + '" onclick="location.hash=\'#/' + n.k + '\'">' + n.t + '</button>').join('');
+  const nav=$('#nav');nav.innerHTML='';
+  NAV.filter(n=>n.roles.includes(me.role)).forEach(n=>{
+    const b=document.createElement('button');
+    b.textContent=n.t;b.dataset.k=n.k;
+    b.onclick=()=>{location.hash='#/'+n.k;};
+    nav.appendChild(b);
+  });
 }
-// api-base.js 的 boot()/doLogin() 均调用 showApp()，必须提供实现（登录后初始化界面）
+// api-base.js 的 boot()/doLogin() 均调用 showApp()（登录后初始化界面，填充侧边栏用户信息）
 function showApp(){
-  $('#me-label').textContent = (me.display_name || me.username) + ' · ' + (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  $('#me-name').textContent = me.display_name || me.username;
+  $('#me-role').textContent = (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
   buildNav();
   route();
 }

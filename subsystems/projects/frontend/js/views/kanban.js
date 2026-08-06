@@ -1,5 +1,6 @@
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
+// 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 async function renderTaskKanban() {
   const v = $('#view');
   v.innerHTML =
@@ -36,16 +37,30 @@ async function kbLoad() {
     '<div id="kb-col-' + c.k + '"></div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
-    el.innerHTML = rows.filter(x => x.status === c.k).map(t =>
-      '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
-      'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
-      'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
-      '<div class="t">' + esc(t.title) + '</div>' +
-      '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
-      esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
-      '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
-      '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div></div>').join('');
+    el.innerHTML = rows.filter(x => x.status === c.k).map(t => {
+      // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
+      const ops = (t.status === 'NOT_STARTED'
+        ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
+        (t.status === 'IN_PROGRESS'
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
+      return '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
+        'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
+        'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
+        '<div class="t">' + esc(t.title) + '</div>' +
+        '<div class="m"><span class="pk-tag ' + (t.priority || 'm').toLowerCase() + '">' +
+        esc(PRIORITY_CN[t.priority] || t.priority) + '</span>' +
+        '<span>' + (esc(t.assignee_name) || '未指派') + '</span>' +
+        '<span>' + (t.planned_date ? fmt(t.planned_date) : '') + '</span></div>' +
+        (ops ? '<div class="ops">' + ops + '</div>' : '') + '</div>';
+    }).join('');
   }
+}
+
+// 卡片按钮流转（与拖拽 kbDrop 共用状态机接口，后端 CAS 兜底）
+async function kbAction(id, action) {
+  try { await api('POST', PApi.task(id) + '/status', { action }); showToast('流转成功'); }
+  catch (err) { showToast(err.message, 'err'); }
+  kbLoad();
 }
 
 function kbDragStart(e) {

@@ -13,10 +13,10 @@ async function renderProjectDashboard() {
     { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8' },
     { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)' }
   ];
+  // P1-1 修复：遵循共享 kb-stat 规范（fluent-card + .n/.l + --stat-color，数字 26px 粗体 + ::before 竖色条）
   $('#pk-stats').innerHTML = stats.map(x =>
-    '<fluent-card class="kb-stat"><span class="kb-bar" style="background:' + x.c + '"></span>' +
-    '<span class="kb-n" style="color:' + x.c + '">' + x.n + '</span>' +
-    '<span class="kb-l">' + x.l + '</span></fluent-card>').join('');
+    '<fluent-card class="kb-stat" style="--stat-color:' + x.c + '"><span class="n">' + x.n + '</span>' +
+    '<span class="l">' + x.l + '</span></fluent-card>').join('');
   // 三维分布（类别/优先级）+ 完成率 + 趋势
   const dist = (arr, cn, base) => arr.map(x =>
     '<div class="pk-row"><span class="pk-name">' + (cn[x.category || x.priority] || x.category || x.priority) + '</span>' +
@@ -29,8 +29,8 @@ async function renderProjectDashboard() {
     '<div class="col"><span class="bar" style="height:' + Math.max(4, Math.round(x.c / maxTrend * 90)) + 'px"></span>' +
     '<span class="num">' + x.c + '</span><span class="wk">' + x.wk.slice(5) + '</span></div>').join('');
   $('#pk-panels').innerHTML =
-    '<div class="pk-panel"><h3>类别分布</h3>' + dist(s.category_dist, CATEGORY_CN, maxCat) + '</div>' +
-    '<div class="pk-panel"><h3>优先级分布</h3>' + dist(s.priority_dist, PRIORITY_CN, maxPr) + '</div>' +
+    '<div class="pk-panel"><h3>类别分布</h3>' + (dist(s.category_dist, CATEGORY_CN, maxCat) || '<span class="pk-name">暂无数据</span>') + '</div>' +
+    '<div class="pk-panel"><h3>优先级分布</h3>' + (dist(s.priority_dist, PRIORITY_CN, maxPr) || '<span class="pk-name">暂无数据</span>') + '</div>' +
     '<div class="pk-panel"><h3>完成率</h3><div class="pk-row"><span class="pk-name">整体</span>' +
     '<div class="pk-bar"><i style="width:' + s.completion_rate + '%"></i></div>' +
     '<span class="pk-count">' + s.completion_rate + '%</span></div>' +
