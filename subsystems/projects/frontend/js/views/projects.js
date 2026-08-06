@@ -23,22 +23,36 @@ async function renderProjects() {
   });
 }
 
-// 新建项目弹窗（prompt 简化输入）
-async function projCreate() {
-  const name = prompt('项目名称（必填）');
-  if (name === null) return;
-  const desc = prompt('项目描述（可空）') || '';
-  try { await api('POST', PApi.projects(), { name, description: desc }); showToast('创建成功'); renderProjects(); }
+// v2：新建项目弹窗
+function projCreate() {
+  openModal('新建项目',
+    '<div class="pk-form">' +
+    '<label>项目名称 *</label><fluent-text-field id="pj-name"></fluent-text-field>' +
+    '<label>项目描述</label><fluent-text-area id="pj-desc"></fluent-text-area>' +
+    '</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="projCreateSave()">创建</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function projCreateSave() {
+  const name = $('#pj-name').value.trim();
+  if (!name) return showToast('项目名称必填', 'err');
+  try { await api('POST', PApi.projects(), { name: name, description: $('#pj-desc').value }); showToast('创建成功'); pCloseModal(); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
-
-// 编辑项目弹窗
 async function projEdit(id) {
   const p = await api('GET', PApi.projects(id));
-  const name = prompt('项目名称', p.name);
-  if (name === null) return;
-  const desc = prompt('项目描述', p.description || '') || '';
-  try { await api('PUT', PApi.projects(id), { name, description: desc }); showToast('已保存'); renderProjects(); }
+  openModal('编辑项目',
+    '<div class="pk-form">' +
+    '<label>项目名称 *</label><fluent-text-field id="pj-name" value="' + esc(p.name) + '"></fluent-text-field>' +
+    '<label>项目描述</label><fluent-text-area id="pj-desc">' + esc(p.description || '') + '</fluent-text-area>' +
+    '</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="projEditSave(' + id + ')">保存</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function projEditSave(id) {
+  const name = $('#pj-name').value.trim();
+  if (!name) return showToast('项目名称必填', 'err');
+  try { await api('PUT', PApi.projects(id), { name: name, description: $('#pj-desc').value }); showToast('已保存'); pCloseModal(); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -49,7 +63,7 @@ async function projDel(id) {
   catch (e) { showToast(e.message, 'err'); }
 }
 
-// 成员管理弹窗（成员列表 + 添加下拉 + 转让 owner + 移除）
+// 成员管理弹窗（成员列表 + 搜索过滤添加下拉 + 转让 owner + 移除）
 // 用户列表走子系统接口 /api/projects/users（共享 /api/users 仅 ADMIN，PM 无权）
 async function projMembers(id) {
   const [mem, users] = await Promise.all([
@@ -64,11 +78,25 @@ async function projMembers(id) {
       : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + id + ',' + m.user_id + ')">转让</fluent-button> ' +
         '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + id + ',' + m.user_id + ')">移除</fluent-button>') +
     '</div>').join('');
-  const opts = users.filter(u => !mem.some(m => m.user_id === u.id))
-    .map(u => '<fluent-option value="' + u.id + '">' + (u.display_name || u.username) + '</fluent-option>').join('');
   openModal('成员管理', lines +
-    '<div class="pk-filters"><fluent-select id="mem-user">' + opts + '</fluent-select>' +
+    '<div class="pk-filters" style="margin-top:10px">' +
+    '<fluent-text-field id="mem-q" placeholder="搜索用户…" onchange="memRenderOpts(' + id + ')"></fluent-text-field>' +
+    '<fluent-select id="mem-user"></fluent-select>' +
     '<fluent-button appearance="accent" onclick="memAdd(' + id + ')">添加</fluent-button></div>');
+  memRenderOpts(id);
+}
+// v2：按关键字过滤可添加用户下拉
+async function memRenderOpts(id) {
+  const q = $('#mem-q').value || '';
+  const [mem, users] = await Promise.all([
+    api('GET', PApi.projects(id) + '/members'),
+    api('GET', '/api/projects/users')
+  ]);
+  const opts = users.filter(function (u) {
+    return !mem.some(function (m) { return m.user_id === u.id; }) &&
+      (!q || (u.display_name || u.username).indexOf(q) >= 0);
+  }).map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('');
+  $('#mem-user').innerHTML = opts || '<fluent-option value="">无匹配用户</fluent-option>';
 }
 async function memAdd(id) {
   const uid = $('#mem-user').value;
