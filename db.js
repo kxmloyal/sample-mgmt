@@ -37,7 +37,7 @@ async function init() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    // ★ 门户卡片排序偏好表（框架级，AGENTS.md §21 门户个性化）
+    // ★ 门户卡片排序偏好表（框架级，AGENTS.md §22 门户个性化）
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS user_portal_prefs (
         user_id INT PRIMARY KEY,
