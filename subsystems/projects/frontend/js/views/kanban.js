@@ -1,11 +1,54 @@
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
 // 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
+// v2：看板「我的任务」筛选状态
+var _kbMine = false;
+async function kbToggleMine() {
+  _kbMine = !_kbMine;
+  $('#kb-mine').classList.toggle('active', _kbMine);
+  kbLoad();
+}
+// v2：新建任务弹窗（看板选中项目自动带入）
+async function kbCreate() {
+  const projects = await api('GET', PApi.projects());
+  const selPid = $('#kb-project').value;
+  const users = await api('GET', '/api/projects/users').catch(function () { return []; });
+  openModal('新建任务',
+    '<div class="pk-form">' +
+    '<label>所属项目 *</label><fluent-select id="kc-project">' +
+    projects.map(function (p) { return '<fluent-option value="' + p.id + '"' + (String(p.id) === selPid ? ' selected' : '') + '>' + esc(p.name) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>任务名称 *</label><fluent-text-field id="kc-title"></fluent-text-field>' +
+    '<label>类别</label><fluent-select id="kc-category">' + CATEGORY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>优先级</label><fluent-select id="kc-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>责任人</label><fluent-select id="kc-assignee"><fluent-option value="">未指派</fluent-option>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>计划完成日期</label><fluent-text-field id="kc-date" type="date"></fluent-text-field>' +
+    '<label>描述</label><fluent-text-area id="kc-desc"></fluent-text-area>' +
+    '</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="kbCreateSave()">创建</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function kbCreateSave() {
+  const pid = $('#kc-project').value;
+  const title = $('#kc-title').value.trim();
+  if (!pid) return showToast('请选择项目', 'err');
+  if (!title) return showToast('任务名称必填', 'err');
+  try {
+    await api('POST', PApi.projectTasks(pid), {
+      title: title, category: $('#kc-category').value, priority: $('#kc-priority').value,
+      assignee_id: Number($('#kc-assignee').value) || null, planned_date: $('#kc-date').value || null,
+      description: $('#kc-desc').value
+    });
+    showToast('创建成功'); pCloseModal(); kbLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
 async function renderTaskKanban() {
   const v = $('#view');
   v.innerHTML =
-    '<div class="pk-filters"><fluent-select id="kb-project" onchange="kbLoad()">' +
-    '<fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<div class="pk-filters">' +
+    '<fluent-select id="kb-project" onchange="kbLoad()"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="kbCreate()">新建任务</fluent-button>' +
+    '<fluent-button appearance="secondary" id="kb-mine" onclick="kbToggleMine()">我的任务</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="kbLoad()">刷新</fluent-button></div>' +
     '<div class="pk-kanban" id="pk-kanban"></div>';
   const projects = await api('GET', PApi.projects());
@@ -21,7 +64,10 @@ async function renderTaskKanban() {
 // 加载当前筛选下的任务并分组渲染 4 列；全部项目走跨项目列表端点（避免 /api/projects//tasks 双斜杠 404）
 async function kbLoad() {
   const pid = $('#kb-project').value;
-  const url = pid ? PApi.projectTasks(pid) : '/api/projects/tasks';
+  const qs = new URLSearchParams();
+  if (pid) qs.set('project_id', pid);
+  if (_kbMine) qs.set('assignee_id', me.id);
+  const url = (pid ? PApi.projectTasks(pid) : '/api/projects/tasks') + (qs.toString() ? '?' + qs : '');
   const tasks = await api('GET', url);
   const rows = Array.isArray(tasks) ? tasks : [];
   const cols = [
@@ -33,17 +79,17 @@ async function kbLoad() {
   const board = $('#pk-kanban');
   board.innerHTML = cols.map(c =>
     '<div class="pk-col" data-status="' + c.k + '" ondragover="kbDragOver(event)" ondrop="kbDrop(event)">' +
-    '<h4>' + c.t + '<span>' + rows.filter(x => x.status === c.k).length + '</span></h4>' +
+    '<h4>' + c.t + '<span>' + rows.filter(x => x.status_eff === c.k).length + '</span></h4>' +
     '<div id="kb-col-' + c.k + '"></div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
-    el.innerHTML = rows.filter(x => x.status === c.k).map(t => {
+    el.innerHTML = rows.filter(x => x.status_eff === c.k).map(t => {
       // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
-      const ops = (t.status === 'NOT_STARTED'
+      const ops = (t.status_eff === 'NOT_STARTED'
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
-        (t.status === 'IN_PROGRESS'
+        (t.status_eff === 'IN_PROGRESS'
           ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
-      return '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status + '" ' +
+      return '<div class="pk-card" draggable="true" data-id="' + t.id + '" data-status="' + t.status_eff + '" ' +
         'ondragstart="kbDragStart(event)" ondragend="kbDragEnd(event)" ' +
         'onclick="location.hash=\'#/tasks/' + t.id + '\'">' +
         '<div class="t">' + esc(t.title) + '</div>' +

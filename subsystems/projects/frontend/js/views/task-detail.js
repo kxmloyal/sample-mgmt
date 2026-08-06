@@ -50,7 +50,8 @@ async function tdLoad() {
     (canEdit ? '<div class="pk-filters"><fluent-button appearance="secondary" size="small" onclick="tdEdit()">编辑</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
-      '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button></div>' : '');
+      '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button>' +
+      '<fluent-button appearance="neutral" size="small" onclick="pConfirm(\'确认删除该任务？（子任务/评论/附件/日志将一并删除）\',\'tdDel()\')">删除任务</fluent-button></div>' : '');
   // 子任务（三态 + CAS 流转按钮：START/COMPLETE）
   $('#td-subs').innerHTML = d.subtasks.map(s =>
     '<div class="pk-row"><span class="pk-name">' + esc(s.title) + '</span>' +
@@ -266,5 +267,13 @@ async function tdUploadFile() {
     const r = await fetch(PApi.taskFiles(_tid), { method: 'POST', credentials: 'include', body: fd });
     if (!r.ok) { let d = {}; try { d = await r.json(); } catch (e) {} throw new Error(d.error || ('上传失败 ' + r.status)); }
     showToast('上传成功'); tdLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+// v2：删除任务（ADMIN/PM/成员；级联）
+async function tdDel() {
+  try {
+    await api('DELETE', PApi.task(_tid));
+    showToast('已删除');
+    location.hash = '#/kanban';
   } catch (e) { showToast(e.message, 'err'); }
 }
