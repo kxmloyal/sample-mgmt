@@ -31,6 +31,10 @@ function register(app) {
         if (!t) return res.status(404).json({ error: '任务不存在' });
         if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
         if (depId === tid) return res.status(400).json({ error: '不能依赖自己' });
+        // v2：加依赖同项目校验（depends_on_id 的 project_id 必须与当前任务一致，否则 400；不存在 404）
+        const depTask = await D.fetchOne(conn, 'SELECT project_id FROM project_tasks WHERE id=?', [depId]);
+        if (!depTask) return res.status(404).json({ error: '前置任务不存在' });
+        if (depTask.project_id !== t.project_id) return res.status(400).json({ error: '只能依赖同一项目内的任务' });
         if (await D.hasCycle(conn, tid, depId)) return res.status(400).json({ error: '存在循环依赖，禁止添加' });
         const r = await D.addTaskDep(conn, tid, depId, u.id);
         if (r.changed === 0) return res.status(409).json({ error: '该依赖已存在' });

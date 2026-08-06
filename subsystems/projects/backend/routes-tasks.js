@@ -222,6 +222,8 @@ function register(app) {
         if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
         const r = await D.casSubtaskStatus(conn, sid, m.from, m.to);
         if (r.changed === 0) return res.status(409).json({ error: '子任务状态已变更，请刷新后重试' });
+        // v2：COMPLETE 后联动父任务进度（同事务）
+        if (action === 'COMPLETE') await D.syncSubtaskProgress(conn, tid);
         await D.addProjectLog(conn, 'subtask', sid, 'STATUS_CHANGE', JSON.stringify(m), u.id);
         const s = await D.fetchOne(conn, 'SELECT * FROM project_subtasks WHERE id=?', [sid]);
         res.json(s);

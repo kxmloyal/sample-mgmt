@@ -4,6 +4,23 @@
 module.exports = function createTaskDao(deps) {
   var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO, fetchOne = deps.fetchOne, fetchAll = deps.fetchAll;
 
+  // v2：有效状态动态判定（已过计划日期且未完成 → 视作 OVERDUE，不写库；需 t 表别名）
+  var STATUS_EFF = "CASE WHEN t.planned_date < CURDATE() AND t.status IN ('NOT_STARTED','IN_PROGRESS') THEN 'OVERDUE' ELSE t.status END AS status_eff";
+
+  // v2：跨项目任务 WHERE 构建（listAllTasks / listAllTasksPage / countAllTasks 复用）
+  function buildTaskWhere(filters) {
+    var sql = '', params = [];
+    if (filters.project_id) { sql += ' AND t.project_id=?'; params.push(filters.project_id); }
+    if (filters.category) { sql += ' AND t.category=?'; params.push(filters.category); }
+    if (filters.priority) { sql += ' AND t.priority=?'; params.push(filters.priority); }
+    if (filters.status && filters.status !== 'OVERDUE') { sql += ' AND t.status=?'; params.push(filters.status); }
+    if (filters.status === 'OVERDUE') {
+      sql += " AND (t.status='OVERDUE' OR (t.status IN ('NOT_STARTED','IN_PROGRESS') AND t.planned_date < CURDATE()))";
+    }
+    if (filters.assignee_id) { sql += ' AND t.assignee_id=?'; params.push(filters.assignee_id); }
+    return { sql: sql, params: params };
+  }
+
   // ===== 任务 =====
   async function createTask(data, conn) {
     const sql = 'INSERT INTO project_tasks (project_id,title,description,category,priority,assignee_id,planned_date,status,progress,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)';
@@ -14,10 +31,12 @@ module.exports = function createTaskDao(deps) {
   }
   async function listProjectTasks(conn, projectId) {
     return fetchAll(conn,
-      'SELECT t.*, u.display_name AS assignee_name, u.username AS assignee_username ' +
+      'SELECT t.*, ' + STATUS_EFF + ', u.display_name AS assignee_name, u.username AS assignee_username ' +
       'FROM project_tasks t LEFT JOIN users u ON u.id=t.assignee_id WHERE t.project_id=? ORDER BY t.id DESC', [projectId]);
   }
-  async function getTask(conn, id) { return fetchOne(conn, 'SELECT * FROM project_tasks WHERE id=?', [id]); }
+  async function getTask(conn, id) {
+    return fetchOne(conn, "SELECT *, CASE WHEN planned_date < CURDATE() AND status IN ('NOT_STARTED','IN_PROGRESS') THEN 'OVERDUE' ELSE status END AS status_eff FROM project_tasks WHERE id=?", [id]);
+  }
   async function updateTask(conn, id, data, version) {
     // 乐观锁：WHERE id AND version；匹配成功则 version+1，返回 affectedRows（0=版本冲突）
     const sets = [], params = [];
@@ -47,18 +66,27 @@ module.exports = function createTaskDao(deps) {
     return { changed: 1 };
   }
   async function listAllTasks(conn, filters) {
-    // 跨项目列表（Task 7 使用）；filters: project_id/category/priority/status/assignee_id/overdue
-    let sql = 'SELECT t.*, p.name AS project_name, u.display_name AS assignee_name ' +
-      'FROM project_tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN users u ON u.id=t.assignee_id WHERE 1=1';
-    const params = [];
-    if (filters.project_id) { sql += ' AND t.project_id=?'; params.push(filters.project_id); }
-    if (filters.category) { sql += ' AND t.category=?'; params.push(filters.category); }
-    if (filters.priority) { sql += ' AND t.priority=?'; params.push(filters.priority); }
-    if (filters.status && filters.status !== 'OVERDUE') { sql += ' AND t.status=?'; params.push(filters.status); }
-    if (filters.status === 'OVERDUE') { sql += " AND t.status<>'DONE' AND t.planned_date < CURDATE()"; }
-    if (filters.assignee_id) { sql += ' AND t.assignee_id=?'; params.push(filters.assignee_id); }
-    sql += ' ORDER BY t.id DESC';
-    return fetchAll(conn, sql, params);
+    filters = filters || {};
+    var w = buildTaskWhere(filters);
+    var sql = 'SELECT t.*, ' + STATUS_EFF + ', p.name AS project_name, u.display_name AS assignee_name ' +
+      'FROM project_tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN users u ON u.id=t.assignee_id WHERE 1=1' +
+      w.sql + ' ORDER BY t.id DESC';
+    return fetchAll(conn, sql, w.params);
+  }
+  async function countAllTasks(conn, filters) {
+    filters = filters || {};
+    var w = buildTaskWhere(filters);
+    var row = await fetchOne(conn, 'SELECT COUNT(*) AS c FROM project_tasks t WHERE 1=1' + w.sql, w.params);
+    return row ? row.c : 0;
+  }
+  async function listAllTasksPage(conn, filters, limit, offset) {
+    filters = filters || {};
+    var w = buildTaskWhere(filters);
+    var sql = 'SELECT t.*, ' + STATUS_EFF + ', p.name AS project_name, u.display_name AS assignee_name ' +
+      'FROM project_tasks t JOIN projects p ON p.id=t.project_id LEFT JOIN users u ON u.id=t.assignee_id WHERE 1=1' +
+      w.sql + ' ORDER BY t.id DESC LIMIT ? OFFSET ?';
+    w.params.push(limit, offset);
+    return fetchAll(conn, sql, w.params);
   }
   async function deleteTaskCascade(conn, tid) {
     // 级联删除（同事务，由调用方 withTransaction 包裹）
@@ -125,6 +153,13 @@ module.exports = function createTaskDao(deps) {
     await run(sql, params); // 无事务仅执行；CAS 需 affectedRows，调用方必须传 conn
     return { changed: 1 };
   }
+  // v2：子任务完成度联动父任务 progress（COMPLETE 事务内调用；同值不更新避免无谓写）
+  async function syncSubtaskProgress(conn, taskId) {
+    var row = await fetchOne(conn, "SELECT COUNT(*) AS total, SUM(status='DONE') AS done FROM project_subtasks WHERE task_id=?", [taskId]);
+    if (!row || !row.total) return;
+    var progress = Math.round(Number(row.done || 0) / row.total * 100);
+    await conn.execute('UPDATE project_tasks SET progress=? WHERE id=? AND progress<>?', [progress, taskId, progress]);
+  }
 
   // ===== 评论 =====
   async function createComment(conn, taskId, content, operatorId) {
@@ -152,7 +187,7 @@ module.exports = function createTaskDao(deps) {
     return { changed: 1 };
   }
 
-  return { createTask, listProjectTasks, getTask, updateTask, deleteTask, listAllTasks, deleteTaskCascade,
-    createSubtask, listSubtasks, updateSubtask, deleteSubtask, casSubtaskStatus,
+  return { createTask, listProjectTasks, getTask, updateTask, deleteTask, listAllTasks, listAllTasksPage, countAllTasks, deleteTaskCascade,
+    createSubtask, listSubtasks, updateSubtask, deleteSubtask, casSubtaskStatus, syncSubtaskProgress,
     createComment, listTaskComments, deleteComment };
 };

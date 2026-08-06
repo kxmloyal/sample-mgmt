@@ -271,3 +271,46 @@ describe('审查修复回归（C1/C3/W1/W2/W3）', () => {
     expect(res.body.error).toContain('不是项目成员');
   });
 });
+
+// ===== v2：status_eff 动态判定 + 子任务进度联动 + 同项目依赖校验（Task 1） =====
+describe('v2 status_eff 动态判定', () => {
+  it('planned_date 已过且未完成的任务 status_eff=OVERDUE', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const p = await agent.post('/api/projects').send({ name: 'eff-proj' + Date.now() });
+    expect(p.status).toBe(201);
+    const pid = p.body.id;
+    const t = await agent.post('/api/projects/' + pid + '/tasks').send({ title: '过期任务', planned_date: '2020-01-01' });
+    expect(t.status).toBe(201);
+    const list = await agent.get('/api/projects/' + pid + '/tasks');
+    expect(list.status).toBe(200);
+    expect(list.body.find(x => x.id === t.body.id).status_eff).toBe('OVERDUE');
+    expect(list.body.find(x => x.id === t.body.id).status).toBe('NOT_STARTED');
+  });
+});
+
+describe('v2 子任务进度联动', () => {
+  it('子任务完成比例联动父任务 progress', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const p = await agent.post('/api/projects').send({ name: 'link-proj' + Date.now() });
+    const pid = p.body.id;
+    const t = await agent.post('/api/projects/' + pid + '/tasks').send({ title: '联动任务' });
+    const s1 = await agent.post('/api/projects/tasks/' + t.body.id + '/subtasks').send({ title: '子1' });
+    const s2 = await agent.post('/api/projects/tasks/' + t.body.id + '/subtasks').send({ title: '子2' });
+    await agent.post('/api/projects/tasks/' + t.body.id + '/subtasks/' + s1.body.id + '/status').send({ action: 'START' });
+    await agent.post('/api/projects/tasks/' + t.body.id + '/subtasks/' + s1.body.id + '/status').send({ action: 'COMPLETE' });
+    const d = await agent.get('/api/projects/tasks/' + t.body.id);
+    expect(d.body.task.progress).toBe(50);
+  });
+});
+
+describe('v2 依赖同项目校验', () => {
+  it('跨项目依赖返回 400', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const p1 = await agent.post('/api/projects').send({ name: 'dep-a' + Date.now() });
+    const p2 = await agent.post('/api/projects').send({ name: 'dep-b' + Date.now() });
+    const ta = await agent.post('/api/projects/' + p1.body.id + '/tasks').send({ title: '任务A' });
+    const tb = await agent.post('/api/projects/' + p2.body.id + '/tasks').send({ title: '任务B' });
+    const r = await agent.post('/api/projects/tasks/' + ta.body.id + '/deps').send({ depends_on_id: tb.body.id });
+    expect(r.status).toBe(400);
+  });
+});
