@@ -25,6 +25,7 @@ function route() {
 
 // 覆盖 api-base.js 的 boot()，使用工作台专用初始化流程
 async function boot() {
+  showDemoHint();
   try {
     me = await api('GET', '/api/me');
     document.title = '制造品质管理系统 - 全局工作台';

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f766e" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>F</text></svg>" />
 <title>制造品质管理系统 - 治具管理</title>
 <link rel="stylesheet" href="/css/app.css?v=20260805b" />
@@ -13,16 +14,25 @@
 <body>
 
 <fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
-<div id="login" style="display:none;width:100vw;height:100vh;align-items:center;justify-content:center;background:var(--bg)">
-  <div style="background:#fff;border-radius:16px;padding:40px;width:360px;max-width:90vw;box-shadow:var(--shadow)">
-    <h1 style="margin:0 0 4px;font-size:20px">制造品质管理系统</h1>
-    <p style="color:var(--muted);font-size:14px;margin:0 0 20px">治具管理</p>
+<div id="login" style="display:none">
+  <div class="login-card">
+    <h1>制造品质管理系统</h1>
+    <p class="sub">治具管理</p>
     <label>账号</label>
-    <fluent-text-field id="lg-user" placeholder="如 rd01 / me01 / admin" appearance="outline" style="width:100%;box-sizing:border-box"></fluent-text-field>
+    <fluent-text-field id="lg-user" placeholder="如 rd01 / me01 / admin" appearance="outline"></fluent-text-field>
     <label>密码</label>
-    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
     <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
-    <div id="lg-err" style="color:var(--bad);font-size:13px;margin-top:8px;text-align:center"></div>
+    <div class="login-err" id="lg-err"></div>
+    <div class="hint" id="demo-hint" style="display:none">
+      演示账号：<br/>
+      rd01 / rd123（研发·研发部）<br/>
+      qa01 / qa123（品保·品保文管中心）<br/>
+      mfg01 / mfg123（保管·制造部）<br/>
+      fqc01 / fqc123（保管·FQC）<br/>
+      me01 / me123（生技·生技部）<br/>
+      admin / admin123（管理员）
+    </div>
   </div>
 </div>
 
@@ -48,6 +58,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/subsystems/fixtures/frontend/js/bundle.js?v=bmsg1n50o" defer></script>
+<script src="/subsystems/fixtures/frontend/js/bundle.js?v=bmsh8gvcd" defer></script>
 </body>
 </html>

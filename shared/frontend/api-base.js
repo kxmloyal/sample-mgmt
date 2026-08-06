@@ -3,7 +3,7 @@
 
 var $ = function (s, r) { return (r || document).querySelector(s); };
 
-var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' };
+var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
   NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
@@ -63,7 +63,18 @@ async function doLogout() {
   location.reload();
 }
 
+// 演示模式：登录页展示演示账号（由后端 /api/config 的 demoMode 控制，生产环境可关闭）
+async function showDemoHint() {
+  var el = document.getElementById('demo-hint');
+  if (!el) return;
+  try {
+    var cfg = await api('GET', '/api/config');
+    el.style.display = cfg.demoMode ? 'block' : 'none';
+  } catch (e) { el.style.display = 'none'; }
+}
+
 async function boot(pageTitle) {
+  showDemoHint();
   try {
     var res = await api('GET', '/api/me');
     me = res;

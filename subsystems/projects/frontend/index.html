@@ -4,20 +4,34 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0f766e">
-<title>项目追踪</title>
-<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f766e'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='sans-serif'>P</text></svg>" />
+<title>制造品质管理系统 - 项目追踪</title>
+<link rel="stylesheet" href="/css/app.css?v=20260805b">
 <link rel="stylesheet" href="/subsystems/projects/frontend/css/module.css?v=20260806a">
+<link rel="preload" href="/vendor/fluentui-web-components.js" as="script">
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
 </head>
 <body>
 <fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
 <div id="login" style="display:none">
   <div class="login-card">
-    <h1>项目追踪</h1>
+    <h1>制造品质管理系统</h1>
     <p class="sub">多项目 · 任务追踪 · 看板协作</p>
+    <label>账号</label>
     <fluent-text-field id="lg-user" placeholder="如 pm01 / admin" appearance="outline"></fluent-text-field>
+    <label>密码</label>
     <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
     <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
     <div class="login-err" id="lg-err"></div>
+    <div class="hint" id="demo-hint" style="display:none">
+      演示账号：<br/>
+      rd01 / rd123（研发·研发部）<br/>
+      qa01 / qa123（品保·品保文管中心）<br/>
+      mfg01 / mfg123（保管·制造部）<br/>
+      fqc01 / fqc123（保管·FQC）<br/>
+      me01 / me123（生技·生技部）<br/>
+      admin / admin123（管理员）
+    </div>
   </div>
 </div>
 <div id="app" style="display:none">
@@ -40,7 +54,6 @@
 </div>
 </fluent-provider>
 <div class="toast" id="toast"></div>
-<script type="module" src="/vendor/fluentui-web-components.js"></script>
-<script src="/subsystems/projects/frontend/js/bundle.js?v=bmsgusrye" defer></script>
+<script src="/subsystems/projects/frontend/js/bundle.js?v=bmsh8gvcd" defer></script>
 </body>
 </html>

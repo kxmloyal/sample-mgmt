@@ -1,7 +1,8 @@
-/** BUNDLE vbmsgzxwq1 — 25 files */
+/** BUNDLE vbmsh8gvcd — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
+var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -86,7 +87,7 @@ function toast(msg, type) { showToast(msg, type); }
 
 var $ = function (s, r) { return (r || document).querySelector(s); };
 
-var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' };
+var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
   NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
@@ -146,7 +147,18 @@ async function doLogout() {
   location.reload();
 }
 
+// 演示模式：登录页展示演示账号（由后端 /api/config 的 demoMode 控制，生产环境可关闭）
+async function showDemoHint() {
+  var el = document.getElementById('demo-hint');
+  if (!el) return;
+  try {
+    var cfg = await api('GET', '/api/config');
+    el.style.display = cfg.demoMode ? 'block' : 'none';
+  } catch (e) { el.style.display = 'none'; }
+}
+
 async function boot(pageTitle) {
+  showDemoHint();
   try {
     var res = await api('GET', '/api/me');
     me = res;
@@ -598,7 +610,7 @@ async function viewSamples() {
     (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
   } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
-  var deptOpts = '<fluent-option value="">保管部门</fluent-option><fluent-option value="研发中心">研发中心</fluent-option><fluent-option value="品保文管中心">品保文管中心</fluent-option><fluent-option value="制造部">制造部</fluent-option><fluent-option value="FQC">FQC</fluent-option><fluent-option value="生技部">生技部</fluent-option>';
+  var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
@@ -1498,54 +1510,6 @@ async function viewLogs(){
 }
 
 
-/* --- subsystems/samples/frontend/js/views/users.js --- */
-// users.js — 用户管理（管理员）
-async function viewUsers(){
-  const v=$('#view');v.innerHTML='<div class="filters"><fluent-text-field id="u-user" placeholder="账号"></fluent-text-field><fluent-text-field id="u-name" placeholder="姓名"></fluent-text-field><fluent-select id="u-role"><fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option></fluent-select><fluent-text-field id="u-dept" placeholder="部门"></fluent-text-field><fluent-text-field id="u-pass" placeholder="初始密码" value="123456"></fluent-text-field><fluent-button appearance="accent" size="small" onclick="addUser()">新增账号</fluent-button></div><div id="u-list"></div>';
-  loadUsers();
-}
-async function loadUsers(){
-  const list=await api('GET','/api/users');
-  window.__users=list;
-  $('#u-list').innerHTML='<div class="card" style="padding:0"><table><tr><th>账号</th><th>姓名</th><th>角色</th><th>部门</th><th>操作</th></tr>'+
-    list.map(u=>'<tr><td>'+e(u.username)+'</td><td>'+e(u.display_name||'—')+'</td><td>'+(ROLE[u.role]||u.role)+'</td><td class="muted">'+e(u.dept||'—')+'</td><td><fluent-button appearance="neutral" size="small" onclick="openEditUser('+u.id+')">编辑</fluent-button></td></tr>').join('')+'</table></div>';
-}
-// 编辑用户弹窗：用户信息卡 + 姓名/新密码分段字段（账号只读）
-function openEditUser(id){
-  const u=(window.__users||[]).find(x=>x.id===id);if(!u)return;
-  const avatar=e((u.display_name||u.username||'?').trim().charAt(0));
-  const roleLabel=e(ROLE[u.role]||u.role);
-  openModal('编辑用户',
-    '<div class="ue-form">'+
-    '<div class="ue-user-card">'+
-    '<div class="ue-avatar">'+avatar+'</div>'+
-    '<div class="ue-meta"><div class="ue-name">'+e(u.display_name||u.username)+'</div>'+
-    '<div class="ue-sub">账号 '+e(u.username)+' · '+roleLabel+' · '+e(u.dept||'—')+'</div></div>'+
-    '</div>'+
-    '<div class="ue-field"><div class="ue-label">姓名</div>'+
-    '<fluent-text-field id="eu-name" value="'+e(u.display_name||'')+'"></fluent-text-field>'+
-    '<div class="ue-hint">修改后，操作日志与签署记录将显示新姓名</div></div>'+
-    '<div class="ue-field"><div class="ue-label">新密码</div>'+
-    '<fluent-text-field id="eu-pass" type="password" placeholder="不修改请留空"></fluent-text-field>'+
-    '<div class="ue-hint">留空表示不修改密码；保存后旧密码立即失效</div></div>'+
-    '</div>',
-    { foot:'<fluent-button appearance="accent" size="small" onclick="saveUser('+u.id+')">保存</fluent-button><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
-}
-async function saveUser(id){
-  const body={};const name=$('#eu-name').value.trim();const pass=$('#eu-pass').value;
-  if(name!=='')body.display_name=name;
-  if(pass!=='')body.password=pass;
-  if(!Object.keys(body).length){toast('未做任何修改','err');return;}
-  try{await api('PUT','/api/users/'+id,body);toast('已保存','ok');closeModal(document.querySelector('.modal-mask'));loadUsers();}
-  catch(err){toast(err.message,'err');}
-}
-async function addUser(){
-  try{await api('POST','/api/users',{username:$('#u-user').value,display_name:$('#u-name').value,role:$('#u-role').value,dept:$('#u-dept').value,password:$('#u-pass').value});
-    toast('账号已创建','ok');$('#u-user').value='';$('#u-name').value='';$('#u-dept').value='';loadUsers();}
-  catch(e){toast(e.message,'err');}
-}
-
-
 /* --- subsystems/samples/frontend/js/views/models.js --- */
 // models.js — 机型列表管理（仅 RD/ADMIN 可见，后端 POST/DELETE 403 兜底）
 function viewModels() {
@@ -1812,8 +1776,7 @@ const NAV=[
   {k:'new',t:'新建样品+打印码',roles:['ADMIN','RD']},
   {k:'models',t:'机型列表',roles:['ADMIN','RD']},
   {k:'scan',t:'扫码台',roles:['ADMIN','RD','ME','QA','CUSTODY']},
-  {k:'logs',t:'操作日志',roles:['ADMIN','RD','ME','QA','CUSTODY']},
-  {k:'users',t:'用户管理',roles:['ADMIN']},
+  {k:'logs',t:'操作日志',roles:['ADMIN']},
 ];
 function buildNav(){
   const nav=$('#nav');nav.innerHTML='';
@@ -1823,13 +1786,13 @@ function buildNav(){
 }
 function setActive(k){document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));}
 
-const VIEWS={dashboard:viewDashboard,samples:viewSamples,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,users:viewUsers};
+const VIEWS={dashboard:viewDashboard,samples:viewSamples,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,};
 function route(){
   const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||viewDashboard; setActive(k);
-  const meta={dashboard:'样品看板',samples:'样品列表',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',users:'用户管理'};
+  const meta={dashboard:'样品看板',samples:'样品列表',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',};
   $('#page-title').textContent=meta[k]||'';
   $('#page-actions').innerHTML='';
   v();

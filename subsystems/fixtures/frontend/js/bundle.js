@@ -1,7 +1,8 @@
-/** BUNDLE vbmsg1n50o — 16 files */
+/** BUNDLE vbmsh8gvcd — 16 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
+var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -86,7 +87,7 @@ function toast(msg, type) { showToast(msg, type); }
 
 var $ = function (s, r) { return (r || document).querySelector(s); };
 
-var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' };
+var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
   NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
@@ -146,7 +147,18 @@ async function doLogout() {
   location.reload();
 }
 
+// 演示模式：登录页展示演示账号（由后端 /api/config 的 demoMode 控制，生产环境可关闭）
+async function showDemoHint() {
+  var el = document.getElementById('demo-hint');
+  if (!el) return;
+  try {
+    var cfg = await api('GET', '/api/config');
+    el.style.display = cfg.demoMode ? 'block' : 'none';
+  } catch (e) { el.style.display = 'none'; }
+}
+
 async function boot(pageTitle) {
+  showDemoHint();
   try {
     var res = await api('GET', '/api/me');
     me = res;
@@ -198,6 +210,7 @@ function fixtureNoVersion(f) {
 
 // ---- 鉴权覆盖（治具用 showFixtureApp 启动） ----
 async function bootFixture() {
+  showDemoHint();
   try {
     me = await api('GET', '/api/me');
     document.getElementById('me-name').textContent = me.display_name || me.username;
@@ -901,7 +914,8 @@ async function loadFixtureList() {
     var html = '<div class="filters">';
     html += '<fluent-text-field placeholder="搜索编号/名称…" value="' + e(fixtureListState.search) + '" oninput="debounceRenderFixtureList(this.value)"></fluent-text-field>';
     html += '<select onchange="filterFixtureListStatus(this.value)"><option value="">全部状态</option>' + Object.keys(STATUS).filter(function(k) { return ['NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING'].indexOf(k) === -1; }).map(function(k) { return '<option value="' + k + '"' + (fixtureListState.status === k ? ' selected' : '') + '>' + (STATUS[k] || k) + '</option>'; }).join('') + '</select>';
-    html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + ['研发中心','品保文管中心','制造部','FQC','生技部'].map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
+    var deptList = typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','FQC','生技部','项目部','系统'];
+    html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + deptList.map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
     html += '<span style="display:flex;align-items:center;gap:4px;white-space:nowrap"><span class="muted">排序</span><select onchange="toggleFixtureSort(this.value)" style="min-width:80px;max-width:120px"><option value="">默认</option><option value="fixture_no"' + (fixtureListState.col === 'fixture_no' ? ' selected' : '') + '>编号</option><option value="name"' + (fixtureListState.col === 'name' ? ' selected' : '') + '>名称</option><option value="updated_at"' + (fixtureListState.col === 'updated_at' ? ' selected' : '') + '>更新时间</option></select></span>';
     html += '<select onchange="changeFixturePageSize(this.value)" style="max-width:110px"><option value="10"' + (fixtureListState.page === 10 ? ' selected' : '') + '>10条/页</option><option value="20"' + (fixtureListState.page === 20 ? ' selected' : '') + '>20条/页</option><option value="50"' + (fixtureListState.page === 50 ? ' selected' : '') + '>50条/页</option><option value="100"' + (fixtureListState.page === 100 ? ' selected' : '') + '>100条/页</option></select>';
     html += '<fluent-button appearance="accent" onclick="clearAllFilters()">清除</fluent-button></div>';

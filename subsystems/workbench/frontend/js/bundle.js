@@ -1,7 +1,8 @@
-/** BUNDLE vbmsg1n50o — 8 files */
+/** BUNDLE vbmsh8gvcd — 8 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
+var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -86,7 +87,7 @@ function toast(msg, type) { showToast(msg, type); }
 
 var $ = function (s, r) { return (r || document).querySelector(s); };
 
-var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' };
+var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
   NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
@@ -146,7 +147,18 @@ async function doLogout() {
   location.reload();
 }
 
+// 演示模式：登录页展示演示账号（由后端 /api/config 的 demoMode 控制，生产环境可关闭）
+async function showDemoHint() {
+  var el = document.getElementById('demo-hint');
+  if (!el) return;
+  try {
+    var cfg = await api('GET', '/api/config');
+    el.style.display = cfg.demoMode ? 'block' : 'none';
+  } catch (e) { el.style.display = 'none'; }
+}
+
 async function boot(pageTitle) {
+  showDemoHint();
   try {
     var res = await api('GET', '/api/me');
     me = res;
@@ -882,6 +894,7 @@ function route() {
 
 // 覆盖 api-base.js 的 boot()，使用工作台专用初始化流程
 async function boot() {
+  showDemoHint();
   try {
     me = await api('GET', '/api/me');
     document.title = '制造品质管理系统 - 全局工作台';

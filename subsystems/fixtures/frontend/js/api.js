@@ -12,6 +12,7 @@ function fixtureNoVersion(f) {
 
 // ---- 鉴权覆盖（治具用 showFixtureApp 启动） ----
 async function bootFixture() {
+  showDemoHint();
   try {
     me = await api('GET', '/api/me');
     document.getElementById('me-name').textContent = me.display_name || me.username;

@@ -24,6 +24,15 @@
     <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
     <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
     <div class="login-err" id="lg-err"></div>
+    <div class="hint" id="demo-hint" style="display:none">
+      演示账号：<br/>
+      rd01 / rd123（研发·研发部）<br/>
+      qa01 / qa123（品保·品保文管中心）<br/>
+      mfg01 / mfg123（保管·制造部）<br/>
+      fqc01 / fqc123（保管·FQC）<br/>
+      me01 / me123（生技·生技部）<br/>
+      admin / admin123（管理员）
+    </div>
   </div>
 </div>
 
@@ -49,6 +58,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/subsystems/workbench/frontend/js/bundle.js?v=bmsg1n50o" defer></script>
+<script src="/subsystems/workbench/frontend/js/bundle.js?v=bmsh8gvcd" defer></script>
 </body>
 </html>
