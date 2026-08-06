@@ -208,7 +208,9 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples/:id/qrcode/download` | GET | 是 | 下载高清二维码 |
 | `/api/samples/:id/label/download` | GET | 是 | 下载标签 HTML |
 | `/api/samples/:id/card/print` | GET | 是 | 打印标示卡 |
+| `/api/samples/export` | GET | 是 | 样品列表导出 CSV（复用筛选参数，忽略分页）|
 | `/api/fixtures` | GET | 是 | 治具列表（筛选/排序/分页）|
+| `/api/fixtures/export` | GET | 是 | 治具清单导出 CSV（复用筛选/排序参数，忽略分页）|
 | `/api/fixtures` | POST | 是 | 新建治具申请 |
 | `/api/fixtures/scan` | GET/POST | 是 | 治具扫码台（解析/执行状态机）|
 | `/api/fixtures/dashboard` | GET | 是 | 治具看板数据 |

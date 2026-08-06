@@ -57,6 +57,7 @@
 ├── shared/                # 框架共享层
 │   ├── middleware/        # 鉴权/上传中间件(不绑定子系统)
 │   ├── state-machine.js   # 通用状态机引擎
+│   ├── csv.js             # 通用 CSV 导出工具（toCsv/sendCsv，AGENTS.md §21）
 │   ├── file-manager.js    # 通用文件管理 DAO
 │   └── frontend/          # 共享前端模块(api-base.js / modal.js / shared/utils.js)
 <!-- AUTO-SUBSYSTEMS-TREE:START -->
@@ -917,6 +918,29 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 - 请求清空/批量改已上线子系统数据而无备份 → 标记高危，中止
 - 修改 manifest `deployed` 标记未经用户授权 → 暂停，要求确认
 - 运行 `npm run seed-samples` 且 samples 已上线 → 护栏拒绝，脚本自动退出
+
+---
+
+## 21. 列表导出标准（强制）
+
+> 2026-08-06 实施。所有含列表页的子系统 MUST 提供「导出 CSV」能力，共享 `shared/csv.js`，禁止各自重复实现。
+
+### 21.1 后端接口
+
+- 端点：`GET /api/<prefix>/export`（鉴权与对应列表接口一致，登录即可）
+- 参数：复用列表筛选/排序参数，**忽略分页取全量**（DAO 不传 limit/offset 即全量）
+- 响应：BOM UTF-8 CSV（`shared/csv.js` 的 `sendCsv`），文件名 `<prefix>-YYYYMMDD-HHmm.csv`
+- 列约定：状态列 MUST 输出中文、时间列 MUST 输出 `YYYY-MM-DD HH:mm` 可读格式
+
+### 21.2 前端
+
+- 列表筛选栏 MUST 提供「导出 CSV」按钮，复用列表查询参数构建函数拼 URL（`location.href` 触发下载，避免弹窗拦截）
+- 按钮位置：与其他筛选操作按钮（查询/清除）同行，小屏可换行不破版
+
+### 21.3 约束
+
+- 禁止各子系统自行重复实现 CSV 生成逻辑（复用 `shared/csv.js`）
+- 导出列 = 列表核心业务字段（不含图片/操作列）；新增子系统按 §17 协议接入后同步实现导出
 
 ---
 
