@@ -429,3 +429,24 @@ describe('缺陷#3 CSV 导出复用筛选', () => {
     expect(res.text).not.toContain('任务-导出低');
   });
 });
+
+
+// ===== 迭代1：A1 全文搜索 q 参数（dao-tasks.js buildTaskWhere + routes-stats.js） =====
+describe('A1 全文搜索', () => {
+  test('q 参数跨字段 LIKE 匹配标题/描述，可与筛选叠加', async () => {
+    const proj = await pm.agent.post('/api/projects').send({ name: 'search-proj' + Date.now() });
+    expect(proj.status).toBe(201);
+    const myPid = proj.body.id;
+    await pm.agent.post('/api/projects/' + myPid + '/tasks').send({ title: '搜索锚点-定位精度', description: '治具根因分析' });
+    const hit1 = await pm.agent.get('/api/projects/tasks?q=' + encodeURIComponent('定位精度'));
+    expect(hit1.status).toBe(200);
+    expect(Array.isArray(hit1.body)).toBe(true);
+    expect(hit1.body.some(x => x.title === '搜索锚点-定位精度')).toBe(true);
+    // 描述命中
+    const hit2 = await pm.agent.get('/api/projects/tasks?q=' + encodeURIComponent('根因分析'));
+    expect(hit2.body.some(x => x.title === '搜索锚点-定位精度')).toBe(true);
+    // 与 project_id 筛选叠加（不匹配词组合应空）
+    const miss = await pm.agent.get('/api/projects/tasks?q=' + encodeURIComponent('不存在的词xyz') + '&project_id=' + myPid);
+    expect(miss.body.length).toBe(0);
+  });
+});

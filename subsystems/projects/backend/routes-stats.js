@@ -25,7 +25,8 @@ function register(app) {
   app.get('/api/projects/tasks', requireAuth, async (req, res) => {
     try {
       const filters = { project_id: req.query.project_id, category: req.query.category,
-        priority: req.query.priority, status: req.query.status, assignee_id: req.query.assignee_id };
+        priority: req.query.priority, status: req.query.status, assignee_id: req.query.assignee_id,
+        q: req.query.q };
       if (req.query.limit !== undefined || req.query.offset !== undefined) {
         const limit = Math.min(parseInt(req.query.limit) || 50, 200);
         const offset = parseInt(req.query.offset) || 0;

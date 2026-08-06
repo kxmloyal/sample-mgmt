@@ -18,6 +18,13 @@ module.exports = function createTaskDao(deps) {
       sql += " AND (t.status='OVERDUE' OR (t.status IN ('NOT_STARTED','IN_PROGRESS') AND t.planned_date < CURDATE()))";
     }
     if (filters.assignee_id) { sql += ' AND t.assignee_id=?'; params.push(filters.assignee_id); }
+    // A1 全文搜索：title/description/notes/solution LIKE 匹配；转义 %/_ 防通配符注入；无索引全表扫，<5万行可接受
+    if (filters.q) {
+      const escaped = String(filters.q).replace(/[\\%_]/g, m => '\\' + m);
+      sql += ' AND (t.title LIKE ? OR t.description LIKE ? OR t.notes LIKE ? OR t.solution LIKE ?)';
+      const like = '%' + escaped + '%';
+      params.push(like, like, like, like);
+    }
     return { sql: sql, params: params };
   }
 
