@@ -378,3 +378,35 @@ describe('v2 边界用例', () => {
     expect(r.body.limit).toBe(200);
   });
 });
+
+
+// ===== 迭代1：缺陷#2 用户列表权限放宽（routes-stats.js） =====
+describe('缺陷#2 用户列表权限放宽', () => {
+  test('非 ADMIN/PM 登录用户可访问 /api/projects/users', async () => {
+    const rd = await makeUser({ username: 'rd-users', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发' });
+    const res = await rd.agent.get('/api/projects/users');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+    expect(res.body[0]).toHaveProperty('id');
+    expect(res.body[0]).toHaveProperty('username');
+    expect(res.body[0]).toHaveProperty('display_name');
+    expect(res.body[0]).not.toHaveProperty('password_hash');
+  });
+});
+
+
+// ===== 迭代1：缺陷#2 用户列表权限放宽（routes-stats.js） =====
+describe('缺陷#2 用户列表权限放宽', () => {
+  test('非 ADMIN/PM 登录用户可访问 /api/projects/users', async () => {
+    const rd = await makeUser({ username: 'rd-users', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发' });
+    const res = await rd.agent.get('/api/projects/users');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+    expect(res.body[0]).toHaveProperty('id');
+    expect(res.body[0]).toHaveProperty('username');
+    expect(res.body[0]).toHaveProperty('display_name');
+    expect(res.body[0]).not.toHaveProperty('password_hash');
+  });
+});

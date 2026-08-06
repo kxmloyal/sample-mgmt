@@ -13,11 +13,10 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 用户列表（ADMIN/PM；项目成员管理弹窗选择用户用；共享 /api/users 仅 ADMIN，故子系统提供）
+  // 用户列表（所有登录用户；项目成员/新建任务指派/@提及/筛选下拉用；共享 /api/users 仅 ADMIN，故子系统提供）
+  // 缺陷#2 修复：原仅 ADMIN/PM，非管理者新建任务指派下拉静默为空 → 放宽为 requireAuth（仅暴露安全字段）
   app.get('/api/projects/users', requireAuth, async (req, res) => {
     try {
-      const u = await currentUser(req);
-      if (u.role !== 'ADMIN' && u.role !== 'PM') return res.status(403).json({ error: '无权限' });
       res.json(await D.fetchAll(null, 'SELECT id,username,display_name FROM users ORDER BY id'));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
