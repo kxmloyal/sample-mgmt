@@ -252,4 +252,17 @@ fluent-card.kb-stat::part(control){background:transparent;border:none;padding:0}
   padding:8px 24px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px}
 .portal-card .card-action:hover{background:var(--brand-d)}
 @media(max-width:576px){.portal-card{width:100%;max-width:280px}}
+/* ===== 门户个性化排列（portal.html 编辑模式，AGENTS.md §21）===== */
+.welcome-sub{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.order-btns{display:inline-flex;gap:8px}
+.btn-order{display:inline-flex;align-items:center;padding:4px 12px;font-size:12px;line-height:1.5;color:var(--brand-d);background:#f0fdfa;border:1px solid var(--brand);border-radius:999px;cursor:pointer;transition:background .15s ease}
+.btn-order:hover{background:#ccfbf1}
+.btn-order.primary{background:var(--brand);color:#fff}
+.btn-order.primary:hover{background:var(--brand-d)}
+.portal-cards.edit-mode .portal-card{cursor:grab}
+.portal-cards.edit-mode .portal-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
+.portal-card .card-grip{position:absolute;top:8px;right:10px;color:#94a3b8;font-size:15px;letter-spacing:1px;user-select:none}
+.portal-card.dragging{opacity:.45}
+.portal-toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);z-index:999;padding:8px 18px;border-radius:8px;color:#fff;background:var(--brand);font-size:13px;box-shadow:0 4px 12px rgba(15,23,42,.18)}
+.portal-toast.err{background:#dc2626}
 

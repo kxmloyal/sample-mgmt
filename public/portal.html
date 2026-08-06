@@ -25,10 +25,14 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
 </div>
 <div class="main">
   <h1>欢迎使用制造品质管理系统</h1>
-  <p class="welcome-sub">请选择子系统进入</p>
+  <div class="welcome-sub">
+    <span>请选择子系统进入</span>
+    <span class="order-btns" id="order-btns"></span>
+  </div>
   <div class="portal-cards" id="subsystem-grid">
     <div class="portal-card"><div class="card-desc" style="text-align:center;color:var(--muted);padding:20px">加载子系统…</div></div>
   </div>
+  <div id="portal-toast" class="portal-toast" style="display:none"></div>
 </div>
 <div class="footer">制造品质管理系统 · <a href="/admin-users.html" style="color:var(--muted);text-decoration:none">用户管理</a> · <a href="/admin-subsystems.html" style="color:var(--muted);text-decoration:none">子系统管理</a></div>
 <script>
@@ -40,24 +44,128 @@ var ICONS = {
   _default: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>'
 };
 
-(async function() {
-  var grid = document.getElementById('subsystem-grid');
+var grid = document.getElementById('subsystem-grid');
+var state = { cards: [], editMode: false, prefs: [] };
+
+/** 合并排序：prefs 中的 id 按用户顺序置前，未配置的按默认顺序排尾 */
+function mergeOrder(list, prefs) {
+  var byId = {};
+  list.forEach(function (m) { byId[m.id] = m; });
+  var ordered = [];
+  prefs.forEach(function (id) {
+    if (byId[id]) { ordered.push(byId[id]); delete byId[id]; }
+  });
+  Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });
+  return ordered;
+}
+
+function cardHtml(m) {
+  var icon = ICONS[m.icon] || ICONS._default;
+  var href = state.editMode ? 'javascript:void(0)' : m.route.entry;
+  return '<a class="portal-card" draggable="' + state.editMode + '" data-id="' + m.id + '" href="' + href + '">' +
+    (state.editMode ? '<span class="card-grip" title="拖动排序">⋮⋮</span>' : '') +
+    '<span class="card-icon">' + icon + '</span>' +
+    '<h3>' + m.name + '</h3>' +
+    '<span class="card-desc">' + (m.description || '') + '</span>' +
+    '<span class="card-action">' + (state.editMode ? '拖动排序' : '进入系统') + '</span>' +
+    '</a>';
+}
+
+function renderCards() {
+  grid.classList.toggle('edit-mode', state.editMode);
+  grid.innerHTML = state.cards.map(cardHtml).join('');
+}
+
+function renderOrderBtns() {
+  var box = document.getElementById('order-btns');
+  if (state.editMode) {
+    box.innerHTML =
+      '<button id="btn-save" class="btn-order primary" type="button">保存顺序</button>' +
+      '<button id="btn-cancel" class="btn-order" type="button">取消</button>';
+    document.getElementById('btn-save').onclick = saveOrder;
+    document.getElementById('btn-cancel').onclick = cancelEdit;
+  } else {
+    box.innerHTML = '<button id="btn-edit" class="btn-order" type="button">编辑排列</button>';
+    document.getElementById('btn-edit').onclick = enterEdit;
+  }
+}
+
+function showToast(msg, isErr) {
+  var t = document.getElementById('portal-toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.className = 'portal-toast' + (isErr ? ' err' : '');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(function () { t.style.display = 'none'; }, 2500);
+}
+
+function enterEdit() { state.editMode = true; renderCards(); renderOrderBtns(); }
+function cancelEdit() { state.editMode = false; renderCards(); renderOrderBtns(); }
+
+async function saveOrder() {
+  var ids = state.cards.map(function (m) { return m.id; });
   try {
-    var res = await fetch('/api/subsystems');
-    var subsystems = await res.json();
+    var res = await fetch('/api/portal/prefs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: ids })
+    });
+    if (!res.ok) throw new Error((await res.json()).error || '保存失败');
+    state.prefs = ids;
+    state.editMode = false;
+    renderCards();
+    renderOrderBtns();
+    showToast('已保存排列顺序');
+  } catch (e) {
+    showToast('保存失败，请重试：' + e.message, true);
+  }
+}
+
+// 拖拽换位（仅编辑态生效；事件委托到容器）
+grid.addEventListener('dragstart', function (e) {
+  var card = e.target.closest('.portal-card');
+  if (!card || !state.editMode) return;
+  state.dragIndex = Array.prototype.indexOf.call(grid.children, card);
+  card.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+});
+grid.addEventListener('dragover', function (e) {
+  if (!state.editMode) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+grid.addEventListener('drop', function (e) {
+  if (!state.editMode) return;
+  e.preventDefault();
+  var target = e.target.closest('.portal-card');
+  if (!target) return;
+  var to = Array.prototype.indexOf.call(grid.children, target);
+  if (to === state.dragIndex) return;
+  var card = state.cards.splice(state.dragIndex, 1)[0];
+  state.cards.splice(to, 0, card);
+  renderCards();
+});
+grid.addEventListener('dragend', function () {
+  var dragging = grid.querySelector('.dragging');
+  if (dragging) dragging.classList.remove('dragging');
+});
+
+(async function () {
+  try {
+    var [subRes, prefRes] = await Promise.all([
+      fetch('/api/subsystems'),
+      fetch('/api/portal/prefs')
+    ]);
+    var subsystems = await subRes.json();
+    var prefs = (await prefRes.json()).order || [];
     if (!subsystems.length) {
       grid.innerHTML = '<div class="portal-card"><div class="card-desc" style="padding:20px">暂无可用子系统</div></div>';
       return;
     }
-    grid.innerHTML = subsystems.map(function(m) {
-      var icon = ICONS[m.icon] || ICONS._default;
-      return '<a class="portal-card" href="' + m.route.entry + '">' +
-        '<span class="card-icon">' + icon + '</span>' +
-        '<h3>' + m.name + '</h3>' +
-        '<span class="card-desc">' + (m.description || '') + '</span>' +
-        '<span class="card-action">进入系统</span>' +
-        '</a>';
-    }).join('');
+    state.cards = mergeOrder(subsystems, prefs);
+    state.prefs = prefs;
+    renderCards();
+    renderOrderBtns();
   } catch (e) {
     grid.innerHTML = '<div class="portal-card"><div class="card-desc" style="color:#dc2626;padding:20px">加载子系统失败：' + e.message + '</div></div>';
   }
