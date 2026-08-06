@@ -450,3 +450,66 @@ describe('A1 全文搜索', () => {
     expect(miss.body.length).toBe(0);
   });
 });
+
+
+// ===== 迭代1：A3 批量操作 POST /tasks/batch（routes-tasks.js） =====
+describe('A3 批量操作', () => {
+  let bPid, batchMember;
+  beforeAll(async () => {
+    const proj = await pm.agent.post('/api/projects').send({ name: 'batch-proj' + Date.now() });
+    expect(proj.status).toBe(201);
+    bPid = proj.body.id;
+    batchMember = await makeUser({ username: 'rd-batch-mem', password: 'rd123', role: 'RD', dept: '研发部', display_name: '批量成员' });
+    await pm.agent.post('/api/projects/' + bPid + '/members').send({ user_id: batchMember.user.id });
+  });
+
+  test('批量指派：成员可指派，skipped 为空', async () => {
+    const t1 = await pm.agent.post('/api/projects/' + bPid + '/tasks').send({ title: '批量-指派1' });
+    const t2 = await pm.agent.post('/api/projects/' + bPid + '/tasks').send({ title: '批量-指派2' });
+    expect(t1.status).toBe(201);
+    expect(t2.status).toBe(201);
+    const r = await pm.agent.post('/api/projects/tasks/batch').send({
+      action: 'assign', ids: [t1.body.id, t2.body.id], assignee_id: batchMember.user.id
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.ok.length).toBe(2);
+    expect(r.body.skipped.length).toBe(0);
+    const d1 = await pm.agent.get('/api/projects/tasks/' + t1.body.id);
+    expect(d1.body.task.assignee_id).toBe(batchMember.user.id);
+  });
+
+  test('批量流转 STATUS：仅合法转移执行', async () => {
+    const t = await pm.agent.post('/api/projects/' + bPid + '/tasks').send({ title: '批量-流转' });
+    expect(t.status).toBe(201);
+    const r = await pm.agent.post('/api/projects/tasks/batch').send({
+      action: 'status', ids: [t.body.id], action2: 'START'
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.ok.length).toBe(1);
+    const d = await pm.agent.get('/api/projects/tasks/' + t.body.id);
+    expect(d.body.task.status).toBe('IN_PROGRESS');
+  });
+
+  test('批量删除：任务消失', async () => {
+    const t = await pm.agent.post('/api/projects/' + bPid + '/tasks').send({ title: '批量-删除' });
+    expect(t.status).toBe(201);
+    const r = await pm.agent.post('/api/projects/tasks/batch').send({ action: 'delete', ids: [t.body.id] });
+    expect(r.status).toBe(200);
+    expect(r.body.ok.length).toBe(1);
+    const d = await pm.agent.get('/api/projects/tasks/' + t.body.id);
+    expect(d.status).toBe(404);
+  });
+
+  test('非项目成员批量删除 → 全部跳过', async () => {
+    const outsider = await makeUser({ username: 'rd-batch-out', password: 'rd123', role: 'RD', dept: '研发部', display_name: '外部' });
+    const t = await pm.agent.post('/api/projects/' + bPid + '/tasks').send({ title: '批量-无权限' });
+    expect(t.status).toBe(201);
+    const r = await outsider.agent.post('/api/projects/tasks/batch').send({ action: 'delete', ids: [t.body.id] });
+    expect(r.status).toBe(200);
+    expect(r.body.ok.length).toBe(0);
+    expect(r.body.skipped.length).toBe(1);
+    expect(r.body.skipped[0].id).toBe(t.body.id);
+    const d = await pm.agent.get('/api/projects/tasks/' + t.body.id);
+    expect(d.status).toBe(200);
+  });
+});

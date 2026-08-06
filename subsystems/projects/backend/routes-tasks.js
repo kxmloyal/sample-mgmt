@@ -268,5 +268,56 @@ function register(app) {
       });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
+  // A3 批量操作（事务内逐条 canEditTask 校验 + 留痕；无权限/状态不允许条目跳过并统计；单批上限 100）
+  // 返回 { ok:[tid], skipped:[{id,reason}] }；delete 走 deleteTaskCascade 级联清理；status 复用单任务流转约束（依赖校验）
+  app.post('/api/projects/tasks/batch', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const body = req.body || {};
+      const action = body.action;
+      const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger).slice(0, 100) : [];
+      if (!['assign', 'status', 'delete'].includes(action)) return res.status(400).json({ error: '非法批量操作' });
+      if (ids.length === 0) return res.status(400).json({ error: 'ids 必填' });
+      const ok = []; const skipped = [];
+      await D.withTransaction(async conn => {
+        for (const tid of ids) {
+          const t = await D.getTask(conn, tid);
+          if (!t) { skipped.push({ id: tid, reason: '任务不存在' }); continue; }
+          if (!await canEditTask(conn, u, t, action !== 'delete')) {
+            skipped.push({ id: tid, reason: '无权限' }); continue;
+          }
+          if (action === 'assign') {
+            const assigneeId = Number(body.assignee_id) || null;
+            await D.updateTask(conn, tid, { assignee_id: assigneeId, version: t.version }, t.version);
+            await D.addProjectLog(conn, 'task', tid, 'BATCH_ASSIGN', JSON.stringify({ assignee_id: assigneeId }), u.id);
+          } else if (action === 'status') {
+            const act2 = String(body.action2 || '').trim();
+            const cfg = await wf.loadWorkflow(conn);
+            const tr = cfg.transitions.find(x => x.action === act2 && x.from === t.status);
+            if (!tr) { skipped.push({ id: tid, reason: '状态不允许该操作' }); continue; }
+            // 依赖校验（与单任务流转一致）：进入 IN_PROGRESS/DONE 前前置须全部 DONE
+            if (tr.to === 'IN_PROGRESS' || tr.to === 'DONE') {
+              const pending = await D.fetchOne(conn,
+                'SELECT COUNT(*) AS c FROM project_task_deps d JOIN project_tasks p ON p.id=d.depends_on_id ' +
+                "WHERE d.task_id=? AND p.status<>'DONE'", [tid]);
+              if (pending && pending.c > 0) { skipped.push({ id: tid, reason: '存在未完成前置任务' }); continue; }
+            }
+            const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
+              [tr.to, tid, t.status]);
+            if (r[0].affectedRows === 0) { skipped.push({ id: tid, reason: '状态已变更' }); continue; }
+            if (tr.to === 'DONE') {
+              await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
+            }
+            await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action: act2, batch: 1 }), u.id);
+          } else if (action === 'delete') {
+            await D.deleteTaskCascade(conn, tid);
+            await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title, batch: 1 }), u.id);
+          }
+          ok.push(tid);
+        }
+      });
+      res.json({ ok: ok, skipped: skipped });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 }
 module.exports = { register };
