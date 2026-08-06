@@ -1,6 +1,6 @@
 # 制造品质管理系统
 
-含**样品管理**、**治具管理**与**全局工作台**三大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
+含**样品管理**、**治具管理**、**全局工作台**与**项目追踪**四大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
 
 ## 五个责任主体
 
@@ -115,6 +115,36 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 
 ---
 
+## 项目追踪
+
+多项目问题/任务追踪子系统（入口 `/subsystems/projects/frontend/index.html`），面向 PM/项目成员的任务协作与进度监控。
+
+### 功能
+
+- **项目看板**：kb-stat 统计卡（项目数/总任务/已完成/进行中/已延期）+ 类别/优先级分布 + 完成率 + 近 8 周完成趋势（CSS 柱状图）
+- **任务看板（Kanban）**：未开始/进行中/已完成/已延期 4 列，HTML5 拖拽流转（仅合法转移，非法回弹），项目筛选
+- **任务列表**：跨项目筛选（项目/状态）+ 已延期行红色高亮 + CSV 导出（UTF-8 BOM）
+- **任务详情**：主信息 + 子任务（三态 CAS 流转）+ 前置依赖（环检测/阻塞校验）+ 评论 + 附件上传 + 样品/治具关联 + 操作日志
+- **项目列表**：项目 CRUD + 成员管理（添加/转让 owner/移除）；有任务的项目禁止删除（409）
+- **状态机管理**（仅 ADMIN）：可视化编辑 4 态标签/颜色 + 转移规则，保存即时生效
+- **并发防护**：任务编辑乐观锁（version 冲突 409）、状态流转 CAS、工作流配置行锁、同事务留痕
+
+### 角色权限
+
+| 角色 | 权限 |
+|---|---|
+| ADMIN / PM | 全局：建项目/任务/成员管理/删除；PM 为项目经理 |
+| owner / member | 项目内管理（建任务/编辑/成员管理由 owner） |
+| 其他角色 | 只读 + 流转自己名下任务（ASSIGNEE 伪角色） |
+
+### 演示账号
+
+| 账号 | 密码 | 角色 |
+|---|---|---|
+| pm01 | pm123 | 项目经理(PM) |
+
+---
+
 ## 运行
 
 ```bash
@@ -221,7 +251,8 @@ routes/
 subsystems/                 所有子系统（插件协议，每目录自包含）
   ├── samples/              样品管理（manifest + backend/db/frontend/seed）
   ├── fixtures/             治具管理（同构）
-  └── workbench/            全局工作台（同构）
+  ├── workbench/            全局工作台（同构）
+  └── projects/             项目追踪（同构）
 db/                         数据访问层
   ├── users.js              用户查询
   ├── fixture-files.js      治具文件 DAO
@@ -241,7 +272,7 @@ docs/
   ├── archive/               历史设计文档与实现计划（已完成迭代归档）
   └── superpowers/           当前有效的设计规范与计划
 tools/
-  ├── build-bundles.js       JS 合并构建（三子系统 JS → 单 bundle + 版本号）
+  ├── build-bundles.js       JS 合并构建（各子系统 JS → 单 bundle + 版本号）
   ├── bundle-sources.json    bundle 源文件清单（依赖顺序）
   ├── .bundle-ver            当前 bundle 版本号（构建生成，gitignore）
   ├── create-subsystem.js    子系统脚手架 CLI（交互生成全套骨架）
