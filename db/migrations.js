@@ -61,11 +61,19 @@ async function migratePerfIndexes(pool) {
   }
 }
 
+async function migrateUserEnabled(pool) {
+  // 账号启用/禁用开关（2026-08-06 批量管理）：存量 users 表补列，幂等
+  try {
+    await pool.execute('ALTER TABLE users ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1');
+  } catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+}
+
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
   await migrateFixtureFiles(pool);
   await migrateFixtureMaintenance(pool);
   await migratePerfIndexes(pool);
+  await migrateUserEnabled(pool);
 }
 
 module.exports = { runMigrations };

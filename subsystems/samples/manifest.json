@@ -3,6 +3,7 @@
   "name": "样品管理",
   "description": "覆盖样品发行→确认→生命周期管理→分发全流程",
   "version": "1.0.0",
+  "deployed": false,
   "icon": "flask",
   "route": {
     "prefix": "/api/samples",
@@ -102,19 +103,6 @@
       "label": "操作日志",
       "icon": "history",
       "view": "viewLogs",
-      "roles": [
-        "ADMIN",
-        "RD",
-        "QA",
-        "CUSTODY",
-        "ME"
-      ]
-    },
-    {
-      "key": "users",
-      "label": "用户管理",
-      "icon": "people",
-      "view": "viewUsers",
       "roles": [
         "ADMIN"
       ]

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f766e" />
+<title>用户管理</title>
+<link rel="stylesheet" href="/css/app.css?v=20260806c" />
+<style>
+.au-admin{max-width:1100px;margin:0 auto;padding:20px}
+/* 独立框架页：覆盖 app.css 的 html,body overflow:hidden（子系统 SPA 内部滚动约束），恢复页面自然滚动 */
+html,body{height:auto;min-height:100%;overflow:auto}
+.au-admin h1{margin:0 0 4px}
+.au-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.au-header a{font-size:13px;color:var(--muted);text-decoration:none;align-self:center;flex:none}
+.au-batch{display:flex;justify-content:flex-start;flex-wrap:wrap;margin-top:8px;gap:10px}
+.au-count{align-self:center;color:var(--muted);font-size:13px}
+.au-prot{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 5px;margin-left:4px}
+.au-unauth{max-width:1100px;margin:0 auto;padding:20px;display:none}
+.au-unauth .box{background:var(--panel);border-radius:12px;padding:40px;text-align:center;color:var(--muted);box-shadow:var(--shadow)}
+.au-unauth .box p{margin:8px 0 16px}
+/* 用户表：宽屏自适应；小屏由外层 .card(overflow-x:auto) 承接横向滚动不破版 */
+.au-tbl{min-width:680px}
+/* 响应式断点（对齐项目体系：XS<576 / SM 576-767 / MD 768-1199 / LG 1200-1599 / XL≥1600） */
+/* 宽屏（LG≥1200）：容器放宽至 1500px，表格 width:100% 自动铺满（与 admin-subsystems 一致） */
+@media(min-width:1200px){
+  .au-admin{max-width:1500px;padding:28px 34px}
+  .au-unauth{max-width:1500px;padding:28px 34px}
+}
+@media(max-width:767px){
+  .au-header{flex-direction:column;align-items:flex-start;gap:8px}
+  .au-header a{align-self:flex-start}
+}
+@media(max-width:576px){
+  .au-admin{padding:12px}
+  .au-batch{gap:8px}
+  .au-batch fluent-button{flex:1 1 calc(50% - 8px);min-width:0}
+  .au-batch .au-count{flex:1 1 100%}
+  .filters fluent-text-field,.filters fluent-select{flex:1 1 100%;max-width:none}
+  .au-unauth .box{padding:24px}
+}
+</style>
+</head>
+<body>
+
+<div class="au-admin" id="u-app">
+  <div class="au-header">
+    <div><h1>用户管理</h1><span style="color:var(--muted);font-size:13px">仅管理员可操作 · 受保护账号（内置 admin / 当前登录者）不可批量操作</span></div>
+    <a href="/portal.html">← 返回门户</a>
+  </div>
+
+  <div class="filters">
+    <fluent-text-field id="u-user" placeholder="账号"></fluent-text-field>
+    <fluent-text-field id="u-name" placeholder="姓名"></fluent-text-field>
+    <fluent-select id="u-role">
+      <fluent-option value="RD">研发 RD</fluent-option>
+      <fluent-option value="ME">生技 ME</fluent-option>
+      <fluent-option value="QA">品保 QA</fluent-option>
+      <fluent-option value="CUSTODY">保管 CUSTODY</fluent-option>
+      <fluent-option value="PM">项目经理 PM</fluent-option>
+    </fluent-select>
+    <fluent-select id="u-dept"><fluent-option value="">请选择部门</fluent-option></fluent-select>
+    <fluent-text-field id="u-pass" placeholder="初始密码" value="123456"></fluent-text-field>
+    <fluent-button appearance="accent" size="small" onclick="addUser()">新增账号</fluent-button>
+  </div>
+
+  <div class="filters au-batch">
+    <span class="au-count" id="u-sel-count">已选 0 个</span>
+    <fluent-button appearance="neutral" size="small" onclick="batchAction('enable')">启用</fluent-button>
+    <fluent-button appearance="neutral" size="small" onclick="batchAction('disable')">停用</fluent-button>
+    <fluent-button appearance="neutral" size="small" onclick="openBatchUpdate()">改角色/部门</fluent-button>
+    <fluent-button appearance="neutral" size="small" onclick="openBatchResetPwd()">重置密码</fluent-button>
+    <fluent-button appearance="accent" size="small" onclick="openBatchDelete()" style="background:var(--bad)">批量删除</fluent-button>
+    <span style="width:1px;background:var(--line);align-self:stretch"></span>
+    <fluent-button appearance="neutral" size="small" onclick="exportTemplate()">导出模板</fluent-button>
+    <fluent-button appearance="neutral" size="small" onclick="pickImportFile()">导入账号</fluent-button>
+    <input type="file" id="u-import" accept=".csv,text/csv" style="display:none" onchange="handleImport()" />
+  </div>
+
+  <div id="u-list"></div>
+</div>
+
+<div class="au-unauth" id="u-unauth"><div class="box" id="u-unauth-box"></div></div>
+<div id="toast" class="toast"></div>
+
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
+<script src="/shared/frontend/shared/utils.js"></script>
+<script src="/shared/frontend/api-base.js"></script>
+<script src="/shared/frontend/modal.js"></script>
+<script src="/js/shared-constants.js"></script>
+<script src="/js/admin-users-import.js"></script>
+<script>
+// admin-users.html — 框架级用户管理页（ADMIN 专属）
+// 2026-08-06 从 samples 子系统移出为独立页面，逻辑基于原 views/users.js，新增：
+//   1) 前端禁用保护账号（内置 admin / id=1 / 当前登录者）勾选，全选自动跳过（后端同样拦截，前端仅为体验优化）
+//   2) 角色枚举加入 PM（与项目追踪子系统 ADMIN/PM 权限对齐）
+var ROLE_OPTIONS = '<fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option><fluent-option value="PM">项目经理 PM</fluent-option>';
+// 部门下拉选项：单一事实来源 = data/depts.json，由 /js/shared-constants.js 注入 DEPTS（2026-08-06 研发中心→研发部）
+var DEPT_OPTIONS = (window.DEPTS || ['系统','研发部','品保文管中心','制造部','FQC','生技部','项目部']).map(function(d){ return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
+
+// 受保护账号判定（与后端 routes/misc.js 批量接口保护逻辑一致）
+function isProtected(u){ return u.id === 1 || u.username === 'admin' || (me && u.id === me.id); }
+
+(async function init(){
+  try { me = await api('GET', '/api/me'); } catch (e) { me = null; }
+  var app = $('#u-app'), unauth = $('#u-unauth'), box = $('#u-unauth-box');
+  if (!me) {
+    app.style.display = 'none'; unauth.style.display = 'block';
+    box.innerHTML = '<h3>未登录或会话已过期</h3><p>请先登录管理员账号后再访问用户管理。</p><a class="btn" href="/portal.html">返回门户</a>';
+    return;
+  }
+  if (me.role !== 'ADMIN') {
+    app.style.display = 'none'; unauth.style.display = 'block';
+    box.innerHTML = '<h3>无权限</h3><p>仅管理员可访问用户管理。</p><a class="btn" href="/portal.html">返回门户</a>';
+    return;
+  }
+  // 部门下拉选项注入（新增账号表单，数据源 data/depts.json）
+  var du = $('#u-dept'); if (du) du.innerHTML = '<fluent-option value="">请选择部门</fluent-option>' + DEPT_OPTIONS;
+  loadUsers();
+})();
+
+async function loadUsers(){
+  const list = await api('GET', '/api/users');
+  window.__users = list;
+  $('#u-list').innerHTML =
+    '<div class="card" style="padding:0"><table class="au-tbl">' +
+    '<tr><th style="width:36px"><fluent-checkbox id="u-all" onchange="toggleAll()"></fluent-checkbox></th><th>账号</th><th>姓名</th><th>角色</th><th>部门</th><th>状态</th><th>操作</th></tr>' +
+    list.map(function(u){
+      const prot = isProtected(u);
+      return '<tr>' +
+        '<td>' + (prot
+          ? '<fluent-checkbox class="u-cb" data-id="' + u.id + '" disabled title="受保护账号不可批量操作"></fluent-checkbox>'
+          : '<fluent-checkbox class="u-cb" data-id="' + u.id + '" onchange="refreshCount()"></fluent-checkbox>') + '</td>' +
+        '<td>' + e(u.username) + (prot ? '<span class="au-prot">受保护</span>' : '') + '</td>' +
+        '<td>' + e(u.display_name || '—') + '</td>' +
+        '<td>' + (ROLE[u.role] || u.role) + '</td>' +
+        '<td class="muted">' + e(u.dept || '—') + '</td>' +
+        '<td>' + (u.enabled === 0 ? '<span style="color:var(--bad)">已停用</span>' : '<span style="color:var(--ok)">正常</span>') + '</td>' +
+        '<td><fluent-button appearance="neutral" size="small" onclick="openEditUser(' + u.id + ')">编辑</fluent-button></td>' +
+      '</tr>';
+    }).join('') + '</table></div>';
+  const all = $('#u-all'); if (all) all.checked = false;  // 显式复位表头全选框初始勾选态
+  refreshCount();
+}
+// —— 批量选择（fluent-checkbox 为自定义元素：change 事件切换后触发 + .checked 属性；disabled 行不参与）——
+function toggleAll(){
+  const all = $('#u-all');
+  const target = all.checked;
+  document.querySelectorAll('.u-cb').forEach(function(cb){ if (!cb.disabled && cb.checked !== target) cb.click(); });
+  refreshCount();
+}
+function refreshCount(){
+  const n = [...document.querySelectorAll('.u-cb')].filter(cb => cb.checked).length;
+  $('#u-sel-count').textContent = '已选 ' + n + ' 个';
+}
+function getSelectedIds(){
+  return [...document.querySelectorAll('.u-cb')].filter(cb => cb.checked).map(cb => Number(cb.dataset.id));
+}
+// —— 批量启用/停用 ——
+async function batchAction(action){
+  const ids = getSelectedIds();
+  if (!ids.length) { toast('请先选择账号', 'err'); return; }
+  const label = action === 'enable' ? '启用' : '停用';
+  if (!confirm('确认' + label + '所选 ' + ids.length + ' 个账号？停用后无法登录，已登录会话将失效。')) return;
+  try {
+    const r = await api('POST', '/api/users/batch', { action: action, ids: ids });
+    toast('已' + label + ' ' + r.count + ' 个' + (r.skipped ? ('，跳过受保护 ' + r.skipped + ' 个') : ''), 'ok');
+    loadUsers();
+  } catch (err) { toast(err.message, 'err'); }
+}
+// —— 批量重置密码 ——
+function openBatchResetPwd(){
+  const ids = getSelectedIds();
+  if (!ids.length) { toast('请先选择账号', 'err'); return; }
+  openModal('批量重置密码（' + ids.length + ' 个账号）',
+    '<div class="ue-form"><div class="ue-field"><div class="ue-label">新密码</div>' +
+    '<fluent-text-field id="bp-pass" type="password" placeholder="统一初始密码"></fluent-text-field>' +
+    '<div class="ue-hint">所选账号将统一重置为同一密码</div></div></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="doBatchResetPwd()">确认重置</fluent-button><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+}
+async function doBatchResetPwd(){
+  const ids = getSelectedIds(); const pass = $('#bp-pass').value;
+  if (!pass) { toast('请输入新密码', 'err'); return; }
+  try {
+    const r = await api('POST', '/api/users/batch', { action: 'reset-password', ids: ids, password: pass });
+    toast('已重置 ' + r.count + ' 个账号密码', 'ok');
+    closeModal(document.querySelector('.modal-mask')); loadUsers();
+  } catch (err) { toast(err.message, 'err'); }
+}
+// —— 批量改角色/部门 ——
+function openBatchUpdate(){
+  const ids = getSelectedIds();
+  if (!ids.length) { toast('请先选择账号', 'err'); return; }
+  openModal('批量修改（' + ids.length + ' 个账号）',
+    '<div class="ue-form">' +
+    '<div class="ue-field"><div class="ue-label">角色</div>' +
+    '<fluent-select id="bu-role"><fluent-option value="">不修改</fluent-option>' + ROLE_OPTIONS + '</fluent-select></div>' +
+    '<div class="ue-field"><div class="ue-label">部门</div>' +
+    '<fluent-select id="bu-dept"><fluent-option value="">不修改</fluent-option>' + DEPT_OPTIONS + '</fluent-select>' +
+    '<div class="ue-hint">角色与部门至少填写一项</div></div></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="doBatchUpdate()">确认修改</fluent-button><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+}
+async function doBatchUpdate(){
+  const ids = getSelectedIds(); const role = $('#bu-role').value; const dept = $('#bu-dept').value.trim();
+  if (!role && !dept) { toast('请填写角色或部门', 'err'); return; }
+  const body = { action: 'update', ids: ids }; if (role) body.role = role; if (dept) body.dept = dept;
+  try {
+    const r = await api('POST', '/api/users/batch', body);
+    toast('已更新 ' + r.count + ' 个账号', 'ok');
+    closeModal(document.querySelector('.modal-mask')); loadUsers();
+  } catch (err) { toast(err.message, 'err'); }
+}
+// —— 批量删除 ——
+function openBatchDelete(){
+  const ids = getSelectedIds();
+  if (!ids.length) { toast('请先选择账号', 'err'); return; }
+  openModal('批量删除（' + ids.length + ' 个账号）',
+    '<div style="color:var(--bad);font-weight:600">确认删除所选 ' + ids.length + ' 个账号？</div>' +
+    '<div class="ue-hint" style="margin-top:8px">删除不可恢复；管理员（admin）与当前登录账号受保护不可删除。历史操作日志将保留，但不再关联姓名。</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="doBatchDelete()" style="background:var(--bad)">确认删除</fluent-button><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+}
+async function doBatchDelete(){
+  const ids = getSelectedIds();
+  try {
+    const r = await api('POST', '/api/users/batch', { action: 'delete', ids: ids });
+    toast('已删除 ' + r.count + ' 个' + (r.skipped ? ('，跳过受保护 ' + r.skipped + ' 个') : ''), 'ok');
+    closeModal(document.querySelector('.modal-mask')); loadUsers();
+  } catch (err) { toast(err.message, 'err'); }
+}
+// 编辑用户弹窗：用户信息卡 + 姓名/新密码分段字段（账号只读）
+function openEditUser(id){
+  const u = (window.__users || []).find(x => x.id === id); if (!u) return;
+  const avatar = e((u.display_name || u.username || '?').trim().charAt(0));
+  const roleLabel = e(ROLE[u.role] || u.role);
+  openModal('编辑用户',
+    '<div class="ue-form">' +
+    '<div class="ue-user-card">' +
+    '<div class="ue-avatar">' + avatar + '</div>' +
+    '<div class="ue-meta"><div class="ue-name">' + e(u.display_name || u.username) + '</div>' +
+    '<div class="ue-sub">账号 ' + e(u.username) + ' · ' + roleLabel + ' · ' + e(u.dept || '—') + '</div></div>' +
+    '</div>' +
+    '<div class="ue-field"><div class="ue-label">姓名</div>' +
+    '<fluent-text-field id="eu-name" value="' + e(u.display_name || '') + '"></fluent-text-field>' +
+    '<div class="ue-hint">修改后，操作日志与签署记录将显示新姓名</div></div>' +
+    '<div class="ue-field"><div class="ue-label">新密码</div>' +
+    '<fluent-text-field id="eu-pass" type="password" placeholder="不修改请留空"></fluent-text-field>' +
+    '<div class="ue-hint">留空表示不修改密码；保存后旧密码立即失效</div></div>' +
+    '</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="saveUser(' + u.id + ')">保存</fluent-button><fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+}
+async function saveUser(id){
+  const body = {}; const name = $('#eu-name').value.trim(); const pass = $('#eu-pass').value;
+  if (name !== '') body.display_name = name;
+  if (pass !== '') body.password = pass;
+  if (!Object.keys(body).length) { toast('未做任何修改', 'err'); return; }
+  try {
+    await api('PUT', '/api/users/' + id, body);
+    toast('已保存', 'ok');
+    closeModal(document.querySelector('.modal-mask')); loadUsers();
+  } catch (err) { toast(err.message, 'err'); }
+}
+async function addUser(){
+  try {
+    await api('POST', '/api/users', {
+      username: $('#u-user').value, display_name: $('#u-name').value,
+      role: $('#u-role').value, dept: $('#u-dept').value, password: $('#u-pass').value
+    });
+    toast('账号已创建', 'ok');
+    $('#u-user').value = ''; $('#u-name').value = ''; $('#u-dept').value = ''; loadUsers();
+  } catch (e) { toast(e.message, 'err'); }
+}
+</script>
+</body>
+</html>

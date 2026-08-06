@@ -33,6 +33,7 @@ async function init() {
         role VARCHAR(20) NOT NULL,
         dept VARCHAR(50),
         display_name VARCHAR(50),
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);

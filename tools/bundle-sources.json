@@ -20,7 +20,6 @@
     "subsystems/samples/frontend/js/views/scan-return-actions.js",
     "subsystems/samples/frontend/js/views/scan.js",
     "subsystems/samples/frontend/js/views/logs.js",
-    "subsystems/samples/frontend/js/views/users.js",
     "subsystems/samples/frontend/js/views/models.js",
     "subsystems/samples/frontend/js/views/help-data.js",
     "subsystems/samples/frontend/js/views/help.js",
