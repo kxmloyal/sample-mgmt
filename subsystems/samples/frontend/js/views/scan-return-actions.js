@@ -8,6 +8,9 @@ function renderReturnActions(action,s){
   }else if(action==='RETURN_REJECT'){
     return '<label>拒绝理由 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请填写拒绝退回的理由"></textarea>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\')">拒绝退回</fluent-button></div>';
+  }else if(action==='RELEASE'){
+    // 修复：RELEASE 漏接分步向导（原仅 RE_RELEASE 接入，导致 QA 发行表单空白）
+    return buildReleaseWizard(s,false);
   }else if(action==='RE_RELEASE'){
     return buildReleaseWizard(s,true);
   }else if(action==='RETIRE_RECREATE'){

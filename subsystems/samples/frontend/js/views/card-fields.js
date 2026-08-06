@@ -49,11 +49,3 @@ function buildCardFieldTable(s,editable,suggestedVersion){
       '<td style="padding:4px 0;text-align:right">'+mark('test_data',dataSt)+'</td></tr>'+
   '</table>';
 }
-
-// 复用于样品已有标示卡数据 pre-fill QA 发行表单
-function buildReleaseCardForm(s){
-  return '<label>复检周期（天）<b class="required">*</b></label><fluent-text-field id="scan-cycle" type="number" min="1" value="90" placeholder="如 90"></fluent-text-field>'+
-    '<div class="scan-section-title">标示卡 <b class="required">*</b></div>'+
-    buildCardFieldTable(s,true)+
-    '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>';
-}

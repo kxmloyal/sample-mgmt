@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgs9xzi — 25 files */
+/** BUNDLE vbmsgyzyc4 — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1197,14 +1197,6 @@ function buildCardFieldTable(s,editable,suggestedVersion){
   '</table>';
 }
 
-// 复用于样品已有标示卡数据 pre-fill QA 发行表单
-function buildReleaseCardForm(s){
-  return '<label>复检周期（天）<b class="required">*</b></label><fluent-text-field id="scan-cycle" type="number" min="1" value="90" placeholder="如 90"></fluent-text-field>'+
-    '<div class="scan-section-title">标示卡 <b class="required">*</b></div>'+
-    buildCardFieldTable(s,true)+
-    '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>';
-}
-
 
 /* --- subsystems/samples/frontend/js/views/scan-wizard.js --- */
 // scan-wizard.js — RELEASE 分步向导（依赖 card-fields.js 的 buildCardFieldTable）
@@ -1327,6 +1319,9 @@ function renderReturnActions(action,s){
   }else if(action==='RETURN_REJECT'){
     return '<label>拒绝理由 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请填写拒绝退回的理由"></textarea>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\')">拒绝退回</fluent-button></div>';
+  }else if(action==='RELEASE'){
+    // 修复：RELEASE 漏接分步向导（原仅 RE_RELEASE 接入，导致 QA 发行表单空白）
+    return buildReleaseWizard(s,false);
   }else if(action==='RE_RELEASE'){
     return buildReleaseWizard(s,true);
   }else if(action==='RETIRE_RECREATE'){
