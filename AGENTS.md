@@ -48,11 +48,12 @@
 ├── db/
 │   ├── users.js           # 用户查询
 │   ├── fixture-files.js   # 治具文件管理 DAO
+│   ├── portal-prefs.js   # 门户卡片排序偏好 DAO
 │   ├── migrations.js      # 增量迁移
 │   └── tx.js              # 事务工具
 ├── routes/
 │   ├── auth.js            # 鉴权路由(登录/登出)
-│   ├── misc.js            # 杂项路由(看板/日志/用户/健康检查)
+│   ├── misc.js            # 杂项路由(看板/日志/用户/健康检查/门户偏好)
 │   └── subsystems.js      # 子系统发现 + CRUD API(管理面板)
 ├── shared/                # 框架共享层
 │   ├── middleware/        # 鉴权/上传中间件(不绑定子系统)
@@ -288,6 +289,11 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 治具状态:`REQUESTED`/`ACCEPTED`/`VERIFY_PENDING`/`VERIFY_RD_OK`/`VERIFY_ORG_OK`/`TRANSFERRED`/`IN_USE`/`IMPROVING`/`REPAIRING_ME`/`REPAIRING_RD`/`REPAIR_DONE`/`RETIRED`
 
 **变更 API 出入参** MUST 保留旧参数做兼容,全量排查下游(前端页面、第三方对接)。
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/portal/prefs | 当前用户门户卡片排序偏好（无记录返回空数组） | 登录 |
+| PUT | /api/portal/prefs | 保存/清除排序偏好（order=[] 或 null 清除） | 登录 |
 
 ## 12. 数据库约定
 
@@ -941,6 +947,15 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 
 - 禁止各子系统自行重复实现 CSV 生成逻辑（复用 `shared/csv.js`）
 - 导出列 = 列表核心业务字段（不含图片/操作列）；新增子系统按 §17 协议接入后同步实现导出
+
+---
+
+## 22. 门户卡片个性化排列
+
+- 门户卡片顺序 = 用户偏好（user_portal_prefs.portal_order）优先，未配置子系统按默认顺序排尾
+- 用户级隔离：偏好仅对当前登录用户生效；新用户/新增子系统无需迁移自动获得默认位置
+- 交互：门户「编辑排列」→ 拖拽手柄换位 → 「保存顺序」统一提交；取消丢弃调整
+- 清除：PUT /api/portal/prefs 传 order=[] 或 null 恢复默认顺序
 
 ---
 

@@ -154,6 +154,18 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 
 ---
 
+## 门户卡片个性化排列
+
+门户首页（portal.html）支持用户级卡片个性化排列，偏好按登录用户独立保存。
+
+- **编辑入口**：门户欢迎语旁「编辑排列」按钮，进入编辑模式后每张卡片出现 ⋮⋮ 拖拽手柄，按钮变为「保存顺序」「取消」
+- **拖拽排序**：编辑模式下按住卡片拖拽换位，实时预览新顺序（仅内存操作，未保存不影响浏览态）
+- **保存/取消**：点击「保存顺序」统一提交（PUT /api/portal/prefs），toast 提示已保存；点击「取消」丢弃本次调整，顺序回退到上次保存值
+- **默认行为**：新用户/未配置用户按子系统默认顺序排列；未配置的子系统自动排尾；新增子系统无需迁移自动获得默认位置
+- **清除恢复**：PUT /api/portal/prefs 传 `order=[]` 或 `null` 即清除偏好恢复默认顺序
+
+---
+
 ## 运行
 
 ```bash
@@ -230,6 +242,8 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
 | `/api/subsystems` | GET | 是 | 已注册子系统清单（门户渲染）|
 | `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效 seed/jest 护栏）|
+| `/api/portal/prefs` | GET | 是 | 当前用户门户卡片排序偏好（无记录返回空数组）|
+| `/api/portal/prefs` | PUT | 是 | 保存/清除排序偏好（order=[] 或 null 清除）|
 | `/api/rd-users` | GET | 是 | RD 用户列表（退回指派选择）|
 | `/api/logs` | GET | 是(ADMIN) | 全量操作日志 |
 | `/api/users` | GET/POST | 是(ADMIN) | 用户管理 |
