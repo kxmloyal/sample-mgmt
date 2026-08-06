@@ -317,6 +317,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
+- `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），后续项目追踪迭代需关注拆分（如 info 主卡渲染拆独立 helper）
 
 ## 15. 禁止行为黑名单
 
@@ -948,6 +949,20 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 
 - 禁止各子系统自行重复实现 CSV 生成逻辑（复用 `shared/csv.js`）
 - 导出列 = 列表核心业务字段（不含图片/操作列）；新增子系统按 §17 协议接入后同步实现导出
+
+---
+
+## 项目追踪 v2 交互升级（2026-08-06）
+
+> 项目追踪子系统 v2 交互现代化，涉及前端视图 `kanban.js / list.js / task-detail.js / projects.js / workflow.js` 与后端 `routes-tasks.js` 等，bundle 已重建。关键约定：
+
+- **任务创建入口**：看板与列表页均提供「新建任务」按钮，弹窗表单化创建（`kbCreate`/`lkCreate`，看板自动带入选中项目）
+- **我的任务**：看板「我的任务」（`kbToggleMine`）/ 列表「只看我的」（`lkToggleMine`）按 assignee 过滤，再次点击取消
+- **依赖与关联下拉选择**：编辑任务时前置依赖、样品/治具关联均为下拉选择器（非手填 ID），保留环检测/阻塞校验
+- **列表分页**：任务列表每页 50 条（`_lkPageSize`），`lkPager` 渲染上一页/下一页 + 页码/总数；筛选变更重置页码
+- **状态动态延期（status_eff）**：任务按计划日期自动判定实际状态，未开始/进行中且已过期 → 有效状态为 OVERDUE；看板列分组/计数、列表行高亮（`pk-row-overdue`）、行内快捷流转均按 `status_eff || status` 动态渲染，前端 MUST 使用 `t.status_eff || t.status` 而非裸 `t.status`
+- **详情页 tab 化**：详情 = 主信息卡（`renderTdInfo`，含编辑/删除入口）+ 子任务/评论/附件/关联/日志 5 个 tabs（`tdSwitchTab` 分区加载），操作后 `tdRefresh()` 仅刷新主卡 + 当前 tab，禁止全量重渲染
+- **删除任务**：详情主卡提供删除入口，受角色权限控制；前后端均校验归属/权限
 
 ---
 
