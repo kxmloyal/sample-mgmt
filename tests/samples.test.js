@@ -189,6 +189,19 @@ describe('DELETE /api/samples/:id', () => {
     const res = await agent.delete('/api/samples/99999');
     expect(res.status).toBe(404);
   });
+
+  it('should not delete NEW sample by other RD (non-creator)', async () => {
+    // 2026-08-06 P2-2 收紧：仅 ADMIN 或创建者可删，RD 不再无条件放行
+    const { sample } = await seedSample();
+    const { agent: adminAgent } = await login('admin', 'admin123');
+    const tmpName = 'rdtmp' + Date.now();
+    const created = await adminAgent.post('/api/users').send({ username: tmpName, password: 'rd123', role: 'RD', dept: '研发部', display_name: 'RD临时' });
+    expect(created.status).toBe(200);
+    const { agent: rdTmp } = await login(tmpName, 'rd123');
+    const res = await rdTmp.delete('/api/samples/' + sample.id);
+    expect(res.status).toBe(403);
+    await adminAgent.post('/api/users/batch').send({ action: 'delete', ids: [created.body.id] });
+  });
 });
 
 describe('POST /api/scan - INSPECT action', () => {

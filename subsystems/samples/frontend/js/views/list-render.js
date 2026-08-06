@@ -29,7 +29,7 @@ function _sampleRowHtml(s, isOverdue, i) {
   if (s.status === 'NEW')
     actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();printSampleLabel(' + s.id + ')">打印</a>' + actions;
   actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();downloadQR(' + s.id + ')">下载QR</a>' + actions;
-  if ((s.status === 'NEW' || s.status === 'PRODUCED') && (me.role === 'ADMIN' || me.role === 'RD' || s.created_by === me.id))
+  if ((s.status === 'NEW' || s.status === 'PRODUCED') && (me.role === 'ADMIN' || s.created_by === me.id))
     actions = '<a class="link" style="margin-right:8px;color:var(--bad)" onclick="event.stopPropagation();deleteSample(' + s.id + ')">取消</a>' + actions;
   var overdueCell = '';
   if (isOverdue) {
