@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const D = require('../../../db');
-const { STATION_GROUPS, generateSampleCode } = require('../db/sample-code');
+const { STATION_GROUPS, generateSampleCode, previewSampleCode } = require('../db/sample-code');
 const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
 const { toCsv, sendCsv } = require('../../../shared/csv');
@@ -104,11 +104,11 @@ function register(app) {
     sendCsv(res, 'samples-' + stamp + '.csv', toCsv(samples, cols));
   }));
 
-  // 编号预览（只读，不落库；须注册在 /:id 之前）——生成后编号以提交实际结果为准
+  // 编号预览（只读，不落库、不消耗序号；须注册在 /:id 之前）——生成后编号以提交实际结果为准
   app.get('/api/samples/code-preview', requireAuth, async (req, res) => {
     const { source_type, model, station, card_version } = req.query;
     try {
-      const sample_no = await generateSampleCode({
+      const sample_no = await previewSampleCode({
         source_type, model, station, card_version,
         query: async (sql, params) => (await D.pool().execute(sql, params || []))[0]
       });

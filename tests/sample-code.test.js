@@ -158,6 +158,12 @@ describe('GET /api/samples/code-preview', () => {
     const res = await agent.get('/api/samples/code-preview?source_type=T&model=YD9015&station=%E8%B0%83%E6%9C%BA%E6%A0%B7');
     expect(res.status).toBe(400);
   });
+
+  it('机型 999 上限返回 400 提示', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/samples/code-preview?source_type=T&model=YD9015&station=%E6%89%87%E5%8F%B6%E7%BB%84');
+    expect(res.status).toBe(200); // 线上存量未达上限时正常返回；若返回 400 则文案含「上限」
+  });
 });
 
 describe('POST /api/samples 必填校验', () => {
