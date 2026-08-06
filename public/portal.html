@@ -99,8 +99,19 @@ function showToast(msg, isErr) {
   showToast._t = setTimeout(function () { t.style.display = 'none'; }, 2500);
 }
 
-function enterEdit() { state.editMode = true; renderCards(); renderOrderBtns(); }
-function cancelEdit() { state.editMode = false; renderCards(); renderOrderBtns(); }
+function enterEdit() {
+  // 快照进入编辑态前的卡片顺序，供「取消」恢复（丢弃未保存的拖拽调整）
+  state.savedCards = state.cards.slice();
+  state.editMode = true;
+  renderCards();
+  renderOrderBtns();
+}
+function cancelEdit() {
+  if (state.savedCards) state.cards = state.savedCards.slice();
+  state.editMode = false;
+  renderCards();
+  renderOrderBtns();
+}
 
 async function saveOrder() {
   var ids = state.cards.map(function (m) { return m.id; });
@@ -112,6 +123,7 @@ async function saveOrder() {
     });
     if (!res.ok) throw new Error((await res.json()).error || '保存失败');
     state.prefs = ids;
+    state.savedCards = null;
     state.editMode = false;
     renderCards();
     renderOrderBtns();
