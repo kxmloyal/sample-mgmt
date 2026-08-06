@@ -1,6 +1,7 @@
 // routes/card-page.js — 匿名数字标示卡页面
 const D = require('../../../db');
 const { SOURCE_TYPES } = require('./card-constants');
+const { escapeHtml } = require('./html-utils');
 
 function fmtCard(t) {
   if (!t) return '—';
@@ -10,7 +11,7 @@ function fmtCard(t) {
 
 async function cardPageHtml(s) {
   const logs = (await D.listLogsBySample(s.id) || []).slice(0, 2);
-  const sourceLabel = SOURCE_TYPES[s.source_type] || s.source_type || '—';
+  const sourceLabel = escapeHtml(SOURCE_TYPES[s.source_type] || s.source_type || '—');
   const typeBadge = s.sample_type === 'OK' ? '<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">OK样品</span>'
     : s.sample_type === 'NG' ? '<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">NG样品</span>' : '';
   const now = new Date();
@@ -22,13 +23,13 @@ async function cardPageHtml(s) {
     logsHtml = '<div class="divider"></div>\n' +
     '  <div class="section-title">最近操作</div>\n' +
     logs.map(l=>
-      '<div class="log-item">' + fmtCard(l.created_at) + ' \u00b7 ' + l.action + ' \u00b7 ' + (l.role||'') + '/' + (l.dept||'') + '</div>'
+      '<div class="log-item">' + fmtCard(l.created_at) + ' \u00b7 ' + escapeHtml(l.action) + ' \u00b7 ' + escapeHtml(l.role||'') + '/' + escapeHtml(l.dept||'') + '</div>'
     ).join('\n');
   }
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>标示卡 ${s.sample_no}</title>
+<title>标示卡 ${escapeHtml(s.sample_no)}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f0f2f5;color:#1a1a1a;line-height:1.5;min-height:100vh}
@@ -53,24 +54,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 <div class="card-wrap">
 <div class="card">
   <div class="card-header">
-    <h2>${s.sample_no}</h2>
+    <h2>${escapeHtml(s.sample_no)}</h2>
     ${typeBadge}
   </div>
-  <div class="row"><span class="lbl">样品名称</span><span class="val">${s.name||'—'}</span></div>
-  <div class="row"><span class="lbl">项目</span><span class="val">${s.limit_item||'—'}</span></div>
+  <div class="row"><span class="lbl">样品名称</span><span class="val">${escapeHtml(s.name)||'—'}</span></div>
+  <div class="row"><span class="lbl">项目</span><span class="val">${escapeHtml(s.limit_item)||'—'}</span></div>
   <div class="row"><span class="lbl">来源</span><span class="val">${sourceLabel}</span></div>
-  <div class="row"><span class="lbl">版次</span><span class="val">${s.card_version||'—'}</span></div>
-  <div class="row"><span class="lbl">样品数值</span><span class="val">${s.test_data||'—'}</span></div>
+  <div class="row"><span class="lbl">版次</span><span class="val">${escapeHtml(s.card_version)||'—'}</span></div>
+  <div class="row"><span class="lbl">样品数值</span><span class="val">${escapeHtml(s.test_data)||'—'}</span></div>
   <div class="row"><span class="lbl">有效期</span><span class="val" style="${validClass}">${s.valid_until?fmtCard(s.valid_until):'—'}${expired?' <span class="badge-expired">已过期</span>':''}</span></div>
   <div class="divider"></div>
   <div class="section-title">签署</div>
-  <div class="row"><span class="lbl">制作</span><span class="val">${s.signed_by_rd||'—'}</span></div>
-  <div class="row"><span class="lbl">确认</span><span class="val">${s.signed_by_qa||'—'}</span></div>
+  <div class="row"><span class="lbl">制作</span><span class="val">${escapeHtml(s.signed_by_rd)||'—'}</span></div>
+  <div class="row"><span class="lbl">确认</span><span class="val">${escapeHtml(s.signed_by_qa)||'—'}</span></div>
   <div class="divider"></div>
   <div class="section-title">规格/型号</div>
-  <div class="row"><span class="lbl">机型</span><span class="val">${s.model||'—'}</span></div>
-  <div class="row"><span class="lbl">站别</span><span class="val">${s.station||'—'}</span></div>
-  <div class="row"><span class="lbl">规格</span><span class="val">${s.spec||'—'}</span></div>
+  <div class="row"><span class="lbl">机型</span><span class="val">${escapeHtml(s.model)||'—'}</span></div>
+  <div class="row"><span class="lbl">站别</span><span class="val">${escapeHtml(s.station)||'—'}</span></div>
+  <div class="row"><span class="lbl">规格</span><span class="val">${escapeHtml(s.spec)||'—'}</span></div>
   ${logsHtml}
   <div class="divider"></div>
   <div class="footer">此卡供现场参照，系统内可查看更多信息</div>

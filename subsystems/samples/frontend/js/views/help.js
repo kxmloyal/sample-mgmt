@@ -4,7 +4,7 @@
 // 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）
 var HELP_PAGE_MAP={
   dashboard:null, samples:'list', new:'create', scan:'scan',
-  board:'inspect', logs:null, users:'users'
+  logs:null, users:'users'
 };
 var HELP_PAGE_TIPS={
   dashboard:'样品看板：查看统计数据和待办事项',

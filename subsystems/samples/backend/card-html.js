@@ -1,5 +1,6 @@
 // routes/card-html.js — 标签和标示卡 HTML 生成 + 尺寸解析
 const { LIMIT_LABELS, SOURCE_TYPES } = require('./card-constants');
+const { escapeHtml } = require('./html-utils');
 
 function fmtDateYYMMDD(t) {
   if (!t) return '______';
@@ -39,6 +40,7 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
   var cardPad = Math.round(4 * scale);
 
   var meta = [s.model || '', s.station || ''].filter(Boolean).join(' \u00b7 ') || '\u2014';
+  meta = escapeHtml(meta);
   var cardSide = blankCard
     ? '<div style="flex:1;min-width:0;padding:0 '+cardPad+'px;border-left:1px dashed #aaa">'+
          '<div style="font-weight:700;font-size:'+cardTitle+'px;text-align:center;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px">\u6807\u793a\u5361\uff08\u53d1\u884c\u540e\u6253\u5370\u8d34\u5165\uff09</div>'+
@@ -63,7 +65,7 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
     '<option value="large"'+(sk==='large'?' selected':'')+'>大号 '+dL.w+'×'+dL.h+'mm</option>'+
     '<option value="custom"'+(sk==='custom'?' selected':'')+'>自定义 '+dC.w+'×'+dC.h+'mm</option>';
 
-  return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u7b7e '+s.sample_no+'</title>\n'+
+  return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u7b7e '+escapeHtml(s.sample_no)+'</title>\n'+
 '<style>\n'+
 '@page{margin:3mm;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
 'body{font-family:\'PingFang SC\',\'Microsoft YaHei\',-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding-top:42px}\n'+
@@ -84,10 +86,10 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
 '<div class="lab">\n'+
 '  <div class="qr-side">\n'+
 '    <img src="'+qrDataUrl+'" alt="QR"/>\n'+
-'    <div class="no">'+s.sample_no+'</div>\n'+
-'    <div class="name">'+(s.name||'\u2014')+'</div>\n'+
+'    <div class="no">'+escapeHtml(s.sample_no)+'</div>\n'+
+'    <div class="name">'+escapeHtml(s.name||'\u2014')+'</div>\n'+
 '    <div class="meta">'+meta+'</div>\n'+
-'    <div class="spec">'+(s.spec||'')+'</div>\n'+
+'    <div class="spec">'+escapeHtml(s.spec||'')+'</div>\n'+
 '  </div>\n'+
 '  '+cardSide+'\n'+
 '</div>\n'+
@@ -128,14 +130,14 @@ function buildCardPrintHtml(s, scale, sizeKey) {
   var gap1 = Math.round(2 * scale);
   var gap2 = Math.round(4 * scale);
 
-  var sourceLabel = SOURCE_TYPES[s.source_type] || s.source_type || '';
-  var limitLabel = LIMIT_LABELS[s.limit_item] || s.limit_item || '';
+  var sourceLabel = escapeHtml(SOURCE_TYPES[s.source_type] || s.source_type || '');
+  var limitLabel = escapeHtml(LIMIT_LABELS[s.limit_item] || s.limit_item || '');
   var validStr = fmtDateYYMMDD(s.valid_until);
   var now = new Date();
   var expired = s.valid_until && new Date(s.valid_until) < now;
   var validColor = expired ? 'color:#dc2626;font-weight:700' : '';
 
-  return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u793a\u5361 '+s.sample_no+'</title>\n'+
+  return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u793a\u5361 '+escapeHtml(s.sample_no)+'</title>\n'+
 '<style>\n'+
 '@page{margin:2mm;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
 'body{font-family:\'PingFang SC\',\'Microsoft YaHei\',-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding-top:42px}\n'+
@@ -159,18 +161,18 @@ function buildCardPrintHtml(s, scale, sizeKey) {
 '  <div class="title">\u6807\u793a\u5361</div>\n'+
 '  <div class="grid">\n'+
 '    <div class="pair-row">\n'+
-'      <div class="pair"><span class="lbl">\u7c7b\u578b</span><span class="val"><b>'+(s.sample_type||'')+'</b></span></div>\n'+
+'      <div class="pair"><span class="lbl">\u7c7b\u578b</span><span class="val"><b>'+escapeHtml(s.sample_type||'')+'</b></span></div>\n'+
 '      <div class="pair"><span class="lbl">\u6765\u6e90</span><span class="val"><b>'+sourceLabel+'</b></span></div>\n'+
 '    </div>\n'+
-'    <span class="lbl">\u7248\u6b21</span><span class="val"><b>'+(s.card_version||'')+'</b></span>\n'+
+'    <span class="lbl">\u7248\u6b21</span><span class="val"><b>'+escapeHtml(s.card_version||'')+'</b></span>\n'+
 '    <div class="full"><span class="lbl">\u9879\u76ee</span><span class="val"><b>'+limitLabel+'</b></span></div>\n'+
 '    <div class="full"><span class="lbl">\u6709\u6548\u671f</span><span class="val" style="'+validColor+'"><b>'+validStr+'</b>'+(expired?' [\u5df2\u8fc7\u671f]':'')+'</span></div>\n'+
-'    <div class="full"><span class="lbl">\u6837\u54c1\u6570\u503c</span><span class="val">'+(s.test_data||'')+'</span></div>\n'+
+'    <div class="full"><span class="lbl">\u6837\u54c1\u6570\u503c</span><span class="val">'+escapeHtml(s.test_data||'')+'</span></div>\n'+
 '    <div class="pair-row">\n'+
-'      <div class="pair"><span class="lbl">\u5236\u4f5c</span><span class="val"><b>'+(s.signed_by_rd||'')+'</b></span></div>\n'+
-'      <div class="pair"><span class="lbl">\u786e\u8ba4</span><span class="val"><b>'+(s.signed_by_qa||'')+'</b></span></div>\n'+
+'      <div class="pair"><span class="lbl">\u5236\u4f5c</span><span class="val"><b>'+escapeHtml(s.signed_by_rd||'')+'</b></span></div>\n'+
+'      <div class="pair"><span class="lbl">\u786e\u8ba4</span><span class="val"><b>'+escapeHtml(s.signed_by_qa||'')+'</b></span></div>\n'+
 '    </div>\n'+
-'    <div class="full"><span class="lbl">\u5907\u6ce8</span><span class="val">'+(s.notes||'')+'</span></div>\n'+
+'    <div class="full"><span class="lbl">\u5907\u6ce8</span><span class="val">'+escapeHtml(s.notes||'')+'</span></div>\n'+
 '  </div>\n'+
 '</div>\n'+
 '<script>window.onload=function(){setTimeout(function(){window.print()},600);};</script>\n'+

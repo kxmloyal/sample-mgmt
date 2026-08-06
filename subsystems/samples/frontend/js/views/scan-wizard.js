@@ -35,6 +35,8 @@ function updateWizardNextDate(){
 }
 
 function renderWizardStep2(s){
+  // 版次默认值：已填写过则回显用户值，否则 RE_RELEASE 自动 +1 / 新发行取 '01'
+  var verDefault=s._wizCardVersion||(s._isReRelease?nextCardVersion(s.card_version):(s.card_version||'01'));
   return '<div class="wizard-steps">'+
       '<span class="wdot done">✓</span><span class="wline done"></span>'+
       '<span class="wdot active">2</span><span class="wline"></span>'+
@@ -43,7 +45,7 @@ function renderWizardStep2(s){
     '<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:14px">设置周期 · 标示卡 · 确认</div>'+
     '<div class="wizard-body">'+
       '<div class="scan-section-title">标示卡审查</div>'+
-      buildCardFieldTable(s,true,(s._isReRelease?nextCardVersion(s.card_version):(s.card_version||'01')))+
+      buildCardFieldTable(s,true,verDefault)+
       '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
@@ -85,6 +87,14 @@ function goWizardStep(step){
   var s=wizardSample;if(!s)return;
   // 离开Step1前持久化复检周期值（后续step中DOM元素已被替换）
   if(step>1){var cyc=$('#scan-cycle');if(cyc)s._wizCycle=cyc.value;}
+  // 从 Step3 返回 Step2：将已填标示卡字段回写原始字段，供 buildCardFieldTable 回显（修复返回修改丢字段）
+  if(step===2&&s._wizCardType){
+    s.sample_type=s._wizCardType;
+    s.limit_item=s._wizCardItem;
+    if(s._wizCardSource)s.source_type=s._wizCardSource;
+    if(s._wizCardVersion)s.card_version=s._wizCardVersion;
+    if(s._wizCardData)s.test_data=s._wizCardData;
+  }
   if(step===3){
     // 离开Step2前持久化标示卡字段值（Step3 DOM中这些元素已不存在）
     var tEl=$('#scan-card-type'),lEl=$('#scan-card-item');

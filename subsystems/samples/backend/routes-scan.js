@@ -1,5 +1,6 @@
 // routes/scan.js — 扫码台：解析 + 状态机
 const D = require('../../../db');
+const { asyncHandler } = require('./async-handler');
 
 const STATUS_LABEL = {
   NEW: '新建(待制作确认)', PRODUCED: '制作完成', RELEASED: '已发行',
@@ -45,7 +46,7 @@ function register(app) {
   const saveSampleImage = app.locals.saveSampleImage;
 
   // 解析扫码内容
-  app.get('/api/resolve', requireAuth, async (req, res) => {
+  app.get('/api/resolve', requireAuth, asyncHandler(async (req, res) => {
     const code = (req.query.code || '').trim();
     if (!code) return res.status(400).json({ error: '无效码' });
     let s = await D.getSampleByNo(code) || await D.getSampleByToken(code);
@@ -57,7 +58,7 @@ function register(app) {
       ? (await D.listRdUsers()).map(x => ({ id: x.id, display_name: x.display_name || x.username, dept: x.dept }))
       : [];
     res.json({ sample: s, allowedActions: actions, rdUsers });
-  });
+  }));
 
   // 扫码状态机
   app.post('/api/scan', requireAuth, async (req, res) => {
@@ -81,23 +82,25 @@ function register(app) {
 
     const ts = D.nowISO();
     const updated = { ...s, updated_at: ts };
+    var logData = null;
 
     if (chosenAction === 'PRODUCE') {
       const img = req.body.image;
       if (!img || typeof img !== 'string') return res.status(400).json({ error: '请上传制作照片' });
       const prodImgUrl = await saveSampleImage(img, s.sample_no + '_prod');
-      if (prodImgUrl) updated.produced_image = prodImgUrl;
+      if (!prodImgUrl) return res.status(500).json({ error: '制作照片保存失败，请重试' });
+      updated.produced_image = prodImgUrl;
       updated.status = 'PRODUCED';
       updated.produced_at = ts;
       updated.signed_by_rd = u.display_name || u.username;
-      await D.addLog({ sample_id: s.id, action: 'PRODUCE', role: u.role, user_id: u.id, dept: u.dept, note: note || '研发确认制作完成' });
+      logData = { sample_id: s.id, action: 'PRODUCE', role: u.role, user_id: u.id, dept: u.dept, note: note || '研发确认制作完成' };
     } else if (chosenAction === 'RELEASE') {
       const cyc = Number(cycleDays);
       if (!cyc || cyc <= 0) return res.status(400).json({ error: '请填写有效的复检周期（天）' });
       const { sample_type, limit_item, source_type, card_version, test_standard, test_data } = (req.body || {});
       if (!sample_type || !sample_type.trim()) return res.status(400).json({ error: '请选择样品类型（OK样品/NG样品）' });
       if (!limit_item || !limit_item.trim()) return res.status(400).json({ error: '请选择限度项目' });
-      const d = new Date(ts); d.setDate(d.getDate() + cyc);
+      const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
       updated.status = 'RELEASED';
       updated.released_at = ts;
       updated.release_cycle_days = cyc;
@@ -110,14 +113,15 @@ function register(app) {
       if (test_standard) updated.test_standard = test_standard.trim();
       if (test_data) updated.test_data = test_data.trim();
       updated.signed_by_qa = u.display_name || u.username;
-      await D.addLog({ sample_id: s.id, action: 'RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: `正式发行，复检周期${cyc}天，标示卡已签署` });
+      logData = { sample_id: s.id, action: 'RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: `正式发行，复检周期${cyc}天，标示卡已签署` };
     } else if (chosenAction === 'INSPECT') {
       const img = req.body.image;
       if (!img || typeof img !== 'string') return res.status(400).json({ error: '请上传复检照片' });
       const inspImgUrl = await saveSampleImage(img, s.sample_no + '_insp');
+      if (!inspImgUrl) return res.status(500).json({ error: '复检照片保存失败，请重试' });
       const cyc = Number(cycleDays) || s.release_cycle_days || 90;
-      const d = new Date(ts); d.setDate(d.getDate() + cyc);
-      if (inspImgUrl) updated.inspect_image = inspImgUrl;
+      const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
+      updated.inspect_image = inspImgUrl;
       updated.next_inspect_at = d.toISOString();
       updated.valid_until = updated.next_inspect_at;
       const { card_version, test_data } = req.body || {};
@@ -125,13 +129,13 @@ function register(app) {
       if (test_data) updated.test_data = test_data;
       const cardUpdated = (card_version||test_data)?'、「标示卡已更新」':'';
       const isEarly = s.next_inspect_at && new Date(s.next_inspect_at).getTime() > Date.now();
-      await D.addLog({ sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role: u.role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + cyc + '天' + cardUpdated) });
+      logData = { sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role: u.role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + cyc + '天' + cardUpdated) };
     } else if (chosenAction === 'CUSTODY') {
       if (!location || !location.trim()) return res.status(400).json({ error: '请填写保管储位' });
       updated.status = 'IN_CUSTODY';
       updated.custody_dept = u.dept;
       updated.storage_location = location.trim();
-      await D.addLog({ sample_id: s.id, action: 'CUSTODY', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' });
+      logData = { sample_id: s.id, action: 'CUSTODY', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' };
     }
     // === 新增 Action ===
     else if (chosenAction === 'EDIT_CARD') {
@@ -142,22 +146,22 @@ function register(app) {
       if (card_version !== undefined) updated.card_version = card_version.trim();
       if (test_data !== undefined) updated.test_data = test_data.trim();
       updated.signed_by_qa = u.display_name || u.username;
-      await D.addLog({ sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: note || '修正标示卡' });
+      logData = { sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: note || '修正标示卡' };
     } else if (chosenAction === 'EDIT_STORAGE') {
       if (!location || !location.trim()) return res.status(400).json({ error: '请填写新储位' });
       updated.storage_location = location.trim();
-      await D.addLog({ sample_id: s.id, action: 'EDIT_STORAGE', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '修改储位' });
+      logData = { sample_id: s.id, action: 'EDIT_STORAGE', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '修改储位' };
     } else if (chosenAction === 'RETURN_REQUEST') {
       if (!note || !note.trim()) return res.status(400).json({ error: '请填写退回原因' });
       updated.status = 'RETURNING';
-      await D.addLog({ sample_id: s.id, action: 'RETURN_REQUEST', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
+      logData = { sample_id: s.id, action: 'RETURN_REQUEST', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
     } else if (chosenAction === 'RE_RELEASE') {
       const cyc = Number(cycleDays);
       if (!cyc || cyc <= 0) return res.status(400).json({ error: '请填写有效的复检周期（天）' });
       const { sample_type, limit_item, source_type, card_version, test_data } = req.body || {};
       if (!sample_type || !sample_type.trim()) return res.status(400).json({ error: '请选择样品类型' });
       if (!limit_item || !limit_item.trim()) return res.status(400).json({ error: '请选择限度项目' });
-      const d = new Date(ts); d.setDate(d.getDate() + cyc);
+      const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
       updated.status = 'RELEASED';
       updated.released_at = ts;
       updated.release_cycle_days = cyc;
@@ -171,7 +175,7 @@ function register(app) {
       updated.signed_by_qa = u.display_name || u.username;
       updated.retire_assigned_rd = null;
       updated.retired_reason = null;
-      await D.addLog({ sample_id: s.id, action: 'RE_RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: '品保确认重新发行，周期' + cyc + '天' });
+      logData = { sample_id: s.id, action: 'RE_RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: '品保确认重新发行，周期' + cyc + '天' };
     } else if (chosenAction === 'RETIRE_RECREATE') {
       const assignedRd = (req.body.retire_assigned_rd || '').trim();
       if (!assignedRd) return res.status(400).json({ error: '请选择指派重新制作的研发人员' });
@@ -180,18 +184,18 @@ function register(app) {
       updated.retire_assigned_rd = assignedRd;
       const assignedUser = await D.getUserById(Number(assignedRd));
       const assignedLabel = assignedUser ? (assignedUser.display_name || assignedUser.username) : assignedRd;
-      await D.addLog({ sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel });
+      logData = { sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel };
     } else if (chosenAction === 'RETIRE_ONLY') {
       if (!note || !note.trim()) return res.status(400).json({ error: '请填写作废原因' });
       updated.status = 'RETIRED';
       updated.retired_reason = note.trim();
-      await D.addLog({ sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
+      logData = { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
     } else if (chosenAction === 'RETURN_REJECT') {
       if (!note || !note.trim()) return res.status(400).json({ error: '请填写拒绝理由' });
       updated.status = 'IN_CUSTODY';
       updated.retire_assigned_rd = null;
       updated.retired_reason = null;
-      await D.addLog({ sample_id: s.id, action: 'RETURN_REJECT', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
+      logData = { sample_id: s.id, action: 'RETURN_REJECT', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
     } else if (chosenAction === 'RECREATE') {
       // 4 步写事务：createSample(新) + updateSample(旧→RETIRED) + 2 addLog
       const newSample = await D.withTransaction(async conn => {
@@ -212,7 +216,12 @@ function register(app) {
       return;
     }
 
-    const result = await D.updateSample(updated);
+    // updateSample + addLog 原子提交，防止状态变更与审计断链
+    const result = await D.withTransaction(async conn => {
+      const r = await D.updateSample(updated, conn);
+      if (logData) await D.addLog(logData, conn);
+      return r;
+    });
     const printCard = (chosenAction === 'RELEASE' || chosenAction === 'RE_RELEASE' || chosenAction === 'EDIT_CARD');
     res.json({ sample: result, action: chosenAction, message: `操作成功：${chosenAction}`, printCard });
     } catch (err) {

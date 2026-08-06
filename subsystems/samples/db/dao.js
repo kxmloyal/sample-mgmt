@@ -66,14 +66,20 @@ module.exports = function createDao(deps) {
   function getSampleByNo(sample_no) { return one('SELECT * FROM samples WHERE sample_no = ?', [sample_no]); }
   function getSampleByToken(qr_token) { return one('SELECT * FROM samples WHERE qr_token = ?', [qr_token]); }
 
+  // 时区统一：next_inspect_at/valid_until 存 ISO UTC 字符串（如 2026-09-05T04:00:00.000Z）
+  // 与 UTC_TIMESTAMP() 规范化后比较，修复旧逻辑用本地 NOW() 比较导致逾期判定差 8 小时
+  var ISO_UTC = "LEFT(REPLACE(REPLACE(next_inspect_at,'T',' '),'Z',''),19)";
+  var NOW_UTC = "LEFT(UTC_TIMESTAMP(),19)";
+  var NOW_UTC_7D = "LEFT(DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 DAY),19)";
+
   function listSamples(opts) {
     opts = opts || {};
     var where = [], params = [];
     if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
     if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
     if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
-    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at < NOW()"); }
-    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at >= NOW() AND next_inspect_at < DATE_ADD(NOW(), INTERVAL 7 DAY)"); }
+    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
     if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
     if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
     if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
@@ -95,8 +101,8 @@ module.exports = function createDao(deps) {
     if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
     if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
     if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
-    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at < NOW()"); }
-    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at >= NOW() AND next_inspect_at < DATE_ADD(NOW(), INTERVAL 7 DAY)"); }
+    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
     if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
     if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
     if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
@@ -119,8 +125,8 @@ module.exports = function createDao(deps) {
   }
 
   function countSamplesByStatus() { return q('SELECT status, COUNT(*) AS cnt FROM samples GROUP BY status'); }
-  function listOverdueSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at < NOW()"); }
-  function listDueSoonSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND next_inspect_at >= NOW() AND next_inspect_at < DATE_ADD(NOW(), INTERVAL 7 DAY)"); }
+  function listOverdueSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+  function listDueSoonSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
 
   function listMyPendingSamples(role, userId) {
     if (role === 'RD') return q("SELECT * FROM samples WHERE status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?) ORDER BY id DESC LIMIT 50", [userId]);

@@ -70,7 +70,7 @@ function refocusScan(){
 function afterScanReset(){
   $('#scan-result').innerHTML='';
   $('#scan-code').value='';
-  delete window._scanSample;delete window._scanActions;delete window._scanRdUsers;delete window._scanWizard;
+  delete window._scanSample;delete window._scanRdUsers;
   refocusScan();
 }
 

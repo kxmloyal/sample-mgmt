@@ -1,4 +1,4 @@
-/** BUNDLE vbmsgyzyc4 — 25 files */
+/** BUNDLE vbmsgzxwq1 — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -189,19 +189,9 @@ function closeModal(mask){mask.remove();var all=document.querySelectorAll('.moda
 const CONFIRM_ACTIONS=new Set(['RELEASE','INSPECT','CUSTODY']);
 const STATIONS=['马达组','扇叶组','成品组','品保部','SMT','供应商'];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
-// 打印尺寸预设（宽度 mm），scale = width / 100
-var PRINT_SIZES=[
-  {key:'small',label:'小号',width:50},
-  {key:'medium',label:'中标',width:70},
-  {key:'large',label:'大号',width:100},
-  {key:'custom',label:'自定义',width:null}
-];
 // 读取用户首选打印尺寸，默认中标(70mm)
 function getPrintSize(){
   try{return localStorage.getItem('printSize')||'medium';}catch(e){return 'medium';}
-}
-function setPrintSize(key){
-  try{localStorage.setItem('printSize',key);}catch(e){}
 }
 
 
@@ -1064,7 +1054,7 @@ function refocusScan(){
 function afterScanReset(){
   $('#scan-result').innerHTML='';
   $('#scan-code').value='';
-  delete window._scanSample;delete window._scanActions;delete window._scanRdUsers;delete window._scanWizard;
+  delete window._scanSample;delete window._scanRdUsers;
   refocusScan();
 }
 
@@ -1236,6 +1226,8 @@ function updateWizardNextDate(){
 }
 
 function renderWizardStep2(s){
+  // 版次默认值：已填写过则回显用户值，否则 RE_RELEASE 自动 +1 / 新发行取 '01'
+  var verDefault=s._wizCardVersion||(s._isReRelease?nextCardVersion(s.card_version):(s.card_version||'01'));
   return '<div class="wizard-steps">'+
       '<span class="wdot done">✓</span><span class="wline done"></span>'+
       '<span class="wdot active">2</span><span class="wline"></span>'+
@@ -1244,7 +1236,7 @@ function renderWizardStep2(s){
     '<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:14px">设置周期 · 标示卡 · 确认</div>'+
     '<div class="wizard-body">'+
       '<div class="scan-section-title">标示卡审查</div>'+
-      buildCardFieldTable(s,true,(s._isReRelease?nextCardVersion(s.card_version):(s.card_version||'01')))+
+      buildCardFieldTable(s,true,verDefault)+
       '<div class="muted" style="font-size:12px;margin-top:6px">品保确认人：<b>'+e(me.display_name||me.username)+'</b>（自动签署）</div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
@@ -1286,6 +1278,14 @@ function goWizardStep(step){
   var s=wizardSample;if(!s)return;
   // 离开Step1前持久化复检周期值（后续step中DOM元素已被替换）
   if(step>1){var cyc=$('#scan-cycle');if(cyc)s._wizCycle=cyc.value;}
+  // 从 Step3 返回 Step2：将已填标示卡字段回写原始字段，供 buildCardFieldTable 回显（修复返回修改丢字段）
+  if(step===2&&s._wizCardType){
+    s.sample_type=s._wizCardType;
+    s.limit_item=s._wizCardItem;
+    if(s._wizCardSource)s.source_type=s._wizCardSource;
+    if(s._wizCardVersion)s.card_version=s._wizCardVersion;
+    if(s._wizCardData)s.test_data=s._wizCardData;
+  }
   if(step===3){
     // 离开Step2前持久化标示卡字段值（Step3 DOM中这些元素已不存在）
     var tEl=$('#scan-card-type'),lEl=$('#scan-card-item');
@@ -1388,7 +1388,6 @@ function renderScanAction(s,actions){
     return;
   }
   window._scanSample=s;
-  window._scanActions=actions;
   var buttonRow=actions.length>1?actions.map(function(a){
     var label=CONFIRM_ACTIONS.has(a)?'确认'+ACTION_CN[a]:(ACTION_CN[a]||a);
     return '<fluent-button appearance="accent" size="small" onclick="showScanActionForm(\''+a+'\')">'+label+'</fluent-button>';
@@ -1688,7 +1687,7 @@ var HELP_DATA=[
 // 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）
 var HELP_PAGE_MAP={
   dashboard:null, samples:'list', new:'create', scan:'scan',
-  board:'inspect', logs:null, users:'users'
+  logs:null, users:'users'
 };
 var HELP_PAGE_TIPS={
   dashboard:'样品看板：查看统计数据和待办事项',

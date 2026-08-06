@@ -47,7 +47,6 @@ function renderScanAction(s,actions){
     return;
   }
   window._scanSample=s;
-  window._scanActions=actions;
   var buttonRow=actions.length>1?actions.map(function(a){
     var label=CONFIRM_ACTIONS.has(a)?'确认'+ACTION_CN[a]:(ACTION_CN[a]||a);
     return '<fluent-button appearance="accent" size="small" onclick="showScanActionForm(\''+a+'\')">'+label+'</fluent-button>';
