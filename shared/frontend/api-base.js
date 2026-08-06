@@ -90,9 +90,19 @@ function statusBadge(row) {
   return '<fluent-badge class="badge ' + cls + '" appearance="filled">' + label + '</fluent-badge>';
 }
 
+// 日期显示：纯日期原样返回；ISO 日期时间按本地时区转日期（修复 UTC 截取导致 GMT+8 下差一天）
 function fmt(d) {
   if (!d) return '—';
-  return String(d).slice(0, 10);
+  var s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var dt = new Date(s);
+  if (!isNaN(dt.getTime())) {
+    var m = String(dt.getMonth() + 1), day = String(dt.getDate());
+    if (m.length < 2) m = '0' + m;
+    if (day.length < 2) day = '0' + day;
+    return dt.getFullYear() + '-' + m + '-' + day;
+  }
+  return s.slice(0, 10);
 }
 
 function showToast(msg, type) {
