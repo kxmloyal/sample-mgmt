@@ -4,11 +4,11 @@ function viewScan(){
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
     '<div class="scan-box" id="scan-box" onclick="if(window.getSelection().toString()===\'\')refocusScan()">'+
       '<div class="muted" style="margin-bottom:10px">'+
-        '<b>主方式：</b>用 <b>二维码扫描枪</b> 扫样品码，或 <b>手动输入</b> 样品编号（SM-XXXXXX），按回车 / 点「确认扫码」即可。<br/>'+
+        '<b>主方式：</b>用 <b>二维码扫描枪</b> 扫样品码，或 <b>手动输入</b> 样品编号（13 位编码如 G-YD9015-Q-001-01，兼容 SM-XXXXXX），按回车 / 点「确认扫码」即可。<br/>'+
         '<b>次方式：</b>无扫码枪的手机端，可用下方「摄像头扫码」（需 HTTPS）。'+
       '</div>'+
-      '<input id="scan-code" class="scan-input" placeholder="扫描或输入 SM-XXXXXX" autocomplete="off"/>'+
-      '<small class="muted" style="font-size:11px">格式：SM-XXXXXX</small>'+
+      '<input id="scan-code" class="scan-input" placeholder="扫描或输入样品编号（13位编码 / SM-XXXXXX）" autocomplete="off"/>'+
+      '<small class="muted" style="font-size:11px">格式：13 位编码（G-YD9015-Q-001-01）或 SM-XXXXXX</small>'+
       '<div style="margin-top:14px">'+
         '<fluent-button appearance="accent" size="small" onclick="doScan()">确认扫码</fluent-button>'+
         '<label class="muted" style="margin-left:12px;font-size:13px;cursor:pointer">'+
@@ -31,7 +31,7 @@ function viewScan(){
 }
 async function doScan(){
   var code=$('#scan-code').value.trim();
-  if(!/^SM-\d{4,}$/.test(code)){toast('编号格式错误：SM- 开头 + 至少4位数字','err');return refocusScan();}
+  if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
   try{
     var data=await api('GET','/api/resolve?code='+encodeURIComponent(code));

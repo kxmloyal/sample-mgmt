@@ -1,4 +1,4 @@
-/** BUNDLE vbmsg1n50o — 25 files */
+/** BUNDLE vbmsgs9xzi — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1350,11 +1350,11 @@ function viewScan(){
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
     '<div class="scan-box" id="scan-box" onclick="if(window.getSelection().toString()===\'\')refocusScan()">'+
       '<div class="muted" style="margin-bottom:10px">'+
-        '<b>主方式：</b>用 <b>二维码扫描枪</b> 扫样品码，或 <b>手动输入</b> 样品编号（SM-XXXXXX），按回车 / 点「确认扫码」即可。<br/>'+
+        '<b>主方式：</b>用 <b>二维码扫描枪</b> 扫样品码，或 <b>手动输入</b> 样品编号（13 位编码如 G-YD9015-Q-001-01，兼容 SM-XXXXXX），按回车 / 点「确认扫码」即可。<br/>'+
         '<b>次方式：</b>无扫码枪的手机端，可用下方「摄像头扫码」（需 HTTPS）。'+
       '</div>'+
-      '<input id="scan-code" class="scan-input" placeholder="扫描或输入 SM-XXXXXX" autocomplete="off"/>'+
-      '<small class="muted" style="font-size:11px">格式：SM-XXXXXX</small>'+
+      '<input id="scan-code" class="scan-input" placeholder="扫描或输入样品编号（13位编码 / SM-XXXXXX）" autocomplete="off"/>'+
+      '<small class="muted" style="font-size:11px">格式：13 位编码（G-YD9015-Q-001-01）或 SM-XXXXXX</small>'+
       '<div style="margin-top:14px">'+
         '<fluent-button appearance="accent" size="small" onclick="doScan()">确认扫码</fluent-button>'+
         '<label class="muted" style="margin-left:12px;font-size:13px;cursor:pointer">'+
@@ -1377,7 +1377,7 @@ function viewScan(){
 }
 async function doScan(){
   var code=$('#scan-code').value.trim();
-  if(!/^SM-\d{4,}$/.test(code)){toast('编号格式错误：SM- 开头 + 至少4位数字','err');return refocusScan();}
+  if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
   try{
     var data=await api('GET','/api/resolve?code='+encodeURIComponent(code));
@@ -1613,7 +1613,7 @@ var HELP_DATA=[
     id:'list', module:'样品列表', desc:'查看和管理全部样品',
     items:[
       {h:'筛选与搜索',body:'按状态筛选：顶部状态标签卡片\n搜索：支持 编号/名称/机型 模糊匹配\n右上角清空按钮重置搜索'},
-      {h:'样品编号规则',body:'格式：SM-XXXXXX（6位数字，自动递增）\n如 SM-000001、SM-000002\n系统自动生成，不可修改'},
+      {h:'样品编号规则',body:'13 位结构化编码：提供处-机型-组别-流水号-版次\n如 G-YD9015-Q-001-01（客供C/元山T/元将五金G + 机型6位 + 组别1位 + 流水号3位 + 版次2位）\n系统自动生成，不可修改'},
       {h:'颜色标记',body:'复检逾期样品 — 橙色边框高亮\n提醒保管人员及时处理'},
       {h:'点击样品',body:'点击任意样品卡片 → 弹出详情弹窗\n详情弹窗包含：基础信息 / 流转进度 / 图片 / 操作日志（最近2条）\n弹窗底部Tab可切换：标示卡 / 全量日志 / 大图'}
     ]
@@ -1623,7 +1623,7 @@ var HELP_DATA=[
     items:[
       {h:'基本信息',body:'名称、机型、站别 — 必填\n规格、备注 — 选填'},
       {h:'限度样品字段',body:'样品类型：OK样品 / NG样品\n限度项目：26 项下拉选择\n来源：客供 / 元山 / 塔岗\n版次：发行自动01，重新发行+1（最高99）\n标准范围：如「震动≤0.5mm」'},
-      {h:'后续流程',body:'创建后自动生成编号SM-XXXXXX\n弹出标签打印页（左半QR码+基本信息，右半空白标示卡区）\n打印标签 → 贴于样品实物 → 扫码台确认制作'}
+      {h:'后续流程',body:'创建后自动生成 13 位结构化编号（如 G-YD9015-Q-001-01）\n弹出标签打印页（左半QR码+基本信息，右半空白标示卡区）\n打印标签 → 贴于样品实物 → 扫码台确认制作'}
     ]
   },
   {

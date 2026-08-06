@@ -126,3 +126,30 @@ describe('POST /api/samples 必填校验', () => {
     expect(res.status).toBe(400);
   });
 });
+
+
+describe('扫码台与 13 位编码兼容', () => {
+  const { getApp, login } = require('./helpers/setup');
+  beforeAll(async () => { await getApp(); });
+
+  it('resolve 识别 13 位编码样品并给出 PRODUCE', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const mk = await agent.post('/api/samples/models').send({ code: 'SCAN01', full_name: '扫码测试机型 SCAN01' });
+    // 机型已存在（重复跑）时 409，忽略
+    expect([200, 201, 409]).toContain(mk.status);
+    const created = await agent.post('/api/samples').send({ name: '扫码兼容测试', model: 'SCAN01', station: '马达组', source_type: 'T', card_version: '01' });
+    expect([200, 201]).toContain(created.status);
+    const no = created.body.sample_no;
+    expect(no).toMatch(/^T-SCAN01-M-\d{3}-01$/);
+    const res = await agent.get('/api/resolve?code=' + encodeURIComponent(no));
+    expect(res.status).toBe(200);
+    expect(res.body.sample.sample_no).toBe(no);
+    expect(res.body.allowedActions).toContain('PRODUCE');
+  });
+
+  it('旧格式 SM- 编号 resolve 不拦截（404 由后端判定）', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/resolve?code=SM-999999');
+    expect([404, 200]).toContain(res.status);
+  });
+});
