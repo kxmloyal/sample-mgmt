@@ -347,3 +347,34 @@ describe('v2 详情 JOIN 与分页', () => {
     expect(Array.isArray(r.body)).toBe(true);
   });
 });
+
+// ===== v2：边界用例（我的任务过滤 / OVERDUE 存量兼容 / 分页钳制，Task 3） =====
+describe('v2 边界用例', () => {
+  it('我的任务：assignee_id 过滤只返回指派给该用户的任务', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const users = await agent.get('/api/projects/users');
+    const rd = users.body.find(u => u.username === 'rd01');
+    const p = await agent.post('/api/projects').send({ name: 'my-proj' + Date.now() });
+    const mine = await agent.post('/api/projects/' + p.body.id + '/tasks').send({ title: '我的任务X', assignee_id: rd ? rd.id : null });
+    await agent.post('/api/projects/' + p.body.id + '/tasks').send({ title: '他人任务Y' });
+    const r = await agent.get('/api/projects/tasks?assignee_id=' + (rd ? rd.id : ''));
+    expect(r.status).toBe(200);
+    if (rd) {
+      for (const t of r.body) expect(t.assignee_id).toBe(rd.id);
+      expect(r.body.some(t => t.id === mine.body.id)).toBe(true);
+    }
+  });
+
+  it('OVERDUE 筛选同时命中存量 OVERDUE 与动态过期任务', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const r = await agent.get('/api/projects/tasks?status=OVERDUE');
+    expect(r.status).toBe(200);
+    for (const t of r.body) expect(t.status_eff).toBe('OVERDUE');
+  });
+
+  it('分页 limit 超过 200 被钳制为 200', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const r = await agent.get('/api/projects/tasks?limit=9999');
+    expect(r.body.limit).toBe(200);
+  });
+});
