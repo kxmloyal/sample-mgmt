@@ -66,3 +66,11 @@ CREATE TABLE IF NOT EXISTS sample_models (
   UNIQUE KEY uk_model_code (code),
   UNIQUE KEY uk_model_full_name (full_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 样品流水号序列表（2026-08-06）：机型级流水号原子自增，prefix=机型 6 位
+-- 取号：INSERT ... ON DUPLICATE KEY UPDATE cur_seq=cur_seq+1，随后 SELECT cur_seq
+CREATE TABLE IF NOT EXISTS sample_seqs (
+  prefix VARCHAR(16) PRIMARY KEY,
+  cur_seq INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
