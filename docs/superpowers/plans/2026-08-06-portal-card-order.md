@@ -508,10 +508,10 @@ Expected: 新增 portal-prefs 10 用例通过；samples 上线保护生效（sam
 | GET | /api/portal/prefs | 当前用户门户卡片排序偏好（无记录返回空数组） | 登录 |
 | PUT | /api/portal/prefs | 保存/清除排序偏好（order=[] 或 null 清除） | 登录 |
 
-3. 追加小节「§21 门户个性化排列」（置于列表导出标准之后或文档末尾收尾声明前）：
+3. 追加小节「§22 门户个性化排列」（AGENTS.md 已有 §21 列表导出标准，编号顺延；置于文档末尾收尾声明前）。同时把 Task 1 在 `db.js`、Task 2 在 `public/css/app.css` 注释中误写的「AGENTS.md §21 门户个性化」修正为 §22：
 
 ```markdown
-## 21. 门户卡片个性化排列
+## 22. 门户卡片个性化排列
 
 - 门户卡片顺序 = 用户偏好（user_portal_prefs.portal_order）优先，未配置子系统按默认顺序排尾
 - 用户级隔离：偏好仅对当前登录用户生效；新用户/新增子系统无需迁移自动获得默认位置
