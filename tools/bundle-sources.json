@@ -62,6 +62,8 @@
     "subsystems/projects/frontend/js/views/dashboard.js",
     "subsystems/projects/frontend/js/views/kanban.js",
     "subsystems/projects/frontend/js/views/list.js",
+    "subsystems/projects/frontend/js/views/list-batch.js",
+    "subsystems/projects/frontend/js/views/list-filter.js",
     "subsystems/projects/frontend/js/views/projects.js",
     "subsystems/projects/frontend/js/views/task-detail.js",
     "subsystems/projects/frontend/js/views/workflow.js",

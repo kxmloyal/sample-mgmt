@@ -1,4 +1,4 @@
-/** BUNDLE vbmshmhokf — 12 files */
+/** BUNDLE vbmshpkpgk — 14 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -438,8 +438,8 @@ async function kbDrop(e) {
 
 
 /* --- subsystems/projects/frontend/js/views/list.js --- */
-// list.js — 任务列表：跨项目筛选（项目/状态）+ CSV 导出 + 延期行高亮
-// v2：列表「只看我的」筛选状态
+// list.js — 任务列表：跨项目筛选（项目/状态/类别/优先级/责任人）+ 全文搜索 + 分页 + CSV 导出 + 延期行高亮
+// v2：列表「只看我的」筛选状态；迭代1：搜索框/多维筛选下拉/checkbox 批量（批量函数在 list-batch.js，筛选 URL 化在 list-filter.js）
 var _lkMine = false;
 function lkToggleMine() {
   _lkMine = !_lkMine;
@@ -452,18 +452,26 @@ async function renderTaskList() {
   const v = $('#view');
   v.innerHTML =
     '<div class="pk-filters">' +
+    '<fluent-text-field id="lk-q" placeholder="搜索标题/描述/备注…" style="width:200px"></fluent-text-field>' +
     '<fluent-select id="lk-project"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
     '<fluent-select id="lk-status"><fluent-option value="">全部状态</fluent-option>' +
     '<fluent-option value="NOT_STARTED">未开始</fluent-option><fluent-option value="IN_PROGRESS">进行中</fluent-option>' +
     '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
-    '<fluent-button appearance="secondary" onclick="lkLoad()">查询</fluent-button>' +
+    '<fluent-select id="lk-category"><fluent-option value="">全部类别</fluent-option>' +
+    CATEGORY_KEYS.map(k => '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="lk-priority"><fluent-option value="">全部优先级</fluent-option>' +
+    PRIORITY_KEYS.map(k => '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
+    '<fluent-select id="lk-assignee"><fluent-option value="">全部责任人</fluent-option></fluent-select>' +
+    '<fluent-button appearance="secondary" onclick="lkApplyFilters()">查询</fluent-button>' +
     '<fluent-button appearance="secondary" id="lk-mine" onclick="lkToggleMine()">只看我的</fluent-button>' +
     '<fluent-button appearance="accent" onclick="lkCreate()">新建任务</fluent-button>' +
-    '<fluent-button appearance="secondary" onclick="location.href=\'/api/projects/tasks/export\'">导出 CSV</fluent-button></div>' +
+    '<fluent-button appearance="secondary" onclick="lkExport()">导出 CSV</fluent-button></div>' +
     // P2 修复：表格外包共享 .card 容器，overflow-x:auto 兜底窄屏横向溢出
     '<div class="card" style="padding:8px 0;overflow-x:auto"><table class="pk-table" id="lk-table"><thead><tr>' +
+    '<th style="width:36px"><fluent-checkbox id="lk-check-all" onchange="lkToggleAll()"></fluent-checkbox></th>' +
     '<th>项目</th><th>任务</th><th>类别</th><th>优先级</th><th>责任人</th><th>状态</th><th>进度</th><th>计划日期</th><th>操作</th>' +
     '</tr></thead><tbody></tbody></table>' +
+    '<div class="pk-filters" id="lk-batch" style="display:none;padding:8px 12px;background:#f0fdfa;border-radius:8px"></div>' +
     '<div class="pk-filters" id="lk-pager" style="padding:8px 12px"></div></div>';
   const projects = await api('GET', PApi.projects());
   const sel = $('#lk-project');
@@ -472,6 +480,21 @@ async function renderTaskList() {
     opt.value = String(p.id); opt.textContent = p.name;
     sel.appendChild(opt);
   }
+  // 责任人下拉（缺陷#2 修复后全员可访问）
+  const users = await api('GET', '/api/projects/users').catch(function () { return []; });
+  const selA = $('#lk-assignee');
+  for (const u of users) {
+    const opt = document.createElement('fluent-option');
+    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    selA.appendChild(opt);
+  }
+  // 搜索框防抖 300ms（触发 lkApplyFilters → URL 化 + 重新加载）
+  $('#lk-q').addEventListener('keyup', function () {
+    clearTimeout(window.__lkQTimer);
+    window.__lkQTimer = setTimeout(function () { lkApplyFilters(); }, 300);
+  });
+  // A4 URL 化：进入页面时从 hash 恢复筛选状态
+  lkRestoreFromHash();
   // 支持 #/list?project=xxx 跳转预选项目：fluent-select 选项异步注册，重试赋值直到生效后再加载
   const qs = new URLSearchParams(location.hash.split('?')[1] || '');
   const prePid = qs.get('project');
@@ -488,13 +511,21 @@ async function renderTaskList() {
 }
 
 // 加载筛选条件下的跨项目任务列表（URL 写死 /api/projects/tasks，避免 /tasks/0 拼接 hack）
-// 仅读下拉值（用户选择为准）；hash 的 project 参数只用于进入页面时的初始预选
+// 迭代1：读取全部筛选下拉值（类别/优先级/责任人/搜索词）+ 行首 checkbox（批量）
 async function lkLoad() {
   const qs = new URLSearchParams();
   const pid = $('#lk-project').value;
   if (pid) qs.set('project_id', pid);
   const st = $('#lk-status').value;
   if (st) qs.set('status', st);
+  const cat = $('#lk-category').value;
+  if (cat) qs.set('category', cat);
+  const pr = $('#lk-priority').value;
+  if (pr) qs.set('priority', pr);
+  const as = $('#lk-assignee').value;
+  if (as) qs.set('assignee_id', as);
+  const q = $('#lk-q').value.trim();
+  if (q) qs.set('q', q);
   if (_lkMine) qs.set('assignee_id', me.id);
   qs.set('limit', String(_lkPageSize));
   qs.set('offset', String(_lkPage * _lkPageSize));
@@ -504,6 +535,7 @@ async function lkLoad() {
   const tbody = document.querySelector('#lk-table tbody');
   tbody.innerHTML = rows.map(t =>
     '<tr class="' + ((t.status_eff || t.status) === 'OVERDUE' ? 'pk-row-overdue' : '') + '">' +
+    '<td><fluent-checkbox class="lk-row-check" data-id="' + t.id + '" onchange="lkRowCheck(this)"></fluent-checkbox></td>' +
     '<td>' + esc(t.project_name) + '</td>' +
     '<td><a href="#/tasks/' + t.id + '">' + esc(t.title) + '</a></td>' +
     '<td>' + (CATEGORY_CN[t.category] || t.category) + '</td>' +
@@ -541,6 +573,124 @@ function renderLkPager(total) {
 function lkPage(d) {
   _lkPage += d;
   lkLoad();
+}
+
+
+/* --- subsystems/projects/frontend/js/views/list-batch.js --- */
+// list-batch.js — 任务列表批量操作（checkbox 选择 + 批量指派/流转/删除）
+// 独立文件原因：list.js 顶层函数已达 8 个（§7.2 ≤10），批量逻辑隔离于此保持各文件 <10
+var _lkSel = new Set();
+var _lkSuppress = false; // 抑制标志：表头全选程序化赋值行 checkbox 触发 change 级联重入（行中间态导致表头被置回 false → 重入清空）
+
+// 行 checkbox 切换：fluent-checkbox 用 .checked 属性判断（:checked 伪类不匹配自定义元素），onchange 后触发
+function lkRowCheck(cb) {
+  const id = Number(cb.dataset.id);
+  if (cb.checked) _lkSel.add(id); else _lkSel.delete(id);
+  lkRenderBatchBar();
+  if (_lkSuppress) return; // 程序化赋值阶段跳过表头联动（防级联重入）
+  const all = document.querySelectorAll('.lk-row-check');
+  const allChecked = all.length > 0 && Array.from(all).every(c => c.checked);
+  const head = $('#lk-check-all');
+  if (head) head.checked = allChecked;
+}
+
+// 表头全选：程序化赋值 .checked 触发组件回显（抑制期间忽略行 change 回调的表头联动）
+function lkToggleAll() {
+  const head = $('#lk-check-all');
+  const all = document.querySelectorAll('.lk-row-check');
+  _lkSuppress = true;
+  try {
+    for (const cb of all) {
+      cb.checked = head.checked;
+      if (head.checked) _lkSel.add(Number(cb.dataset.id)); else _lkSel.delete(Number(cb.dataset.id));
+    }
+  } finally {
+    _lkSuppress = false;
+  }
+  lkRenderBatchBar();
+}
+
+// 批量操作栏渲染（选中 ≥1 条时浮现）
+function lkRenderBatchBar() {
+  const bar = $('#lk-batch');
+  if (!bar) return;
+  const n = _lkSel.size;
+  if (n === 0) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML =
+    '<span style="align-self:center;font-size:13px">已选 <b>' + n + '</b> 条</span>' +
+    '<fluent-button appearance="secondary" size="small" onclick="lkBatch(\'status\',\'START\')">批量开始</fluent-button>' +
+    '<fluent-button appearance="secondary" size="small" onclick="lkBatch(\'status\',\'COMPLETE\')">批量完成</fluent-button>' +
+    '<fluent-button appearance="accent" size="small" onclick="lkBatch(\'delete\')">批量删除</fluent-button>' +
+    '<fluent-button appearance="neutral" size="small" onclick="lkClearSel()">取消</fluent-button>';
+}
+
+function lkClearSel() {
+  _lkSel.clear();
+  document.querySelectorAll('.lk-row-check').forEach(c => { c.checked = false; });
+  const head = $('#lk-check-all'); if (head) head.checked = false;
+  lkRenderBatchBar();
+}
+
+// 批量操作提交（assign/status/delete → POST /api/projects/tasks/batch）
+async function lkBatch(action, action2) {
+  const ids = Array.from(_lkSel);
+  if (ids.length === 0) return showToast('请先勾选任务', 'err');
+  const body = { action: action, ids: ids };
+  if (action === 'status') body.action2 = action2;
+  try {
+    const r = await api('POST', '/api/projects/tasks/batch', body);
+    showToast('成功 ' + r.ok.length + ' 条' + (r.skipped.length ? '，跳过 ' + r.skipped.length + ' 条' : ''));
+    lkClearSel();
+    lkLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+
+/* --- subsystems/projects/frontend/js/views/list-filter.js --- */
+// list-filter.js — 任务列表筛选 URL 化（A4）+ CSV 导出（复用当前筛选）
+// 独立文件原因：list.js 顶层函数已达 8 个（§7.2 ≤10），筛选工具隔离于此
+
+// A4 筛选状态 URL 化：查询时把筛选写入 hash（页码不写入，刷新回第一页）
+function lkApplyFilters() {
+  const qs = new URLSearchParams();
+  const map = {
+    q: '#lk-q', project: '#lk-project', status: '#lk-status',
+    category: '#lk-category', priority: '#lk-priority', assignee: '#lk-assignee'
+  };
+  for (const [key, sel] of Object.entries(map)) {
+    const val = $(sel).value;
+    if (val) qs.set(key, val);
+  }
+  if (_lkMine) qs.set('mine', '1');
+  _lkPage = 0;
+  location.hash = '#/list' + (qs.toString() ? '?' + qs : '');
+  lkLoad();
+}
+
+// 从 hash 恢复筛选（进入页面时 renderTaskList 调用；project 由原 attempt 逻辑兜底异步注册）
+function lkRestoreFromHash() {
+  const qs = new URLSearchParams(location.hash.split('?')[1] || '');
+  const set = function (id, v) { if (v) $(id).value = v; };
+  set('#lk-q', qs.get('q'));
+  set('#lk-project', qs.get('project'));
+  set('#lk-status', qs.get('status'));
+  set('#lk-category', qs.get('category'));
+  set('#lk-priority', qs.get('priority'));
+  set('#lk-assignee', qs.get('assignee'));
+  if (qs.get('mine') === '1' && !_lkMine) lkToggleMine();
+}
+
+// 导出 CSV：复用当前筛选参数拼 URL（location.href 触发下载，避免弹窗拦截；缺陷#3 后端已复用筛选）
+function lkExport() {
+  const qs = new URLSearchParams();
+  const map = { q: '#lk-q', project: '#lk-project', status: '#lk-status',
+    category: '#lk-category', priority: '#lk-priority', assignee: '#lk-assignee' };
+  for (const [key, sel] of Object.entries(map)) {
+    const val = $(sel).value;
+    if (val) qs.set(key, val);
+  }
+  location.href = '/api/projects/tasks/export' + (qs.toString() ? '?' + qs : '');
 }
 
 
