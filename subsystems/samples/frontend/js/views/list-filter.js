@@ -1,15 +1,17 @@
 // sample-filter.js — 样品筛选、chips、快捷过滤
 // 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
 
-/** 从当前筛选控件值构建查询参数字符串 */
+/** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
 function _buildQueryParams(baseParams) {
   var q = $('#f-q').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
+  var st = $('#f-status').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var p = baseParams || '';
   if (q) p += '&q=' + encodeURIComponent(q);
   if (dept) p += '&dept=' + encodeURIComponent(dept);
   if (sort) p += '&sort=' + sort;
+  if (st && p.indexOf('status=') === -1) p += '&status=' + st;
   if (tp) p += '&sample_type=' + tp;
   if (li) p += '&limit_item=' + li;
   if (src) p += '&source_type=' + src;
