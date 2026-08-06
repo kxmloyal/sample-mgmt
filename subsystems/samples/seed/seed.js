@@ -6,6 +6,9 @@
 //  - created_at/日志时间按本地时间(UTC+8)回填，保证时间线真实
 //  - 日志覆盖 10 种动作：CREATE/PRODUCE/RELEASE/CUSTODY/INSPECT/EDIT_STORAGE/
 //    RETURN_REQUEST/RETIRE_RECREATE/RETIRE_ONLY/RECREATE_REPLACED
+// 说明：本脚本硬编码 13 位样品编号（直接 INSERT sample_no），不受流水号生成规则影响。
+// 流水号规则（2026-08-06 起）：机型级递增，由 sample_seqs 序列表原子自增（见 db/sample-code.js）。
+// 本脚本对 samples 表执行清空 + 插入，属测试数据注入；samples 已上线（deployed:true），护栏拒绝执行。
 const D = require('../../../db');
 
 const NOW = new Date();
