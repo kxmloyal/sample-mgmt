@@ -5,6 +5,7 @@ const D = require('../../../db');
 const { STATION_GROUPS, generateSampleCode } = require('../db/sample-code');
 const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
+const { toCsv, sendCsv } = require('../../../shared/csv');
 
 const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
 const UPLOAD_MAX_SIZE = parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10);
@@ -51,6 +52,56 @@ function register(app) {
       D.countAllSamples(filterOpts)
     ]);
     res.json({ samples, total, limit: pageLimit, offset: pageOffset });
+  }));
+
+  // 导出列表 CSV（复用列表筛选参数，忽略分页取全量；AGENTS.md §21 列表导出标准）
+  // 注意：须注册在 GET /api/samples/:id 之前，避免 'export' 被 :id 捕获
+  const SAMPLE_STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
+  const INSPECT_SOON_DAYS = 7;
+
+  /** 时间列格式化：mysql2 默认将 TIMESTAMP 列返回 Date 对象，统一转 ISO 后取 YYYY-MM-DD HH:mm；null/空 → '' */
+  function fmtTime(v) {
+    if (v == null || v === '') return '';
+    const s = v instanceof Date ? v.toISOString() : String(v);
+    return s.slice(0, 16).replace('T', ' ');
+  }
+
+  /** 复检状态中文（与前端 list-inspect.js 判定一致：正常/近7天到期/逾期N天/—） */
+  function inspectStateCn(row) {
+    if (!row || !row.next_inspect_at) return '—';
+    const t = new Date(row.next_inspect_at).getTime();
+    if (t < Date.now()) return '逾期' + Math.ceil((Date.now() - t) / 86400000) + '天';
+    if (t <= Date.now() + INSPECT_SOON_DAYS * 86400000) return '近7天到期';
+    return '正常';
+  }
+
+  app.get('/api/samples/export', requireAuth, asyncHandler(async (req, res) => {
+    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model } = req.query;
+    const filterOpts = {
+      status: status || undefined, dept: dept || undefined, search: q || undefined,
+      sort: sort || undefined, overdue: overdue || undefined,
+      sample_type: sample_type || undefined, limit_item: limit_item || undefined,
+      source_type: source_type || undefined, model: model || undefined
+    };
+    const samples = await D.listSamples(filterOpts); // 不传 limit/offset → 全量（与列表同排序）
+    const cols = [
+      { key: 'sample_no', label: '编号' },
+      { key: 'name', label: '名称' },
+      { key: 'model', label: '机型' },
+      { key: 'station', label: '站别' },
+      { key: 'spec', label: '规格' },
+      { key: 'sample_type', label: '类型', fmt: v => (v === 'OK' ? 'OK样品' : v === 'NG' ? 'NG样品' : (v || '')) },
+      { key: 'status', label: '状态', fmt: v => SAMPLE_STATUS_CN[v] || v },
+      { key: 'next_inspect_at', label: '复检状态', fmt: (v, row) => inspectStateCn(row) },
+      { key: 'produced_at', label: '制作时间', fmt: v => fmtTime(v) },
+      { key: 'released_at', label: '发行时间', fmt: v => fmtTime(v) },
+      { key: 'custody_dept', label: '保管部门' },
+      { key: 'storage_location', label: '储位' },
+      { key: 'next_inspect_at', label: '复检到期', fmt: v => fmtTime(v) },
+      { key: 'updated_at', label: '更新时间', fmt: v => fmtTime(v) }
+    ];
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    sendCsv(res, 'samples-' + stamp + '.csv', toCsv(samples, cols));
   }));
 
   // 编号预览（只读，不落库；须注册在 /:id 之前）——生成后编号以提交实际结果为准

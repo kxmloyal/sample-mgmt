@@ -1,3 +1,4 @@
+const request = require('supertest');
 const { getApp, login } = require('./helpers/setup');
 const { isDeployed } = require('./helpers/deployed');
 
@@ -386,6 +387,51 @@ describe('GET /api/samples — limit filters', () => {
     const res = await agent.get('/api/samples?source_type=T');
     expect(res.status).toBe(200);
     for (const s of res.body.samples) expect(s.source_type).toBe('T');
+  });
+});
+
+describe('GET /api/samples/export', () => {
+  let expId, adminAgent;
+
+  beforeAll(async () => {
+    ({ agent: adminAgent } = await login('admin', 'admin123'));
+    const res = await adminAgent.post('/api/samples').send({
+      name: '导出测试样', spec: 'EXP-1', model: 'SF1225', station: '马达组',
+      sample_type: 'OK', limit_item: 'A', source_type: 'T', notes: 'csv-export'
+    });
+    expect(res.status).toBe(200);
+    expId = res.body.id;
+  });
+
+  it('should reject unauthenticated', async () => {
+    const res = await request(await getApp()).get('/api/samples/export');
+    expect(res.status).toBe(401);
+  });
+
+  it('should return CSV with BOM, header and created sample', async () => {
+    const res = await adminAgent.get('/api/samples/export');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    const text = res.text;
+    expect(text.startsWith('\uFEFF')).toBe(true);
+    const lines = text.replace('\uFEFF', '').split('\r\n');
+    expect(lines[0]).toContain('编号');
+    expect(lines[0]).toContain('状态');
+    expect(lines.some(l => l.includes('导出测试样'))).toBe(true);
+    expect(lines.some(l => l.includes('待制作'))).toBe(true); // NEW → 待制作
+  });
+
+  it('should respect status filter (full export ignores paging)', async () => {
+    // 不传 status：导出全部（含新建样品）
+    const all = await adminAgent.get('/api/samples/export');
+    const allLines = all.text.replace('\uFEFF', '').split('\r\n').slice(1).filter(l => l.trim());
+    const listRes = await adminAgent.get('/api/samples');
+    expect(allLines.length).toBe(listRes.body.total);
+  });
+
+  afterAll(async () => {
+    if (expId) await adminAgent.delete('/api/samples/' + expId);
   });
 });
 }
