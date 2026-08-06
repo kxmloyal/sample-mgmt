@@ -31,14 +31,14 @@ describe('项目 CRUD 与成员管理', () => {
     expect(mem.body.some(m => m.user_id === pm.user.id && m.is_owner === 1)).toBe(true);
   });
   test('非成员 RD 只读，不能建任务', async () => {
-    const rd = await makeUser({ username: 'rd-proj', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发' });
+    const rd = await makeUser({ username: 'rd-proj', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发' });
     const list = await rd.agent.get('/api/projects');
     expect(list.status).toBe(200);
     const create = await rd.agent.post('/api/projects/' + pid + '/tasks').send({ title: 'x' });
     expect(create.status).toBe(403);
   });
   test('owner 添加成员、转让 owner、移除成员', async () => {
-    rd2 = await makeUser({ username: 'rd-proj2', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发2' });
+    rd2 = await makeUser({ username: 'rd-proj2', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发2' });
     const add = await pm.agent.post('/api/projects/' + pid + '/members').send({ user_id: rd2.user.id });
     expect(add.status).toBe(201);
     const transfer = await pm.agent.put('/api/projects/' + pid + '/members/' + rd2.user.id).send({ is_owner: 1 });
@@ -47,7 +47,7 @@ describe('项目 CRUD 与成员管理', () => {
     expect(memAfter.body.find(m => m.user_id === rd2.user.id).is_owner).toBe(1);
   });
   test('普通角色不能删除项目', async () => {
-    const rd = await makeUser({ username: 'rd-proj3', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发3' });
+    const rd = await makeUser({ username: 'rd-proj3', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发3' });
     const del = await rd.agent.delete('/api/projects/' + pid);
     expect(del.status).toBe(403);
   });
@@ -88,7 +88,7 @@ describe('任务 CRUD 与乐观锁', () => {
     expect(res.status).toBe(400);
   });
   test('普通角色编辑他人任务 → 403', async () => {
-    const rd = await makeUser({ username: 'rd-proj4', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发4' });
+    const rd = await makeUser({ username: 'rd-proj4', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发4' });
     const res = await rd.agent.put('/api/projects/tasks/' + tid).send({ title: 'hack', version: 2 });
     expect(res.status).toBe(403);
   });
@@ -147,7 +147,7 @@ describe('子任务与评论', () => {
     expect(list.body.some(x => x.content === '进展：样品测试完成')).toBe(true);
   });
   test('非成员不能评论', async () => {
-    const rd = await makeUser({ username: 'rd-proj5', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发5' });
+    const rd = await makeUser({ username: 'rd-proj5', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发5' });
     const res = await rd.agent.post('/api/projects/tasks/' + tid + '/comments').send({ content: 'x' });
     expect(res.status).toBe(403);
   });
@@ -265,7 +265,7 @@ describe('审查修复回归（C1/C3/W1/W2/W3）', () => {
     expect(res.body.error).toContain('不能移除自己');
   });
   test('W3：转让 owner 给非成员 → 400（防 owner 被清空）', async () => {
-    const outsider = await makeUser({ username: 'rd-proj6', password: 'rd123', role: 'RD', dept: '研发中心', display_name: '研发6' });
+    const outsider = await makeUser({ username: 'rd-proj6', password: 'rd123', role: 'RD', dept: '研发部', display_name: '研发6' });
     const res = await rd2.agent.put('/api/projects/' + pid + '/members/' + outsider.user.id).send({ is_owner: 1 });
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('不是项目成员');

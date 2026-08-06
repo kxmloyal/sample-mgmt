@@ -149,19 +149,19 @@ else
 fi
 
 # 4b. 按 dept 筛选
-info "按 dept=研发中心 筛选…"
+info "按 dept=研发部 筛选…"
 DEPT_RAW=$(curl -s -b "$COOKIE" "$BASE/api/workbench?dept=%E7%A0%94%E5%8F%91%E4%B8%AD%E5%BF%83")
 DEPT_COUNT=$(echo "$DEPT_RAW" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['items']))" 2>/dev/null)
 DEPT_OK=$(echo "$DEPT_RAW" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-all_rd = all(item['resp_dept']=='研发中心' for item in d['items'])
+all_rd = all(item['resp_dept']=='研发部' for item in d['items'])
 print('OK' if all_rd else 'MIXED')
 " 2>/dev/null)
 if [ "$DEPT_OK" = "OK" ] && [ "$DEPT_COUNT" -gt 0 ]; then
-  ok "研发中心 筛选返回 ${DEPT_COUNT} 条，全部正确"
+  ok "研发部 筛选返回 ${DEPT_COUNT} 条，全部正确"
 else
-  fail "研发中心 筛选异常: count=$DEPT_COUNT ok=$DEPT_OK"
+  fail "研发部 筛选异常: count=$DEPT_COUNT ok=$DEPT_OK"
 fi
 
 info "按 dept=品保文管中心 筛选…"
@@ -174,14 +174,14 @@ else
 fi
 
 # 4c. 组合筛选
-info "组合筛选：item_type=sample & dept=研发中心…"
+info "组合筛选：item_type=sample & dept=研发部…"
 COMBO=$(curl -s -b "$COOKIE" \
   "$BASE/api/workbench?item_type=sample&dept=%E7%A0%94%E5%8F%91%E4%B8%AD%E5%BF%83")
 COMBO_COUNT=$(echo "$COMBO" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['items']))" 2>/dev/null)
 COMBO_OK=$(echo "$COMBO" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-ok = all(item['item_type']=='sample' and item['resp_dept']=='研发中心' for item in d['items'])
+ok = all(item['item_type']=='sample' and item['resp_dept']=='研发部' for item in d['items'])
 print('OK' if ok else 'MIXED')
 " 2>/dev/null)
 [ "$COMBO_OK" = "OK" ] && ok "组合筛选返回 ${COMBO_COUNT} 条，全部匹配" \

@@ -19,8 +19,8 @@ var unionSQL = `
       WHEN 'RETIRED' THEN '已废弃'
     END AS stage_cn,
     CASE s.status
-      WHEN 'NEW' THEN '研发中心'
-      WHEN 'PRODUCED' THEN '研发中心'
+      WHEN 'NEW' THEN '研发部'
+      WHEN 'PRODUCED' THEN '研发部'
       WHEN 'RELEASED' THEN COALESCE(s.custody_dept, '品保文管中心')
       WHEN 'IN_CUSTODY' THEN COALESCE(s.custody_dept, '-')
       WHEN 'RETURNING' THEN '品保文管中心'
@@ -67,13 +67,13 @@ var unionSQL = `
     END AS stage_cn,
     CASE f.status
       WHEN 'REQUESTED' THEN COALESCE(f.requested_dept, '-')
-      WHEN 'ACCEPTED' THEN '研发中心'
+      WHEN 'ACCEPTED' THEN '研发部'
       WHEN 'VERIFY_PENDING' THEN COALESCE(f.requested_dept, '-')
       WHEN 'TRANSFERRED' THEN COALESCE(f.requested_dept, '-')
       WHEN 'IN_USE' THEN COALESCE(f.requested_dept, '-')
-      WHEN 'IMPROVING' THEN '研发中心'
+      WHEN 'IMPROVING' THEN '研发部'
       WHEN 'REPAIRING_ME' THEN '生技部'
-      WHEN 'REPAIRING_RD' THEN '研发中心'
+      WHEN 'REPAIRING_RD' THEN '研发部'
       WHEN 'REPAIR_DONE' THEN '生技部'
       ELSE '-'
     END AS resp_dept,

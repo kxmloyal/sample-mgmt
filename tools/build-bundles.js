@@ -26,9 +26,11 @@ const sources = JSON.parse(fs.readFileSync(sourcesPath, 'utf-8'));
 function sharedConstantsHeader() {
   const limitItems = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'limit-items.json'), 'utf-8'));
   const sourceTypes = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'source-types.json'), 'utf-8'));
+  const depts = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'depts.json'), 'utf-8'));
   return '/* --- shared constants (data/*.json) --- */\n' +
     'var LIMIT_ITEMS = ' + JSON.stringify(limitItems) + ';\n' +
-    'var SOURCE_TYPES = ' + JSON.stringify(sourceTypes) + ';\n';
+    'var SOURCE_TYPES = ' + JSON.stringify(sourceTypes) + ';\n' +
+    'var DEPTS = ' + JSON.stringify(depts) + ';\n';
 }
 
 for (const [id, scripts] of Object.entries(sources)) {

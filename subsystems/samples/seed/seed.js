@@ -53,13 +53,13 @@ async function seed(pool) {
   async function make(data, createdDaysAgo, logNote) {
     var s = await D.createSample(data);
     await pool.execute('UPDATE samples SET created_at=? WHERE id=?', [localAgo(createdDaysAgo), s.id]);
-    await addLogAt({ sample_id: s.id, action: 'CREATE', role: 'RD', user_id: rd.id, dept: '研发中心', note: logNote || '新建样品' }, localAgo(createdDaysAgo));
+    await addLogAt({ sample_id: s.id, action: 'CREATE', role: 'RD', user_id: rd.id, dept: '研发部', note: logNote || '新建样品' }, localAgo(createdDaysAgo));
     return s;
   }
   // PRODUCE + RELEASE（cfg: produced/released/cycle/inspectOffset）
   async function flowToReleased(s, cfg) {
     await transit(s, { status: 'PRODUCED', produced_at: isoAgo(cfg.produced) });
-    await addLogAt({ sample_id: s.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '研发确认制作完成' }, localAgo(cfg.produced));
+    await addLogAt({ sample_id: s.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发部', note: '研发确认制作完成' }, localAgo(cfg.produced));
     await transit(s, { status: 'RELEASED', released_at: isoAgo(cfg.released), release_cycle_days: cfg.cycle, next_inspect_at: isoFrom(cfg.inspectOffset), valid_until: isoFrom(cfg.inspectOffset) });
     await addLogAt({ sample_id: s.id, action: 'RELEASE', role: 'QA', user_id: qa.id, dept: '品保文管中心', note: '正式发行，复检周期' + cfg.cycle + '天' }, localAgo(cfg.released));
   }
@@ -116,7 +116,7 @@ async function seed(pool) {
     test_standard: 'Q/YS-振动-002', test_data: '震动≤0.5mm', signed_by_rd: '研发工程师'
   }, 4, '新建样品（含标示卡）');
   await transit(s4, { status: 'PRODUCED', produced_at: isoAgo(2) });
-  await addLogAt({ sample_id: s4.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '研发确认制作完成' }, localAgo(2));
+  await addLogAt({ sample_id: s4.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发部', note: '研发确认制作完成' }, localAgo(2));
   console.log('  ' + s4.sample_no + ' 量产验证风扇·标准品 [含标示卡 OK·成品震动·元山]');
 
   var s5 = await make({
@@ -124,7 +124,7 @@ async function seed(pool) {
     notes: '竞品对标分析用样品', created_by: rd.id, source_type: 'C'
   }, 7);
   await transit(s5, { status: 'PRODUCED', produced_at: isoAgo(5) });
-  await addLogAt({ sample_id: s5.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '研发确认制作完成' }, localAgo(5));
+  await addLogAt({ sample_id: s5.id, action: 'PRODUCE', role: 'RD', user_id: rd.id, dept: '研发部', note: '研发确认制作完成' }, localAgo(5));
   console.log('  ' + s5.sample_no + ' 竞品对标风扇·A品牌');
 
   // ═══ 3. RELEASED: 已发行 (3个) ═══
@@ -271,9 +271,9 @@ async function seed(pool) {
     notes: '替代已作废样品 ' + s16.sample_no, created_by: rd.id, replaces: s16.sample_no
   });
   await pool.execute('UPDATE samples SET created_at=? WHERE id=?', [localAgo(6), s17.id]);
-  await addLogAt({ sample_id: s17.id, action: 'CREATE', role: 'RD', user_id: rd.id, dept: '研发中心', note: '替代 ' + s16.sample_no }, localAgo(6));
+  await addLogAt({ sample_id: s17.id, action: 'CREATE', role: 'RD', user_id: rd.id, dept: '研发部', note: '替代 ' + s16.sample_no }, localAgo(6));
   await transit(s16, { status: 'RETIRED', replaced_by: s17.sample_no });
-  await addLogAt({ sample_id: s16.id, action: 'RECREATE_REPLACED', role: 'RD', user_id: rd.id, dept: '研发中心', note: '由 ' + s17.sample_no + ' 替代' }, localAgo(6));
+  await addLogAt({ sample_id: s16.id, action: 'RECREATE_REPLACED', role: 'RD', user_id: rd.id, dept: '研发部', note: '由 ' + s17.sample_no + ' 替代' }, localAgo(6));
   console.log('  ' + s16.sample_no + ' 精度漂移作废样品 [被 ' + s17.sample_no + ' 替代]');
   console.log('  ' + s17.sample_no + ' 精度漂移重做替代品 [替代 ' + s16.sample_no + ', 待制作确认]');
 

@@ -13,7 +13,7 @@ async function seed() {
 
   const users = [
     { username: 'admin',   password: 'admin123', role: 'ADMIN',  dept: '系统',     display_name: '系统管理员' },
-    { username: 'rd01',    password: 'rd123',    role: 'RD',    dept: '研发中心', display_name: '研发工程师' },
+    { username: 'rd01',    password: 'rd123',    role: 'RD',    dept: '研发部', display_name: '研发工程师' },
     { username: 'qa01',    password: 'qa123',    role: 'QA',     dept: '品保文管中心', display_name: '品保文管员' },
     { username: 'mfg01',   password: 'mfg123',   role: 'CUSTODY', dept: '制造部',  display_name: '制造部保管员' },
     { username: 'fqc01',   password: 'fqc123',   role: 'CUSTODY', dept: 'FQC',     display_name: 'FQC保管员' },

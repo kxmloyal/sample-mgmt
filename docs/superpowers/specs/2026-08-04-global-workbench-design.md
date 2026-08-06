@@ -187,19 +187,19 @@ backend/index.js → D.query(unifiedWorkbenchSQL)
 
 | 子系统 | 状态码 | 负责部门 |
 |---|---|---|
-| 样品 | NEW | 研发中心 |
-| 样品 | PRODUCED | 研发中心 |
+| 样品 | NEW | 研发部 |
+| 样品 | PRODUCED | 研发部 |
 | 样品 | RELEASED | 当前保管部门 |
 | 样品 | IN_CUSTODY | 当前保管部门 |
 | 样品 | RETURNING | 品保文管中心 |
 | 治具 | REQUESTED | 申请部门 |
-| 治具 | ACCEPTED | 研发中心 |
+| 治具 | ACCEPTED | 研发部 |
 | 治具 | VERIFY_PENDING | 申请部门 |
 | 治具 | TRANSFERRED | 申请部门 |
 | 治具 | IN_USE | 申请部门 |
-| 治具 | IMPROVING | 研发中心 |
+| 治具 | IMPROVING | 研发部 |
 | 治具 | REPAIRING_ME | 生技部 |
-| 治具 | REPAIRING_RD | 研发中心 |
+| 治具 | REPAIRING_RD | 研发部 |
 | 治具 | REPAIR_DONE | 生技部 |
 
 ---
@@ -329,7 +329,7 @@ function calcOverdue(item, cfg) {
   ],
   "byDept": [
     {
-      "dept": "研发中心",
+      "dept": "研发部",
       "total": 5,
       "d1": 2,
       "d3": 1,
@@ -365,7 +365,7 @@ function calcOverdue(item, cfg) {
 │  全局工作台                    [筛选] [刷新]  │
 ├─────────────────────────────────────────────┤
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐    │
-│  │研发中心   │ │品保文管中心│ │制造部     │    │
+│  │研发部   │ │品保文管中心│ │制造部     │    │
 │  │待办 5    │ │待办 2    │ │待办 4    │    │
 │  │1d+ 2    │ │1d+ 1    │ │7d+ 1    │    │
 │  │3d+ 1    │ │         │ │         │    │
@@ -482,8 +482,8 @@ SELECT * FROM (
       WHEN 'RETIRED' THEN '已废弃'
     END AS stage_cn,
     CASE s.status
-      WHEN 'NEW' THEN '研发中心'
-      WHEN 'PRODUCED' THEN '研发中心'
+      WHEN 'NEW' THEN '研发部'
+      WHEN 'PRODUCED' THEN '研发部'
       WHEN 'RELEASED' THEN COALESCE(s.custody_dept, '品保文管中心')
       WHEN 'IN_CUSTODY' THEN COALESCE(s.custody_dept, '-')
       WHEN 'RETURNING' THEN '品保文管中心'
@@ -520,13 +520,13 @@ SELECT * FROM (
     END AS stage_cn,
     CASE f.status
       WHEN 'REQUESTED' THEN COALESCE(f.requested_dept, '-')
-      WHEN 'ACCEPTED' THEN '研发中心'
+      WHEN 'ACCEPTED' THEN '研发部'
       WHEN 'VERIFY_PENDING' THEN COALESCE(f.requested_dept, '-')
       WHEN 'TRANSFERRED' THEN COALESCE(f.requested_dept, '-')
       WHEN 'IN_USE' THEN COALESCE(f.requested_dept, '-')
-      WHEN 'IMPROVING' THEN '研发中心'
+      WHEN 'IMPROVING' THEN '研发部'
       WHEN 'REPAIRING_ME' THEN '生技部'
-      WHEN 'REPAIRING_RD' THEN '研发中心'
+      WHEN 'REPAIRING_RD' THEN '研发部'
       WHEN 'REPAIR_DONE' THEN '生技部'
       ELSE '-'
     END AS resp_dept,
