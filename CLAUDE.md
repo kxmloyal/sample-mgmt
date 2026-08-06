@@ -214,6 +214,7 @@
 - `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 action helper 拆分后仍偏大），后续治具迭代需关注
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
+- `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06），建议门户块拆独立样式文件（需三系统回归）
 
 ## 12. 验证清单(提交前自检)
 

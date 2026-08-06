@@ -215,7 +215,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品 |
-| `/api/samples/:id` | DELETE | 是 | 删除样品（仅 NEW/PRODUCED）|
+| `/api/samples/:id` | DELETE | 是 | 删除样品（仅 NEW/PRODUCED，仅创建者或管理员）|
 | `/api/samples/:id/qrcode` | GET | 是 | 样品二维码 |
 | `/api/samples/:id/qrcode/download` | GET | 是 | 下载高清二维码 |
 | `/api/samples/:id/label/download` | GET | 是 | 下载标签 HTML |
@@ -244,7 +244,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效 seed/jest 护栏）|
 | `/api/portal/prefs` | GET | 是 | 当前用户门户卡片排序偏好（无记录返回空数组）|
 | `/api/portal/prefs` | PUT | 是 | 保存/清除排序偏好（order=[] 或 null 清除）|
-| `/api/rd-users` | GET | 是 | RD 用户列表（退回指派选择）|
+| `/api/rd-users` | GET | 是(ADMIN/RD/QA) | RD 用户列表（退回指派选择）|
 | `/api/logs` | GET | 是(ADMIN) | 全量操作日志 |
 | `/api/users` | GET/POST | 是(ADMIN) | 用户管理 |
 | `/api/users/batch` | POST | 是(ADMIN) | 用户批量管理（delete/reset-password/update/enable/disable）|

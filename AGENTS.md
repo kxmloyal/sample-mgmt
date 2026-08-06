@@ -316,6 +316,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
+- `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
 
 ## 15. 禁止行为黑名单
 
