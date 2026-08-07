@@ -10,7 +10,7 @@ function buildReleaseWizard(s,isReRelease){
 }
 
 function renderWizardStep1(s){
-  var cycle=s._wizCycle||'90';
+  var cycle=s._wizCycle||'365';
   var nextDate=new Date(Date.now()+parseInt(cycle)*864e5).toISOString().slice(0,10);
   return '<div class="wizard-steps">'+
       '<span class="wdot active">1</span><span class="wline"></span>'+
@@ -20,7 +20,7 @@ function renderWizardStep1(s){
     '<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:14px">设置周期 · 标示卡 · 确认</div>'+
     '<div class="wizard-body">'+
       '<label>复检周期（天）<b class="required">*</b></label>'+
-      '<fluent-text-field id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 90" oninput="updateWizardNextDate()" style="width:100px;text-align:center"></fluent-text-field>'+
+      '<fluent-text-field id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 365" oninput="updateWizardNextDate()" style="width:100px;text-align:center"></fluent-text-field>'+
       '<span class="muted" style="margin-left:8px;font-size:12px" id="wiz-next-date">→ 下次复检：'+nextDate+'</span>'+
     '</div>'+
     '<div style="text-align:right;margin-top:14px">'+
@@ -29,7 +29,7 @@ function renderWizardStep1(s){
   ;
 }
 function updateWizardNextDate(){
-  var days=parseInt($('#scan-cycle').value)||90;
+  var days=parseInt($('#scan-cycle').value)||365;
   var d=new Date(Date.now()+days*864e5).toISOString().slice(0,10);
   var el=document.getElementById('wiz-next-date');if(el)el.textContent='→ 下次复检：'+d;
 }
@@ -56,7 +56,7 @@ function renderWizardStep2(s){
 }
 
 function renderWizardStep3(s){
-  var cycle=s._wizCycle||'90';
+  var cycle=s._wizCycle||'365';
   var t=s._wizCardType||'',l=s._wizCardItem||'';
   var ok=t&&l;
   var confirmAction=s._isReRelease?'RE_RELEASE':'RELEASE';
@@ -94,6 +94,8 @@ function goWizardStep(step){
     if(s._wizCardSource)s.source_type=s._wizCardSource;
     if(s._wizCardVersion)s.card_version=s._wizCardVersion;
     if(s._wizCardData)s.test_data=s._wizCardData;
+    // 标准范围允许空值回写（RD 可能未填），仅当已进入过 Step3 时覆盖
+    if(s._wizCardStandard!==undefined)s.test_standard=s._wizCardStandard;
   }
   if(step===3){
     // 离开Step2前持久化标示卡字段值（Step3 DOM中这些元素已不存在）
@@ -104,6 +106,7 @@ function goWizardStep(step){
     var srcEl=$('#scan-card-source');s._wizCardSource=srcEl?srcEl.value:'';
     var verEl=$('#scan-card-ver');s._wizCardVersion=verEl?verEl.value.trim():'';
     var dataEl=$('#scan-card-data');s._wizCardData=dataEl?dataEl.value.trim():'';
+    var stdEl=$('#scan-card-standard');s._wizCardStandard=stdEl?stdEl.value.trim():'';
   }
   var html;
   if(step===1)html=renderWizardStep1(s);
@@ -114,4 +117,6 @@ function goWizardStep(step){
   // 仅替换表单区域，保留样品头部信息（编号/名称/规格/储位等）
   var formEl=box.querySelector('#scan-action-form');
   if(formEl)formEl.innerHTML=html;
+  // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
+  if(step===2)applyCardFieldValues(s);
 }

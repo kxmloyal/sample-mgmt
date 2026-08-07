@@ -18,6 +18,8 @@ function renderTab(tab, id) {
   var body = document.querySelector('.modal-body');
   if (!body) return;
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
+  // innerHTML 注入的 selected 属性在 FAST 下不生效，需显式回显下拉值
+  if (tab === 'card') applyDetailCardValues(s);
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -33,7 +35,7 @@ function _buildTabContent(s, id, tab) {
 function _buildTabsHTML(s, id, activeTab) {
   var hasImg = !!(s.produced_image || s.image || s.inspect_image);
   var hasLog = s.logs && s.logs.length > 0;
-  var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data);
+  var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data || s.test_standard);
   if (!hasImg && !hasLog && !hasCrd) return '';
 
   var on = 'renderTab(\'';
@@ -125,6 +127,14 @@ function showImageView(src) {
   document.body.appendChild(o);
 }
 
+// 标示卡 Tab 下拉回显（innerHTML 注入 selected 属性在 FAST upgrade 时序下失效，须显式设置 value）
+function applyDetailCardValues(s){
+  var el;
+  el=document.getElementById('cd-type');if(el)el.value=s.sample_type||'';
+  el=document.getElementById('cd-limit-item');if(el)el.value=s.limit_item||'';
+  el=document.getElementById('cd-source');if(el)el.value=s.source_type||'';
+}
+
 // ═══ 标示卡 Tab（8字段编辑表单） ═══
 function _buildCardTab(s, id) {
   var locked = ['RELEASED', 'IN_CUSTODY', 'RETURNING', 'RETIRED'].indexOf(s.status) !== -1;
@@ -145,6 +155,7 @@ function _buildCardTab(s, id) {
     '<div><label>制作</label><fluent-text-field id="cd-signed-rnd" value="' + e(s.signed_by_rd || '') + '"' + dis + '></fluent-text-field></div>' +
     '<div><label>确认</label><fluent-text-field id="cd-signed-qa" value="' + e(s.signed_by_qa || '') + '"' + dis + '></fluent-text-field></div>' +
     '<div class="full-row"><label>样品数值</label><textarea id="cd-test-data" rows="1" style="resize:none;min-height:32px"' + dis + '>' + e(s.test_data || '') + '</textarea></div>' +
+    '<div class="full-row"><label>标准范围</label><textarea id="cd-test-standard" rows="2" style="resize:none;min-height:40px"' + dis + '>' + e(s.test_standard || '') + '</textarea></div>' +
     '</div>' +
     '<div style="margin-top:12px;display:flex;gap:8px">' +
     (locked ? '' : '<fluent-button appearance="accent" id="cd-save-btn" onclick="saveCard(' + id + ')">保存标示卡</fluent-button>') +
@@ -160,7 +171,7 @@ async function saveCard(id) {
   if (msg) msg.textContent = '保存中...';
   if (btn) btn.disabled = true;
   try {
-    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
+    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
     await api('PUT', '/api/samples/' + id, p);
     toast('标示卡已保存', 'ok');
     if (msg) msg.textContent = '保存成功';

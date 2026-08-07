@@ -1,4 +1,4 @@
-/** BUNDLE vbmsi8bg1c — 24 files */
+/** BUNDLE vbmsifb7lh — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -859,6 +859,8 @@ function renderTab(tab, id) {
   var body = document.querySelector('.modal-body');
   if (!body) return;
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
+  // innerHTML 注入的 selected 属性在 FAST 下不生效，需显式回显下拉值
+  if (tab === 'card') applyDetailCardValues(s);
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -874,7 +876,7 @@ function _buildTabContent(s, id, tab) {
 function _buildTabsHTML(s, id, activeTab) {
   var hasImg = !!(s.produced_image || s.image || s.inspect_image);
   var hasLog = s.logs && s.logs.length > 0;
-  var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data);
+  var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data || s.test_standard);
   if (!hasImg && !hasLog && !hasCrd) return '';
 
   var on = 'renderTab(\'';
@@ -966,6 +968,14 @@ function showImageView(src) {
   document.body.appendChild(o);
 }
 
+// 标示卡 Tab 下拉回显（innerHTML 注入 selected 属性在 FAST upgrade 时序下失效，须显式设置 value）
+function applyDetailCardValues(s){
+  var el;
+  el=document.getElementById('cd-type');if(el)el.value=s.sample_type||'';
+  el=document.getElementById('cd-limit-item');if(el)el.value=s.limit_item||'';
+  el=document.getElementById('cd-source');if(el)el.value=s.source_type||'';
+}
+
 // ═══ 标示卡 Tab（8字段编辑表单） ═══
 function _buildCardTab(s, id) {
   var locked = ['RELEASED', 'IN_CUSTODY', 'RETURNING', 'RETIRED'].indexOf(s.status) !== -1;
@@ -986,6 +996,7 @@ function _buildCardTab(s, id) {
     '<div><label>制作</label><fluent-text-field id="cd-signed-rnd" value="' + e(s.signed_by_rd || '') + '"' + dis + '></fluent-text-field></div>' +
     '<div><label>确认</label><fluent-text-field id="cd-signed-qa" value="' + e(s.signed_by_qa || '') + '"' + dis + '></fluent-text-field></div>' +
     '<div class="full-row"><label>样品数值</label><textarea id="cd-test-data" rows="1" style="resize:none;min-height:32px"' + dis + '>' + e(s.test_data || '') + '</textarea></div>' +
+    '<div class="full-row"><label>标准范围</label><textarea id="cd-test-standard" rows="2" style="resize:none;min-height:40px"' + dis + '>' + e(s.test_standard || '') + '</textarea></div>' +
     '</div>' +
     '<div style="margin-top:12px;display:flex;gap:8px">' +
     (locked ? '' : '<fluent-button appearance="accent" id="cd-save-btn" onclick="saveCard(' + id + ')">保存标示卡</fluent-button>') +
@@ -1001,7 +1012,7 @@ async function saveCard(id) {
   if (msg) msg.textContent = '保存中...';
   if (btn) btn.disabled = true;
   try {
-    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
+    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
     await api('PUT', '/api/samples/' + id, p);
     toast('标示卡已保存', 'ok');
     if (msg) msg.textContent = '保存成功';
@@ -1184,13 +1195,22 @@ function cardFieldStatus(s,field){
   }
   return val?'filled':'empty';
 }
+// 下拉回显：innerHTML 注入 selected 属性在 FAST upgrade 时序下失效（2026-08-07 实测），须注入后显式设置 value
+function applyCardFieldValues(s){
+  var el;
+  el=document.getElementById('scan-card-type');if(el)el.value=s.sample_type||'';
+  el=document.getElementById('scan-card-item');if(el)el.value=s.limit_item||'';
+  el=document.getElementById('scan-card-source');if(el)el.value=s.source_type||'';
+}
+
 // 标示卡字段表格组件，三处复用（RELEASE Step2, INSPECT, 详情弹窗标示卡Tab）
 function buildCardFieldTable(s,editable,suggestedVersion){
   var t=s.sample_type||'', l=s.limit_item||'', src=s.source_type||'';
-  var ver=suggestedVersion||s.card_version||'', data=s.test_data||'';
+  var ver=suggestedVersion||s.card_version||'', data=s.test_data||'', std=s.test_standard||'';
   var typeSt=cardFieldStatus(s,'sample_type'), itemSt=cardFieldStatus(s,'limit_item');
   var srcSt=cardFieldStatus(s,'source_type');
   var verSt=cardFieldStatus(s,'card_version'), dataSt=cardFieldStatus(s,'test_data');
+  var stdSt=cardFieldStatus(s,'test_standard');
 
   function mark(field,status){
     if(status==='required_empty')return '<span style="color:#dc2626;font-size:11px;margin-left:4px">✗ 必填</span>';
@@ -1215,6 +1235,9 @@ function buildCardFieldTable(s,editable,suggestedVersion){
     '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td>'+
       '<td style="padding:4px 0"><textarea id="scan-card-data" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(data)+'</textarea></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('test_data',dataSt)+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:#6b7280">标准范围</td>'+
+      '<td style="padding:4px 0"><textarea id="scan-card-standard" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(std)+'</textarea></td>'+
+      '<td style="padding:4px 0;text-align:right">'+mark('test_standard',stdSt)+'</td></tr>'+
   '</table>';
 }
 
@@ -1232,7 +1255,7 @@ function buildReleaseWizard(s,isReRelease){
 }
 
 function renderWizardStep1(s){
-  var cycle=s._wizCycle||'90';
+  var cycle=s._wizCycle||'365';
   var nextDate=new Date(Date.now()+parseInt(cycle)*864e5).toISOString().slice(0,10);
   return '<div class="wizard-steps">'+
       '<span class="wdot active">1</span><span class="wline"></span>'+
@@ -1242,7 +1265,7 @@ function renderWizardStep1(s){
     '<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:14px">设置周期 · 标示卡 · 确认</div>'+
     '<div class="wizard-body">'+
       '<label>复检周期（天）<b class="required">*</b></label>'+
-      '<fluent-text-field id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 90" oninput="updateWizardNextDate()" style="width:100px;text-align:center"></fluent-text-field>'+
+      '<fluent-text-field id="scan-cycle" type="number" min="1" value="'+cycle+'" placeholder="如 365" oninput="updateWizardNextDate()" style="width:100px;text-align:center"></fluent-text-field>'+
       '<span class="muted" style="margin-left:8px;font-size:12px" id="wiz-next-date">→ 下次复检：'+nextDate+'</span>'+
     '</div>'+
     '<div style="text-align:right;margin-top:14px">'+
@@ -1251,7 +1274,7 @@ function renderWizardStep1(s){
   ;
 }
 function updateWizardNextDate(){
-  var days=parseInt($('#scan-cycle').value)||90;
+  var days=parseInt($('#scan-cycle').value)||365;
   var d=new Date(Date.now()+days*864e5).toISOString().slice(0,10);
   var el=document.getElementById('wiz-next-date');if(el)el.textContent='→ 下次复检：'+d;
 }
@@ -1278,7 +1301,7 @@ function renderWizardStep2(s){
 }
 
 function renderWizardStep3(s){
-  var cycle=s._wizCycle||'90';
+  var cycle=s._wizCycle||'365';
   var t=s._wizCardType||'',l=s._wizCardItem||'';
   var ok=t&&l;
   var confirmAction=s._isReRelease?'RE_RELEASE':'RELEASE';
@@ -1316,6 +1339,8 @@ function goWizardStep(step){
     if(s._wizCardSource)s.source_type=s._wizCardSource;
     if(s._wizCardVersion)s.card_version=s._wizCardVersion;
     if(s._wizCardData)s.test_data=s._wizCardData;
+    // 标准范围允许空值回写（RD 可能未填），仅当已进入过 Step3 时覆盖
+    if(s._wizCardStandard!==undefined)s.test_standard=s._wizCardStandard;
   }
   if(step===3){
     // 离开Step2前持久化标示卡字段值（Step3 DOM中这些元素已不存在）
@@ -1326,6 +1351,7 @@ function goWizardStep(step){
     var srcEl=$('#scan-card-source');s._wizCardSource=srcEl?srcEl.value:'';
     var verEl=$('#scan-card-ver');s._wizCardVersion=verEl?verEl.value.trim():'';
     var dataEl=$('#scan-card-data');s._wizCardData=dataEl?dataEl.value.trim():'';
+    var stdEl=$('#scan-card-standard');s._wizCardStandard=stdEl?stdEl.value.trim():'';
   }
   var html;
   if(step===1)html=renderWizardStep1(s);
@@ -1336,6 +1362,8 @@ function goWizardStep(step){
   // 仅替换表单区域，保留样品头部信息（编号/名称/规格/储位等）
   var formEl=box.querySelector('#scan-action-form');
   if(formEl)formEl.innerHTML=html;
+  // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
+  if(step===2)applyCardFieldValues(s);
 }
 
 
@@ -1473,15 +1501,18 @@ function showScanActionForm(action){
     if(!html){formEl.innerHTML='';return;}
   }
   formEl.innerHTML=html;
+  // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
+  if(action==='EDIT_CARD')applyCardFieldValues(s);
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
-  body.cycleDays=(wizardSample&&wizardSample._wizCycle?wizardSample._wizCycle:'90');
+  body.cycleDays=(wizardSample&&wizardSample._wizCycle?wizardSample._wizCycle:'365');
   body.sample_type=wizardSample&&wizardSample._wizCardType?wizardSample._wizCardType:'';
   body.limit_item=wizardSample&&wizardSample._wizCardItem?wizardSample._wizCardItem:'';
   if(wizardSample&&wizardSample._wizCardSource)body.source_type=wizardSample._wizCardSource;
   if(wizardSample&&wizardSample._wizCardVersion)body.card_version=wizardSample._wizCardVersion;
   if(wizardSample&&wizardSample._wizCardData)body.test_data=wizardSample._wizCardData;
+  if(wizardSample&&wizardSample._wizCardStandard)body.test_standard=wizardSample._wizCardStandard;
 }
 async function confirmScan(action){
   var code=document.getElementById('scan-code').value.trim();
@@ -1513,6 +1544,7 @@ async function confirmScan(action){
     var sEl=$('#scan-card-source');if(sEl&&sEl.value)body.source_type=sEl.value;
     var verEl2=document.getElementById('scan-card-ver');if(verEl2&&verEl2.value!==undefined)body.card_version=verEl2.value.trim();
     var dataEl2=document.getElementById('scan-card-data');if(dataEl2&&dataEl2.value!==undefined)body.test_data=dataEl2.value.trim();
+    var stdEl2=document.getElementById('scan-card-standard');if(stdEl2&&stdEl2.value!==undefined)body.test_standard=stdEl2.value.trim();
   }
   try{var r=await api('POST','/api/scan',body);handleScanSuccess(r);}catch(e){toast(e.message,'err');}
 }

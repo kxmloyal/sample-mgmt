@@ -101,15 +101,18 @@ function showScanActionForm(action){
     if(!html){formEl.innerHTML='';return;}
   }
   formEl.innerHTML=html;
+  // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
+  if(action==='EDIT_CARD')applyCardFieldValues(s);
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
-  body.cycleDays=(wizardSample&&wizardSample._wizCycle?wizardSample._wizCycle:'90');
+  body.cycleDays=(wizardSample&&wizardSample._wizCycle?wizardSample._wizCycle:'365');
   body.sample_type=wizardSample&&wizardSample._wizCardType?wizardSample._wizCardType:'';
   body.limit_item=wizardSample&&wizardSample._wizCardItem?wizardSample._wizCardItem:'';
   if(wizardSample&&wizardSample._wizCardSource)body.source_type=wizardSample._wizCardSource;
   if(wizardSample&&wizardSample._wizCardVersion)body.card_version=wizardSample._wizCardVersion;
   if(wizardSample&&wizardSample._wizCardData)body.test_data=wizardSample._wizCardData;
+  if(wizardSample&&wizardSample._wizCardStandard)body.test_standard=wizardSample._wizCardStandard;
 }
 async function confirmScan(action){
   var code=document.getElementById('scan-code').value.trim();
@@ -141,6 +144,7 @@ async function confirmScan(action){
     var sEl=$('#scan-card-source');if(sEl&&sEl.value)body.source_type=sEl.value;
     var verEl2=document.getElementById('scan-card-ver');if(verEl2&&verEl2.value!==undefined)body.card_version=verEl2.value.trim();
     var dataEl2=document.getElementById('scan-card-data');if(dataEl2&&dataEl2.value!==undefined)body.test_data=dataEl2.value.trim();
+    var stdEl2=document.getElementById('scan-card-standard');if(stdEl2&&stdEl2.value!==undefined)body.test_standard=stdEl2.value.trim();
   }
   try{var r=await api('POST','/api/scan',body);handleScanSuccess(r);}catch(e){toast(e.message,'err');}
 }

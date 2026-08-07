@@ -16,13 +16,22 @@ function cardFieldStatus(s,field){
   }
   return val?'filled':'empty';
 }
+// 下拉回显：innerHTML 注入 selected 属性在 FAST upgrade 时序下失效（2026-08-07 实测），须注入后显式设置 value
+function applyCardFieldValues(s){
+  var el;
+  el=document.getElementById('scan-card-type');if(el)el.value=s.sample_type||'';
+  el=document.getElementById('scan-card-item');if(el)el.value=s.limit_item||'';
+  el=document.getElementById('scan-card-source');if(el)el.value=s.source_type||'';
+}
+
 // 标示卡字段表格组件，三处复用（RELEASE Step2, INSPECT, 详情弹窗标示卡Tab）
 function buildCardFieldTable(s,editable,suggestedVersion){
   var t=s.sample_type||'', l=s.limit_item||'', src=s.source_type||'';
-  var ver=suggestedVersion||s.card_version||'', data=s.test_data||'';
+  var ver=suggestedVersion||s.card_version||'', data=s.test_data||'', std=s.test_standard||'';
   var typeSt=cardFieldStatus(s,'sample_type'), itemSt=cardFieldStatus(s,'limit_item');
   var srcSt=cardFieldStatus(s,'source_type');
   var verSt=cardFieldStatus(s,'card_version'), dataSt=cardFieldStatus(s,'test_data');
+  var stdSt=cardFieldStatus(s,'test_standard');
 
   function mark(field,status){
     if(status==='required_empty')return '<span style="color:#dc2626;font-size:11px;margin-left:4px">✗ 必填</span>';
@@ -47,5 +56,8 @@ function buildCardFieldTable(s,editable,suggestedVersion){
     '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td>'+
       '<td style="padding:4px 0"><textarea id="scan-card-data" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(data)+'</textarea></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('test_data',dataSt)+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:#6b7280">标准范围</td>'+
+      '<td style="padding:4px 0"><textarea id="scan-card-standard" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(std)+'</textarea></td>'+
+      '<td style="padding:4px 0;text-align:right">'+mark('test_standard',stdSt)+'</td></tr>'+
   '</table>';
 }

@@ -139,12 +139,13 @@ function register(app) {
     }
     // === 新增 Action ===
     else if (chosenAction === 'EDIT_CARD') {
-      const { sample_type, limit_item, source_type, card_version, test_data } = req.body || {};
+      const { sample_type, limit_item, source_type, card_version, test_data, test_standard } = req.body || {};
       if (sample_type) updated.sample_type = sample_type.trim();
       if (limit_item) updated.limit_item = limit_item.trim();
       if (source_type) updated.source_type = source_type.trim();
       if (card_version !== undefined) updated.card_version = card_version.trim();
       if (test_data !== undefined) updated.test_data = test_data.trim();
+      if (test_standard !== undefined) updated.test_standard = test_standard.trim();
       updated.signed_by_qa = u.display_name || u.username;
       logData = { sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: note || '修正标示卡' };
     } else if (chosenAction === 'EDIT_STORAGE') {
@@ -158,7 +159,7 @@ function register(app) {
     } else if (chosenAction === 'RE_RELEASE') {
       const cyc = Number(cycleDays);
       if (!cyc || cyc <= 0) return res.status(400).json({ error: '请填写有效的复检周期（天）' });
-      const { sample_type, limit_item, source_type, card_version, test_data } = req.body || {};
+      const { sample_type, limit_item, source_type, card_version, test_data, test_standard } = req.body || {};
       if (!sample_type || !sample_type.trim()) return res.status(400).json({ error: '请选择样品类型' });
       if (!limit_item || !limit_item.trim()) return res.status(400).json({ error: '请选择限度项目' });
       const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
@@ -172,6 +173,7 @@ function register(app) {
       if (source_type) updated.source_type = source_type.trim();
       updated.card_version = (card_version && card_version.trim()) || nextCardVersion(s.card_version);
       if (test_data) updated.test_data = test_data.trim();
+      if (test_standard) updated.test_standard = test_standard.trim();
       updated.signed_by_qa = u.display_name || u.username;
       updated.retire_assigned_rd = null;
       updated.retired_reason = null;
