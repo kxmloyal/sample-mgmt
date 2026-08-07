@@ -929,7 +929,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 
 | 子系统 | id | 上线日期 | 受保护数据表 |
 |---|---|---|---|
-| 样品管理 | samples | 2026-08-06 | samples / scan_logs / sample_models |
+| 样品管理 | samples | 2026-08-07（重新上线） | samples / scan_logs / sample_models / sample_seqs |
 
 ### 20.5 AI 拦截逻辑
 
