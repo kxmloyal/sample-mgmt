@@ -53,7 +53,7 @@ header "2. 子系统注册验证"
 # ============================================================
 
 info "检查子系统列表…"
-SUBS=$(curl -s "$BASE/api/subsystems")
+SUBS=$(curl -s -b "$COOKIE" "$BASE/api/subsystems")
 if echo "$SUBS" | grep -q '"workbench"'; then
   ok "workbench 子系统已注册"
 else

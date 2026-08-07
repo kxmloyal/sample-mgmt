@@ -39,7 +39,10 @@ function buildNav(){
   });
 }
 // api-base.js 的 boot()/doLogin() 均调用 showApp()（登录后初始化界面，填充侧边栏用户信息）
+// 2026-08-07 子系统未完成，仅 ADMIN 可进入（与 manifest.json roles.use 一致）；非 ADMIN 直连入口页时弹回门户
+const SUBSYSTEM_ROLES=['ADMIN'];
 function showApp(){
+  if(!SUBSYSTEM_ROLES.includes(me.role)){location.replace('/portal.html');return;}
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   $('#me-name').textContent = me.display_name || me.username;

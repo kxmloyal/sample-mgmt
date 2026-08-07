@@ -39,10 +39,19 @@ function register(app) {
   const currentUser = app.locals.currentUser;
 
   // 获取所有子系统（门户渲染用）— 每次请求实时扫描，确保 server.js 后加载的子系统也能被发现
-  app.get('/api/subsystems', function (req, res) {
+  // 2026-08-07 角色过滤：已登录用户仅返回 manifest.roles.use 中允许其角色进入的子系统（projects 未完成仅 ADMIN 可见）；
+  // 未登录返回空数组（不向匿名访问暴露子系统清单）
+  app.get('/api/subsystems', async function (req, res) {
     // 每次请求以磁盘为准重建 registry（PUT 已同步写磁盘，不会丢数据）
     registry = scanSubsystems();
-    var list = Object.values(registry).map(function (m) {
+    var u = await currentUser(req);
+    if (!u) return res.json([]);
+    var list = Object.values(registry).filter(function (m) {
+      var use = m.roles && m.roles.use;
+      if (!use || !use.length) return true; // 未声明 roles.use 视为所有人可见
+      return use.indexOf(u.role) !== -1;
+    });
+    res.json(list.map(function (m) {
       return {
         id: m.id, name: m.name, description: m.description,
         icon: m.icon, version: m.version,
@@ -51,8 +60,7 @@ function register(app) {
         stateCount: m.stateMachine ? Object.keys(m.stateMachine.states).length : 0,
         navCount: m.navigation ? m.navigation.length : 0
       };
-    });
-    res.json(list);
+    }));
   });
 
   // 获取单个子系统 manifest

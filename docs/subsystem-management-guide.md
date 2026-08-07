@@ -97,7 +97,7 @@ module.exports = { register, initDB, seed };
 
 | 方法 | 路径 | 鉴权 | 角色 | 说明 |
 |---|---|---|---|---|
-| `GET` | `/api/subsystems` | 无 | 全角色 | 获取所有子系统摘要列表 |
+| `GET` | `/api/subsystems` | 无 | 登录按 `roles.use` 过滤，未登录返回空数组 | 获取所有子系统摘要列表（2026-08-07 起按角色过滤，projects 仅 ADMIN 可见；未登录不暴露子系统清单） |
 | `GET` | `/api/subsystems/:id` | 无 | 全角色 | 获取单个子系统完整 manifest |
 | `POST` | `/api/subsystems` | 是 | ADMIN | 创建新子系统（生成目录+模板） |
 | `PUT` | `/api/subsystems/:id/manifest` | 是 | ADMIN | 更新 manifest.json |
