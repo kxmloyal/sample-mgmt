@@ -16,6 +16,15 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
 .main h1{font-size:24px;margin:0 0 8px;color:var(--text)}
 .main .welcome-sub{color:var(--muted);margin:0 0 40px;font-size:14px}
 .footer{text-align:center;padding:16px;color:var(--muted);font-size:12px;flex-shrink:0}
+.login-box{width:320px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:24px;margin:0 auto 32px}
+.login-title{font-size:15px;font-weight:600;margin-bottom:16px;text-align:center}
+.login-row{margin-bottom:12px}
+.login-row input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;box-sizing:border-box}
+.login-row input:focus{outline:none;border-color:var(--brand)}
+.login-row button{width:100%;padding:9px 0;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer}
+.login-row button:hover{background:var(--brand-d)}
+.login-err{color:#dc2626;font-size:12px;text-align:center;min-height:16px}
+#user-info{font-size:13px}
 </style>
 <link rel="stylesheet" href="/css/app.css?v=20260805b">
 </head>
@@ -28,6 +37,15 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
   <div class="welcome-sub">
     <span>请选择子系统进入</span>
     <span class="order-btns" id="order-btns"></span>
+    <span id="user-info"></span>
+  </div>
+  <!-- 未登录时显示内嵌登录框 -->
+  <div class="login-box" id="login-box" style="display:none">
+    <div class="login-title">用户登录</div>
+    <div class="login-row"><input id="lg-user" placeholder="账号" autocomplete="username" /></div>
+    <div class="login-row"><input id="lg-pass" type="password" placeholder="密码" autocomplete="current-password" /></div>
+    <div class="login-row"><button type="button" onclick="portalLogin()">登 录</button></div>
+    <div class="login-err" id="lg-err"></div>
   </div>
   <div class="portal-cards" id="subsystem-grid">
     <div class="portal-card"><div class="card-desc" style="text-align:center;color:var(--muted);padding:20px">加载子系统…</div></div>
@@ -162,11 +180,21 @@ grid.addEventListener('dragend', function () {
   if (dragging) dragging.classList.remove('dragging');
 });
 
-(async function () {
+// ===== 门户登录（未登录时内嵌登录框，登录后加载子系统卡片）=====
+// 门户初始化/登录后渲染：u 已登录 → 加载卡片并显示用户；未登录 → 显示登录框（退出链接内联，避免额外顶层函数）
+async function bootPortal(u) {
+  if (!u || !u.id) {
+    document.getElementById('login-box').style.display = 'block';
+    grid.innerHTML = '<div class="portal-card"><div class="card-desc" style="text-align:center;color:var(--muted);padding:20px">登录后显示可用子系统</div></div>';
+    return;
+  }
+  document.getElementById('user-info').innerHTML =
+    '<span style="color:var(--muted);margin-right:8px">' + (u.display_name || u.username) + '</span>' +
+    '<a href="javascript:fetch(\'/api/logout\',{method:\'POST\',credentials:\'include\'}).then(function(){location.reload()})" style="color:var(--brand);text-decoration:none">退出</a>';
   try {
     var [subRes, prefRes] = await Promise.all([
-      fetch('/api/subsystems'),
-      fetch('/api/portal/prefs')
+      fetch('/api/subsystems', { credentials: 'include' }),
+      fetch('/api/portal/prefs', { credentials: 'include' })
     ]);
     var subsystems = await subRes.json();
     var prefs = (await prefRes.json()).order || [];
@@ -181,6 +209,35 @@ grid.addEventListener('dragend', function () {
   } catch (e) {
     grid.innerHTML = '<div class="portal-card"><div class="card-desc" style="color:#dc2626;padding:20px">加载子系统失败：' + e.message + '</div></div>';
   }
+}
+
+// 门户登录：成功后初始化门户（隐藏登录框、加载卡片）
+async function portalLogin() {
+  var errEl = document.getElementById('lg-err');
+  errEl.textContent = '';
+  try {
+    var res = await fetch('/api/login', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('lg-user').value.trim(),
+        password: document.getElementById('lg-pass').value
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || '登录失败');
+    document.getElementById('login-box').style.display = 'none';
+    document.getElementById('lg-pass').value = '';
+    bootPortal(data);
+  } catch (e) { errEl.textContent = e.message; }
+}
+
+// 启动：检查登录态 → 初始化门户
+(async function () {
+  try {
+    var r = await fetch('/api/me', { credentials: 'include' });
+    bootPortal(await r.json());
+  } catch (e) { bootPortal(null); }
 })();
 </script>
 </body>
