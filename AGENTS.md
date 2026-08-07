@@ -210,6 +210,17 @@ npm start           # 启动,访问 http://localhost:4000(端口可通过 .env �
 - 返回值说明(是否兼容旧调用方)
 - 异常说明(变更后可能新增的异常场景)
 
+### 7.6 EditorConfig 格式规范
+
+仓库根目录 `.editorconfig` 为编辑器格式统一规范（2 空格缩进、UTF-8、LF、末行换行），主流 IDE 自动识别，新增/修改代码 MUST 遵循。
+
+### 7.7 dotenv 加载规范（MUST）
+
+- 背景：`db.js` 的 `dbConfig` 在模块加载时读取 `process.env.DB_*`，db.js 本身不加载 .env
+- 规则：任何独立运行脚本/CLI MUST 在顶部、require db 之前执行 `require('dotenv').config()`（如 `seed.js`/`seed-samples.js`/`init-sample-seqs.js`）
+- 豁免：纯函数导出模块、后端路由（由 server.js 加载）、测试（经 helpers/setup.js 链路）、tools/ 脚本
+- 自查命令与完整规范见 CONTRIBUTING.md
+
 ## 8. Git 规范
 
 ### 8.1 提交格式(Conventional Commits)

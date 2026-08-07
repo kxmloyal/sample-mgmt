@@ -119,6 +119,15 @@
 - 不写 ARIA(项目当前无,留待独立无障碍任务)
 - 内联 `style="..."` 仅用于一次性样式,复用样式 MUST 抽 CSS 类
 
+### 4.4 EditorConfig 格式
+
+根目录 `.editorconfig` 统一格式（2 空格 / UTF-8 / LF / 末行换行），IDE 自动识别，生成的代码 MUST 匹配。
+
+### 4.5 dotenv 加载规范（MUST）
+
+- 独立运行脚本 MUST 顶部先 `require('dotenv').config()` 再 `require('db')`（db.js 配置模块加载时求值，缺加载 Access denied）
+- 豁免：纯导出模块 / server.js 加载的后端 / 测试 getApp() 链路 / tools/ 脚本
+
 ## 5. 全链路变更规则(核心)
 
 > 完整规则见 AGENTS.md 第 6 节与用户 user_rules。Claude MUST 永久记忆:

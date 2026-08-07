@@ -1,0 +1,25 @@
+# EditorConfig — 制造品质管理系统代码格式统一规范
+# https://editorconfig.org | 适用于 VS Code/Trae/JetBrains 等主流编辑器
+# 规则要点：2 空格缩进、UTF-8、LF 行尾、末行换行（与现有代码风格一致）
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# 命令行脚本（bash）：4 空格缩进、LF
+[*.{sh,bash}]
+indent_size = 4
+
+# Markdown：保留行尾双空格换行语义（项目文档大量中文 Markdown）
+[*.md]
+trim_trailing_whitespace = false
+
+# SQL：2 空格缩进（与 schema.sql 现有风格一致）
+[*.sql]
+indent_size = 2

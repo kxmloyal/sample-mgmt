@@ -362,3 +362,9 @@ npm run lint          # ESLint
 npm run lint:fix      # ESLint 自动修复
 npm run format        # Prettier
 ```
+## 开发规范
+
+- 编辑器格式：仓库根目录 `.editorconfig` 统一（2 空格缩进 / UTF-8 / LF / 末行换行），主流 IDE 自动识别
+- dotenv 加载（MUST）：任何独立运行脚本 MUST 顶部先 `require('dotenv').config()` 再 `require('./db')`（db.js 配置在模块加载时求值，缺加载会 Access denied）
+- 完整开发贡献规范见 [CONTRIBUTING.md](CONTRIBUTING.md)
+
