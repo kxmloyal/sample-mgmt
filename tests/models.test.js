@@ -33,6 +33,12 @@ describe('POST /api/samples/models', () => {
     expect(res.status).toBe(400);
   });
 
+  it('should reject code with illegal characters', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.post('/api/samples/models').send({ code: 'ABC-123', full_name: 'x' });
+    expect(res.status).toBe(400);
+  });
+
   it('should reject duplicate code or full_name', async () => {
     const { agent } = await login('rd01', 'rd123');
     await agent.post('/api/samples/models').send({ code: R + '02', full_name: R + ' 重复A' });

@@ -142,6 +142,7 @@ function register(app) {
       if (!code) return res.status(400).json({ error: '请填写机型短码' });
       if (code.length < 6) return res.status(400).json({ error: '机型短码至少 6 位' });
       if (code.length > 20) return res.status(400).json({ error: '机型短码最长 20 位' });
+      if (!/^[A-Za-z0-9]+$/.test(code)) return res.status(400).json({ error: '机型短码仅允许字母和数字' });
       if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
       res.json(await D.createModel({ code: code, full_name: full_name, created_by: u.id }));
     } catch (err) {

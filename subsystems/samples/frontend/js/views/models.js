@@ -24,6 +24,7 @@ async function addModel() {
   const code = $('#m-code').value.trim().toUpperCase();
   const full_name = $('#m-full-name').value.trim();
   if (!code || !full_name) { toast('请填写机型短码和全称', 'err'); return; }
+  if (!/^[A-Za-z0-9]+$/.test(code)) { toast('机型短码仅允许字母和数字', 'err'); return; }
   try {
     await api('POST', '/api/samples/models', { code: code, full_name: full_name });
     toast('机型已新增', 'ok');
