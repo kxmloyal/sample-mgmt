@@ -1,6 +1,6 @@
 # 制造品质管理系统 — 宝塔面板部署教程
 
-本教程适用于把「样品管理 / 治具管理 / 全局工作台」三大子系统部署到 **宝塔面板（Linux 服务器）**，对外提供多人访问，并支持手机扫码（需 HTTPS）。
+本教程适用于把「样品管理 / 治具管理 / 项目追踪 / 全局工作台」四大子系统部署到 **宝塔面板（Linux 服务器）**，对外提供多人访问，并支持手机扫码（需 HTTPS）。
 
 ---
 
@@ -13,13 +13,15 @@
 | 入口文件 | `server.js` |
 | 启动命令 | `npm start`（即 `node server.js`） |
 | 默认端口 | `4000`（可用 `.env` 中 `PORT` 改） |
-| 统一入口 | `public/portal.html` 门户页（先选子系统，再登录） |
-| 子系统 | `subsystems/<id>/`：样品管理 / 治具管理 / 全局工作台，由框架启动时自动扫描 manifest 挂载 |
-| 建表方式 | `db.js` 启动时自动执行 `subsystems/*/db/schema.sql`（幂等，含 `workbench_settings` 等表） |
+| 统一入口 | `public/portal.html` 门户页（**未登录显示内嵌登录框，登录后按角色显示子系统卡片**） |
+| 子系统 | `subsystems/<id>/`：样品管理 / 治具管理 / 项目追踪 / 全局工作台，由框架启动时自动扫描 manifest 挂载 |
+| 建表方式 | `db.js` 启动时自动执行 `subsystems/*/db/schema.sql`（幂等，含各子系统业务表） |
 | 会话密钥 | `.env` 中 `SESSION_SECRET`（生产环境**务必改掉**默认开发值） |
 | 环境变量 | 项目根目录 `.env` 文件读取（`dotenv`），模板见 `.env.example` |
 | 目录权限 | 运行用户（默认 `www`）需可写 `logs/`（日志）与 `public/uploads/`（图片上传） |
 | 手机摄像头扫码 | 依赖浏览器原生 `BarcodeDetector`，**必须在 HTTPS 下才可用**（或 localhost）。仅桌面扫码枪不需要。 |
+| 上线保护 | **样品管理已正式上线**（manifest `deployed:true`）：禁止向线上库注入测试数据，`npm run seed-samples` 会被护栏自动拒绝（见 3.5）。 |
+| 未完成子系统 | **项目追踪（projects）未完成**：门户仅 ADMIN 可见、非 ADMIN 直连入口会被弹回门户（见 9.4）。 |
 
 > ⚠️ 结论先行：**手机扫码一定要配域名 + SSL 证书**。否则手机端只能手动输入编号代替扫码。
 >
@@ -32,7 +34,7 @@
 - 一台 Linux 服务器（CentOS / Ubuntu / Debian 均可），已装好**宝塔面板**。
 - 开放端口：宝塔面板 `8888`、以及后续要用的 `80 / 443`。
 - 准备一个域名（如 `sample.your-company.com`），A 记录解析到服务器 IP。
-- 本地先确认项目能跑：`npm install && npm run seed && npm start`，浏览器开 `http://localhost:4000`。
+- 本地先确认项目能跑：`npm install && npm run seed && npm start`，浏览器开 `http://localhost:4000`（未登录显示登录框，`admin / admin123` 登录后可见子系统卡片）。
 
 ---
 
@@ -126,9 +128,9 @@
 cd /www/wwwroot/sample-mgmt
 npm install --production
 npm run seed          # 创建 6 个角色账号（仅首次执行）
-# 以下为可选的演示/测试数据（生产环境可跳过）：
-npm run seed-samples  # 15 个样品（6 种状态全覆盖）
-npm run seed-fixture  # 15 个治具（12 种状态全覆盖）
+# 以下为可选的演示/测试数据（生产环境一律跳过）：
+npm run seed-samples  # 样品演示数据 —— 样品系统已上线，护栏会直接拒绝（exit 1），生产环境无需执行
+npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示可执行（15 个治具）
 ```
 
 > 若依赖安装慢，可切换 npm 镜像：`npm config set registry https://registry.npmmirror.com`
@@ -136,15 +138,15 @@ npm run seed-fixture  # 15 个治具（12 种状态全覆盖）
 ### 3.6 启动并验证
 
 - 在 Node.js 项目列表点 **启动**（首次启动会自动建表，见 3.2 说明）。
-- 浏览器直接访问 `http://服务器IP:4000`，应能看到**门户页**（样品管理 / 治具管理 / 全局工作台三张入口卡片）。
-- 任选一子系统进入登录页，用 `admin / admin123` 登录验证流程。
+- 浏览器直接访问 `http://服务器IP:4000`，未登录应看到**门户登录框**；用 `admin / admin123` 登录后，应看到样品管理 / 治具管理 / 全局工作台三张卡片（项目追踪仅 ADMIN 可见）。
+- 点击「样品管理」卡片进入系统，验证登录、列表、扫码台等流程。
 
 ### 3.7 绑定域名 + 开启 HTTPS（手机扫码必需）
 
 1. 宝塔 → **网站** → **Node 项目**（或「添加站点」选 Node 项目）→ **域名管理** → 添加 `sample.your-company.com`。
 2. 宝塔会**自动生成 Nginx 反向代理**到 `127.0.0.1:4000`。
 3. **SSL** → 申请 **Let's Encrypt 免费证书** → 强制 HTTPS。
-4. 手机访问 `https://sample.your-company.com` → 登录 → 进入扫码台 → 应能用摄像头扫码。
+4. 手机访问 `https://sample.your-company.com` → 门户登录框登录 → 点「样品管理」进入扫码台 → 应能用摄像头扫码。
 
 > 若没自动反代，手动在站点「反向代理」加一条：目标 `127.0.0.1:4000`，发送域名 `$host`。
 
@@ -161,7 +163,7 @@ npm run seed-fixture  # 15 个治具（12 种状态全覆盖）
    cd /www/wwwroot/sample-mgmt
    npm install --production
    npm run seed          # 角色账号（仅首次）
-   npm run seed-samples  # 可选演示数据
+   npm run seed-samples  # 可选演示数据（样品已上线，护栏会拒绝，生产跳过）
    npm run seed-fixture  # 可选演示数据
    ```
 4. PM2 管理器 → **添加项目**：
@@ -213,6 +215,8 @@ mysql -h127.0.0.1 -usample_mgmt -p sample_mgmt < /www/backup/sample-2026-08-04.s
 ```
 
 > 建议用宝塔「计划任务」设置每日把导出的 `.sql` 打包传到 OSS / 另一块磁盘；`logs/`、`public/uploads/` 按需一并备份。
+>
+> ⚠️ **上线保护**：样品管理已上线（deployed:true），其线上数据（`samples` / `scan_logs` / `sample_models` / `sample_seqs` 表）**禁止** TRUNCATE / DELETE / UPDATE 批量清理；需要清理或回滚时先备份、再经用户明确确认后操作。
 
 ---
 
@@ -222,12 +226,20 @@ mysql -h127.0.0.1 -usample_mgmt -p sample_mgmt < /www/backup/sample-2026-08-04.s
 cd /www/wwwroot/sample-mgmt
 git pull            # 或重新上传解压
 npm install --production
+# 若本次更新涉及子系统前端 JS（subsystems/*/frontend/js/），需重建 bundle 并更新版本号：
+node tools/build-bundles.js
+sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
+sudo cp /tmp/bundle-fixtures.js   subsystems/fixtures/frontend/js/bundle.js
+sudo cp /tmp/bundle-projects.js   subsystems/projects/frontend/js/bundle.js
+sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
+# 并按 tools/.bundle-ver 更新各子系统 index.html 中 bundle.js?v= 版本号（仅改 JS 时需要）
 pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 ```
 
 > - 表结构由 `db.js` 启动时自动执行 `subsystems/*/db/schema.sql`（幂等，`CREATE TABLE IF NOT EXISTS`），**新增表无需手动建**。
 > - **字段级变更**（加列/改类型）需手动 `ALTER TABLE` 并同步子系统的 `db/schema.sql` 与全链路代码；迁移脚本见 `db/migrations.js`。
-> - 升级后建议核对日志无报错、三子系统均能正常登录访问（子系统隔离回归）。
+> - 仅修改后端代码/配置时，**无需**重建 bundle，改完重启即可。
+> - 升级后建议核对日志无报错、样品 / 治具 / 工作台各子系统均能正常登录访问（子系统隔离回归）；已上线子系统的数据仅做只读验证，禁止注入测试数据。
 
 ---
 
@@ -246,6 +258,9 @@ pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 | 上传后白屏 | 上传时漏了文件；或 `npm install` 没跑。检查 `public/portal.html` 是否存在 |
 | 数据"丢了" | 数据库误删/被覆盖，从 6 的备份恢复；部署时勿覆盖 `.env` 与数据库 |
 | 扫码枪不触发 | 扫码枪需以「回车结尾」输出；检查扫码台输入框是否已聚焦、枪的 suffix 设置 |
+| 未登录打开门户看不到卡片 | 正常行为——门户未登录只显示登录框（不暴露子系统清单），登录后按角色显示卡片 |
+| 登录后看不到「项目追踪」卡片 | 项目追踪未完成、仅 ADMIN 可见；非 ADMIN 账号属正常，ADMIN 登录可见 |
+| 跑 `npm run seed-samples` 被拒绝（exit 1） | 样品系统已上线，上线护栏阻止注入测试数据，属预期；生产环境无需演示数据 |
 
 ---
 
@@ -257,6 +272,7 @@ pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 4. **会话时效**：`server.js` cookie `maxAge` 为 8 小时，可按需调整。
 5. **全局工作台阈值**：积压阈值（默认 3 天 / 7 天）仅 ADMIN 可在工作台「阈值设置」修改，存于 `workbench_settings` 表，全局生效。
 6. **主动提醒**：复检逾期目前靠看板高亮；如需邮件 / 企业微信主动推送，可在此基础上扩展。
+7. **未完成子系统管理**：项目追踪当前仅 ADMIN 可见（`subsystems/projects/manifest.json` 的 `roles.use` 为 `["ADMIN"]`，且前端入口有角色拦截）；开发完成后开放给全员时，改回全角色并移除前端拦截即可。子系统正式上线需管理员明确授权（`deployed:true`），上线后受数据保护（见第 0 节）。
 
 ---
 
@@ -269,9 +285,10 @@ pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 - [ ] `cp .env.example .env` 并修改 `SESSION_SECRET` 为随机长串、`DB_PASSWORD` 为数据库密码
 - [ ] `npm run seed` 已执行（首次，创建角色账号）
 - [ ] 项目以 `node server.js` 启动（环境变量从 `.env` 读取）
-- [ ] `http://IP:4000` 能看到门户页并可登录
+- [ ] `http://IP:4000` 未登录显示门户登录框，登录后能看到子系统卡片并可进入
+- [ ] 非 ADMIN 账号登录后看不到「项目追踪」卡片（仅 ADMIN 可见）
 - [ ] 已绑域名 + 申请 Let's Encrypt + 强制 HTTPS
-- [ ] 手机 `https://域名` 能用摄像头扫码
+- [ ] 手机 `https://域名` 登录后能用摄像头扫码
 - [ ] 默认账号密码已修改
 - [ ] `logs/` 与 `public/uploads/` 目录权限正常（运行用户可写）
 - [ ] 数据库已加入每日备份计划（宝塔「数据库」备份或 mysqldump + 计划任务）
