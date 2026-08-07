@@ -2,6 +2,7 @@
 // 用法：node subsystems/samples/db/init-sample-seqs.js [--dry-run]
 // 注意：samples 已上线（deployed:true），实际执行属生产迁移，须先备份 samples 表；
 //       默认建议先 --dry-run 查看将初始化的机型序号，再决定是否执行
+require('dotenv').config(); // CLI 独立运行时加载 .env（与 seed.js/seed-samples.js 一致）
 const D = require('../../../db');
 const { initSampleSeqsSql, dryRunSeqsSql } = require('./init-sample-seqs-sql');
 
