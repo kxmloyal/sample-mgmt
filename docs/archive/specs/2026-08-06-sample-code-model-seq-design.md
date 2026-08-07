@@ -52,7 +52,7 @@ GROUP BY SUBSTRING(sample_no, 3, 6)
 ON DUPLICATE KEY UPDATE cur_seq = GREATEST(cur_seq, VALUES(cur_seq));
 ```
 
-- 使用 MySQL 8.0 别名语法（`VALUES()` 已弃用），`GREATEST` 保证幂等安全
+- MariaDB 兼容：`VALUES()` 在 MariaDB 的 ON DUPLICATE KEY UPDATE 中可用（MySQL 8.0.20+ 已弃用 VALUES() 改用别名语法，本项目为 MariaDB 不受影响）；`GREATEST` 保证幂等安全
 
 ## 4. 取号与预览分离（核心）
 
