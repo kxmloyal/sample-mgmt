@@ -1,5 +1,6 @@
 // fixture-detail.js — 治具详情弹窗（Tab 切换：概览/日志/附件）
 var _fixDetail = null, _fixLogs = null, _fixFiles = null, _fixModalOpen = false, _fixId = null;
+var _fixDormant = null; // 当前治具呆滞信息 {days, reason}，非呆滞为 null
 
 async function showFixtureDetail(id) {
   _fixId = id; _fixModalOpen = false;
@@ -7,9 +8,15 @@ async function showFixtureDetail(id) {
     var _a = await Promise.all([
       api('GET', '/api/fixtures/' + id),
       api('GET', '/api/fixtures/' + id + '/logs').catch(function(){ return []; }),
-      fetchFixtureFiles(id).catch(function(){ return []; })
+      fetchFixtureFiles(id).catch(function(){ return []; }),
+      api('GET', '/api/fixtures/dashboard').catch(function(){ return { dormant: [] }; })
     ]);
     _fixDetail = _a[0]; _fixLogs = _a[1]; _fixFiles = _a[2];
+    _fixDormant = null;
+    var dormant = _a[3].dormant || [];
+    for (var i = 0; i < dormant.length; i++) {
+      if (dormant[i].id === id) { _fixDormant = { days: dormant[i].dormant_days, reason: dormant[i].dormant_reason }; break; }
+    }
     renderFixTab('overview');
   } catch (e) { showToast(e.message); }
 }
@@ -78,6 +85,7 @@ function _cardInfo(f) {
     html += '<span class="label">下次保养</span><span>' + nextHtml + '</span>';
   }
   if (f.retired_reason) html += '<span class="label" style="color:var(--bad)">报废原因</span><span style="color:var(--bad)">' + e(f.retired_reason) + '</span>';
+  if (_fixDormant) html += '<span class="label" style="color:var(--bad)">呆滞</span><span style="color:var(--bad);font-weight:600">呆滞 ' + _fixDormant.days + ' 天 · ' + e(_fixDormant.reason) + '</span>';
   return html + '</div></div>';
 }
 

@@ -10,9 +10,11 @@
 .wb-tag-1{color:#16a34a;background:#f0fdf4}
 .wb-tag-2{color:#ea580c;background:#fff7ed}
 .wb-tag-3{color:#dc2626;background:#fef2f2}
+.wb-tag-dormant{color:#991b1b;background:#fee2e2;border:1px solid #fecaca}
 
 /* 表格内积压标记 */
 .wb-badge{font-size:12px;padding:2px 8px;border-radius:4px;font-weight:600;white-space:nowrap}
+.wb-badge-dormant{color:#991b1b;background:#fee2e2;border:1px solid #fecaca}
 
 /* 类型标签 */
 .wb-type-tag{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}

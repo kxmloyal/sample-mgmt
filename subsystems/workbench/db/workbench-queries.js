@@ -10,6 +10,7 @@ var unionSQL = `
     'sample' AS item_type,
     '样品' AS item_type_cn,
     s.status,
+    NULL AS dormant_days,
     CASE s.status
       WHEN 'NEW' THEN '制样中'
       WHEN 'PRODUCED' THEN '待发行'
@@ -53,6 +54,13 @@ var unionSQL = `
     'fixture' AS item_type,
     '治具' AS item_type_cn,
     f.status,
+    -- 呆滞天数：超过 fixtures_settings.dormant_days 阈值返回天数，否则 NULL（非呆滞）
+    CASE
+      WHEN f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')
+       AND DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = f.id), f.created_at)) >= COALESCE((SELECT v FROM fixtures_settings WHERE k = 'dormant_days'), 60)
+      THEN DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = f.id), f.created_at))
+      ELSE NULL
+    END AS dormant_days,
     CASE f.status
       WHEN 'REQUESTED' THEN '待接收'
       WHEN 'ACCEPTED' THEN '制作中'

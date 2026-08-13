@@ -7,7 +7,8 @@ var DASH_STATS = [
   { label: '领用中', status: 'IN_USE',          countByStatus: true,  color: '#1d4ed8' },
   { label: '已接收', status: 'ACCEPTED',       countByStatus: true,  color: '#065f46' },
   { label: '改善中', status: 'IMPROVING',       countByStatus: true,  color: '#92400e' },
-  { label: '待保养', status: 'MAINTENANCE_DUE', countByStatus: true,  color: 'var(--bad)' }
+  { label: '待保养', status: 'MAINTENANCE_DUE', countByStatus: true,  color: 'var(--bad)' },
+  { label: '呆滞', status: 'DORMANT', dormantCount: true, color: '#b91c1c' }
 ];
 
 async function renderFixtureDashboard() {
@@ -46,6 +47,34 @@ function _renderMaintTable(items) {
     }).join('') + '</tbody></table>';
 }
 
+// 渲染呆滞治具表（状态停滞 / 在库无人领用）
+function _renderDormantTable(items) {
+  return '<table class="fx-dash-table"><colgroup><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:90px"><col style="width:110px"></colgroup><thead><tr><th>编号<span class="col-rsz"></span></th><th>名称<span class="col-rsz"></span></th><th>状态<span class="col-rsz"></span></th><th>呆滞天数<span class="col-rsz"></span></th><th>原因<span class="col-rsz"></span></th></tr></thead><tbody>' +
+    items.map(function(f) {
+      return '<tr style="cursor:pointer" onclick="goFixScan(\'' + esc(f.fixture_no) + '\')"><td data-label="编号"><b>' + e(f.fixture_no || '—') + '</b></td><td data-label="名称">' + e(f.name || '—') + '</td><td data-label="状态">' + statusBadge(f) + '</td><td data-label="呆滞天数" style="color:var(--bad);font-weight:600">' + f.dormant_days + ' 天</td><td data-label="原因">' + e(f.dormant_reason || '—') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// 呆滞阈值设置弹窗（仅 ADMIN 可见齿轮入口）
+function openDormantSettings() {
+  var cur = (_dashData && _dashData.dormantDays) || 60;
+  openModal('呆滞阈值设置', '<div class="form-row"><label>呆滞判定阈值（天）</label><fluent-text-field id="dd-input" type="number" min="1" max="365" value="' + cur + '" style="width:100%"></fluent-text-field><p class="muted" style="margin:8px 0 0;font-size:12px">超过该天数未流转的治具将标记为呆滞（在库无人领用 / 状态长期停滞）</p></div>', {
+    foot: '<fluent-button appearance="accent" onclick="saveDormantSettings()">保存</fluent-button><fluent-button appearance="neutral" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>'
+  });
+}
+
+async function saveDormantSettings() {
+  var el = document.getElementById('dd-input');
+  var days = parseInt(el ? el.value : '', 10);
+  if (!days || days < 1 || days > 365) { showToast('阈值须为 1~365 天'); return; }
+  try {
+    var r = await api('PUT', '/api/fixtures/settings', { dormant_days: days });
+    closeModal(document.querySelector('.modal-mask'));
+    showToast('已保存：呆滞阈值 ' + r.dormant_days + ' 天');
+    renderFixtureDashboard();
+  } catch (e) { showToast(e.message); }
+}
+
 function _renderDashContent() {
   var d = _dashData;
 
@@ -54,6 +83,8 @@ function _renderDashContent() {
     var count;
     if (cfg.status === 'MAINTENANCE_DUE') {
       count = (d.maintenanceOverdueCount || 0) + (d.maintenanceUpcomingCount || 0);
+    } else if (cfg.dormantCount) {
+      count = d.dormantCount || 0;
     } else if (cfg.countByStatus) {
       // 按状态从 myPending 中统计当前用户可操作的条目数
       var statuses = cfg.status === 'VERIFY_ALL' ? ['VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK'] : [cfg.status];
@@ -69,6 +100,12 @@ function _renderDashContent() {
   // 逾期表
   if (d.overdue.length > 0) {
     html += '<div class="card" style="margin-top:18px;border-color:#fecaca"><h3 style="margin:0 0 12px;color:var(--bad)">逾期未归还 (' + d.overdue.length + ')</h3>' + _renderOverdueTable(d.overdue) + '</div>';
+  }
+
+  // 呆滞清单（标题右侧阈值齿轮，仅 ADMIN）
+  if (d.dormant.length > 0) {
+    var gear = (me && me.role === 'ADMIN') ? '<fluent-button appearance="lightweight" size="small" onclick="openDormantSettings()">⚙ 阈值 ' + d.dormantDays + ' 天</fluent-button>' : '<span class="muted" style="font-size:12px">阈值 ' + d.dormantDays + ' 天</span>';
+    html += '<div class="card" style="margin-top:18px;border-color:#fecaca"><div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 12px"><h3 style="margin:0;color:var(--bad)">呆滞治具 (' + d.dormant.length + ')</h3>' + gear + '</div>' + _renderDormantTable(d.dormant) + '</div>';
   }
 
   // 逾期保养预警表
@@ -100,6 +137,11 @@ function _renderDashContent() {
           }).join('') + '</tbody></table>';
       }
       html += '</div>';
+    }
+  } else if (filterCfg && filterCfg.status === 'DORMANT') {
+    // 呆滞清单已在常驻「呆滞治具」区块展示，此处仅处理无呆滞数据的空态，避免表格重复渲染
+    if (d.dormant.length === 0) {
+      html += '<div class="card" style="margin-top:18px"><h3 style="margin:0 0 12px">呆滞治具 (0)</h3><div class="empty" style="padding:16px">暂无呆滞治具</div></div>';
     }
   } else {
     var filtered = filterCfg.status ? d.myPending.filter(function(f) { return f.status === filterCfg.status; }) : d.myPending;

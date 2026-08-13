@@ -33,6 +33,8 @@
       "REQUESTED":      { "label": "已申请",       "color": "#666666", "bg": "#f0f0f0" },
       "ACCEPTED":       { "label": "已接收",       "color": "#1d4ed8", "bg": "#dbeafe" },
       "VERIFY_PENDING": { "label": "待验证",       "color": "#92400e", "bg": "#fef3c7" },
+      "VERIFY_RD_OK":   { "label": "RD验证通过",   "color": "#065f46", "bg": "#d1fae5" },
+      "VERIFY_ORG_OK":  { "label": "申请单位确认", "color": "#065f46", "bg": "#bbf7d0" },
       "TRANSFERRED":    { "label": "已移交",       "color": "#065f46", "bg": "#d1fae5" },
       "IN_USE":         { "label": "领用中",       "color": "#1d4ed8", "bg": "#dbeafe" },
       "IMPROVING":      { "label": "改善中",       "color": "#92400e", "bg": "#fef3c7" },

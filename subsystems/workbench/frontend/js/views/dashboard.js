@@ -16,13 +16,16 @@ async function renderWorkbenchDashboard(keepFilter) {
     _wbItems = data.items; // 缓存数据供阈值弹窗实时预览
 
     // 单次遍历：计算逾期 + 部门分组 + 汇总统计（合并原 4 次遍历）
-    var deptMap = {}, summary = { total: 0, d3in: 0, d37: 0, d7: 0 };
+    var deptMap = {}, summary = { total: 0, d3in: 0, d37: 0, d7: 0, dormant: 0 };
     data.items.forEach(function(item) {
       var od = calcOverdue(item);
       item.overdue_level = od.level;
       item.overdue_label = od.label;
       item.overdue_hours = od.hours;
       item.overdue_reason = od.reason;
+
+      // 呆滞治具计数（dormant_days 非空 = 呆滞）
+      if (item.dormant_days != null) summary.dormant++;
 
       var dept = item.resp_dept || '-';
       if (!deptMap[dept]) deptMap[dept] = { dept: dept, total: 0, d3in: 0, d37: 0, d7: 0 };
@@ -83,10 +86,11 @@ function renderSummaryCards(depts, summary) {
   }
   var html = '<div class="kb-stats">';
   // 总计卡：单击清除部门筛选（组件规范见 2026-08-04-card-design-system.md）
+  var dormantTag = summary.dormant > 0 ? '<span class="wb-tag wb-tag-dormant">呆滞 ' + summary.dormant + '</span>' : '';
   html += '<fluent-card class="kb-stat wb-card-total' + (_deptFilter ? '' : ' active') + '" style="--stat-color:var(--brand)" onclick="clearDeptFilter()">' +
     '<div class="n">' + summary.total + '</div>' +
     '<div class="l">总计</div>' +
-    (tags(summary) ? '<div class="wb-card-tags">' + tags(summary) + '</div>' : '') +
+    (tags(summary) || dormantTag ? '<div class="wb-card-tags">' + tags(summary) + dormantTag + '</div>' : '') +
     '</fluent-card>';
   // 部门卡：单击筛选该部门，再次点击取消
   depts.forEach(function(d) {
@@ -133,6 +137,9 @@ function renderItemTable(items) {
     var badgeHtml = item.overdue_level > 0
       ? '<span class="wb-badge" style="color:' + style.color + ';background:' + style.bg + '">' + item.overdue_label + '·' + item.overdue_reason + '</span>'
       : '<span style="color:var(--muted)">正常</span>';
+    if (item.dormant_days != null) {
+      badgeHtml += ' <span class="wb-badge wb-badge-dormant">呆滞 ' + item.dormant_days + '天</span>';
+    }
     var typeBadge = item.item_type === 'sample'
       ? '<span class="wb-type-tag sample">样品</span>'
       : '<span class="wb-type-tag fixture">治具</span>';

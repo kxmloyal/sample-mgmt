@@ -82,3 +82,10 @@ CREATE TABLE IF NOT EXISTS fixture_files (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_fixture_files_fixture (fixture_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 治具子系统配置表（呆滞阈值等），幂等 + 默认值
+CREATE TABLE IF NOT EXISTS fixtures_settings (
+  k VARCHAR(50) PRIMARY KEY,
+  v VARCHAR(100)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO fixtures_settings (k, v) VALUES ('dormant_days', '60');

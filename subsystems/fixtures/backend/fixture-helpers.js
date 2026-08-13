@@ -3,6 +3,7 @@ var D = require('../../../db');
 
 var STATUS_LABEL = {
   REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
+  VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位确认',
   TRANSFERRED: '已移交', IN_USE: '领用中', IMPROVING: '改善中',
   REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '维修完成(待确认)', RETIRED: '已报废'
 };

@@ -1,4 +1,4 @@
-/** BUNDLE vbmshmhokf — 8 files */
+/** BUNDLE vbmsr3yfm8 — 8 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -93,6 +93,7 @@ var STATUS = {
   NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
   // 治具状态
   REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
+  VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位确认',
   TRANSFERRED: '已移交', IN_USE: '领用中', IMPROVING: '改善中',
   REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '维修完成',
   // 共用
@@ -361,13 +362,16 @@ async function renderWorkbenchDashboard(keepFilter) {
     _wbItems = data.items; // 缓存数据供阈值弹窗实时预览
 
     // 单次遍历：计算逾期 + 部门分组 + 汇总统计（合并原 4 次遍历）
-    var deptMap = {}, summary = { total: 0, d3in: 0, d37: 0, d7: 0 };
+    var deptMap = {}, summary = { total: 0, d3in: 0, d37: 0, d7: 0, dormant: 0 };
     data.items.forEach(function(item) {
       var od = calcOverdue(item);
       item.overdue_level = od.level;
       item.overdue_label = od.label;
       item.overdue_hours = od.hours;
       item.overdue_reason = od.reason;
+
+      // 呆滞治具计数（dormant_days 非空 = 呆滞）
+      if (item.dormant_days != null) summary.dormant++;
 
       var dept = item.resp_dept || '-';
       if (!deptMap[dept]) deptMap[dept] = { dept: dept, total: 0, d3in: 0, d37: 0, d7: 0 };
@@ -428,10 +432,11 @@ function renderSummaryCards(depts, summary) {
   }
   var html = '<div class="kb-stats">';
   // 总计卡：单击清除部门筛选（组件规范见 2026-08-04-card-design-system.md）
+  var dormantTag = summary.dormant > 0 ? '<span class="wb-tag wb-tag-dormant">呆滞 ' + summary.dormant + '</span>' : '';
   html += '<fluent-card class="kb-stat wb-card-total' + (_deptFilter ? '' : ' active') + '" style="--stat-color:var(--brand)" onclick="clearDeptFilter()">' +
     '<div class="n">' + summary.total + '</div>' +
     '<div class="l">总计</div>' +
-    (tags(summary) ? '<div class="wb-card-tags">' + tags(summary) + '</div>' : '') +
+    (tags(summary) || dormantTag ? '<div class="wb-card-tags">' + tags(summary) + dormantTag + '</div>' : '') +
     '</fluent-card>';
   // 部门卡：单击筛选该部门，再次点击取消
   depts.forEach(function(d) {
@@ -478,6 +483,9 @@ function renderItemTable(items) {
     var badgeHtml = item.overdue_level > 0
       ? '<span class="wb-badge" style="color:' + style.color + ';background:' + style.bg + '">' + item.overdue_label + '·' + item.overdue_reason + '</span>'
       : '<span style="color:var(--muted)">正常</span>';
+    if (item.dormant_days != null) {
+      badgeHtml += ' <span class="wb-badge wb-badge-dormant">呆滞 ' + item.dormant_days + '天</span>';
+    }
     var typeBadge = item.item_type === 'sample'
       ? '<span class="wb-type-tag sample">样品</span>'
       : '<span class="wb-type-tag fixture">治具</span>';
