@@ -55,3 +55,15 @@
 
 /* 机型管理弹窗表格内联输入（2026-08-13） */
 #fxm-input, [id^="fxm-input-"] { border:1px solid var(--line); border-radius:4px; padding:4px 8px; font-size:13px; }
+
+/* 批量新建治具行式表格（2026-08-13） */
+.fn-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+.fn-row .fn-cell { flex:1; min-width:90px; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px; }
+.fn-row .fn-name { flex:2; }
+.fn-row .fn-cycle { max-width:90px; }
+.fn-row .fn-del { border:1px solid var(--line); border-radius:4px; background:transparent; color:var(--bad); cursor:pointer; padding:6px 10px; font-size:12px; }
+.fn-row .fn-del:disabled { color:#bbb; cursor:not-allowed; }
+@media (max-width: 576px) {
+  .fn-row { flex-direction:column; align-items:stretch; }
+  .fn-row .fn-name, .fn-row .fn-cell, .fn-row .fn-cycle { max-width:none; width:100%; }
+}
