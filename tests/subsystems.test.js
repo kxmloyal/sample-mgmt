@@ -1,5 +1,8 @@
 // tests/subsystems.test.js — 子系统管理模块单元测试
 // 覆盖：列表/新建/编辑/导出 + 权限分支（ADMIN/非ADMIN/未登录）
+// 2026-08-13：权限矩阵账号（rd01/qa01/mfg01/me01）曾被停用，beforeAll 临时启用、afterAll 恢复原状态
+require('dotenv').config();
+const { pool } = require('../db');
 const { getApp, login } = require('./helpers/setup');
 const request = require('supertest');
 const fs = require('fs');
@@ -7,12 +10,20 @@ const path = require('path');
 
 const TEST_ID = 'test-jest-subsystem';
 const TEST_DIR = path.join(__dirname, '..', 'subsystems', TEST_ID);
+const PERM_ACCOUNTS = ['rd01', 'qa01', 'mfg01', 'me01'];
+let permAccountStates = []; // 记录启用前 enabled 原值，afterAll 恢复
 
 // 测试结束后清理
-afterAll(() => {
+afterAll(async () => {
   if (fs.existsSync(TEST_DIR)) {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
   }
+  // 恢复权限矩阵账号原启用状态（不改动线上用户永久状态）
+  const p = pool();
+  for (const st of permAccountStates) {
+    await p.execute('UPDATE users SET enabled = ? WHERE id = ?', [st.enabled, st.id]);
+  }
+  await p.end();
 });
 
 beforeAll(async () => {
@@ -21,7 +32,13 @@ beforeAll(async () => {
   if (fs.existsSync(TEST_DIR)) {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
   }
-});
+  // 临时启用权限矩阵测试账号
+  const p = pool();
+  const placeholders = PERM_ACCOUNTS.map(() => '?').join(',');
+  const rows = await p.execute('SELECT id, username, enabled FROM users WHERE username IN (' + placeholders + ')', PERM_ACCOUNTS);
+  permAccountStates = rows[0];
+  await p.execute('UPDATE users SET enabled = 1 WHERE username IN (' + placeholders + ')', PERM_ACCOUNTS);
+}, 30000);
 
 // ============================================================
 // GET /api/subsystems — 获取子系统列表（登录后按角色过滤）

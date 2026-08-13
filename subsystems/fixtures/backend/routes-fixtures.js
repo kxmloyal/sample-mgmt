@@ -103,12 +103,12 @@ function register(app) {
     try {
       var u = await currentUser(req);
       var _b = req.body || {}, name = _b.name, spec = _b.spec, model = _b.model, station = _b.station,
-          category = _b.category, request_note = _b.request_note, notes = _b.notes;
+          category = _b.category, request_note = _b.request_note, notes = _b.notes, maintenance_cycle_days = _b.maintenance_cycle_days;
       if (!name || !name.trim()) return res.status(400).json({ error: '治具名称必填' });
       var f = await D.createFixture({
         name: name.trim(), spec: spec, model: model, station: station,
         category: category, requested_by: u.id, requested_dept: u.dept,
-        request_note: request_note, notes: notes
+        request_note: request_note, notes: notes, maintenance_cycle_days: maintenance_cycle_days
       });
       await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建申请' });
       res.json(f);
@@ -148,6 +148,39 @@ function register(app) {
     if (!days || days < 1 || days > 365) return res.status(400).json({ error: '呆滞阈值须为 1~365 天' });
     await D.setFixtureSetting('dormant_days', String(days));
     res.json({ dormant_days: days });
+  });
+
+  // 批量新建治具：清单列表式（同一机型批量创建，事务保证全成或全回滚；settings 为固定路径，必须放在 :id 之前）
+  app.post('/api/fixtures/batch', requireAuth, async function(req, res) {
+    var conn;
+    try {
+      var u = await currentUser(req);
+      var _b = req.body || {}, model = (_b.model || '').trim(), items = Array.isArray(_b.items) ? _b.items : [];
+      if (!model) return res.status(400).json({ error: '请选择机型' });
+      if (!items.length) return res.status(400).json({ error: '请至少填写一条治具' });
+      if (items.length > 50) return res.status(400).json({ error: '单次最多创建 50 条治具' });
+      var cleaned = items.map(function(it, idx) {
+        var name = ((it || {}).name || '').trim();
+        if (!name) { var e = new Error('第 ' + (idx + 1) + ' 行：治具名称必填'); e.status = 400; throw e; }
+        return { name: name, spec: ((it.spec) || '').trim(), station: ((it.station) || '').trim(), category: ((it.category) || '').trim(), maintenance_cycle_days: it.maintenance_cycle_days };
+      });
+      conn = await D.pool().getConnection();
+      await conn.beginTransaction();
+      var fixtures = [];
+      for (var i = 0; i < cleaned.length; i++) {
+        var f = await D.createFixture(Object.assign({ model: model, requested_by: u.id, requested_dept: u.dept }, cleaned[i]), conn);
+        await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '批量新建申请' }, conn);
+        fixtures.push(f);
+      }
+      await conn.commit();
+      res.json({ created: fixtures.length, fixtures: fixtures });
+    } catch (err) {
+      if (conn) { try { await conn.rollback(); } catch (e) {} }
+      var status = err.status || 500;
+      res.status(status).json({ error: err.message || '批量创建失败' });
+    } finally {
+      if (conn) { try { conn.release(); } catch (e) {} }
+    }
   });
 
   // 机型列表（含治具计数）：登录可读

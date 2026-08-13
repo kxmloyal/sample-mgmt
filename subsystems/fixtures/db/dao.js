@@ -16,21 +16,25 @@ module.exports = function createDao(deps) {
     return one(sql, params);
   }
 
-  async function nextFixtureNo() {
-    var row = await one('SELECT COALESCE(MAX(id), 0) AS m FROM fixtures');
+  // 生成治具编号；conn 存在时用事务连接查询 MAX(id)（事务内可见本事务已插入行，保证批量编号连续），否则用全局连接（兼容原调用）
+  async function nextFixtureNo(conn) {
+    var row = await fetchOne(conn, 'SELECT COALESCE(MAX(id), 0) AS m FROM fixtures');
     return 'FJ-' + String(row.m + 1).padStart(6, '0');
   }
 
-  async function createFixture(data) {
-    var { name, spec, model, station, category, requested_by, requested_dept, request_note, request_image, notes } = data;
-    var sql = 'INSERT INTO fixtures (fixture_no,name,spec,model,station,category,status,requested_by,requested_dept,request_note,request_image,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
+  // 新建治具申请：data 含基础字段 + maintenance_cycle_days（保养周期，透传落库）；conn 存在时走事务连接（批量/事务场景），否则走全局连接
+  async function createFixture(data, conn) {
+    var { name, spec, model, station, category, requested_by, requested_dept, request_note, request_image, notes, maintenance_cycle_days } = data;
+    var sql = 'INSERT INTO fixtures (fixture_no,name,spec,model,station,category,status,requested_by,requested_dept,request_note,request_image,notes,maintenance_cycle_days) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
     var lastErr;
     for (var i = 0; i < 3; i++) {
-      var ns = await nextFixtureNo();
-      var params = [ns, name||null, spec||null, model||null, station||null, category||null, 'REQUESTED', requested_by||null, requested_dept||null, request_note||null, request_image||null, notes||null];
+      var ns = await nextFixtureNo(conn);
+      var params = [ns, name||null, spec||null, model||null, station||null, category||null, 'REQUESTED', requested_by||null, requested_dept||null, request_note||null, request_image||null, notes||null, maintenance_cycle_days != null ? maintenance_cycle_days : null];
       try {
-        await run(sql, params);
-        return await getFixtureByNo(ns);
+        if (conn) await conn.execute(sql, params);
+        else await run(sql, params);
+        // 事务内必须用 conn 读回（全局连接查不到未提交数据），无 conn 时用全局 one()，行为与旧版 getFixtureByNo 一致
+        return await fetchOne(conn, 'SELECT * FROM fixtures WHERE fixture_no = ?', [ns]);
       } catch (e) {
         if (e.code === 'ER_DUP_ENTRY' || e.errno === 1062) { lastErr = e; continue; }
         throw e;
