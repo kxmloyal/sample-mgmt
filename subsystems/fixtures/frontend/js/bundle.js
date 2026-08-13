@@ -1,4 +1,4 @@
-/** BUNDLE vbmsr3yfm8 — 17 files */
+/** BUNDLE vbmsr8dk46 — 17 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1396,16 +1396,21 @@ function renderFixtureLogsFiltered(search) {
 
 
 /* --- subsystems/fixtures/frontend/js/views/new.js --- */
-// fixture-new.js — 治具新建申请（两步：① 选择/新建机型 → ② 填写治具清单）
-var _fnSelectedModel = ''; // 当前选中的机型 code
-var _fnModelList = [];     // 机型下拉数据（含治具计数）
+// fixture-new.js — 治具新建申请（清单列表式批量录入：① 选择机型 → ② 动态行表格，一次提交 N 条）
+var _fnModel = '';        // 当前选中机型 code
+var _fnModelFull = '';    // 当前选中机型全称（显示用）
+var _fnModels = [];       // 机型下拉数据
+var _fnRows = [];         // 治具清单行 [{name,spec,station,category,cycle}]
+var _fnSubmitting = false; // 提交防抖（双击/连点防护）
 
+// 入口视图：渲染「① 选择机型 → ② 行式清单」，加载机型下拉并渲染首行
 async function renderFixtureNew() {
-  _fnSelectedModel = ''; _fnModelList = [];
-  var html = '<div class="card" style="max-width:720px">';
-  html += '<h3 style="margin:0 0 16px">新建治具申请</h3>';
+  _fnModel = ''; _fnModelFull = ''; _fnModels = []; _fnRows = []; _fnSubmitting = false;
+  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90 });
+  var html = '<div class="card" style="max-width:860px">';
+  html += '<h3 style="margin:0 0 16px">新建治具申请（批量）</h3>';
 
-  // 第一步：选择机型（全角色可选已有机型；仅 RD/ADMIN 可新建机型）
+  // ① 选择机型
   html += '<div style="background:var(--bg-card,#fff);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:16px">';
   html += '<div style="font-weight:600;font-size:13px;margin-bottom:10px">① 选择机型 <span style="color:var(--bad)">*</span></div>';
   html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
@@ -1414,100 +1419,153 @@ async function renderFixtureNew() {
   html += '<fluent-text-field id="fn-model-code" placeholder="机型短码(6~20位字母数字)"></fluent-text-field>';
   html += '<fluent-text-field id="fn-model-name" placeholder="机型全称(必填)" style="flex:1"></fluent-text-field>';
   html += '<fluent-button appearance="accent" size="small" onclick="fnCreateModel()">保存机型</fluent-button>';
-  html += '<fluent-button appearance="neutral" size="small" onclick="fnCancelNewModel()">取消</fluent-button>';
+  html += '<fluent-button appearance="neutral" size="small" onclick="fnToggleModelNew(false)">取消</fluent-button>';
   html += '</span></div>';
   html += '<div style="margin-top:8px" id="fn-model-actions"></div>';
+  html += '<div id="fn-model-picked" style="margin-top:8px;display:none;font-size:13px;color:var(--brand);font-weight:600"></div>';
   html += '</div>';
 
-  // 第二步：治具清单
-  html += '<form id="fixture-new-form" onsubmit="submitFixtureNew(event)">';
-  html += '<div style="font-weight:600;font-size:13px;margin-bottom:10px">② 治具清单</div>';
-  html += '<div class="new-grid">';
-  html += '<div class="new-col"><div class="new-col-title">基础信息</div>';
-  html += '<label>治具名称<span style="color:var(--bad)">*</span></label><fluent-text-field id="fn-name" required></fluent-text-field>';
-  html += '<label>规格</label><fluent-text-field id="fn-spec"></fluent-text-field>';
-  html += '<label>机型</label><fluent-text-field id="fn-model-display" readonly></fluent-text-field>';
+  // ② 治具清单（行式表格）
+  html += '<div style="background:var(--bg-card,#fff);border:1px solid var(--line);border-radius:8px;padding:14px 16px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  html += '<div style="font-weight:600;font-size:13px">② 治具清单 <span class="muted" style="font-weight:400">（同一机型批量创建，每次最多 50 条）</span></div>';
+  html += '<fluent-button appearance="lightweight" size="small" onclick="fnAddRow()">＋ 添加一行</fluent-button>';
   html += '</div>';
-  html += '<div class="new-col"><div class="new-col-title">使用信息</div>';
-  html += '<label>对应工站</label><fluent-text-field id="fn-station"></fluent-text-field>';
-  html += '<label>分类</label><fluent-text-field id="fn-category" placeholder="如测试治具/装配治具"></fluent-text-field>';
-  html += '<label>申请说明</label><textarea id="fn-note" rows="3"></textarea>';
-  html += '<label>保养周期(天) <small>(选填，默认90)</small></label><fluent-text-field id="fn-maint-cycle" type="number" min="0" value="90" placeholder="0=无需定期保养"></fluent-text-field>';
-  html += '</div></div>';
-  html += '<fluent-button appearance="accent" onclick="submitFixtureNew(event)" style="margin-top:16px">提交申请</fluent-button>';
-  html += '</form></div>';
+  html += '<div id="fn-rows"></div>';
+  html += '<div style="margin-top:14px">';
+  html += '<fluent-button id="fn-submit" appearance="accent" onclick="submitFixtureBatch(event)">提交申请</fluent-button>';
+  html += '</div></div></div>';
   document.getElementById('view').innerHTML = html;
   await fnLoadModels();
+  fnRenderRows();
 }
 
-// 加载机型下拉（含治具计数）；仅 RD/ADMIN 显示「新建机型」按钮
+// 加载机型下拉（含治具计数）；仅 RD/ADMIN 显示「新建机型」「管理机型」
 async function fnLoadModels() {
   try {
     var list = await api('GET', '/api/fixtures/models');
-    _fnModelList = list || [];
+    _fnModels = list || [];
     var sel = document.getElementById('fn-model');
     if (!sel) return;
-    var opts = '<option value="">请选择机型…</option>' + _fnModelList.map(function(m) {
+    sel.innerHTML = '<option value="">请选择机型…</option>' + _fnModels.map(function(m) {
       return '<option value="' + e(m.code) + '">' + e(m.code) + ' · ' + e(m.full_name) + (m.fixture_count ? ' (' + m.fixture_count + '治具)' : '') + '</option>';
     }).join('');
-    sel.innerHTML = opts;
-    if (_fnSelectedModel) sel.value = _fnSelectedModel;
+    if (_fnModel) { sel.value = _fnModel; fnPickModel(_fnModel); }
     var canManage = typeof me !== 'undefined' && me && ['ADMIN', 'RD'].indexOf(me.role) !== -1;
     var zone = document.getElementById('fn-model-actions');
     if (zone) {
       zone.innerHTML = canManage
-        ? '<fluent-button appearance="lightweight" size="small" onclick="fnShowNewModel()">＋ 新建机型</fluent-button><fluent-button appearance="lightweight" size="small" onclick="openFixtureModelsModal()">管理机型</fluent-button>'
+        ? '<fluent-button appearance="lightweight" size="small" onclick="fnToggleModelNew(true)">＋ 新建机型</fluent-button><fluent-button appearance="lightweight" size="small" onclick="openFixtureModelsModal()">管理机型</fluent-button>'
         : '<span class="muted" style="font-size:12px">机型由研发/管理员维护，如需新机型请联系研发</span>';
     }
   } catch (e) { showToast(e.message); }
 }
 
-function fnShowNewModel() {
-  var zone = document.getElementById('fn-model-new-zone');
-  if (zone) zone.style.display = 'flex';
+// 选择机型：记录 code+全称，显示「已选机型：code · 全称」
+function fnPickModel(val) {
+  _fnModel = val;
+  var m = _fnModels.filter(function(x) { return x.code === val; })[0];
+  _fnModelFull = m ? m.full_name : '';
+  var picked = document.getElementById('fn-model-picked');
+  if (picked) { picked.style.display = val ? 'block' : 'none'; picked.textContent = val ? '已选机型：' + val + ' · ' + _fnModelFull : ''; }
 }
 
-function fnCancelNewModel() {
-  var zone = document.getElementById('fn-model-new-zone');
-  if (zone) zone.style.display = 'none';
-  document.getElementById('fn-model-code').value = '';
-  document.getElementById('fn-model-name').value = '';
+// 新建机型区展开/收起：true=展开输入区；false=收起并清空输入
+function fnToggleModelNew(open) {
+  var z = document.getElementById('fn-model-new-zone');
+  if (!z) return;
+  z.style.display = open ? 'flex' : 'none';
+  if (!open) {
+    var code = document.getElementById('fn-model-code');
+    var name = document.getElementById('fn-model-name');
+    if (code) code.value = '';
+    if (name) name.value = '';
+  }
 }
 
-// 内联新建机型：校验 → POST → 自动选中新机型
+// 内联新建机型：校验 → POST → 自动选中并同步机型显示
 async function fnCreateModel() {
   var code = document.getElementById('fn-model-code').value.trim().toUpperCase();
   var full_name = document.getElementById('fn-model-name').value.trim();
   if (!code || !full_name) { showToast('请填写机型短码和全称'); return; }
   try {
     await api('POST', '/api/fixtures/models', { code: code, full_name: full_name });
-    _fnSelectedModel = code;
-    fnCancelNewModel();
-    await fnLoadModels();
+    _fnModel = code;
+    fnToggleModelNew(false);
+    await fnLoadModels(); // 内部已同步 fnPickModel：新建后自动选中并显示
     showToast('机型已新建并选中');
   } catch (e) { showToast(e.message); }
 }
 
-function fnPickModel(val) {
-  _fnSelectedModel = val;
-  var dis = document.getElementById('fn-model-display');
-  if (dis) dis.value = val;
+// 行式表格渲染（名称行首、保养周期列、删除按钮；仅剩 1 行时禁用删除）
+function fnRenderRows() {
+  var box = document.getElementById('fn-rows');
+  if (!box) return;
+  box.innerHTML = _fnRows.map(function(r, i) {
+    return '<div class="fn-row" data-i="' + i + '">' +
+      '<input class="fn-cell fn-name" value="' + e(r.name) + '" placeholder="治具名称*" oninput="fnRowCell(' + i + ',\'name\',this.value)" onblur="fnRowCell(' + i + ',\'mark\')"/>' +
+      '<input class="fn-cell" value="' + e(r.spec) + '" placeholder="规格" oninput="fnRowCell(' + i + ',\'spec\',this.value)"/>' +
+      '<input class="fn-cell" value="' + e(r.station) + '" placeholder="工站" oninput="fnRowCell(' + i + ',\'station\',this.value)"/>' +
+      '<input class="fn-cell" value="' + e(r.category) + '" placeholder="分类" oninput="fnRowCell(' + i + ',\'category\',this.value)"/>' +
+      '<input class="fn-cell fn-cycle" type="number" min="0" value="' + (r.cycle != null ? r.cycle : '') + '" placeholder="保养(天)" oninput="fnRowCell(' + i + ',\'cycle\',this.value)"/>' +
+      '<button type="button" class="fn-del" onclick="fnDelRow(' + i + ')" ' + (_fnRows.length <= 1 ? 'disabled' : '') + '>删除</button>' +
+      '</div>';
+  }).join('');
 }
 
-async function submitFixtureNew(e) {
+// 行单元格回调：key='mark' 仅刷新名称红框；其余写入行数据，名称变化时同步标记
+function fnRowCell(i, key, val) {
+  if (key === 'mark') {
+    var el = document.querySelector('.fn-row[data-i="' + i + '"] .fn-name');
+    if (el) el.style.borderColor = (_fnRows[i] && _fnRows[i].name && _fnRows[i].name.trim()) ? '' : 'var(--bad)';
+    return;
+  }
+  if (_fnRows[i]) _fnRows[i][key] = val;
+  if (key === 'name') fnRowCell(i, 'mark');
+}
+
+// 添加一行（上限 50）
+function fnAddRow() {
+  if (_fnRows.length >= 50) { showToast('单次最多 50 条'); return; }
+  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90 });
+  fnRenderRows();
+}
+
+// 删除一行（至少保留一行）
+function fnDelRow(i) {
+  if (_fnRows.length <= 1) { showToast('至少保留一行'); return; }
+  _fnRows.splice(i, 1);
+  fnRenderRows();
+}
+
+// 批量提交：行校验（空名称标红拦截）→ POST /api/fixtures/batch → 防抖
+async function submitFixtureBatch(e) {
   e.preventDefault();
-  var model = _fnSelectedModel || document.getElementById('fn-model').value;
+  if (_fnSubmitting) return;
+  var model = _fnModel;
   if (!model) { showToast('请先选择机型'); return; }
+  var valid = true;
+  _fnRows.forEach(function(r, i) {
+    if (!r.name || !r.name.trim()) { valid = false; fnRowCell(i, 'mark'); }
+  });
+  if (!valid) { showToast('存在名称为空的治具行，请补全后再提交'); return; }
+  var items = _fnRows.map(function(r) {
+    var it = { name: r.name.trim(), spec: r.spec, station: r.station, category: r.category };
+    if (r.cycle != null && r.cycle !== '') it.maintenance_cycle_days = parseInt(r.cycle, 10);
+    return it;
+  });
+  _fnSubmitting = true;
+  var btn = document.getElementById('fn-submit');
+  if (btn) btn.setAttribute('disabled', '');
   try {
-    var body = {
-      name: document.getElementById('fn-name').value, spec: document.getElementById('fn-spec').value, model: model,
-      station: document.getElementById('fn-station').value, category: document.getElementById('fn-category').value, request_note: document.getElementById('fn-note').value
-    };
-    var cycleEl = document.getElementById('fn-maint-cycle'); if (cycleEl && cycleEl.value) body.maintenance_cycle_days = parseInt(cycleEl.value) || 90;
-    var f = await api('POST', '/api/fixtures', body);
-    showToast('申请成功：' + f.fixture_no);
+    var res = await api('POST', '/api/fixtures/batch', { model: model, items: items });
+    showToast('成功创建 ' + res.created + ' 条治具');
     location.hash = '#/list';
-  } catch (err) { showToast(err.message); }
+  } catch (err) {
+    showToast(err.message);
+    _fnSubmitting = false;
+    if (btn) btn.removeAttribute('disabled');
+  }
 }
 
 
