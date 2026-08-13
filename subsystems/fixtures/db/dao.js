@@ -2,6 +2,9 @@
 module.exports = function createDao(deps) {
   var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
 
+  // 呆滞/配置子模块（2026-08-13 拆分，规避 dao.js 容量红线；db.js 无需改动）
+  var DORM = require('./dao-dormant')(deps);
+
   function toDT(v) {
     if (v == null) return null;
     if (typeof v === 'string' && v.indexOf('T') !== -1) return v.slice(0, 19).replace('T', ' ');
@@ -49,7 +52,7 @@ module.exports = function createDao(deps) {
     if (opts.overdue === '1') { where.push("status='IN_USE' AND expected_return_at IS NOT NULL AND expected_return_at < NOW()"); }
     // 呆滞筛选：状态停滞 + 在库无人领用（最近状态变更时间 ≥ 阈值，见 fixtures_settings.dormant_days）
     if (opts.dormant === '1') {
-      var dormantDays = Number(await getFixtureSetting('dormant_days', 60)) || 60;
+      var dormantDays = Number(await DORM.getFixtureSetting('dormant_days', 60)) || 60;
       where.push("COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = fixtures.id), fixtures.created_at) <= DATE_SUB(NOW(), INTERVAL ? DAY)");
       params.push(dormantDays);
       where.push("fixtures.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')");
@@ -78,7 +81,7 @@ module.exports = function createDao(deps) {
     if (opts.search) { where.push('(fixture_no LIKE ? OR name LIKE ? OR spec LIKE ? OR model LIKE ?)'); var kw = '%' + opts.search + '%'; params.push(kw, kw, kw, kw); }
     if (opts.overdue === '1') { where.push('expected_return_at < NOW() AND status = ?'); params.push('IN_USE'); }
     if (opts.dormant === '1') {
-      var dormantDays = Number(await getFixtureSetting('dormant_days', 60)) || 60;
+      var dormantDays = Number(await DORM.getFixtureSetting('dormant_days', 60)) || 60;
       where.push("COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = fixtures.id), fixtures.created_at) <= DATE_SUB(NOW(), INTERVAL ? DAY)");
       params.push(dormantDays);
       where.push("fixtures.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')");
@@ -86,32 +89,6 @@ module.exports = function createDao(deps) {
     var sql = 'SELECT COUNT(*) as total FROM fixtures';
     if (where.length) sql += ' WHERE ' + where.join(' AND ');
     return q(sql, params).then(function(rows) { return rows[0].total; });
-  }
-
-  // 读取治具配置项（fixtures_settings），无记录返回默认值
-  async function getFixtureSetting(k, defaultVal) {
-    var row = await one('SELECT v FROM fixtures_settings WHERE k = ?', [k]);
-    return row ? row.v : (defaultVal != null ? defaultVal : null);
-  }
-
-  // 写入治具配置项（存在则更新，幂等）
-  async function setFixtureSetting(k, v) {
-    await run('INSERT INTO fixtures_settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, String(v)]);
-  }
-
-  // 呆滞治具列表：状态停滞 + 在库无人领用（按最近状态变更时间判定），返回 dormant_days/dormant_reason
-  function listDormantFixtures(threshold) {
-    var days = Number(threshold) || 60;
-    return q(
-      "SELECT f.*, DATEDIFF(NOW(), COALESCE(l.last_at, f.created_at)) AS dormant_days, " +
-      "CASE WHEN f.status='TRANSFERRED' THEN '在库无人领用' ELSE '状态长期停滞' END AS dormant_reason " +
-      "FROM fixtures f " +
-      "LEFT JOIN (SELECT fixture_id, MAX(created_at) AS last_at FROM fixture_logs GROUP BY fixture_id) l ON l.fixture_id = f.id " +
-      "WHERE f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED') " +
-      "AND DATEDIFF(NOW(), COALESCE(l.last_at, f.created_at)) >= ? " +
-      "ORDER BY dormant_days DESC",
-      [days]
-    );
   }
 
   async function updateFixture(updated, original, conn) {
@@ -193,5 +170,5 @@ module.exports = function createDao(deps) {
     return map;
   }
 
-  return { nextFixtureNo, createFixture, getFixtureById, getFixtureByNo, listFixtures, countAllFixtures, updateFixture, addFixtureLog, countFixturesByStatus, listOverdueFixtures, listMyPendingFixtures, getFixtureDetailById, listFixtureLogs, getFixtureLogsByFixtureId, listOverdueMaintenanceFixtures, listUpcomingMaintenanceFixtures, getFixturePhotoCounts, getFirstPhotoMap, getFixtureSetting, setFixtureSetting, listDormantFixtures };
+  return Object.assign({ nextFixtureNo: nextFixtureNo, createFixture: createFixture, getFixtureById: getFixtureById, getFixtureByNo: getFixtureByNo, listFixtures: listFixtures, countAllFixtures: countAllFixtures, updateFixture: updateFixture, addFixtureLog: addFixtureLog, countFixturesByStatus: countFixturesByStatus, listOverdueFixtures: listOverdueFixtures, listMyPendingFixtures: listMyPendingFixtures, getFixtureDetailById: getFixtureDetailById, listFixtureLogs: listFixtureLogs, getFixtureLogsByFixtureId: getFixtureLogsByFixtureId, listOverdueMaintenanceFixtures: listOverdueMaintenanceFixtures, listUpcomingMaintenanceFixtures: listUpcomingMaintenanceFixtures, getFixturePhotoCounts: getFixturePhotoCounts, getFirstPhotoMap: getFirstPhotoMap }, DORM);
 };
