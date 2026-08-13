@@ -86,7 +86,10 @@ function toObj(row) {
 
 async function q(sql, params) {
   const pool = getPool();
-  const [rows] = await pool.execute(sql, params || []);
+  const res = await pool.execute(sql, params || []);
+  const rows = res[0];
+  // DML（INSERT/UPDATE/DELETE 等）execute 返回 ResultSetHeader 对象而非行数组，按空结果处理
+  if (!Array.isArray(rows)) return [];
   return rows.map(toObj);
 }
 
