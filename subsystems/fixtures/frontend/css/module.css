@@ -5,6 +5,8 @@
 .b-REQUESTED { background: #f0f0f0; color: #666; }
 .b-ACCEPTED { background: #dbeafe; color: #1d4ed8; }
 .b-VERIFY_PENDING { background: #fef3c7; color: #92400e; }
+.b-VERIFY_RD_OK { background: #d1fae5; color: #065f46; }
+.b-VERIFY_ORG_OK { background: #bbf7d0; color: #065f46; }
 .b-TRANSFERRED { background: #d1fae5; color: #065f46; }
 .b-IN_USE { background: #dbeafe; color: #1d4ed8; }
 .b-IMPROVING { background: #fef3c7; color: #92400e; }
@@ -12,6 +14,11 @@
 .b-REPAIRING_RD { background: #fed7aa; color: #9a3412; }
 .b-REPAIR_DONE { background: #e0e7ff; color: #3730a3; }
 .b-RETIRED { background: #f0f0f0; color: #999; }
+
+/* 呆滞治具（2026-08-13：列表行标红 + 状态徽章） */
+.dormant-row td { background: #fef2f2; }
+.dormant-row:hover td { background: #fee2e2; }
+.badge-dormant { display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap; }
 
 /* 到期状态徽章（归还/保养双列，2026-08-04；逾期复用共享 .b-overdue） */
 .b-maint-ok { background: #dcfce7; color: #166534; }
@@ -45,3 +52,6 @@
   .detail-log-tab tr:last-child td{border-bottom:none}
   .fx-log-toolbar fluent-text-field{width:100%}
 }
+
+/* 机型管理弹窗表格内联输入（2026-08-13） */
+#fxm-input, [id^="fxm-input-"] { border:1px solid var(--line); border-radius:4px; padding:4px 8px; font-size:13px; }

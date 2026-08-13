@@ -5,6 +5,8 @@ function clearFilterChip(idx) {
   var keys = [];
   if (fixtureListState.status) keys.push('status');
   if (fixtureListState.dept) keys.push('dept');
+  if (fixtureListState.model) keys.push('model');
+  if (fixtureListState.dormant) keys.push('dormant');
   if (fixtureListState.search) keys.push('search');
   if (idx >= 0 && idx < keys.length) {
     fixtureListState[keys[idx]] = '';
@@ -17,6 +19,8 @@ function clearAllFilters() {
   fixtureListState.status = '';
   fixtureListState.dept = '';
   fixtureListState.search = '';
+  fixtureListState.dormant = '';
+  fixtureListState.model = '';
   fixtureListState.pageNo = 1;
   loadFixtureList();
 }
@@ -29,6 +33,19 @@ function filterFixtureListStatus(val) {
 
 function filterFixtureListDept(val) {
   fixtureListState.dept = val;
+  fixtureListState.pageNo = 1;
+  loadFixtureList();
+}
+
+function filterFixtureListDormant(val) {
+  fixtureListState.dormant = val;
+  fixtureListState.pageNo = 1;
+  loadFixtureList();
+}
+
+// 机型筛选：写入 state.model 并刷新列表（筛选栏下拉 onchange 调用）
+function filterFixtureListModel(val) {
+  fixtureListState.model = val;
   fixtureListState.pageNo = 1;
   loadFixtureList();
 }
