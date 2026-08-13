@@ -63,7 +63,12 @@
 .fn-row .fn-cycle { max-width:90px; }
 .fn-row .fn-del { border:1px solid var(--line); border-radius:4px; background:transparent; color:var(--bad); cursor:pointer; padding:6px 10px; font-size:12px; }
 .fn-row .fn-del:disabled { color:#bbb; cursor:not-allowed; }
+/* 表头行（文字列，列宽与输入框对齐） */
+.fn-row.fn-head { font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px; }
+.fn-row.fn-head .fn-cell { border:none; background:transparent; padding:2px 8px; }
+.fn-head-del { flex:0 0 52px; text-align:center; }
 @media (max-width: 576px) {
   .fn-row { flex-direction:column; align-items:stretch; }
   .fn-row .fn-name, .fn-row .fn-cell, .fn-row .fn-cycle { max-width:none; width:100%; }
+  .fn-row.fn-head { display:none; }
 }

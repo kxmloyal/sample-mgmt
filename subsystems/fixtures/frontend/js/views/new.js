@@ -103,7 +103,16 @@ async function fnCreateModel() {
 function fnRenderRows() {
   var box = document.getElementById('fn-rows');
   if (!box) return;
-  box.innerHTML = _fnRows.map(function(r, i) {
+  // 表头行（列宽与输入框对齐：名称 flex:2，其余 flex:1，周期/删除定宽）
+  var head = '<div class="fn-row fn-head">' +
+    '<span class="fn-cell fn-name">治具名称 <em style="color:var(--bad);font-style:normal">*</em></span>' +
+    '<span class="fn-cell">规格</span>' +
+    '<span class="fn-cell">工站</span>' +
+    '<span class="fn-cell">分类</span>' +
+    '<span class="fn-cell fn-cycle">保养(天)</span>' +
+    '<span class="fn-head-del">删除</span>' +
+    '</div>';
+  box.innerHTML = head + _fnRows.map(function(r, i) {
     return '<div class="fn-row" data-i="' + i + '">' +
       '<input class="fn-cell fn-name" value="' + e(r.name) + '" placeholder="治具名称*" oninput="fnRowCell(' + i + ',\'name\',this.value)" onblur="fnRowCell(' + i + ',\'mark\')"/>' +
       '<input class="fn-cell" value="' + e(r.spec) + '" placeholder="规格" oninput="fnRowCell(' + i + ',\'spec\',this.value)"/>' +

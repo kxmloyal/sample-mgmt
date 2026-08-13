@@ -1,4 +1,4 @@
-/** BUNDLE vbmsr8dk46 — 17 files */
+/** BUNDLE vbmsr9qegp — 17 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1501,7 +1501,16 @@ async function fnCreateModel() {
 function fnRenderRows() {
   var box = document.getElementById('fn-rows');
   if (!box) return;
-  box.innerHTML = _fnRows.map(function(r, i) {
+  // 表头行（列宽与输入框对齐：名称 flex:2，其余 flex:1，周期/删除定宽）
+  var head = '<div class="fn-row fn-head">' +
+    '<span class="fn-cell fn-name">治具名称 <em style="color:var(--bad);font-style:normal">*</em></span>' +
+    '<span class="fn-cell">规格</span>' +
+    '<span class="fn-cell">工站</span>' +
+    '<span class="fn-cell">分类</span>' +
+    '<span class="fn-cell fn-cycle">保养(天)</span>' +
+    '<span class="fn-head-del">删除</span>' +
+    '</div>';
+  box.innerHTML = head + _fnRows.map(function(r, i) {
     return '<div class="fn-row" data-i="' + i + '">' +
       '<input class="fn-cell fn-name" value="' + e(r.name) + '" placeholder="治具名称*" oninput="fnRowCell(' + i + ',\'name\',this.value)" onblur="fnRowCell(' + i + ',\'mark\')"/>' +
       '<input class="fn-cell" value="' + e(r.spec) + '" placeholder="规格" oninput="fnRowCell(' + i + ',\'spec\',this.value)"/>' +
