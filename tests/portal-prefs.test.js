@@ -17,6 +17,8 @@ describe('GET/PUT /api/portal/prefs — 门户卡片排序偏好', () => {
 
   it('GET 无记录返回空数组', async () => {
     const { agent } = await login('rd01', 'rd123');
+    // 前置复位：清除本用户历史偏好，保证用例独立于前次运行残留（用例 4/10 会写入偏好且不清理）
+    await agent.put('/api/portal/prefs').send({ order: [] });
     const res = await agent.get('/api/portal/prefs');
     expect(res.status).toBe(200);
     expect(res.body.order).toEqual([]);
