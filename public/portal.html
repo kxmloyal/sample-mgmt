@@ -42,8 +42,8 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
   <!-- 未登录时显示内嵌登录框 -->
   <div class="login-box" id="login-box" style="display:none">
     <div class="login-title">用户登录</div>
-    <div class="login-row"><input id="lg-user" placeholder="账号" autocomplete="username" /></div>
-    <div class="login-row"><input id="lg-pass" type="password" placeholder="密码" autocomplete="current-password" /></div>
+    <div class="login-row"><input id="lg-user" placeholder="账号" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('lg-pass').focus()" /></div>
+    <div class="login-row"><input id="lg-pass" type="password" placeholder="密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')portalLogin()" /></div>
     <div class="login-row"><button type="button" onclick="portalLogin()">登 录</button></div>
     <div class="login-err" id="lg-err"></div>
   </div>
