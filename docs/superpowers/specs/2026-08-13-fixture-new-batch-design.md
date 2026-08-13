@@ -22,8 +22,10 @@
 |---|---|
 | 交互形态 | 清单列表式批量录入（替换单条表单） |
 | 提交方式 | 新增批量端点，事务保证 N 条全成或全回滚 |
-| 单条接口 | `POST /api/fixtures` 保留不动（扫码台等其他入口兼容） |
+| 单条接口 | `POST /api/fixtures` 保留，**同步补收 maintenance_cycle_days**（L1，消除批量/单条语义分歧） |
 | 保养周期 | 每行独立、默认 90、0=无需保养；后端彻底接收（P1 根治） |
+| 提交防抖 | 批量提交按钮禁用 + loading 态（L2，防双击重复建批） |
+| 窄屏 | 行表格 <576px 纵向堆叠 CSS 兜底（可选，已确认纳入） |
 | dao.js 容量 | 已 197/200 行红线，本次先拆分再改（见 §5） |
 
 ## 3. 页面交互（new.js 重写）
@@ -66,7 +68,7 @@
 
 ### 4.3 兼容
 
-`POST /api/fixtures`（单条）不改签名与行为；扫码台、列表其他入口继续可用。
+`POST /api/fixtures`（单条）行为不变，**同步补收 `maintenance_cycle_days`**（L1，路由解构 + 透传 createFixture），扫码台、列表其他入口创建的治具同样生效。
 
 ## 5. dao.js 容量拆分（前置步骤，强制）
 
@@ -82,11 +84,12 @@ dao.js 当前 197/200 行（98.5% 红线），必须先拆分再改：
 3. batch model 缺失 → 400；items 空数组 → 400；items 51 条 → 400
 4. `maintenance_cycle_days` 缺省 → 落库为 NULL（兼容旧行为）
 5. 单条 `POST /api/fixtures` 行为不变（回归）
+6. 单条 `POST /api/fixtures` 带 `maintenance_cycle_days` → 落库生效（L1 回归）
 
 ## 7. 影响范围与回归
 
-- 改：`new.js`（重写）、`routes-fixtures.js`（+batch 路由，容量已达 74.75% 预警，注意控制）、`dao.js`（拆分 + createFixture 字段）、`tests/`、bundle 重建
-- 双系统回归：扫码台单条创建正常（POST /api/fixtures 未变）；样品系统不受影响
+- 改：`new.js`（重写，含 L2 提交防抖）、`routes-fixtures.js`（+batch 路由 + L1 单条透传，容量已达 74.75% 预警，注意控制）、`dao.js`（拆分 + createFixture 字段）、`module.css`（窄屏堆叠）、`tests/`、bundle 重建
+- 双系统回归：扫码台单条创建正常（POST /api/fixtures 仅增字段不破坏）、样品系统不受影响
 - 文档：操作手册「新建治具」章节同步
 
 ## 8. 范围外（YAGNI）
