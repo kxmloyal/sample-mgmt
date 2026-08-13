@@ -57,9 +57,13 @@
 #fxm-input, [id^="fxm-input-"] { border:1px solid var(--line); border-radius:4px; padding:4px 8px; font-size:13px; }
 
 /* 批量新建治具行式表格（2026-08-13） */
+/* 卡片响应式宽度（AGENTS.md §10 断点：MD/LG/XL 逐级放大） */
+.fn-card { max-width:860px; }
+@media (min-width: 1200px) { .fn-card { max-width:1000px; } }
+@media (min-width: 1600px) { .fn-card { max-width:1120px; } }
 .fn-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
-.fn-row .fn-cell { flex:1; min-width:90px; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px; }
-.fn-row .fn-name { flex:2; }
+.fn-row .fn-cell { flex:1; min-width:90px; max-width:240px; border:1px solid var(--line); border-radius:4px; padding:6px 8px; font-size:13px; }
+.fn-row .fn-name { flex:2; max-width:340px; }
 .fn-row .fn-cycle { max-width:90px; }
 .fn-row .fn-del { border:1px solid var(--line); border-radius:4px; background:transparent; color:var(--bad); cursor:pointer; padding:6px 10px; font-size:12px; }
 .fn-row .fn-del:disabled { color:#bbb; cursor:not-allowed; }

@@ -9,7 +9,7 @@ var _fnSubmitting = false; // 提交防抖（双击/连点防护）
 async function renderFixtureNew() {
   _fnModel = ''; _fnModelFull = ''; _fnModels = []; _fnRows = []; _fnSubmitting = false;
   _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90 });
-  var html = '<div class="card" style="max-width:860px">';
+  var html = '<div class="card fn-card">';
   html += '<h3 style="margin:0 0 16px">新建治具申请（批量）</h3>';
 
   // ① 选择机型
