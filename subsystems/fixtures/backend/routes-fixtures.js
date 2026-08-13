@@ -6,10 +6,14 @@ var { doAccept, doCancel, doReturn, doUse, doMaintenance } = require('./fixture-
 var AR = require('./fixture-actions-repair');
 var AS = require('./fixture-actions-special');
 var { toCsv, sendCsv } = require('../../../shared/csv');
+var MD = require('../db/models-dao');
 
 function register(app) {
   var requireAuth = app.locals.requireAuth;
   var currentUser = app.locals.currentUser;
+  MD.setPool(D.pool());
+  // 启动即执行存量机型迁移（幂等 INSERT IGNORE，重复执行无副作用）
+  MD.migrateFixtureModels().catch(function () { /* 迁移失败不影响启动，models 路由首次调用会重试 */ });
 
   // 治具解析（供扫码台查询）
   app.get('/api/fixtures/scan', requireAuth, async function(req, res) {
@@ -29,10 +33,10 @@ function register(app) {
 
   // 清单
   app.get('/api/fixtures', requireAuth, async function(req, res) {
-    var _a = req.query, status = _a.status, dept = _a.dept, search = _a.search, overdue = _a.overdue,
+    var _a = req.query, status = _a.status, dept = _a.dept, search = _a.search, overdue = _a.overdue, dormant = _a.dormant, model = _a.model,
         sort = _a.sort, dir = _a.dir, limit = parseInt(_a.limit) || 20, offset = parseInt(_a.offset) || 0;
-    var fixtures = await D.listFixtures({ status: status, dept: dept, search: search, overdue: overdue, sort: sort, dir: dir, limit: limit, offset: offset });
-    var total = await D.countAllFixtures({ status: status, dept: dept, search: search, overdue: overdue });
+    var fixtures = await D.listFixtures({ status: status, dept: dept, search: search, overdue: overdue, dormant: dormant, model: model, sort: sort, dir: dir, limit: limit, offset: offset });
+    var total = await D.countAllFixtures({ status: status, dept: dept, search: search, overdue: overdue, dormant: dormant, model: model });
     var ids = fixtures.map(function(f) { return f.id; });
     if (ids.length) {
       var rows = await D.getFixturePhotoCounts(ids);
@@ -77,8 +81,8 @@ function register(app) {
 
   app.get('/api/fixtures/export', requireAuth, async function (req, res) {
     var _a = req.query, status = _a.status, dept = _a.dept, search = _a.search,
-        overdue = _a.overdue, sort = _a.sort, dir = _a.dir;
-    var fixtures = await D.listFixtures({ status: status, dept: dept, search: search, overdue: overdue, sort: sort, dir: dir });
+        overdue = _a.overdue, dormant = _a.dormant, model = _a.model, sort = _a.sort, dir = _a.dir;
+    var fixtures = await D.listFixtures({ status: status, dept: dept, search: search, overdue: overdue, dormant: dormant, model: model, sort: sort, dir: dir });
     var cols = [
       { key: 'fixture_no', label: '编号' },
       { key: 'name', label: '名称' },
@@ -116,16 +120,75 @@ function register(app) {
   // 看板
   app.get('/api/fixtures/dashboard', requireAuth, async function(req, res) {
     var u = await currentUser(req);
-    var [rows, overdue, myPending, overdueM, upcomingM] = await Promise.all([
+    var dormantDays = Number(await D.getFixtureSetting('dormant_days', 60)) || 60;
+    var [rows, overdue, myPending, overdueM, upcomingM, dormant] = await Promise.all([
       D.countFixturesByStatus(),
       D.listOverdueFixtures(),
       D.listMyPendingFixtures(u.role, u.id),
       D.listOverdueMaintenanceFixtures(),
-      D.listUpcomingMaintenanceFixtures()
+      D.listUpcomingMaintenanceFixtures(),
+      D.listDormantFixtures(dormantDays)
     ]);
     var byStatus = {}, i, r, total = 0;
     for (i = 0; i < rows.length; i++) { r = rows[i]; byStatus[r.status] = Number(r.cnt); total += Number(r.cnt); }
-    res.json({ byStatus: byStatus, total: total, overdue: overdue, myPending: myPending, maintenanceOverdue: overdueM, maintenanceUpcoming: upcomingM, maintenanceOverdueCount: overdueM.length, maintenanceUpcomingCount: upcomingM.length, role: u.role, dept: u.dept });
+    res.json({ byStatus: byStatus, total: total, overdue: overdue, myPending: myPending, maintenanceOverdue: overdueM, maintenanceUpcoming: upcomingM, maintenanceOverdueCount: overdueM.length, maintenanceUpcomingCount: upcomingM.length, dormantDays: dormantDays, dormantCount: dormant.length, dormant: dormant, role: u.role, dept: u.dept });
+  });
+
+  // 治具配置：读取（登录即可）；settings 为固定路径，必须放在 :id 之前
+  app.get('/api/fixtures/settings', requireAuth, async function(req, res) {
+    var dormantDays = Number(await D.getFixtureSetting('dormant_days', 60)) || 60;
+    res.json({ dormant_days: dormantDays });
+  });
+
+  // 治具配置：更新（仅 ADMIN，dormant_days 范围 1~365）
+  app.put('/api/fixtures/settings', requireAuth, async function(req, res) {
+    var u = await currentUser(req);
+    if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可修改配置' });
+    var days = Number(req.body && req.body.dormant_days);
+    if (!days || days < 1 || days > 365) return res.status(400).json({ error: '呆滞阈值须为 1~365 天' });
+    await D.setFixtureSetting('dormant_days', String(days));
+    res.json({ dormant_days: days });
+  });
+
+  // 机型列表（含治具计数）：登录可读
+  app.get('/api/fixtures/models', requireAuth, async function(req, res) {
+    res.json(await MD.listModelsWithCount());
+  });
+
+  // 新建机型：仅 RD/ADMIN；code 6~20 位字母数字，唯一冲突 409
+  app.post('/api/fixtures/models', requireAuth, async function(req, res) {
+    try {
+      var u = await currentUser(req);
+      if (['RD', 'ADMIN'].indexOf(u.role) === -1) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+      var code = ((req.body || {}).code || '').trim().toUpperCase();
+      var full_name = ((req.body || {}).full_name || '').trim();
+      if (!code) return res.status(400).json({ error: '请填写机型短码' });
+      if (code.length < 6 || code.length > 20) return res.status(400).json({ error: '机型短码须为 6~20 位' });
+      if (!/^[A-Za-z0-9]+$/.test(code)) return res.status(400).json({ error: '机型短码仅允许字母和数字' });
+      if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
+      var m = await MD.createModel({ code: code, full_name: full_name, created_by: u.id });
+      res.json(m);
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
+      res.status(500).json({ error: '新增机型失败：' + (err.message || '服务器内部错误') });
+    }
+  });
+
+  // 编辑机型：仅 RD/ADMIN；仅允许改 full_name（code 只读防破坏已引用治具）
+  app.put('/api/fixtures/models/:id', requireAuth, async function(req, res) {
+    try {
+      var u = await currentUser(req);
+      if (['RD', 'ADMIN'].indexOf(u.role) === -1) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+      var m = await MD.getModelById(Number(req.params.id));
+      if (!m) return res.status(404).json({ error: '机型不存在' });
+      var full_name = ((req.body || {}).full_name || '').trim();
+      if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
+      var updated = await MD.updateModelName(m.id, full_name);
+      res.json(updated);
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型全称已存在' });
+      res.status(500).json({ error: '编辑机型失败：' + (err.message || '服务器内部错误') });
+    }
   });
 
   // 操作日志
