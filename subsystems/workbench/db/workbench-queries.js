@@ -116,4 +116,24 @@ var unifiedWorkbenchSQL = 'SELECT * FROM (' + unionSQL + ') AS wb ORDER BY dwell
 // 总数查询（用于分页器）
 var unifiedWorkbenchCountSQL = 'SELECT COUNT(*) AS total FROM (' + unionSQL + ') AS wb';
 
-module.exports = { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL };
+// 动态拼装基础维度 WHERE（全部参数化防注入；level 为派生值由服务层 JS 计算后过滤，不走 SQL）
+function buildWorkbenchSQL(f) {
+  var where = [], params = [];
+  f = f || {};
+  if (f.type) { where.push('item_type = ?'); params.push(f.type); }
+  if (f.dept) { where.push('resp_dept = ?'); params.push(f.dept); }
+  if (f.apply_dept) { where.push('apply_dept = ?'); params.push(f.apply_dept); }
+  if (f.keyword) {
+    where.push('(item_no LIKE ? OR name LIKE ?)');
+    var kw = '%' + f.keyword + '%';
+    params.push(kw, kw);
+  }
+  if (f.stage) { where.push('stage_cn = ?'); params.push(f.stage); }
+  if (f.dormant) { where.push('dormant_days IS NOT NULL'); }
+  if (f.min_hours != null) { where.push('dwell_hours >= ?'); params.push(f.min_hours); }
+  if (f.max_hours != null) { where.push('dwell_hours <= ?'); params.push(f.max_hours); }
+  var whereSql = where.length ? ' WHERE ' + where.join(' AND ') : '';
+  return { sql: 'SELECT * FROM (' + unionSQL + ') AS wb' + whereSql, params: params };
+}
+
+module.exports = { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL, buildWorkbenchSQL };

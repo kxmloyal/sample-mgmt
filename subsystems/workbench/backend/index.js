@@ -4,6 +4,8 @@
 var D = require('../../../db');
 var { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL } = require('../db/workbench-queries');
 var pool = D.pool();
+var { buildWorkbenchSQL } = require('../db/workbench-queries');
+var { calcOverdue } = require('../db/workbench-overdue');
 
 // 默认阈值（小时）：3天边界 warn=72h，7天边界 bad=168h
 var DEFAULT_SETTINGS = { warn: 72, bad: 168 };
@@ -23,29 +25,56 @@ function register(app) {
   var requireAuth = app.locals.requireAuth;
   var currentUser = app.locals.currentUser;
 
-  // GET /api/workbench — 合并样品+治具活跃数据（分页，默认200条，上限500）
+  // GET /api/workbench — 服务端筛选 + 等级计算 + 统计 + 分页
+  // 筛选参数：type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours/limit/offset
   app.get('/api/workbench', requireAuth, async function(req, res) {
     try {
-      var limit = Math.min(parseInt(req.query.limit || '200', 10) || 200, 500);
-      var offset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
+      var filters = parseWorkbenchFilters(req.query);
+      if (filters.error) return res.status(400).json({ error: filters.error });
+      var settings = await getSettings(); // {warn,bad} 小时，缺省 72/168
+      var base = buildWorkbenchSQL(filters);
+      var [rows] = await pool.query(base.sql, base.params);
 
-      // 用 pool.query() 代替 execute()，因为 UNION 子查询与 prepared statement 不兼容
-      var [[rows], [countRow]] = await Promise.all([
-        pool.query(unifiedWorkbenchSQL, [limit, offset]),
-        pool.query(unifiedWorkbenchCountSQL)
-      ]);
-      var items = rows;
-      var total = countRow[0] ? countRow[0].total : 0;
-
-      // 后端支持按 item_type / dept 预筛选
-      if (req.query.item_type) {
-        items = items.filter(function(r) { return r.item_type === req.query.item_type; });
+      // 等级计算（后端权威版本）
+      rows.forEach(function(r) {
+        var od = calcOverdue(r, settings);
+        r.overdue_level = od.level;
+        r.overdue_label = od.label;
+        r.overdue_hours = od.hours;
+        r.overdue_reason = od.reason;
+      });
+      // 等级过滤（服务端，非前端内存）
+      if (filters.level !== '') {
+        var lv = Number(filters.level);
+        rows = rows.filter(function(r) { return r.overdue_level === lv; });
       }
-      if (req.query.dept) {
-        items = items.filter(function(r) { return r.resp_dept === req.query.dept; });
-      }
+      // 排序：等级降序 + 停留时长降序 + 类型/编号稳定序
+      rows.sort(function(a, b) {
+        if (a.overdue_level !== b.overdue_level) return b.overdue_level - a.overdue_level;
+        if (a.dwell_hours !== b.dwell_hours) return b.dwell_hours - a.dwell_hours;
+        if (a.item_type !== b.item_type) return a.item_type > b.item_type ? 1 : -1;
+        return a.item_no > b.item_no ? 1 : -1;
+      });
 
-      res.json({ items: items, total: total, limit: limit, offset: offset });
+      // 统计（基于过滤后全量，不受分页影响）
+      var total = rows.length;
+      var summary = { total: total, d3in: 0, d37: 0, d7: 0, dormant: 0 };
+      var deptMap = {};
+      rows.forEach(function(r) {
+        if (r.overdue_level === 0) summary.d3in++;
+        else if (r.overdue_level === 1) summary.d37++;
+        else summary.d7++;
+        if (r.dormant_days != null) summary.dormant++;
+        var dept = r.resp_dept || '-';
+        if (!deptMap[dept]) deptMap[dept] = { dept: dept, total: 0, d3in: 0, d37: 0, d7: 0 };
+        deptMap[dept].total++;
+        if (r.overdue_level === 0) deptMap[dept].d3in++;
+        else if (r.overdue_level === 1) deptMap[dept].d37++;
+        else deptMap[dept].d7++;
+      });
+
+      var page = rows.slice(filters.offset, filters.offset + filters.limit);
+      res.json({ items: page, total: total, limit: filters.limit, offset: filters.offset, summary: summary, deptStats: Object.values(deptMap) });
     } catch (err) {
       console.error('[workbench] 查询失败:', err.message);
       res.status(500).json({ error: '获取工作台数据失败：' + err.message });
@@ -86,5 +115,36 @@ function register(app) {
 
 function initDB() { return Promise.resolve(); }
 function seed() { return Promise.resolve(); }
+
+// 解析并校验工作台筛选参数（非法返回 { error }）
+function parseWorkbenchFilters(q) {
+  var f = {};
+  if (q.type && q.type !== 'sample' && q.type !== 'fixture') return { error: 'type 仅支持 sample/fixture' };
+  f.type = q.type || '';
+  if (q.level !== undefined && q.level !== '') {
+    var lv = Number(q.level);
+    if (lv !== 0 && lv !== 1 && lv !== 2) return { error: 'level 仅支持 0/1/2' };
+    f.level = String(lv);
+  } else f.level = '';
+  f.dept = q.dept || '';
+  f.apply_dept = q.apply_dept || '';
+  var kw = (q.keyword || '').trim();
+  f.keyword = kw.length > 50 ? kw.slice(0, 50) : kw;
+  f.stage = q.stage || '';
+  f.dormant = q.dormant === '1' ? '1' : '';
+  if (q.min_hours !== undefined && q.min_hours !== '') {
+    var min = Number(q.min_hours);
+    if (!(min >= 0)) return { error: 'min_hours 需为非负整数' };
+    f.min_hours = min;
+  }
+  if (q.max_hours !== undefined && q.max_hours !== '') {
+    var max = Number(q.max_hours);
+    if (!(max >= 0)) return { error: 'max_hours 需为非负整数' };
+    f.max_hours = max;
+  }
+  f.limit = Math.min(parseInt(q.limit || '50', 10) || 50, 500);
+  f.offset = Math.max(parseInt(q.offset || '0', 10) || 0, 0);
+  return f;
+}
 
 module.exports = { register, initDB, seed };
