@@ -23,6 +23,7 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
 .login-row input:focus{outline:none;border-color:var(--brand)}
 .login-row button{width:100%;padding:9px 0;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer}
 .login-row button:hover{background:var(--brand-d)}
+.login-row button:disabled{opacity:.6;cursor:not-allowed}
 .login-err{color:#dc2626;font-size:12px;text-align:center;min-height:16px}
 #user-info{font-size:13px}
 </style>
@@ -46,6 +47,15 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
     <div class="login-row"><input id="lg-pass" type="password" placeholder="密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')portalLogin()" /></div>
     <div class="login-row"><button type="button" onclick="portalLogin()">登 录</button></div>
     <div class="login-err" id="lg-err"></div>
+  </div>
+  <!-- 修改密码弹窗（登录后点击 user-info「修改密码」打开；复用登录框样式） -->
+  <div class="login-box" id="pwd-box" style="display:none">
+    <div class="login-title">修改密码</div>
+    <div class="login-row"><input id="cp-old" type="password" placeholder="原密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')document.getElementById('cp-new').focus()" /></div>
+    <div class="login-row"><input id="cp-new" type="password" placeholder="新密码（至少6位）" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('cp-new2').focus()" /></div>
+    <div class="login-row"><input id="cp-new2" type="password" placeholder="确认新密码" autocomplete="new-password" onkeydown="if(event.key==='Enter')doChangePwd()" /></div>
+    <div class="login-row"><button type="button" id="cp-btn" onclick="doChangePwd()">确认修改</button></div>
+    <div class="login-err" id="cp-err"></div>
   </div>
   <div class="portal-cards" id="subsystem-grid">
     <div class="portal-card"><div class="card-desc" style="text-align:center;color:var(--muted);padding:20px">加载子系统…</div></div>
@@ -190,6 +200,7 @@ async function bootPortal(u) {
   }
   document.getElementById('user-info').innerHTML =
     '<span style="color:var(--muted);margin-right:8px">' + (u.display_name || u.username) + '</span>' +
+    '<a href="javascript:openChangePwd()" style="color:var(--brand);text-decoration:none;margin-right:8px">修改密码</a>' +
     '<a href="javascript:fetch(\'/api/logout\',{method:\'POST\',credentials:\'include\'}).then(function(){location.reload()})" style="color:var(--brand);text-decoration:none">退出</a>';
   try {
     var [subRes, prefRes] = await Promise.all([
@@ -231,6 +242,40 @@ async function portalLogin() {
     bootPortal(data);
   } catch (e) { errEl.textContent = e.message; }
 }
+
+// —— 修改密码（2026-08-13 自助改密；文件顶层函数已达 10 上限，用 IIFE 包裹，不新增顶层函数）——
+(function () {
+  // 打开修改密码弹窗（仅登录态调用）
+  window.openChangePwd = function () {
+    document.getElementById('pwd-box').style.display = 'block';
+    document.getElementById('cp-old').focus();
+  };
+  // 提交修改：前端校验 → POST /api/change-password → 成功后刷新（会话已销毁，回到登录框）
+  window.doChangePwd = async function () {
+    var errEl = document.getElementById('cp-err');
+    errEl.textContent = '';
+    var oldPwd = document.getElementById('cp-old').value;
+    var newPwd = document.getElementById('cp-new').value;
+    var newPwd2 = document.getElementById('cp-new2').value;
+    if (newPwd.length < 6) { errEl.textContent = '新密码长度至少 6 位'; return; }
+    if (newPwd !== newPwd2) { errEl.textContent = '两次输入的新密码不一致'; return; }
+    var btn = document.getElementById('cp-btn');
+    btn.disabled = true;
+    try {
+      var res = await fetch('/api/change-password', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || '修改失败');
+      location.reload();
+    } catch (e) {
+      errEl.textContent = e.message;
+      btn.disabled = false;
+    }
+  };
+})();
 
 // 启动：检查登录态 → 初始化门户
 (async function () {
