@@ -4,8 +4,17 @@
 //       shared modal.js(openModal/closeModal)、api-base.js(api/showToast)
 // 后端：GET/PUT /api/workbench/settings（PUT 仅 ADMIN，写库全局生效）
 
-// 打开阈值设置弹窗
-function openThresholdModal() {
+// 打开阈值设置弹窗：先拉无筛选全量样本（≤500 条）供预览，避免被当前筛选/分页截断
+async function openThresholdModal() {
+  try {
+    var fresh = await api('GET', '/api/workbench?limit=500&offset=0');
+    if (fresh.items && fresh.items.length) _wbItems = fresh.items;
+  } catch (err) { /* 拉取失败沿用现有缓存 */ }
+  openThresholdModalInner();
+}
+
+// 原 openThresholdModal 函数体（弹窗渲染 + 打开），改名后保留
+function openThresholdModalInner() {
   var wd = Math.round(OVERDUE_BOUNDS.warn / 24);
   var bd = Math.round(OVERDUE_BOUNDS.bad / 24);
   var html =
@@ -30,7 +39,7 @@ function openThresholdModal() {
         '</div>' +
       '</div>' +
       '<div class="th-preview">' +
-        '<div class="th-preview-title">按当前阈值，当前 ' + _wbItems.length + ' 条活跃项目的分布</div>' +
+        '<div class="th-preview-title">按当前阈值，当前活跃数据样本 ' + _wbItems.length + ' 条（≤500）的分布</div>' +
         '<div class="th-bars" id="th-bars"></div>' +
         '<div class="th-err" id="th-err"></div>' +
       '</div>' +

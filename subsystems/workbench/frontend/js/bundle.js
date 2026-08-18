@@ -1,4 +1,4 @@
-/** BUNDLE vbmsygozu2 — 9 files */
+/** BUNDLE vbmsygsiqc — 9 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -823,8 +823,17 @@ function _openWbScanJs(item) {
 //       shared modal.js(openModal/closeModal)、api-base.js(api/showToast)
 // 后端：GET/PUT /api/workbench/settings（PUT 仅 ADMIN，写库全局生效）
 
-// 打开阈值设置弹窗
-function openThresholdModal() {
+// 打开阈值设置弹窗：先拉无筛选全量样本（≤500 条）供预览，避免被当前筛选/分页截断
+async function openThresholdModal() {
+  try {
+    var fresh = await api('GET', '/api/workbench?limit=500&offset=0');
+    if (fresh.items && fresh.items.length) _wbItems = fresh.items;
+  } catch (err) { /* 拉取失败沿用现有缓存 */ }
+  openThresholdModalInner();
+}
+
+// 原 openThresholdModal 函数体（弹窗渲染 + 打开），改名后保留
+function openThresholdModalInner() {
   var wd = Math.round(OVERDUE_BOUNDS.warn / 24);
   var bd = Math.round(OVERDUE_BOUNDS.bad / 24);
   var html =
@@ -849,7 +858,7 @@ function openThresholdModal() {
         '</div>' +
       '</div>' +
       '<div class="th-preview">' +
-        '<div class="th-preview-title">按当前阈值，当前 ' + _wbItems.length + ' 条活跃项目的分布</div>' +
+        '<div class="th-preview-title">按当前阈值，当前活跃数据样本 ' + _wbItems.length + ' 条（≤500）的分布</div>' +
         '<div class="th-bars" id="th-bars"></div>' +
         '<div class="th-err" id="th-err"></div>' +
       '</div>' +
