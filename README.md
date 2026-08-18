@@ -254,7 +254,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/resolve` | GET | 是 | 解析扫码内容 |
 | `/api/scan` | POST | 是 | 执行扫码操作（状态机）|
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
-| `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats |
+| `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats/applyDepts |
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
 | `/api/subsystems` | GET | 登录 | 已注册子系统清单（门户渲染；登录按 roles.use 过滤，未登录返回空数组）|
 | `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效 seed/jest 护栏）|

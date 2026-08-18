@@ -9,7 +9,8 @@ function parseWbHash() {
   h.split('&').forEach(function(kv) {
     var i = kv.indexOf('=');
     if (i < 0) return;
-    var k = kv.slice(0, i), v = decodeURIComponent(kv.slice(i + 1));
+    var k = kv.slice(0, i), v;
+    try { v = decodeURIComponent(kv.slice(i + 1)); } catch (e) { return; } // 非法编码跳过该 kv，避免页面加载死循环
     if (v === '') return;
     if (k === 'offset') { f.offset = Math.max(parseInt(v, 10) || 0, 0); }
     else if (k === 'limit') { f.limit = parseInt(v, 10) || 50; }

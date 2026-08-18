@@ -36,12 +36,14 @@ function register(app) {
       var [rows] = await pool.query(base.sql, base.params);
 
       // 等级计算（后端权威版本）
+      var applySet = {}; // 申请部门去重列表（apply_dept 下拉数据源）
       rows.forEach(function(r) {
         var od = calcOverdue(r, settings);
         r.overdue_level = od.level;
         r.overdue_label = od.label;
         r.overdue_hours = od.hours;
         r.overdue_reason = od.reason;
+        if (r.apply_dept) applySet[r.apply_dept] = 1;
       });
       // 等级过滤（服务端，非前端内存）
       if (filters.level !== '') {
@@ -73,8 +75,10 @@ function register(app) {
         else deptMap[dept].d7++;
       });
 
+      // offset 超界钳制（total 已在上方算出，避免前端 cur>pages 显示异常）
+      filters.offset = Math.min(filters.offset, Math.max(total - filters.limit, 0));
       var page = rows.slice(filters.offset, filters.offset + filters.limit);
-      res.json({ items: page, total: total, limit: filters.limit, offset: filters.offset, summary: summary, deptStats: Object.values(deptMap) });
+      res.json({ items: page, total: total, limit: filters.limit, offset: filters.offset, summary: summary, deptStats: Object.values(deptMap), applyDepts: Object.keys(applySet) });
     } catch (err) {
       console.error('[workbench] 查询失败:', err.message);
       res.status(500).json({ error: '获取工作台数据失败：' + err.message });
@@ -143,7 +147,7 @@ function parseWorkbenchFilters(q) {
     if (!(max >= 0)) return { error: 'max_hours 需为非负整数' };
     f.max_hours = max;
   }
-  f.limit = Math.min(parseInt(q.limit || '50', 10) || 50, 500);
+  f.limit = Math.min(Math.max(parseInt(q.limit || '50', 10) || 50, 1), 500);
   f.offset = Math.max(parseInt(q.offset || '0', 10) || 0, 0);
   return f;
 }

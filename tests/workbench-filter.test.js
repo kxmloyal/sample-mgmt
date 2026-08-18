@@ -99,4 +99,25 @@ describe('GET /api/workbench 服务端筛选', () => {
     const res = await agent.get('/api/workbench?item_type=bad');
     expect(res.status).toBe(400);
   });
+  test('apply_dept 筛选：items 全部满足对应申请部门', async () => {
+    const base = await agent.get('/api/workbench');
+    expect(base.status).toBe(200);
+    if (!base.body.applyDepts || !base.body.applyDepts.length) return; // 无申请部门数据跳过
+    const ad = base.body.applyDepts[0];
+    const res = await agent.get('/api/workbench?apply_dept=' + encodeURIComponent(ad));
+    expect(res.status).toBe(200);
+    res.body.items.forEach((it) => expect(it.apply_dept).toBe(ad));
+  });
+  test('响应含 applyDepts 数组且与 items 中 apply_dept 值域一致', async () => {
+    const res = await agent.get('/api/workbench?limit=500');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.applyDepts)).toBe(true);
+    // 方向 1：items 的 apply_dept 全部出现在 applyDepts 中
+    res.body.items.forEach((it) => expect(res.body.applyDepts).toContain(it.apply_dept));
+    // 方向 2：数据未超单页上限（items 覆盖全量）时，applyDepts 与 items 值域互含
+    if (res.body.items.length === res.body.total) {
+      const itemDepts = res.body.items.map((x) => x.apply_dept);
+      res.body.applyDepts.forEach((d) => expect(itemDepts).toContain(d));
+    }
+  });
 });

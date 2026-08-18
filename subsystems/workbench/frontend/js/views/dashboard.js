@@ -23,8 +23,8 @@ async function renderWorkbenchDashboard(keepFilter) {
     if (f.keyword) qs.push('keyword=' + encodeURIComponent(f.keyword));
     if (f.stage) qs.push('stage=' + encodeURIComponent(f.stage));
     if (f.dormant) qs.push('dormant=1');
-    if (f.min_hours) qs.push('min_hours=' + encodeURIComponent(f.min_hours));
-    if (f.max_hours) qs.push('max_hours=' + encodeURIComponent(f.max_hours));
+    if (f.min_hours !== '' && f.min_hours != null) qs.push('min_hours=' + encodeURIComponent(f.min_hours));
+    if (f.max_hours !== '' && f.max_hours != null) qs.push('max_hours=' + encodeURIComponent(f.max_hours));
     qs.push('limit=' + (f.limit || 50), 'offset=' + (f.offset || 0));
     var data = await api('GET', '/api/workbench?' + qs.join('&'));
     _wbItems = data.items; // 当前页数据（阈值弹窗打开时再拉全量样本）
@@ -32,7 +32,7 @@ async function renderWorkbenchDashboard(keepFilter) {
     view.style = '';
     view.innerHTML =
       renderSummaryCards(data.deptStats, data.summary) +
-      renderWbFilterBar(f, data.total, data.deptStats, deptNames(data.deptStats)) +
+      renderWbFilterBar(f, data.total, data.deptStats, data.applyDepts) +
       renderItemTable(data.items) +
       renderWbPager(f, data.total);
 
@@ -80,15 +80,6 @@ function renderSummaryCards(depts, summary) {
   });
   html += '</div>';
   return html;
-}
-
-// 申请部门列表（来自部门统计去重；后续可扩展为独立字典接口）
-function deptNames(deptStats) {
-  var seen = {}, arr = [];
-  (deptStats || []).forEach(function(d) {
-    if (!seen[d.dept]) { seen[d.dept] = 1; arr.push(d.dept); }
-  });
-  return arr;
 }
 
 // 阈值设置弹窗逻辑见 views/threshold.js（openThresholdModal/applyPreset/refreshThresholdPreview/saveThreshold）

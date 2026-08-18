@@ -1,4 +1,4 @@
-/** BUNDLE vbmsygsiqc — 9 files */
+/** BUNDLE vbmsyhaxjr — 9 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -355,7 +355,8 @@ function parseWbHash() {
   h.split('&').forEach(function(kv) {
     var i = kv.indexOf('=');
     if (i < 0) return;
-    var k = kv.slice(0, i), v = decodeURIComponent(kv.slice(i + 1));
+    var k = kv.slice(0, i), v;
+    try { v = decodeURIComponent(kv.slice(i + 1)); } catch (e) { return; } // 非法编码跳过该 kv，避免页面加载死循环
     if (v === '') return;
     if (k === 'offset') { f.offset = Math.max(parseInt(v, 10) || 0, 0); }
     else if (k === 'limit') { f.limit = parseInt(v, 10) || 50; }
@@ -471,8 +472,8 @@ async function renderWorkbenchDashboard(keepFilter) {
     if (f.keyword) qs.push('keyword=' + encodeURIComponent(f.keyword));
     if (f.stage) qs.push('stage=' + encodeURIComponent(f.stage));
     if (f.dormant) qs.push('dormant=1');
-    if (f.min_hours) qs.push('min_hours=' + encodeURIComponent(f.min_hours));
-    if (f.max_hours) qs.push('max_hours=' + encodeURIComponent(f.max_hours));
+    if (f.min_hours !== '' && f.min_hours != null) qs.push('min_hours=' + encodeURIComponent(f.min_hours));
+    if (f.max_hours !== '' && f.max_hours != null) qs.push('max_hours=' + encodeURIComponent(f.max_hours));
     qs.push('limit=' + (f.limit || 50), 'offset=' + (f.offset || 0));
     var data = await api('GET', '/api/workbench?' + qs.join('&'));
     _wbItems = data.items; // 当前页数据（阈值弹窗打开时再拉全量样本）
@@ -480,7 +481,7 @@ async function renderWorkbenchDashboard(keepFilter) {
     view.style = '';
     view.innerHTML =
       renderSummaryCards(data.deptStats, data.summary) +
-      renderWbFilterBar(f, data.total, data.deptStats, deptNames(data.deptStats)) +
+      renderWbFilterBar(f, data.total, data.deptStats, data.applyDepts) +
       renderItemTable(data.items) +
       renderWbPager(f, data.total);
 
@@ -528,15 +529,6 @@ function renderSummaryCards(depts, summary) {
   });
   html += '</div>';
   return html;
-}
-
-// 申请部门列表（来自部门统计去重；后续可扩展为独立字典接口）
-function deptNames(deptStats) {
-  var seen = {}, arr = [];
-  (deptStats || []).forEach(function(d) {
-    if (!seen[d.dept]) { seen[d.dept] = 1; arr.push(d.dept); }
-  });
-  return arr;
 }
 
 // 阈值设置弹窗逻辑见 views/threshold.js（openThresholdModal/applyPreset/refreshThresholdPreview/saveThreshold）
