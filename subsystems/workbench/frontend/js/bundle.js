@@ -1,4 +1,4 @@
-/** BUNDLE vbmsrcf8kj — 8 files */
+/** BUNDLE vbmsygj5n2 — 9 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -343,11 +343,112 @@ function _fixtureOverdue(item) {
 }
 
 
+/* --- subsystems/workbench/frontend/js/views/wb-filter.js --- */
+// subsystems/workbench/frontend/js/views/wb-filter.js
+// 工作台筛选栏/分页/hash 持久化（依赖全局：_deptFilter/_wbItems/renderWorkbenchDashboard/tierLabels/me/e）
+
+// 从 location.hash 解析筛选状态（#type=sample&level=2&dept=...&keyword=...&offset=...）
+function parseWbHash() {
+  var f = { type: '', level: '', dept: '', apply_dept: '', keyword: '', stage: '', dormant: '', min_hours: '', max_hours: '', limit: 50, offset: 0 };
+  var h = (location.hash || '').replace(/^#/, '');
+  if (!h) return f;
+  h.split('&').forEach(function(kv) {
+    var i = kv.indexOf('=');
+    if (i < 0) return;
+    var k = kv.slice(0, i), v = decodeURIComponent(kv.slice(i + 1));
+    if (v === '') return;
+    if (k === 'offset') { f.offset = Math.max(parseInt(v, 10) || 0, 0); }
+    else if (k === 'limit') { f.limit = parseInt(v, 10) || 50; }
+    else if (k in f) f[k] = v;
+  });
+  return f;
+}
+
+// 序列化筛选状态为 hash 片段（空值跳过）
+function serializeWbHash(f) {
+  var parts = [];
+  ['type', 'level', 'dept', 'apply_dept', 'keyword', 'stage', 'dormant', 'min_hours', 'max_hours'].forEach(function(k) {
+    if (f[k]) parts.push(k + '=' + encodeURIComponent(f[k]));
+  });
+  if (f.offset > 0) parts.push('offset=' + f.offset);
+  return parts.length ? '#' + parts.join('&') : '';
+}
+
+// 渲染筛选栏（含结果计数 + 清除按钮 + ADMIN 阈值入口）
+function renderWbFilterBar(f, total, deptStats, applyDepts) {
+  var tl = tierLabels();
+  var deptOpts = '<option value="">全部负责部门</option>' + (deptStats || []).map(function(d) {
+    return '<option value="' + d.dept + '"' + (f.dept === d.dept ? ' selected' : '') + '>' + d.dept + '</option>';
+  }).join('');
+  var applyOpts = '<option value="">全部申请部门</option>' + (applyDepts || []).map(function(d) {
+    return '<option value="' + d + '"' + (f.apply_dept === d ? ' selected' : '') + '>' + d + '</option>';
+  }).join('');
+  var isAdmin = typeof me !== 'undefined' && me && me.role === 'ADMIN';
+  var settingsBtn = isAdmin
+    ? '<button class="btn btn-sm" onclick="openThresholdModal()" style="margin-left:8px">阈值设置</button>'
+    : '';
+  return '<div class="filters" style="margin:16px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
+    '<input class="filter-select" id="wb-keyword" placeholder="编号/名称搜索" value="' + e(f.keyword) + '" style="max-width:150px" onkeydown="if(event.key===\'Enter\')wbSetFilter({keyword:this.value,offset:0})">' +
+    '<select class="filter-select" id="wb-type" onchange="wbSetFilter({type:this.value,offset:0})">' +
+      '<option value="">全部类型</option>' +
+      '<option value="sample"' + (f.type === 'sample' ? ' selected' : '') + '>样品</option>' +
+      '<option value="fixture"' + (f.type === 'fixture' ? ' selected' : '') + '>治具</option>' +
+    '</select>' +
+    '<select class="filter-select" id="wb-level" onchange="wbSetFilter({level:this.value,offset:0})">' +
+      '<option value="">全部积压等级</option>' +
+      '<option value="0"' + (f.level === '0' ? ' selected' : '') + '>' + tl[0] + '</option>' +
+      '<option value="1"' + (f.level === '1' ? ' selected' : '') + '>' + tl[1] + '</option>' +
+      '<option value="2"' + (f.level === '2' ? ' selected' : '') + '>' + tl[2] + '</option>' +
+    '</select>' +
+    '<select class="filter-select" id="wb-dept" onchange="wbSetFilter({dept:this.value,offset:0})">' + deptOpts + '</select>' +
+    '<select class="filter-select" id="wb-apply-dept" onchange="wbSetFilter({apply_dept:this.value,offset:0})">' + applyOpts + '</select>' +
+    '<label style="font-size:12px;color:var(--muted)">' +
+      '<input type="checkbox" id="wb-dormant"' + (f.dormant ? ' checked' : '') + ' onchange="wbSetFilter({dormant:this.checked?\'1\':\'\',offset:0})"> 仅呆滞</label>' +
+    '<span style="font-size:12px;color:var(--muted)">停留</span>' +
+    '<input class="filter-select" id="wb-min-h" placeholder="≥小时" value="' + e(f.min_hours || '') + '" style="width:70px" onchange="wbSetFilter({min_hours:this.value,offset:0})">' +
+    '<span style="color:var(--muted)">~</span>' +
+    '<input class="filter-select" id="wb-max-h" placeholder="≤小时" value="' + e(f.max_hours || '') + '" style="width:70px" onchange="wbSetFilter({max_hours:this.value,offset:0})">' +
+    '<button class="btn btn-sm" onclick="wbClearFilter()">清除筛选</button>' +
+    '<span style="margin-left:4px;font-size:12px;color:var(--muted)">共 ' + total + ' 条</span>' +
+    '<button class="btn btn-sm" onclick="renderWorkbenchDashboard(true)">刷新</button>' +
+    settingsBtn +
+    '</div>';
+}
+
+// 渲染分页控件（上一页/下一页 + 页码/总数；≤1 页不渲染）
+function renderWbPager(f, total) {
+  var pageSize = f.limit || 50;
+  var pages = Math.max(Math.ceil(total / pageSize), 1);
+  var cur = Math.floor((f.offset || 0) / pageSize) + 1;
+  if (pages <= 1) return '';
+  return '<div class="pager" style="margin:12px 0;display:flex;align-items:center;gap:8px">' +
+    '<button class="btn btn-sm" ' + (cur <= 1 ? 'disabled' : 'onclick="wbSetFilter({offset:' + ((cur - 2) * pageSize) + '})"') + '>上一页</button>' +
+    '<span style="font-size:12px;color:var(--muted)">' + cur + ' / ' + pages + ' 页</span>' +
+    '<button class="btn btn-sm" ' + (cur >= pages ? 'disabled' : 'onclick="wbSetFilter({offset:' + (cur * pageSize) + '})"') + '>下一页</button>' +
+    '</div>';
+}
+
+// 更新筛选状态：合并 patch → 写 hash → 重载看板
+function wbSetFilter(patch) {
+  var f = parseWbHash();
+  Object.keys(patch).forEach(function(k) { f[k] = patch[k]; });
+  var hash = serializeWbHash(f);
+  if (hash !== location.hash) history.replaceState(null, '', hash);
+  renderWorkbenchDashboard(true);
+}
+
+// 一键清除筛选（含部门卡 active 态复位）
+function wbClearFilter() {
+  history.replaceState(null, '', location.pathname + location.search);
+  _deptFilter = null;
+  renderWorkbenchDashboard(true);
+}
+
+
 /* --- subsystems/workbench/frontend/js/views/dashboard.js --- */
 // subsystems/workbench/frontend/js/views/dashboard.js
 // 核心渲染函数（逾期判断逻辑见 overdue.js）
 
-var _filterCache = null;
 var _deptFilter = null;   // 部门卡筛选（null=全部），单击部门卡设置/取消
 var _wbItems = [];        // 最近一次加载的工作台数据（阈值弹窗实时预览用）
 
@@ -357,62 +458,40 @@ async function renderWorkbenchDashboard(keepFilter) {
   view.style = 'padding:40px;text-align:center;color:var(--muted)';
 
   try {
-    await loadOverdueBounds(); // 确保使用全局阈值（ADMIN 可改）后再计算
-    var data = await api('GET', '/api/workbench');
-    _wbItems = data.items; // 缓存数据供阈值弹窗实时预览
+    await loadOverdueBounds(); // 确保使用全局阈值（ADMIN 可改）
+    var f = parseWbHash();
+    if (_deptFilter) f.dept = _deptFilter; // 部门卡筛选优先级高于下拉
 
-    // 单次遍历：计算逾期 + 部门分组 + 汇总统计（合并原 4 次遍历）
-    var deptMap = {}, summary = { total: 0, d3in: 0, d37: 0, d7: 0, dormant: 0 };
-    data.items.forEach(function(item) {
-      var od = calcOverdue(item);
-      item.overdue_level = od.level;
-      item.overdue_label = od.label;
-      item.overdue_hours = od.hours;
-      item.overdue_reason = od.reason;
-
-      // 呆滞治具计数（dormant_days 非空 = 呆滞）
-      if (item.dormant_days != null) summary.dormant++;
-
-      var dept = item.resp_dept || '-';
-      if (!deptMap[dept]) deptMap[dept] = { dept: dept, total: 0, d3in: 0, d37: 0, d7: 0 };
-      deptMap[dept].total++;
-      // 互斥三档：0=正常(≤3天) 1=3~7天 2=7天以上
-      if (item.overdue_level === 0) deptMap[dept].d3in++;
-      if (item.overdue_level === 1) deptMap[dept].d37++;
-      if (item.overdue_level === 2) deptMap[dept].d7++;
-
-      summary.total++;
-      if (item.overdue_level === 0) summary.d3in++;
-      if (item.overdue_level === 1) summary.d37++;
-      if (item.overdue_level === 2) summary.d7++;
-    });
-
-    // 按逾期等级 + 停留时长排序
-    data.items.sort(function(a, b) {
-      if (a.overdue_level !== b.overdue_level) return b.overdue_level - a.overdue_level;
-      if (a.dwell_hours !== b.dwell_hours) return b.dwell_hours - a.dwell_hours;
-      if (a.item_type !== b.item_type) return a.item_type > b.item_type ? 1 : -1;
-      return a.item_no > b.item_no ? 1 : -1;
-    });
+    // 带筛选参数请求（服务端过滤 + 等级计算 + 统计 + 分页）
+    var qs = [];
+    if (f.type) qs.push('type=' + encodeURIComponent(f.type));
+    if (f.level) qs.push('level=' + encodeURIComponent(f.level));
+    if (f.dept) qs.push('dept=' + encodeURIComponent(f.dept));
+    if (f.apply_dept) qs.push('apply_dept=' + encodeURIComponent(f.apply_dept));
+    if (f.keyword) qs.push('keyword=' + encodeURIComponent(f.keyword));
+    if (f.stage) qs.push('stage=' + encodeURIComponent(f.stage));
+    if (f.dormant) qs.push('dormant=1');
+    if (f.min_hours) qs.push('min_hours=' + encodeURIComponent(f.min_hours));
+    if (f.max_hours) qs.push('max_hours=' + encodeURIComponent(f.max_hours));
+    qs.push('limit=' + (f.limit || 50), 'offset=' + (f.offset || 0));
+    var data = await api('GET', '/api/workbench?' + qs.join('&'));
+    _wbItems = data.items; // 当前页数据（阈值弹窗打开时再拉全量样本）
 
     view.style = '';
     view.innerHTML =
-      renderSummaryCards(Object.values(deptMap), summary) +
-      renderFilterBar() +
-      renderItemTable(data.items);
+      renderSummaryCards(data.deptStats, data.summary) +
+      renderWbFilterBar(f, data.total, data.deptStats, deptNames(data.deptStats)) +
+      renderItemTable(data.items) +
+      renderWbPager(f, data.total);
 
-    // 恢复筛选状态（类型/等级下拉 + 部门卡）
-    if (keepFilter && _filterCache) {
-      var ft = document.getElementById('filter-type');
-      var fl = document.getElementById('filter-level');
-      if (ft) ft.value = _filterCache.type || '';
-      if (fl) fl.value = _filterCache.level || '';
-    }
+    // 部门卡 active 态
     if (_deptFilter) {
       var dc = document.querySelector('.kb-stat[data-dept="' + _deptFilter + '"]');
       if (dc) dc.classList.add('active');
+    } else {
+      var totalCard = document.querySelector('.wb-card-total');
+      if (totalCard) totalCard.classList.add('active');
     }
-    doFilter();
   } catch (err) {
     view.innerHTML = '<div style="padding:40px;text-align:center;color:#dc2626">' +
       '<div>加载失败：' + e(err.message) + '</div>' +
@@ -451,28 +530,13 @@ function renderSummaryCards(depts, summary) {
   return html;
 }
 
-function renderFilterBar() {
-  // 阈值设置按钮仅 ADMIN 可见（全局生效配置）
-  var isAdmin = typeof me !== 'undefined' && me && me.role === 'ADMIN';
-  var settingsBtn = isAdmin
-    ? '<button class="btn btn-sm" onclick="openThresholdModal()" style="margin-left:8px">阈值设置</button>'
-    : '';
-  var tl = tierLabels(); // 筛选选项标签随当前阈值动态生成
-  return '<div class="filters" style="margin:16px 0">' +
-    '<select class="filter-select" id="filter-type" onchange="doFilter()">' +
-      '<option value="">全部类型</option>' +
-      '<option value="sample">样品</option>' +
-      '<option value="fixture">治具</option>' +
-    '</select>' +
-    '<select class="filter-select" id="filter-level" onchange="doFilter()">' +
-      '<option value="">全部积压等级</option>' +
-      '<option value="0">' + tl[0] + '</option>' +
-      '<option value="1">' + tl[1] + '</option>' +
-      '<option value="2">' + tl[2] + '</option>' +
-    '</select>' +
-    '<button class="btn btn-sm" onclick="renderWorkbenchDashboard(true)" style="margin-left:8px">刷新</button>' +
-    settingsBtn +
-    '</div>';
+// 申请部门列表（来自部门统计去重；后续可扩展为独立字典接口）
+function deptNames(deptStats) {
+  var seen = {}, arr = [];
+  (deptStats || []).forEach(function(d) {
+    if (!seen[d.dept]) { seen[d.dept] = 1; arr.push(d.dept); }
+  });
+  return arr;
 }
 
 // 阈值设置弹窗逻辑见 views/threshold.js（openThresholdModal/applyPreset/refreshThresholdPreview/saveThreshold）
@@ -514,39 +578,17 @@ function renderItemTable(items) {
     '</table></div>';
 }
 
-function doFilter() {
-  var typeVal = document.getElementById('filter-type').value;
-  var levelVal = document.getElementById('filter-level').value;
-  _filterCache = { type: typeVal, level: levelVal };
-  var rows = document.querySelectorAll('#wb-table tbody tr');
-  var n = 0;
-  rows.forEach(function(tr) {
-    var show = true;
-    if (typeVal && tr.getAttribute('data-type') !== typeVal) show = false;
-    if (levelVal !== '' && tr.getAttribute('data-level') !== levelVal) show = false;
-    if (_deptFilter && tr.getAttribute('data-dept') !== _deptFilter) show = false;
-    tr.style.display = show ? '' : 'none';
-    if (show) { n++; tr.cells[0].textContent = n; } // 可见行重新编号，保证筛选后序号连续
-  });
-}
-
-// 部门卡交互：单击筛选该部门，再次点击取消
+// 部门卡交互：单击筛选该部门（服务端过滤），再次点击取消
 function filterByDept(el) {
   var dept = el.dataset.dept;
   _deptFilter = (_deptFilter === dept) ? null : dept;
-  document.querySelectorAll('.kb-stat').forEach(function(c) {
-    c.classList.toggle('active', c.dataset.dept ? c.dataset.dept === _deptFilter : !_deptFilter);
-  });
-  doFilter();
+  renderWorkbenchDashboard(true);
 }
 
 // 总计卡交互：清除部门筛选
 function clearDeptFilter() {
   _deptFilter = null;
-  document.querySelectorAll('.kb-stat').forEach(function(c) { c.classList.remove('active'); });
-  var total = document.querySelector('.wb-card-total');
-  if (total) total.classList.add('active');
-  doFilter();
+  renderWorkbenchDashboard(true);
 }
 
 function formatHours(h) {

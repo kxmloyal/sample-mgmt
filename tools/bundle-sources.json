@@ -49,6 +49,7 @@
     "shared/frontend/api-base.js",
     "shared/frontend/modal.js",
     "subsystems/workbench/frontend/js/views/overdue.js",
+    "subsystems/workbench/frontend/js/views/wb-filter.js",
     "subsystems/workbench/frontend/js/views/dashboard.js",
     "subsystems/workbench/frontend/js/views/wb-detail.js",
     "subsystems/workbench/frontend/js/views/threshold.js",
