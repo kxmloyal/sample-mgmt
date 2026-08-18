@@ -52,7 +52,7 @@
 │   ├── migrations.js      # 增量迁移
 │   └── tx.js              # 事务工具
 ├── routes/
-│   ├── auth.js            # 鉴权路由(登录/登出)
+│   ├── auth.js            # 鉴权路由(登录/登出/自助改密)
 │   ├── misc.js            # 杂项路由(看板/日志/用户/健康检查/门户偏好)
 │   └── subsystems.js      # 子系统发现 + CRUD API(管理面板)
 ├── shared/                # 框架共享层
