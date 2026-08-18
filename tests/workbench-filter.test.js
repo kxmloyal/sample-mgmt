@@ -90,4 +90,13 @@ describe('GET /api/workbench 服务端筛选', () => {
     const res = await agent.get('/api/workbench?level=9');
     expect(res.status).toBe(400);
   });
+  test('item_type 旧参数兼容筛选', async () => {
+    const res = await agent.get('/api/workbench?item_type=fixture');
+    expect(res.status).toBe(200);
+    res.body.items.forEach((it) => expect(it.item_type).toBe('fixture'));
+  });
+  test('item_type 非法值 → 400', async () => {
+    const res = await agent.get('/api/workbench?item_type=bad');
+    expect(res.status).toBe(400);
+  });
 });

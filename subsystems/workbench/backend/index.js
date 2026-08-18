@@ -119,8 +119,9 @@ function seed() { return Promise.resolve(); }
 // 解析并校验工作台筛选参数（非法返回 { error }）
 function parseWorkbenchFilters(q) {
   var f = {};
-  if (q.type && q.type !== 'sample' && q.type !== 'fixture') return { error: 'type 仅支持 sample/fixture' };
-  f.type = q.type || '';
+  var typeRaw = q.type || q.item_type || ''; // 兼容旧参数 item_type（tests/test-workbench-api.sh 仍使用）
+  if (typeRaw && typeRaw !== 'sample' && typeRaw !== 'fixture') return { error: 'type 仅支持 sample/fixture' };
+  f.type = typeRaw;
   if (q.level !== undefined && q.level !== '') {
     var lv = Number(q.level);
     if (lv !== 0 && lv !== 1 && lv !== 2) return { error: 'level 仅支持 0/1/2' };
