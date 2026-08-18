@@ -57,12 +57,14 @@ function renderWbFilterBar(f, total, deptStats, applyDepts) {
     '</select>' +
     '<select class="filter-select" id="wb-dept" onchange="wbSetFilter({dept:this.value,offset:0})">' + deptOpts + '</select>' +
     '<select class="filter-select" id="wb-apply-dept" onchange="wbSetFilter({apply_dept:this.value,offset:0})">' + applyOpts + '</select>' +
-    '<label style="font-size:12px;color:var(--muted)">' +
-      '<input type="checkbox" id="wb-dormant"' + (f.dormant ? ' checked' : '') + ' onchange="wbSetFilter({dormant:this.checked?\'1\':\'\',offset:0})"> 仅呆滞</label>' +
-    '<span style="font-size:12px;color:var(--muted)">停留</span>' +
-    '<input class="filter-select" id="wb-min-h" placeholder="≥小时" value="' + e(f.min_hours || '') + '" style="width:70px" onchange="wbSetFilter({min_hours:this.value,offset:0})">' +
-    '<span style="color:var(--muted)">~</span>' +
-    '<input class="filter-select" id="wb-max-h" placeholder="≤小时" value="' + e(f.max_hours || '') + '" style="width:70px" onchange="wbSetFilter({max_hours:this.value,offset:0})">' +
+    '<span class="filter-group">' +
+      '<label class="filter-check" title="仅显示无任何流转/移动记录的积压项目">' +
+        '<input type="checkbox" id="wb-dormant"' + (f.dormant ? ' checked' : '') + ' onchange="wbSetFilter({dormant:this.checked?\'1\':\'\',offset:0})">仅呆滞</label>' +
+      '<span style="font-size:12px;color:var(--muted)">停留</span>' +
+      '<input class="filter-select" id="wb-min-h" placeholder="≥小时" value="' + e(f.min_hours || '') + '" style="width:70px" onchange="wbSetFilter({min_hours:this.value,offset:0})">' +
+      '<span style="color:var(--muted)">~</span>' +
+      '<input class="filter-select" id="wb-max-h" placeholder="≤小时" value="' + e(f.max_hours || '') + '" style="width:70px" onchange="wbSetFilter({max_hours:this.value,offset:0})">' +
+    '</span>' +
     '<button class="btn btn-sm" onclick="wbClearFilter()">清除筛选</button>' +
     '<span style="margin-left:4px;font-size:12px;color:var(--muted)">共 ' + total + ' 条</span>' +
     '<button class="btn btn-sm" onclick="renderWorkbenchDashboard(true)">刷新</button>' +

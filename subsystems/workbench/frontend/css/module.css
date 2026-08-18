@@ -92,3 +92,10 @@ fluent-dialog[data-wb-detail]::part(control){max-width:1280px;max-height:82vh}
   .wb-detail-left{border-right:none;border-bottom:1px solid var(--line);overflow:visible}
   .wb-detail-right{overflow:visible}
 }
+
+
+/* 筛选分组（仅呆滞 + 停留时长归为一组，视觉隔离对齐） */
+.filter-group{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid var(--line);border-radius:8px;background:#fbfbfc}
+.filter-group .filter-select{flex:none;min-width:0}
+.filter-check{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap;user-select:none}
+.filter-check input[type="checkbox"]{flex:none;min-width:0;accent-color:var(--brand);width:14px;height:14px;margin:0;cursor:pointer}
