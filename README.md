@@ -117,7 +117,8 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 
 - **统计卡片**：总计 + 各部门卡片，互斥三档积压（≤3 天 / 3~7 天 / 7 天以上），标签随阈值动态显示
 - **卡片交互**：单击部门卡筛选该部门数据、再次单击取消；双击/总计卡清除筛选
-- **统一列表**：编号/名称/类型/阶段/负责部门/申请部门/停留时长/积压状态，支持类型 + 积压等级筛选
+- **筛选栏**：类型 / 积压等级 / 负责部门 / 申请部门 / 编号名称搜索 / 仅呆滞 / 停留时长范围（小时）多维筛选，服务端过滤实时生效，附「共 N 条」计数与一键清除
+- **统一列表与分页**：编号/名称/类型/阶段/负责部门/申请部门/停留时长/积压状态；分页展示（上一页/下一页 + 页码），筛选条件与页码写入网址（hash），刷新页面后自动恢复
 - **信息下钻**：点击列表行打开详情弹窗——左栏基本信息、右栏流转日志时间线（倒序最新在上 + 流程步骤号 + ⬆ 流向箭头 + 折叠）；弹窗宽高随信息密度自适应；「前往处理」跳转对应子系统扫码台并预填编号
 - **阈值设置**（仅 ADMIN）：可自定义 3 天 / 7 天边界（支持快捷预设 3/7、5/10、7/14、10/30 天），保存后全局生效（存 `workbench_settings` 表），所有用户即时按新阈值渲染
 - **逾期判定**：样品 NEW/PRODUCED 阈值放大 3 倍（制样中更宽松）；RELEASED/IN_CUSTODY 按复检日；治具维修/改善状态优先按 `expected_finish_at`（有值且未到期→正常，到期按超出天数），无该值则按报修日兜底
@@ -253,7 +254,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/resolve` | GET | 是 | 解析扫码内容 |
 | `/api/scan` | POST | 是 | 执行扫码操作（状态机）|
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
-| `/api/workbench` | GET | 是 | 工作台合并数据（样品 + 治具积压）|
+| `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats |
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
 | `/api/subsystems` | GET | 登录 | 已注册子系统清单（门户渲染；登录按 roles.use 过滤，未登录返回空数组）|
 | `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效 seed/jest 护栏）|
