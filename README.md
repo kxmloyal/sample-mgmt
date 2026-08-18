@@ -174,6 +174,10 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 - **默认行为**：新用户/未配置用户按子系统默认顺序排列；未配置的子系统自动排尾；新增子系统无需迁移自动获得默认位置
 - **清除恢复**：PUT /api/portal/prefs 传 `order=[]` 或 `null` 即清除偏好恢复默认顺序
 
+## 修改密码（自助）
+
+登录后在门户页右上角（账号旁）点击「**修改密码**」，输入原密码与新密码（至少 6 位）即可修改本人密码；修改成功后会话销毁，需重新登录。忘记密码请联系管理员重置。
+
 ---
 
 ## 运行
@@ -221,6 +225,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/logout` | POST | 是 | 登出 |
 | `/api/me` | GET | 是 | 当前用户信息 |
 | `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
+| `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
 | `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
