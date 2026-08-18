@@ -269,9 +269,9 @@ beforeAll(async () => {
 }, 30000);
 
 describe('buildWorkbenchSQL 单测', () => {
-  test('无筛选 → 无 WHERE 无参数', () => {
+  test('无筛选 → 外层不追加 WHERE、无参数（unionSQL 内嵌 WHERE 不在此列）', () => {
     const { sql, params } = buildWorkbenchSQL({});
-    expect(sql).not.toMatch(/ WHERE /);
+    expect(sql).not.toMatch(/\) AS wb WHERE/);
     expect(params).toEqual([]);
   });
   test('type+keyword → WHERE 拼接 + 参数化（LIKE 带 %）', () => {
