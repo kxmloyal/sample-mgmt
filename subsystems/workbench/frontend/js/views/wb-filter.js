@@ -25,7 +25,7 @@ function serializeWbHash(f) {
     if (f[k]) parts.push(k + '=' + encodeURIComponent(f[k]));
   });
   if (f.offset > 0) parts.push('offset=' + f.offset);
-  return parts.length ? '#' + parts.join('&') : '';
+  return parts.length ? '#/dashboard&' + parts.join('&') : '';
 }
 
 // 渲染筛选栏（含结果计数 + 清除按钮 + ADMIN 阈值入口）

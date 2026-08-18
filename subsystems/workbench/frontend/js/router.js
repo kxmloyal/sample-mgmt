@@ -15,7 +15,7 @@ function setActive(k) {
 
 function route() {
   var h = location.hash.replace('#/', '') || 'dashboard';
-  if (h === 'dashboard') {
+  if (h.indexOf('dashboard') === 0) {
     setActive('dashboard');
     document.getElementById('page-title').textContent = '全局工作台';
     document.getElementById('page-actions').innerHTML = '';
