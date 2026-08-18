@@ -305,6 +305,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 |---|---|---|---|
 | GET | /api/portal/prefs | 当前用户门户卡片排序偏好（无记录返回空数组） | 登录 |
 | PUT | /api/portal/prefs | 保存/清除排序偏好（order=[] 或 null 清除） | 登录 |
+| POST | /api/change-password | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录） | 登录 |
 
 ## 12. 数据库约定
 
