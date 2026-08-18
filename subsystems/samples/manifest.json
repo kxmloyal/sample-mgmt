@@ -3,7 +3,7 @@
   "name": "样品管理",
   "description": "覆盖样品发行→确认→生命周期管理→分发全流程",
   "version": "1.0.0",
-  "deployed": false,
+  "deployed": true,
   "icon": "flask",
   "route": {
     "prefix": "/api/samples",
