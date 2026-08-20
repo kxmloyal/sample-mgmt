@@ -34,31 +34,60 @@ function parseSize(req) {
   return { sizeKey, scale: w / 100, cw, ch };
 }
 
-// 字号下限保护：字号随 scale 等比缩小时，低于该下限的字段打印不可辨认（规格/机型等 5~6px 打印后糊成一片）
-// 下限按印刷可读下限 ~6pt≈8px 折算：编号为最关键字段取 9，其余按重要性递减
+// 文本行数估算：CJK≈1em/字符、ASCII≈0.55em，用于按纸高自适应字号/二维码
+function estTextLines(text, px, colW) {
+  if (!text) return 1;
+  var w = 0;
+  for (var i = 0; i < text.length; i++) w += text.charCodeAt(i) > 255 ? px : px * 0.55;
+  return Math.max(1, Math.ceil(w / Math.max(colW, 1)));
+}
+
+// 字号与二维码随标签尺寸自动缩放：字号下限=印刷可读下限 ~4pt（编号 6px / 其余 5px），
+// 二维码尺寸按纸高剩余空间自适应（文本换行/下限挤占时 QR 收缩兜底），实现内容铺满纸张
 function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey, cw, ch) {
   if (!scale || scale <= 0) scale = 1;
   var sk = sizeKey || 'large';
 
   var labW = Math.round(280 * scale);
   var qrSideW = Math.round(100 * scale);
-  var qrImgW = Math.round(66 * scale);
   var pad = Math.round(10 * scale);
   var gap = Math.round(7 * scale);
   var radius = Math.round(10 * scale);
   var borderW = scale >= 0.7 ? 2 : 1;
-  // 字号下限保护（px）：编号≥9 / 名称≥7 / 机型·工位≥7 / 规格≥7 / 标示卡提示≥6 / 页脚≥7
-  var noSize = Math.max(Math.round(11 * scale), 9);
-  var nameSize = Math.max(Math.round(9 * scale), 7);
-  var metaSize = Math.max(Math.round(8 * scale), 7);
-  var specSize = Math.max(Math.round(7 * scale), 7);
-  var cardTitle = Math.max(Math.round(7 * scale), 6);
-  var cardText = Math.max(Math.round(7 * scale), 6);
-  var footerSize = Math.max(Math.round(6 * scale), 7);
+  var nameSize = Math.max(Math.round(9 * scale), 5);
+  var metaSize = Math.max(Math.round(8 * scale), 5);
+  var specSize = Math.max(Math.round(7 * scale), 5);
+  var cardTitle = Math.max(Math.round(7 * scale), 5);
+  var cardText = Math.max(Math.round(7 * scale), 5);
+  var footerSize = Math.max(Math.round(6 * scale), 5);
   var cardPad = Math.round(4 * scale);
 
   var meta = [s.model || '', s.station || ''].filter(Boolean).join(' \u00b7 ') || '\u2014';
   meta = escapeHtml(meta);
+  // 标签纸物理尺寸（px）：预设按内容基准 280×133px×scale 折 mm 再转 px（1mm≈3.7795px @96dpi）
+  var paperWpx = Math.round((cw || Math.round(280 * scale * 0.265)) * 3.7795);
+  var paperHpx = Math.round((ch || Math.round(133 * scale * 0.265)) * 3.7795);
+  var innerH = paperHpx - 4 * borderW - 2 * pad;
+  // 编号优先单行：字号自动收缩至可放入 QR 列宽（下限 6px），放不下时仍允许换行
+  var noLen = (s.sample_no || '').length;
+  var noSize = noLen ? Math.max(Math.min(Math.round(11 * scale), Math.floor(qrSideW / (noLen * 0.55 + 0.001))), 6) : Math.round(11 * scale);
+  // 文本块高度估算（行高：编号 1.2 / 名称 1.4 / 机型 1.3 / 规格 1.2，含 3px/1px 外边距）
+  // 小尺寸（scale<0.6）名称/机型限 1 行、规格限 2 行；二维码余量不足(<24px)时再收紧为单行
+  var tight = scale < 0.6;
+  var nameLines = Math.min(estTextLines(s.name, nameSize, qrSideW), tight ? 1 : 2);
+  var metaLines = Math.min(estTextLines(meta, metaSize, qrSideW), tight ? 1 : 2);
+  var specLines = Math.min(estTextLines(s.spec, specSize, qrSideW), tight ? 2 : 3);
+  var noLines = estTextLines(s.sample_no, noSize, qrSideW);
+  var textBlockH = noLines * noSize * 1.2 + 3 + nameLines * nameSize * 1.4 + metaLines * metaSize * 1.3 + specLines * specSize * 1.2 + 1;
+  var qrImgW = Math.min(Math.round(66 * scale), Math.max(Math.round(innerH - textBlockH), 12));
+  if (qrImgW < 24) {
+    // 二维码余量不足：名称/机型/规格收紧为单行，优先保障二维码可识别尺寸
+    nameLines = Math.min(estTextLines(s.name, nameSize, qrSideW), 1);
+    metaLines = Math.min(estTextLines(meta, metaSize, qrSideW), 1);
+    specLines = Math.min(estTextLines(s.spec, specSize, qrSideW), 1);
+    textBlockH = noLines * noSize * 1.2 + 3 + nameLines * nameSize * 1.4 + metaLines * metaSize * 1.3 + specLines * specSize * 1.2 + 1;
+    qrImgW = Math.min(Math.round(66 * scale), Math.max(Math.round(innerH - textBlockH), 12));
+  }
   var cardSide = blankCard
     ? '<div style="flex:1;min-width:0;padding:0 '+cardPad+'px;border-left:1.5px dashed #666">'+
          '<div style="font-weight:700;font-size:'+cardTitle+'px;text-align:center;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px">\u6807\u793a\u5361\uff08\u53d1\u884c\u540e\u6253\u5370\u8d34\u5165\uff09</div>'+
@@ -88,22 +117,22 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey, cw, ch) {
 
   return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u7b7e '+escapeHtml(s.sample_no)+'</title>\n'+
 '<style>\n'+
-'@page{margin:3mm;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
+'@page{margin:0;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
 'body{font-family:\'PingFang SC\',\'Microsoft YaHei\',-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding-top:42px}\n'+
 '.size-bar{position:fixed;top:0;left:0;right:0;z-index:999;background:#fff;border-bottom:1px solid #e5e7eb;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:12px;font-family:sans-serif}\n'+
 '.size-bar select{padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px}\n'+
 '.size-bar button{margin-left:auto;padding:4px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}\n'+
-'.lab{width:'+labW+'px;border:'+borderW+'px solid #000;border-radius:'+radius+'px;padding:'+pad+'px;display:flex;gap:'+gap+'px}\n'+
+'.lab{width:'+paperWpx+'px;height:'+paperHpx+'px;border:'+borderW+'px solid #000;border-radius:'+radius+'px;padding:'+pad+'px;display:flex;gap:'+gap+'px}\n'+
 '.qr-side{width:'+qrSideW+'px;flex-shrink:0;text-align:center}\n'+
 '.qr-side img{width:'+qrImgW+'px;height:'+qrImgW+'px;display:block;margin:0 auto}\n'+
 '.qr-side .no{font-weight:700;font-size:'+noSize+'px;margin-top:3px;line-height:1.2}\n'+
-'.qr-side .name{font-size:'+nameSize+'px;line-height:1.4}\n'+
-'.qr-side .meta{font-size:'+metaSize+'px;color:#333;line-height:1.3}\n'+
-'.qr-side .spec{font-size:'+specSize+'px;color:#444;line-height:1.2;margin-top:1px}\n'+
+'.qr-side .name{font-size:'+nameSize+'px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:'+nameLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
+'.qr-side .meta{font-size:'+metaSize+'px;color:#333;line-height:1.3;display:-webkit-box;-webkit-line-clamp:'+metaLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
+'.qr-side .spec{font-size:'+specSize+'px;color:#444;line-height:1.2;margin-top:1px;display:-webkit-box;-webkit-line-clamp:'+specLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
 '.footer-note{font-size:'+footerSize+'px;color:#666;text-align:center;margin-top:5px}\n'+
-'@media print{.size-bar{display:none}body{padding-top:0}html,body{width:auto;height:auto;overflow:visible}}\n'+
+'@media print{.size-bar{display:none}body{padding-top:0;justify-content:flex-start}html,body{width:auto;height:auto;overflow:visible}.footer-note{display:none}}\n'+
 '</style></head><body>\n'+
-'<div class="size-bar">打印尺寸: <select onchange="changeSize(this.value)">'+sizeOpts+'</select><button onclick="window.print()">打印</button></div>\n'+
+'<div class="size-bar">打印尺寸: <select onchange="changeSize(this.value)">'+sizeOpts+'</select><span style="color:#b45309;font-size:11px">打印时在打印对话框选择标签纸尺寸并设缩放 100%，即可铺满纸张</span><button onclick="window.print()">打印</button></div>\n'+
 '<div class="lab">\n'+
 '  <div class="qr-side">\n'+
 '    <img src="'+qrDataUrl+'" alt="QR"/>\n'+
@@ -164,7 +193,7 @@ function buildCardPrintHtml(s, scale, sizeKey) {
 
   return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u793a\u5361 '+escapeHtml(s.sample_no)+'</title>\n'+
 '<style>\n'+
-'@page{margin:2mm;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
+'@page{margin:0;size:auto}*{margin:0;padding:0;box-sizing:border-box}\n'+
 'body{font-family:\'PingFang SC\',\'Microsoft YaHei\',-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding-top:42px}\n'+
 '.size-bar{position:fixed;top:0;left:0;right:0;z-index:999;background:#fff;border-bottom:1px solid #e5e7eb;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:12px;font-family:sans-serif}\n'+
 '.size-bar button{margin-left:auto;padding:4px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}\n'+
@@ -179,7 +208,7 @@ function buildCardPrintHtml(s, scale, sizeKey) {
 '.crd .pair-row{grid-column:1/-1;display:flex;justify-content:space-between}\n'+
 '.crd .pair-row .pair{display:flex;gap:2px;flex-shrink:0}\n'+
 '.crd .pair-row .pair .lbl{min-width:'+gridCol+'px;flex-shrink:0;text-align:right}\n'+
-'@media print{.size-bar{display:none}body{padding-top:0}html,body{width:auto;height:auto;overflow:visible}}\n'+
+'@media print{.size-bar{display:none}body{padding-top:0;justify-content:flex-start}html,body{width:auto;height:auto;overflow:visible}}\n'+
 '</style></head><body>\n'+
 '<div class="size-bar">打印尺寸: <b>'+labelMm+'</b> <span style="color:#6b7280">（跟随标签尺寸）</span><button onclick="window.print()">打印</button></div>\n'+
 '<div class="crd">\n'+
