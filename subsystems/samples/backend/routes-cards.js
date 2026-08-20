@@ -53,19 +53,19 @@ function register(app) {
   app.get('/api/samples/:id/label/print', requireAuth, asyncHandler(async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
-    const { sizeKey, scale } = parseSize(req);
+    const { sizeKey, scale, cw, ch } = parseSize(req);
     var qrGenW = Math.round(132 * scale);
     // QR 内容用不可枚举的 qr_token（兼容存量 qr_token 为空的历史数据回落 sample_no）
     var qrContent = s.qr_token || s.sample_no;
     var cached = getCachedQR(qrContent, qrGenW);
     if (cached) {
       res.set('Content-Type', 'text/html; charset=utf-8');
-      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey));
+      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey, cw, ch));
     }
     QRCode.toDataURL(qrContent, { width: qrGenW, margin: 1, errorCorrectionLevel: 'M' })
       .then(qrDataUrl => {
         setCachedQR(qrContent, qrGenW, qrDataUrl);
-        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey);
+        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey, cw, ch);
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
       })
@@ -79,19 +79,19 @@ function register(app) {
   app.get('/api/samples/:id/label/download', requireAuth, asyncHandler(async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
-    const { sizeKey, scale } = parseSize(req);
+    const { sizeKey, scale, cw, ch } = parseSize(req);
     var qrGenW = Math.round(132 * scale);
     var qrContent = s.qr_token || s.sample_no;
     var cached = getCachedQR(qrContent, qrGenW);
     if (cached) {
       res.set('Content-Type', 'text/html; charset=utf-8');
       res.set('Content-Disposition', 'attachment; filename="'+s.sample_no+'_label.html"');
-      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey));
+      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey, cw, ch));
     }
     QRCode.toDataURL(qrContent, { width: qrGenW, margin: 1, errorCorrectionLevel: 'M' })
       .then(qrDataUrl => {
         setCachedQR(qrContent, qrGenW, qrDataUrl);
-        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey);
+        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey, cw, ch);
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Content-Disposition', 'attachment; filename="'+s.sample_no+'_label.html"');
         res.send(html);

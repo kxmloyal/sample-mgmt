@@ -15,11 +15,28 @@ function parseSize(req) {
   const sizeKey = req.query.size || 'large';
   const sizeMap = { small: 50, medium: 70, large: 100 };
   var w = sizeMap[sizeKey] || 100;
-  if (sizeKey === 'custom' && req.query.customW) w = Number(req.query.customW);
-  return { sizeKey, scale: w / 100 };
+  var cw = null;
+  var ch = null;
+  if (sizeKey === 'custom') {
+    // 自定义长宽（真实 mm 语义）：内容基准 280×133px ≈ 74.2×35.2mm（1px≈0.265mm）
+    // 宽 30~150mm、高 10~150mm；任一非法/缺失按等比兼容；宽非法回退大号
+    cw = Number(req.query.customW);
+    if (!(Number.isFinite(cw) && cw >= 30 && cw <= 150)) cw = null;
+    ch = Number(req.query.customH);
+    if (!(Number.isFinite(ch) && ch >= 10 && ch <= 150)) ch = null;
+    if (cw !== null) {
+      var scale = cw / 74.2; // 宽度填满标签纸
+      if (ch !== null) scale = Math.min(scale, ch / 35.2); // contain 适配：内容完整放入纸张（不溢出/不裁剪）
+      return { sizeKey, scale, cw, ch };
+    }
+    w = 100; // 宽度非法回退大号
+  }
+  return { sizeKey, scale: w / 100, cw, ch };
 }
 
-function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
+// 字号下限保护：字号随 scale 等比缩小时，低于该下限的字段打印不可辨认（规格/机型等 5~6px 打印后糊成一片）
+// 下限按印刷可读下限 ~6pt≈8px 折算：编号为最关键字段取 9，其余按重要性递减
+function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey, cw, ch) {
   if (!scale || scale <= 0) scale = 1;
   var sk = sizeKey || 'large';
 
@@ -30,19 +47,20 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
   var gap = Math.round(7 * scale);
   var radius = Math.round(10 * scale);
   var borderW = scale >= 0.7 ? 2 : 1;
-  var noSize = Math.round(11 * scale);
-  var nameSize = Math.round(9 * scale);
-  var metaSize = Math.round(8 * scale);
-  var specSize = Math.round(7 * scale);
-  var cardTitle = Math.round(7 * scale);
-  var cardText = Math.round(7 * scale);
-  var footerSize = Math.round(6 * scale);
+  // 字号下限保护（px）：编号≥9 / 名称≥7 / 机型·工位≥7 / 规格≥7 / 标示卡提示≥6 / 页脚≥7
+  var noSize = Math.max(Math.round(11 * scale), 9);
+  var nameSize = Math.max(Math.round(9 * scale), 7);
+  var metaSize = Math.max(Math.round(8 * scale), 7);
+  var specSize = Math.max(Math.round(7 * scale), 7);
+  var cardTitle = Math.max(Math.round(7 * scale), 6);
+  var cardText = Math.max(Math.round(7 * scale), 6);
+  var footerSize = Math.max(Math.round(6 * scale), 7);
   var cardPad = Math.round(4 * scale);
 
   var meta = [s.model || '', s.station || ''].filter(Boolean).join(' \u00b7 ') || '\u2014';
   meta = escapeHtml(meta);
   var cardSide = blankCard
-    ? '<div style="flex:1;min-width:0;padding:0 '+cardPad+'px;border-left:1px dashed #aaa">'+
+    ? '<div style="flex:1;min-width:0;padding:0 '+cardPad+'px;border-left:1.5px dashed #666">'+
          '<div style="font-weight:700;font-size:'+cardTitle+'px;text-align:center;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px">\u6807\u793a\u5361\uff08\u53d1\u884c\u540e\u6253\u5370\u8d34\u5165\uff09</div>'+
          '<div style="font-size:'+cardText+'px;color:#ccc;line-height:1.6">'+
            '<div><span style="color:#d5d5d5">\u7c7b\u578b</span> ___ <span style="color:#d5d5d5">\u6765\u6e90</span> ___ <span style="color:#d5d5d5">\u7248\u6b21</span> ___</div>'+
@@ -59,7 +77,10 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
   var dS = { w: Math.round(280*0.5*P2M), h: Math.round(133*0.5*P2M) };
   var dM = { w: Math.round(280*0.7*P2M), h: Math.round(133*0.7*P2M) };
   var dL = { w: Math.round(280*1.0*P2M), h: Math.round(133*1.0*P2M) };
-  var dC = { w: Math.round(labW*P2M), h: Math.round(133*scale*P2M) };
+  // 自定义选项显示实际纸张尺寸；未提供高度（旧 URL 兼容）时显示内容等比尺寸
+  var dC = (cw && ch)
+    ? { w: Math.round(cw), h: Math.round(ch) }
+    : { w: Math.round(labW*P2M), h: Math.round(133*scale*P2M) };
   var sizeOpts = '<option value="small"'+(sk==='small'?' selected':'')+'>小号 '+dS.w+'×'+dS.h+'mm</option>'+
     '<option value="medium"'+(sk==='medium'?' selected':'')+'>中标 '+dM.w+'×'+dM.h+'mm</option>'+
     '<option value="large"'+(sk==='large'?' selected':'')+'>大号 '+dL.w+'×'+dL.h+'mm</option>'+
@@ -77,9 +98,9 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
 '.qr-side img{width:'+qrImgW+'px;height:'+qrImgW+'px;display:block;margin:0 auto}\n'+
 '.qr-side .no{font-weight:700;font-size:'+noSize+'px;margin-top:3px;line-height:1.2}\n'+
 '.qr-side .name{font-size:'+nameSize+'px;line-height:1.4}\n'+
-'.qr-side .meta{font-size:'+metaSize+'px;color:#555;line-height:1.3}\n'+
-'.qr-side .spec{font-size:'+specSize+'px;color:#666;line-height:1.2;margin-top:1px}\n'+
-'.footer-note{font-size:'+footerSize+'px;color:#999;text-align:center;margin-top:5px}\n'+
+'.qr-side .meta{font-size:'+metaSize+'px;color:#333;line-height:1.3}\n'+
+'.qr-side .spec{font-size:'+specSize+'px;color:#444;line-height:1.2;margin-top:1px}\n'+
+'.footer-note{font-size:'+footerSize+'px;color:#666;text-align:center;margin-top:5px}\n'+
 '@media print{.size-bar{display:none}body{padding-top:0}html,body{width:auto;height:auto;overflow:visible}}\n'+
 '</style></head><body>\n'+
 '<div class="size-bar">打印尺寸: <select onchange="changeSize(this.value)">'+sizeOpts+'</select><button onclick="window.print()">打印</button></div>\n'+
@@ -97,10 +118,13 @@ function buildLabelHtml(s, qrDataUrl, blankCard, scale, sizeKey) {
 '<script>\n'+
 'function changeSize(v){\n'+
 '  if(v==="custom"){\n'+
-'    var w=prompt("输入宽度(30~150mm)","80");\n'+
+'    var w=prompt("输入标签纸宽度(30~150mm)","80");\n'+
 '    if(w&&!isNaN(w)&&Number(w)>=30&&Number(w)<=150){\n'+
-'      localStorage.setItem("printSize","custom");\n'+
-'      location.search="?size=custom&customW="+w;\n'+
+'      var h=prompt("输入标签纸高度(10~150mm)","40");\n'+
+'      if(h&&!isNaN(h)&&Number(h)>=10&&Number(h)<=150){\n'+
+'        localStorage.setItem("printSize","custom");\n'+
+'        location.search="?size=custom&customW="+w+"&customH="+h;\n'+
+'      }else{document.querySelector(".size-bar select").value="'+sk+'";}\n'+
 '    }else{document.querySelector(".size-bar select").value="'+sk+'";}\n'+
 '  }else{\n'+
 '    localStorage.setItem("printSize",v);\n'+
@@ -124,8 +148,9 @@ function buildCardPrintHtml(s, scale, sizeKey) {
   var pad = Math.round(8 * scale);
   var radius = Math.round(8 * scale);
   var borderW = scale >= 0.7 ? 2 : 1;
-  var fontSize = Math.round(7 * scale);
-  var titleSize = Math.round(7 * scale);
+  // 字号下限保护（px）：标示卡正文≥7，标题≥7（随尺寸缩小时避免打印不可辨认）
+  var fontSize = Math.max(Math.round(7 * scale), 7);
+  var titleSize = Math.max(Math.round(7 * scale), 7);
   var gridCol = Math.round(28 * scale);
   var gap1 = Math.round(2 * scale);
   var gap2 = Math.round(4 * scale);
