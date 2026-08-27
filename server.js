@@ -57,6 +57,10 @@ const sessionStore = new (MySQLStoreFactory(session))({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'sample_mgmt',
   createDatabaseTable: true,
+  // 关闭 session 触底续期（touch）：每个带 cookie 请求在响应收尾都会对 sessions 表做 UPDATE 写库，
+  // 而 MariaDB 双1(fsync+doublewrite) 在有慢磁盘 I/O 环境下把写事务拖到 200~600ms，导致接口卡顿。
+  // 开启后仅登录(set)/登出(destroy)触发低频写库，读接口不再写 session（代价：session 过期时间不滚动续期，故下方 maxAge 加宽至 24h）。
+  disableTouch: true,
   schema: {
     tableName: 'sessions',
     columnNames: {
@@ -73,7 +77,8 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 1000 * 60 * 60 * 8,
+    // 因 disableTouch 会话期不滚动，取 24h 以免长时间使用者中途过期
+    maxAge: 1000 * 60 * 60 * 24,
     httpOnly: true,
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production'
