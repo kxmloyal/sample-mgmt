@@ -11,7 +11,12 @@ var unionSQL = `
     'sample' AS item_type,
     '样品' AS item_type_cn,
     s.status,
-    NULL AS dormant_days,
+    -- 呆滞天数：以 last activity(updated_at) 计，超过统一呆滞阈值返回天数，否则 NULL（与治具一致）
+    CASE
+      WHEN DATEDIFF(NOW(), s.updated_at) >= COALESCE((SELECT v FROM fixtures_settings WHERE k = 'dormant_days'), 60)
+      THEN DATEDIFF(NOW(), s.updated_at)
+      ELSE NULL
+    END AS dormant_days,
     CASE s.status
       WHEN 'NEW' THEN '制样中'
       WHEN 'PRODUCED' THEN '待发行'
@@ -119,8 +124,12 @@ var unionSQL = `
     'control' AS item_type,
     '管制' AS item_type_cn,
     c.status,
-    -- 管制无「呆滞」概念：dormant_days 恒 NULL
-    NULL AS dormant_days,
+    -- 呆滞天数：以 last activity(updated_at) 计，超过统一呆滞阈值返回天数，否则 NULL（与样品/治具一致）
+    CASE
+      WHEN DATEDIFF(NOW(), c.updated_at) >= COALESCE((SELECT v FROM fixtures_settings WHERE k = 'dormant_days'), 60)
+      THEN DATEDIFF(NOW(), c.updated_at)
+      ELSE NULL
+    END AS dormant_days,
     -- 阶段中文按《管制 5 阶段》映射（flow.js STAGE_OF_STATUS + STAGE_DEFS）
     CASE c.status
       WHEN 'DRAFT' THEN '申请与会签'

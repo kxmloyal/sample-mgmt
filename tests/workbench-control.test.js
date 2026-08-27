@@ -60,9 +60,9 @@ describe('workbench-control UNION 分支结构（24 列与样品/治具一致）
     expect(unifiedWorkbenchSQL).toMatch(/WHEN 'REWORKING' THEN '生产'/);
     expect(unifiedWorkbenchSQL).toMatch(/WHEN 'SHIPPED' THEN '仓库'/);
   });
-  test('dwell_hours = updated_at 到现在的停留小时数，dormant_days 恒 NULL', () => {
+  test('dwell_hours = updated_at 到现在的停留小时数，dormant_days 按统一阈值计算', () => {
     expect(unifiedWorkbenchSQL).toMatch(/TIMESTAMPDIFF\(HOUR, c\.updated_at, NOW\(\)\) AS dwell_hours/);
-    expect(unifiedWorkbenchSQL).toMatch(/NULL AS dormant_days/);
+    expect(unifiedWorkbenchSQL).toMatch(/DATEDIFF\(NOW\(\), c\.updated_at\) >= COALESCE\(\(SELECT v FROM fixtures_settings WHERE k = 'dormant_days'\), 60\)/);
   });
   test('id 字段在首列（不破坏下钻分派）', () => {
     const sampleIdx = unifiedWorkbenchSQL.indexOf('s.id AS id');
