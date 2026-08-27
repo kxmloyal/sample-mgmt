@@ -20,6 +20,7 @@
 .wb-type-tag{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
 .wb-type-tag.sample{color:var(--brand);background:#f0fdfa}
 .wb-type-tag.fixture{color:#7c3aed;background:#f5f3ff}
+.wb-type-tag.control{color:#b45309;background:#fef3c7}
 
 /* 表格容器与表头（app.css 无 .data-table/.table-wrap，需工作台自备） */
 .table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}

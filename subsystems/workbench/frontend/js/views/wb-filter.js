@@ -48,6 +48,7 @@ function renderWbFilterBar(f, total, deptStats, applyDepts) {
       '<option value="">全部类型</option>' +
       '<option value="sample"' + (f.type === 'sample' ? ' selected' : '') + '>样品</option>' +
       '<option value="fixture"' + (f.type === 'fixture' ? ' selected' : '') + '>治具</option>' +
+      '<option value="control"' + (f.type === 'control' ? ' selected' : '') + '>管制</option>' +
     '</select>' +
     '<select class="filter-select" id="wb-level" onchange="wbSetFilter({level:this.value,offset:0})">' +
       '<option value="">全部积压等级</option>' +

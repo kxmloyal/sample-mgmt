@@ -1,6 +1,7 @@
 // subsystems/workbench/db/workbench-queries.js
-// 统一工作台查询：合并样品 + 治具活跃数据，排除 RETIRED
+// 统一工作台查询：合并样品 + 治具 + 管制 active 数据，exclude 终态/作废
 // 外层排序（dwell_hours DESC）后用 LIMIT/OFFSET 分页，避免服务端全量传输
+// 注意：三条 UNION ALL 分支列名 / 顺序 / 类型 MUST 完全一致（24 列）
 
 var unionSQL = `
   SELECT
@@ -108,6 +109,66 @@ var unionSQL = `
     f.updated_at
   FROM fixtures f
   WHERE f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE')
+
+  UNION ALL
+
+  SELECT
+    c.id AS id,
+    c.order_no AS item_no,
+    c.part_name AS name,
+    'control' AS item_type,
+    '管制' AS item_type_cn,
+    c.status,
+    -- 管制无「呆滞」概念：dormant_days 恒 NULL
+    NULL AS dormant_days,
+    -- 阶段中文按《管制 5 阶段》映射（flow.js STAGE_OF_STATUS + STAGE_DEFS）
+    CASE c.status
+      WHEN 'DRAFT' THEN '申请与会签'
+      WHEN 'SIGNING' THEN '申请与会签'
+      WHEN 'LABELED' THEN '贴标与入仓'
+      WHEN 'CONTROL_STORED' THEN '贴标与入仓'
+      WHEN 'NCR_DONE' THEN 'NCR与处理会签'
+      WHEN 'DISPOSAL_SIGNING' THEN 'NCR与处理会签'
+      WHEN 'REWORK_OPENED' THEN '重工执行'
+      WHEN 'REWORKING' THEN '重工执行'
+      WHEN 'REWORK_REPORTED' THEN '重工执行'
+      WHEN 'REIN_STOCK' THEN '入库出货'
+      WHEN 'SHIPPED' THEN '入库出货'
+      ELSE '-'
+    END AS stage_cn,
+    -- 负责部门 = 当前状态下一步动作的归属单位，无明确归属回退 apply_dept
+    CASE c.status
+      WHEN 'DRAFT' THEN COALESCE(c.apply_dept, '-')
+      WHEN 'SIGNING' THEN '品保文管中心'
+      WHEN 'LABELED' THEN COALESCE(c.apply_dept, '-')
+      WHEN 'CONTROL_STORED' THEN '品保文管中心'
+      WHEN 'NCR_DONE' THEN '品保文管中心'
+      WHEN 'DISPOSAL_SIGNING' THEN '品保文管中心'
+      WHEN 'REWORK_OPENED' THEN '生管'
+      WHEN 'REWORKING' THEN '生产'
+      WHEN 'REWORK_REPORTED' THEN '生产'
+      WHEN 'REIN_STOCK' THEN '仓库'
+      WHEN 'SHIPPED' THEN '仓库'
+      ELSE COALESCE(c.apply_dept, '-')
+    END AS resp_dept,
+    COALESCE(c.apply_dept, '-') AS apply_dept,
+    NULL AS spec,
+    NULL AS model,
+    NULL AS station,
+    TIMESTAMPDIFF(HOUR, c.updated_at, NOW()) AS dwell_hours,
+    NULL AS next_inspect_at,
+    NULL AS release_cycle_days,
+    NULL AS expected_return_at,
+    NULL AS expected_finish_at,
+    NULL AS next_maintenance_at,
+    NULL AS transferred_at,
+    NULL AS used_at,
+    NULL AS repair_requested_at,
+    c.created_at,
+    c.updated_at
+  FROM control_orders c
+  -- 进行中单据：初态 DRAFT 至 SHIPPED（终态前），排除 RETIRED 作废
+  WHERE c.status <> 'RETIRED'
 `;
 
 // 分页数据查询（停留时间降序，逾期项排最前）

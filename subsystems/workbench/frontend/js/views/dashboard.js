@@ -95,7 +95,9 @@ function renderItemTable(items) {
     }
     var typeBadge = item.item_type === 'sample'
       ? '<span class="wb-type-tag sample">样品</span>'
-      : '<span class="wb-type-tag fixture">治具</span>';
+      : item.item_type === 'fixture'
+        ? '<span class="wb-type-tag fixture">治具</span>'
+        : '<span class="wb-type-tag control">管制</span>';
 
     return '<tr class="wb-row" data-type="' + item.item_type + '" data-level="' + item.overdue_level + '" data-dept="' + item.resp_dept + '" style="cursor:pointer" onclick="openWbDetail(' + JSON.stringify(item).replace(/"/g, '&quot;') + ')">' +
       '<td class="muted">' + (idx + 1) + '</td>' +

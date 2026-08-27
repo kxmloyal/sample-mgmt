@@ -7,6 +7,18 @@
 var _wbTlExpanded = true;
 var _wbTlMax = 6;
 var _wbTlAllLogs = [];
+var _wbTlItem = null; // 当前详情 item（用于按类型解析流转动作中文）
+
+// 管制流转/留痕动作中文（workbench 未加载 control 子系统 constants，本地隔离映射）
+var _CTL_ACTION_CN = {
+  CREATE: '新建管制申请', EDIT: '编辑草稿', SUBMIT: '提交会签',
+  SIGN_OK: '闸口①会签通过/贴标', STORE: '入管制仓', CREATE_NCR: '开不良品委托单',
+  DISPATCH: '发起处理方式会签', DISPOSAL_OK: '闸口②会签通过', START: '生产确认开工',
+  REPORT: '报工', IN_STOCK: '入库', SHIP: '出货',
+  SIGN_REJECT: '闸口①会签退回', DISPOSAL_REJECT: '闸口②会签退回',
+  VOID: '作废', NCR: '追加不良品委托单', REWORK_LOG: '报工',
+  SIGN_AGREE: '会签同意', SIGN_REJECT2: '会签退回', SIGN_SKIP: '会签强制跳过'
+};
 
 // 各类型关键时间点字段（按存在性展示）
 var _KEY_DATES = {
@@ -23,6 +35,12 @@ var _KEY_DATES = {
     { k: 'used_at', l: '领用时间' },
     { k: 'next_maintenance_at', l: '下次保养' },
     { k: 'repair_requested_at', l: '报修时间' }
+  ],
+  control: [
+    { k: 'apply_at', l: '申请时间' },
+    { k: 'stored_at', l: '入仓时间' },
+    { k: 'in_stock_at', l: '入库时间' },
+    { k: 'updated_at', l: '最后更新' }
   ]
 };
 
@@ -37,9 +55,13 @@ async function openWbDetail(item) {
       detail = await api('GET', '/api/samples/' + item.id);
       logs = detail.logs || [];
       delete detail.logs; // 与治具结构对齐，统一传 logs 参数
-    } else {
+    } else if (item.item_type === 'fixture') {
       detail = await api('GET', '/api/fixtures/' + item.id);
       logs = await api('GET', '/api/fixtures/' + item.id + '/logs');
+    } else { // control
+      detail = await api('GET', '/api/control/orders/' + item.id);
+      logs = detail.logs || [];
+      delete detail.logs; // 与样品结构对齐，统一传 logs 参数
     }
     // 后端按 id DESC（最新在上），时间线倒序展示（最新 #N 在最上），直接使用无需反转
     _renderWbDetail(detail, logs || [], item);
@@ -65,8 +87,8 @@ function _wbLeftPct(fieldCount) {
 // 统计实际渲染的基本信息字段数（用于宽度自适应）
 function _countWbFields(detail, item) {
   var n = 0;
-  if (detail.sample_no || detail.fixture_no || item.item_no) n++;
-  if (detail.name) n++;
+  if (detail.order_no || detail.sample_no || detail.fixture_no || item.item_no) n++;
+  if (detail.name || item.name) n++;
   n += 2; // 类型 + 阶段（恒有值）
   if (detail.spec) n++;
   if (detail.model) n++;
@@ -78,14 +100,18 @@ function _countWbFields(detail, item) {
 
 // 组装弹窗 HTML：左右分栏（左=基本信息，右=流转日志）+ 内容密度自适应
 function _renderWbDetail(detail, logs, item) {
-  var typeLabel = item.item_type === 'sample' ? '样品' : '治具';
-  var stageLabel = STATUS[detail.status] || detail.status || '-';
+  var typeLabel = item.item_type === 'sample' ? '样品' : (item.item_type === 'fixture' ? '治具' : '管制');
+  // 管制状态未在全局 STATUS 中：阶段用工作台派生的 stage_cn，其余子系统用全局状态中文
+  var stageLabel = item.item_type === 'control'
+    ? (item.stage_cn || detail.status || '-')
+    : (STATUS[detail.status] || detail.status || '-');
   _wbTlAllLogs = logs; // 供折叠/展开切换使用
+  _wbTlItem = item;
 
   var fields = _countWbFields(detail, item);
   var leftHtml = '<div class="wb-detail-info">' +
     _kv('编号', detail.sample_no || detail.fixture_no || item.item_no) +
-    _kv('名称', detail.name) +
+    _kv('名称', detail.name || item.name) +
     _kv('类型', typeLabel) +
     _kv('阶段', stageLabel) +
     _kv('规格', detail.spec) +
@@ -107,7 +133,7 @@ function _renderWbDetail(detail, logs, item) {
     '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>' +
     '</div>';
 
-  var mask = openModal('详细信息 · ' + (detail.sample_no || detail.fixture_no || item.item_no), html, { foot: foot });
+  var mask = openModal('详细信息 · ' + (detail.order_no || detail.sample_no || detail.fixture_no || item.item_no), html, { foot: foot });
   // 自适应：通过 fluent-dialog 的 CSS 变量控制面板尺寸（style.width 进不了 shadow DOM）
   var dlg = mask.querySelector('fluent-dialog');
   var w = _wbWidth(fields, logs.length);
@@ -169,7 +195,10 @@ function _buildTimelineRows(logs) {
   var total = _wbTlAllLogs.length || shown.length;
   var html = '';
   shown.forEach(function(l, i) {
-    var action = ACTION_CN[l.action] || l.action || '-';
+    // 管制动作中文走本地映射（_CTL_ACTION_CN），其余子系统沿用全局 ACTION_CN
+    var action = _wbTlItem && _wbTlItem.item_type === 'control'
+      ? (_CTL_ACTION_CN[l.action] || l.action || '-')
+      : (ACTION_CN[l.action] || l.action || '-');
     var who = l.display_name || l.username || (ROLE[l.role] || l.role || '') + (l.dept ? ' · ' + l.dept : '');
     var time = l.created_at ? String(l.created_at).slice(0, 16).replace('T', ' ') : '';
     var note = l.note ? '<span class="wb-tl-note" title="' + e(l.note) + '">' + e(l.note) + '</span>' : '';
@@ -203,6 +232,10 @@ function toggleWbTimeline() {
 
 // 跳转按钮 onclick 表达式（内联 JSON 转义，防止引号破坏 onclick）
 function _openWbScanJs(item) {
+  // 管制详情走 control 子系统详情页（#/detail?id=...），样品/治具走扫码页（#/scan?no=...）
+  if (item.item_type === 'control') {
+    return "window.open('/subsystems/control/frontend/index.html#/detail?id=" + item.id + "','_blank')";
+  }
   var entry = item.item_type === 'sample'
     ? '/subsystems/samples/frontend/index.html'
     : '/subsystems/fixtures/frontend/index.html';

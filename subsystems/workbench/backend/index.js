@@ -124,7 +124,7 @@ function seed() { return Promise.resolve(); }
 function parseWorkbenchFilters(q) {
   var f = {};
   var typeRaw = q.type || q.item_type || ''; // 兼容旧参数 item_type（tests/test-workbench-api.sh 仍使用）
-  if (typeRaw && typeRaw !== 'sample' && typeRaw !== 'fixture') return { error: 'type 仅支持 sample/fixture' };
+  if (typeRaw && typeRaw !== 'sample' && typeRaw !== 'fixture' && typeRaw !== 'control') return { error: 'type 仅支持 sample/fixture/control' };
   f.type = typeRaw;
   if (q.level !== undefined && q.level !== '') {
     var lv = Number(q.level);

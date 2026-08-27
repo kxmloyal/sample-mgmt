@@ -52,6 +52,10 @@ function calcOverdue(item, cfg) {
     var fixt = _fixtureOverdue(item);
     hours = fixt.hours;
     reason = fixt.reason;
+  } else if (item.item_type === 'control') {
+    // 管制无呆滞/预期时限概念：按停留时长复用统一阈值（dormant_days 恒 NULL）
+    hours = item.dwell_hours || 0;
+    reason = '停留中(' + (item.stage_cn || '') + ')';
   }
 
   var level = 0;
