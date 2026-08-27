@@ -79,7 +79,7 @@ function controlDeriveProgress(agg) {
     const sts = steps.filter(function (s) { return s.stage === def.stage; });
     const doneCount = sts.filter(function (s) { return s.done; }).length;
     return {
-      stage: def.stage, key: def.key, name: def.name,
+      stage: def.stage, key: def.key, name: def.name, dept: def.dept || [],
       steps: sts.map(function (s) { return s.seq; }), stepCount: sts.length,
       doneCount, done: doneCount === sts.length, current: sts.some(function (s) { return s.current; })
     };
@@ -113,7 +113,9 @@ function controlRenderStageCards(agg) {
   return d.stages.map(function (st) {
     const cls = st.done ? 'ctl-stage done' : (st.current ? 'ctl-stage current' : 'ctl-stage');
     return '<div class="' + cls + '" data-stage="' + st.stage + '">'
-      + '<div class="ctl-stage-name">阶段' + st.stage + ' ' + st.name + '</div>'
+      + '<div class="ctl-stage-name">阶段' + st.stage + ' ' + st.name
+      + (st.dept && st.dept.length ? '<span class="ctl-stage-dept">' + st.dept.join(' / ') + '</span>' : '')
+      + '</div>'
       + '<div class="ctl-stage-count">' + st.doneCount + '/' + st.stepCount + '</div>'
       + '</div>';
   }).join('');

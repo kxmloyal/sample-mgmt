@@ -14,10 +14,10 @@ var _ctlUtil = {
     if (type === 'textarea') return '<div><label>' + label + '</label><textarea id="cf-' + k + '" rows="2"></textarea></div>';
     return '<div><label>' + label + '</label><input id="cf-' + k + '" type="' + (type || 'text') + '"></div>';
   },
-  /** 模态底部按钮：提交 + 取消 */
+  /** 模态底部按钮：提交（品牌主色）+ 取消（中性描边灰色），统一 .btn 体系保证等高等对齐 */
   foot: function (kind) {
-    return '<fluent-button appearance="accent" onclick="ctlSubmit(\'' + kind + '\')">提交</fluent-button>'
-      + '<button class="btn" onclick="closeModal(document.querySelector(\'.modal-mask\'))">取消</button>';
+    return '<button class="btn" onclick="ctlSubmit(\'' + kind + '\')">提交</button>'
+      + '<button class="btn cancel" onclick="closeModal(document.querySelector(\'.modal-mask\'))">取消</button>';
   },
   /** 会签记录状态标签 */
   signState: function (rec) {
@@ -42,13 +42,13 @@ var _ctlUtil = {
   modalCfg: function (kind, action) {
     if (kind === 'sign') {
       var node = CONTROL_SIGN_NODES.find(function (n) { return n.node_key === action; });
-      var opts = '<option value="AGREE">同意</option><option value="REJECT">退回</option>'
+      var opts = '<option value="">请选择</option><option value="AGREE">同意</option><option value="REJECT">退回</option>'
         + (me.role === 'ADMIN' ? '<option value="SKIP">强制跳过(仅管理员)</option>' : '');
       return {
         head: '会签 · ' + (node ? node.node_name : action),
         body: '<div class="ctl-form-grid">'
           + '<div><label>会签决定</label><select id="cf-decision">' + opts + '</select></div>'
-          + '<div class="nf-full"><label>会签意见</label><textarea id="cf-comment" rows="2" placeholder="填写意见或原因"></textarea></div></div>',
+          + '<div class="nf-full"><label class="req">会签意见</label><textarea id="cf-comment" rows="2" placeholder="填写意见或原因"></textarea></div></div>',
         foot: _ctlUtil.foot('sign')
       };
     }
@@ -66,7 +66,7 @@ var _ctlUtil = {
       return {
         head: '追加不良品委托单',
         body: '<div class="ctl-form-grid">'
-          + '<div><label>委托单号</label><input id="cf-ncr_no"></div>'
+          + '<div><label class="req">委托单号</label><input id="cf-ncr_no"></div>'
           + '<div><label>检验部门</label><select id="cf-inspect_dept"><option value="">请选择</option>' + deptOpts + '</select></div>'
           + '<div><label>处理部门</label><select id="cf-handle_dept"><option value="">请选择</option>' + deptOpts + '</select></div></div>',
         foot: _ctlUtil.foot('ncr')
@@ -90,7 +90,7 @@ var _ctlUtil = {
     if (kind === 'void') {
       return {
         head: '作废管制单',
-        body: '<div class="ctl-form-grid"><div class="nf-full"><label>作废原因</label><textarea id="cf-comment" rows="2" placeholder="请说明作废原因"></textarea></div></div>',
+        body: '<div class="ctl-form-grid"><div class="nf-full"><label class="req">作废原因</label><textarea id="cf-comment" rows="2" placeholder="请说明作废原因"></textarea></div></div>',
         foot: _ctlUtil.foot('void')
       };
     }
@@ -110,7 +110,8 @@ function ctlOpen(kind, action) {
     return;
   }
   var m = _ctlUtil.modalCfg(kind, action);
-  openModal(m.head, m.body, { foot: m.foot });
+  var mask = openModal(m.head, m.body, { foot: m.foot });
+  if (mask) mask.classList.add('ctl-modal');
 }
 
 /** 统一提交入口：按模态上下文读取字段并调用对应 API */
@@ -124,12 +125,18 @@ async function ctlSubmit(kind) {
       if (err) { toast(err, 'err'); return; }
       await api('POST', '/api/control/orders/' + _ctlDetailId + '/transition', Object.assign({ action: m.action }, body));
     } else if (kind === 'sign') {
-      await api('POST', '/api/control/orders/' + _ctlDetailId + '/sign', { node_key: m.node, decision: $('#cf-decision').value, comment: _ctlUtil.val('#cf-comment') });
+      var decision = $('#cf-decision') ? $('#cf-decision').value : '';
+      var c = _ctlUtil.val('#cf-comment');
+      if (!decision) { toast('请先选择会签决定', 'err'); return; }
+      if (!c.trim()) { toast('请填写会签意见', 'err'); return; }
+      await api('POST', '/api/control/orders/' + _ctlDetailId + '/sign', { node_key: m.node, decision: decision, comment: c });
     } else if (kind === 'ncr') {
+      if (!_ctlUtil.val('#cf-ncr_no').trim()) { toast('请填写委托单号', 'err'); return; }
       await api('POST', '/api/control/orders/' + _ctlDetailId + '/ncr', { ncr_no: _ctlUtil.val('#cf-ncr_no'), inspect_dept: _ctlUtil.val('#cf-inspect_dept'), handle_dept: _ctlUtil.val('#cf-handle_dept') });
     } else if (kind === 'rework') {
       await api('POST', '/api/control/orders/' + _ctlDetailId + '/rework-log', { good_qty: Number(_ctlUtil.val('#cf-good_qty')) || 0, ng_qty: Number(_ctlUtil.val('#cf-ng_qty')) || 0, scrap_qty: Number(_ctlUtil.val('#cf-scrap_qty')) || 0, scrap_reason: _ctlUtil.val('#cf-scrap_reason'), batch_no: _ctlUtil.val('#cf-batch_no'), pack_record: _ctlUtil.val('#cf-pack_record'), confirm_by: _ctlUtil.val('#cf-confirm_by'), qty_consistent: $('#cf-qty_consistent') ? ($('#cf-qty_consistent').value === '1' ? 1 : 0) : 0 });
     } else if (kind === 'void') {
+      if (!_ctlUtil.val('#cf-comment').trim()) { toast('请填写作废原因', 'err'); return; }
       await api('POST', '/api/control/orders/' + _ctlDetailId + '/void', { comment: _ctlUtil.val('#cf-comment') });
     }
     closeModal(document.querySelector('.modal-mask'));

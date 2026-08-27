@@ -110,7 +110,7 @@ function deriveProgress(order, bonus) {
     const doneCount = sts.filter((s) => s.done).length;
     const done = doneCount === sts.length;
     return {
-      stage: def.stage, key: def.key, name: def.name,
+      stage: def.stage, key: def.key, name: def.name, dept: def.dept || [],
       steps: sts.map((s) => s.seq), stepCount: sts.length,
       doneCount, done, current: sts.some((s) => s.current)
     };

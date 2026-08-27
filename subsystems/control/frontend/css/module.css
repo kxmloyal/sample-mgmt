@@ -28,6 +28,8 @@
 .ctl-stage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .ctl-stage { background: var(--panel); border: var(--card-border); border-radius: var(--card-radius); padding: 10px 12px; }
 .ctl-stage-name { font-size: 13px; font-weight: 600; }
+/* 阶段卡「负责部门」：灰小字、可换行，与阶段名同段后续排（如 阶段1 申请与会签 · 品保/研发…） */
+.ctl-stage-dept { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; white-space: normal; }
 .ctl-stage-count { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .ctl-stage.done { border-color: var(--ok); }
 .ctl-stage.done .ctl-stage-name { color: var(--ok); }
@@ -109,9 +111,21 @@
 .ctl-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 
 /* 报工/委托单/会签表单浮层输入 */
-.ctl-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 10px; }
+.ctl-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin-top: 4px; }
 .ctl-form-grid > div { min-width: 0; }
 .ctl-form-grid .nf-full { grid-column: 1 / -1; }
+.ctl-form-grid label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--text); }
+.ctl-form-grid label.req::after { content: ' *'; color: var(--bad); }
+.ctl-form-grid select { width: 100%; }
+
+/* 管制操作弹窗（modal.js 构建，作用域限管制子系统，不污染共享 app.css）：
+   fluent-dialog 默认 --dialog-width:640px/--dialog-height:480px 导致过宽与空白，此处收窄并让高度随内容 */
+.modal-mask.ctl-modal fluent-dialog#fluent-modal { --dialog-width: 560px; --dialog-height: auto; }
+.modal-mask.ctl-modal .modal-body { padding: 14px 18px 18px; }
+.modal-mask.ctl-modal .btn.cancel { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+.modal-mask.ctl-modal .btn.cancel:hover { background: #f8fafc; color: var(--text); border-color: #cbd5e1; }
+/* 弹窗底栏统一 .btn 体系：flex 右对齐 + 等间距，fluent-button 与 .btn 混用会导致高度不齐 */
+.modal-mask.ctl-modal .modal-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 
 /* 看板顶部汇总统计卡 + 阈值入口（.kb-stat 协议见 app.css） */
 .ctl-th-gear { display: flex; justify-content: flex-end; margin: -6px 0 10px; }

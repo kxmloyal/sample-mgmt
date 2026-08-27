@@ -24,11 +24,11 @@ describe('SIGN_NODES 会签模板（§8）', () => {
     expect(SIGN_NODES).toHaveLength(2);
     expect(SIGN_NODES.map((n) => n.node_key)).toEqual(['APPLY_SIGN', 'DISPOSAL_SIGN']);
   });
-  it('APPLY_SIGN 顺序 品保→研发→生管→生产→仓库（5 步）', () => {
+  it('APPLY_SIGN 顺序 品保→研发→生管→制造部→仓库（5 步）', () => {
     const apply = SIGN_NODES.find((n) => n.node_key === 'APPLY_SIGN');
     expect(apply.trigger_status).toBe('SIGNING');
-    expect(apply.steps.map((s) => s.role)).toEqual(['QA', 'RD', 'ME', 'ME', 'CUSTODY']);
-    expect(apply.steps.map((s) => s.dept)).toEqual(['品保', '研发', '生管', '生产', '仓库']);
+    expect(apply.steps.map((s) => s.role)).toEqual(['QA', 'RD', 'CUSTODY', 'CUSTODY', 'CUSTODY']);
+    expect(apply.steps.map((s) => s.dept)).toEqual(['品保', '研发', '生管', '制造部', '仓库']);
     expect(apply.steps.map((s) => s.seq)).toEqual([1, 2, 3, 4, 5]);
   });
   it('DISPOSAL_SIGN 仅品保+研发（2 步），触发状态 DISPOSAL_SIGNING', () => {

@@ -36,7 +36,7 @@ async function seed(pool) {
   const fqc = await D.getUserByUsername('fqc01');
   const me = await D.getUserByUsername('me01');
   if (!rd || !qa || !mfg || !me) { console.log('请先执行 node seed.js 创建基础账号'); return; }
-  // 会签用户按角色映射（APPLY_SIGN: QA→RD→ME→ME→CUSTODY；DISPOSAL_SIGN: QA→RD）
+  // 会签用户按角色映射（APPLY_SIGN: QA→RD→CUSTODY→CUSTODY→CUSTODY；DISPOSAL_SIGN: QA→RD）
   const USERS = { ADMIN: admin, RD: rd, QA: qa, ME: me, CUSTODY: mfg };
 
   // ── 清空管制数据（子表→主表→序号） ──
