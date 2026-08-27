@@ -30,11 +30,11 @@ describe('workbench-overdue 等级计算（与前端 overdue.js 一致）', () =
     expect(r.level).toBe(2);
     expect(r.reason).toBe('复检逾期');
   });
-  test('样品 NEW 阈值放大 3 倍（200/3=66h ≤72 → 0）', () => {
-    expect(calcOverdue(sample({ status: 'NEW', dwell_hours: 200 }), CFG).level).toBe(0);
+  test('样品 NEW 按真实停留时长分级（66h ≤72 → 0）', () => {
+    expect(calcOverdue(sample({ status: 'NEW', dwell_hours: 66 }), CFG).level).toBe(0);
   });
-  test('样品 NEW 放大后仍超（300/3=100h → 1）', () => {
-    expect(calcOverdue(sample({ status: 'NEW', dwell_hours: 300 }), CFG).level).toBe(1);
+  test('样品 NEW 超 warn（100h → 1）', () => {
+    expect(calcOverdue(sample({ status: 'NEW', dwell_hours: 100 }), CFG).level).toBe(1);
   });
   test('治具 IN_USE 归还逾期（5 天=120h → 1）', () => {
     const r = calcOverdue(fixture({ status: 'IN_USE', expected_return_at: isoDaysAgo(5) }), CFG);

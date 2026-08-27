@@ -21,14 +21,12 @@ function calcOverdue(item, cfg) {
   if (item.item_type === 'sample') {
     hours = sampleOverdueHours(item);
     reason = sampleOverdueReason(item);
-    // NEW/PRODUCED 阈值放大 3 倍
-    if (item.status === 'NEW' || item.status === 'PRODUCED') hours = hours / 3;
   } else if (item.item_type === 'fixture') {
     var fx = fixtureOverdue(item);
     hours = fx.hours;
     reason = fx.reason;
   } else if (item.item_type === 'control') {
-    // 管制无呆滞/预期时限概念：按停留时长复用统一阈值（dormant_days 恒 NULL）
+    // 管制无预期时限概念：按停留时长复用统一阈值
     hours = item.dwell_hours || 0;
     reason = '停留中(' + (item.stage_cn || '') + ')';
   }
