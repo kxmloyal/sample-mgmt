@@ -60,11 +60,11 @@ function ctlStatsHtml(orders, todo, overdueHours) {
   var today = orders.filter(function (o) { return ctlIsTodayApply(o); }).length;
   var over = active.filter(function (o) { return ctlDwellOf(o) > overdueHours; }).length;
   var cards = [
-    { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders', tip: '前往管制单列表' },
-    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders', tip: '前往管制单列表' },
+    { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders?active=1', tip: '前往管制单列表（进行中）' },
+    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders?today=1', tip: '前往管制单列表（今日新增）' },
     { n: todo.signCount, l: '待我签核', c: 'var(--warn)', hash: '#/todo', tip: '前往我的待办' },
     { n: todo.flowCount, l: '待我流转', c: '#065f46', hash: '#/todo', tip: '前往我的待办' },
-    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders', tip: '前往管制单列表' }
+    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
   ];
   var html = '<div class="kb-stats">' + cards.map(function (cd) {
     return '<div class="kb-stat" style="--stat-color:' + cd.c + '" onclick="location.hash=\'' + cd.hash + '\'" title="' + cd.tip + '">'

@@ -48,14 +48,23 @@ function applyActionFields(order, action, body) {
   return o;
 }
 
-// 列表筛选条件（与导出共用）
+// 列表筛选条件（与导出共用）；active/today/overdue 为看板统计卡联动快速筛选
 function buildListOpts(req) {
-  const { status, apply_dept, bad_type, model, q, sort, limit, offset } = req.query;
+  const { status, apply_dept, bad_type, model, q, sort, limit, offset, active, today, overdue } = req.query;
+  const yes = v => v === '1' || v === 'true' ? true : undefined;
   return {
     status: status || undefined, apply_dept: apply_dept || undefined,
     bad_type: bad_type || undefined, model: model || undefined, search: q || undefined,
-    sort: sort || undefined
+    sort: sort || undefined,
+    active: yes(active), today: yes(today), overdue: yes(overdue)
   };
+}
+
+// overdue 需按系统阈值判定：注入 overdue_hours（缺省 48，与看板 _ctlOverdueHours 同一数据源）
+async function withOverdueHours(opts) {
+  if (!opts.overdue) return opts;
+  opts.overdue_hours = (await D.getControlSetting('overdue_hours')) || 48;
+  return opts;
 }
 
 function register(app) {
@@ -66,8 +75,9 @@ function register(app) {
   app.get('/api/control/orders', requireAuth, asyncHandler(async (req, res) => {
     const pageLimit = Math.min(parseInt(req.query.limit || '20', 10) || 20, 200);
     const pageOffset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
-    const filterOpts = Object.assign({}, buildListOpts(req), { limit: pageLimit, offset: pageOffset });
-    const [orders, total] = await Promise.all([D.listOrders(filterOpts), D.countAllOrders(buildListOpts(req))]);
+    const baseOpts = await withOverdueHours(buildListOpts(req));
+    const filterOpts = Object.assign({}, baseOpts, { limit: pageLimit, offset: pageOffset });
+    const [orders, total] = await Promise.all([D.listOrders(filterOpts), D.countAllOrders(baseOpts)]);
     res.json({ orders, total, limit: pageLimit, offset: pageOffset });
   }));
 
@@ -81,7 +91,7 @@ function register(app) {
 
   // 导出列表 CSV：复用列表筛选、忽略分页取全量；须注册在 GET /api/control/orders/:id 之前（避免 'export' 被 :id 捕获）
   app.get('/api/control/orders/export', requireAuth, asyncHandler(async (req, res) => {
-    const orders = await D.listOrders(buildListOpts(req));
+    const orders = await D.listOrders(await withOverdueHours(buildListOpts(req)));
     const cols = [
       { key: 'order_no', label: '管制单号' },
       { key: 'part_no', label: '料号' },

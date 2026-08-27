@@ -1,5 +1,11 @@
 // subsystems/control/db/dao.js — 管制流程数据访问层（工厂模式）
+const path = require('path');
+const fs = require('fs');
 const { generateControlCode } = require('./control-code');
+
+// 附件上传物理目录：public/uploads/control_files（与 fixtures 的 fixture_files 同理，各子系统分目录）
+const CONTROL_UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads', 'control_files');
+if (!fs.existsSync(CONTROL_UPLOAD_DIR)) fs.mkdirSync(CONTROL_UPLOAD_DIR, { recursive: true });
 
 module.exports = function createDao(deps) {
   var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
@@ -34,7 +40,15 @@ module.exports = function createDao(deps) {
   function getOrderById(id) { return one('SELECT * FROM control_orders WHERE id = ?', [id]); }
   function getOrderByNo(order_no) { return one('SELECT * FROM control_orders WHERE order_no = ?', [order_no]); }
 
-  // 列表/计数共用筛选条件（筛选维度：状态/申请部门/不良类型/机型/关键词）
+  // UTC+8 时区「今天」在 UTC ISO 下的 [起, 止) 边界（apply_at 为 UTC ISO 串，字典序比较自洽）
+  function todayRangeIso() {
+    var nowPlus8 = Date.now() + 8 * 3600000;
+    var d = new Date(nowPlus8);
+    var fromMs = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 8 * 3600000;
+    return { from: new Date(fromMs).toISOString(), to: new Date(fromMs + 86400000).toISOString() };
+  }
+
+  // 列表/计数共用筛选条件（筛选维度：状态/申请部门/不良类型/机型/关键词/快速筛选 active/today/overdue）
   function buildOrderWhere(opts) {
     var where = [], params = [];
     if (opts.status) {
@@ -46,6 +60,18 @@ module.exports = function createDao(deps) {
     if (opts.bad_type) { where.push('bad_type = ?'); params.push(opts.bad_type); }
     if (opts.model) { where.push('model = ?'); params.push(opts.model); }
     if (opts.search) { where.push('(order_no LIKE ? OR part_no LIKE ? OR part_name LIKE ? OR applicant_name LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
+    // 看板统计卡联动：进行中 / 今日新增 / 超期滞留（与 dashboard.js 判定口径一致）
+    if (opts.active) { where.push("status NOT IN ('SHIPPED','RETIRED')"); }
+    if (opts.today) {
+      var r = todayRangeIso();
+      where.push('apply_at IS NOT NULL AND apply_at >= ? AND apply_at < ?');
+      params.push(r.from, r.to);
+    }
+    if (opts.overdue) {
+      var oh = Number(opts.overdue_hours) || 48;
+      where.push("status NOT IN ('SHIPPED','RETIRED') AND apply_at IS NOT NULL AND apply_at < ?");
+      params.push(new Date(Date.now() - oh * 3600000).toISOString());
+    }
     return { where: where, params: params };
   }
 
@@ -193,5 +219,30 @@ module.exports = function createDao(deps) {
     else await run(sql, params);
   }
 
-  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting };
+  // ===== 附件（文件/图片）=====
+  // 列表：按 id 倒序，latest 在前
+  function ctlListOrderFiles(order_id) { return q('SELECT * FROM control_files WHERE order_id = ? ORDER BY id DESC', [order_id]); }
+  function ctlGetOrderFile(fileId) { return one('SELECT * FROM control_files WHERE id = ?', [fileId]); }
+
+  // 新增文件记录：filename 为磁盘随机名（uuid），original_name 为原始文件名
+  async function ctlAddOrderFile(f) {
+    f = f || {};
+    var sql = 'INSERT INTO control_files (order_id, filename, original_name, mime_type, file_size, uploaded_by) VALUES (?,?,?,?,?,?)';
+    await run(sql, [f.order_id, f.filename, f.original_name || null, f.mime_type || null, f.file_size || 0, f.uploaded_by || null]);
+    return one('SELECT * FROM control_files WHERE order_id = ? AND filename = ? ORDER BY id DESC LIMIT 1', [f.order_id, f.filename]);
+  }
+
+  // 删除文件：先取记录定位磁盘文件，物理删除后删库记录；记录不存在返回 false
+  async function ctlDeleteOrderFile(fileId) {
+    var f = await ctlGetOrderFile(fileId);
+    if (!f) return false;
+    var fp = path.join(CONTROL_UPLOAD_DIR, f.filename);
+    fs.unlink(fp, function () {}); // 异步删除，忽略错误（文件可能已丢失）
+    await run('DELETE FROM control_files WHERE id = ?', [fileId]);
+    return true;
+  }
+
+  function getControlUploadDir() { return CONTROL_UPLOAD_DIR; }
+
+  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting, ctlListOrderFiles, ctlGetOrderFile, ctlAddOrderFile, ctlDeleteOrderFile, getControlUploadDir };
 };

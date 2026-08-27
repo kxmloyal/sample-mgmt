@@ -20,6 +20,9 @@ var currentControlId = null;
 var currentStatusFilter = '';
 var currentFocusNcr = '';   // 详情定位：聚合页行点击跳来，指示要展开高亮的委托单号
 var currentNcrNoFilter = ''; // 聚合页预过滤：详情卡「在委托单列表查看」跳来时预填委托单号
+var currentActiveFilter = false;  // 看板统计卡「进行中」联动筛选
+var currentTodayFilter = false;   // 看板统计卡「今日新增」联动筛选
+var currentOverdueFilter = false; // 看板统计卡「超期滞留」联动筛选
 
 // 简易元素构造器（自包含，不依赖其它子系统的 helper）
 function ctlEl(tag, cls, html) {
@@ -70,6 +73,9 @@ function route() {
   currentStatusFilter = q.status || '';
   currentFocusNcr = q.focusNcr || '';
   currentNcrNoFilter = q.ncr_no || '';
+  currentActiveFilter = q.active === '1' || q.active === 'true';
+  currentTodayFilter = q.today === '1' || q.today === 'true';
+  currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
   // 详情/标签打印需先选中单据；无 id 时引导去列表，避免「缺少单据编号」生硬报错
   if ((k === 'detail' || k === 'label') && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');

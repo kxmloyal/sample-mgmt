@@ -91,6 +91,7 @@
     "subsystems/control/frontend/js/views/ncr-form-view.js",
     "subsystems/control/frontend/js/views/detail-card.js",
     "subsystems/control/frontend/js/views/detail-tabs.js",
+    "subsystems/control/frontend/js/views/files.js",
     "subsystems/control/frontend/js/views/detail-modal.js",
     "subsystems/control/frontend/js/views/label.js",
     "subsystems/control/frontend/js/views/logs.js",

@@ -8,23 +8,35 @@ function renderNew() {
     .concat(CONTROL_BAD_TYPES.map(function (b) { return '<fluent-option value="' + b + '">' + b + '</fluent-option>'; })).join('');
   var deptOpts = ['<fluent-option value="">请选择申请部门</fluent-option>']
     .concat(CONTROL_DEPTS.map(function (d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; })).join('');
-  view.innerHTML = '<div class="card" style="max-width:760px">'
-    + '<div class="nf-grid">'
-    + '<div><label>料号 *</label><fluent-text-field id="n-part_no" placeholder="如 SN-1001" required></fluent-text-field></div>'
-    + '<div><label>品名 *</label><fluent-text-field id="n-part_name" placeholder="不良品名称" required></fluent-text-field></div>'
-    + '<div><label>销货单号</label><fluent-text-field id="n-sales_no" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>机型</label><fluent-text-field id="n-model" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>数量 *</label><fluent-text-field id="n-qty" type="number" min="1" placeholder="如 100" required></fluent-text-field></div>'
-    + '<div><label>不良类型 *</label><fluent-select id="n-bad_type" required>' + badOpts + '</fluent-select></div>'
-    + '<div><label>申请部门</label><fluent-select id="n-apply_dept">' + deptOpts + '</fluent-select></div>'
-    + '<div><label>喷码日期</label><fluent-text-field id="n-spray_date" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>客户</label><fluent-text-field id="n-customer" placeholder="可选"></fluent-text-field></div>'
-    + '<div class="nf-full"><label>管制/不良原因 *</label><textarea id="n-reason" rows="3" placeholder="描述不良现象、数量、批次等" required></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·外观</label><textarea id="n-bad_appearance" rows="2" placeholder="可选，外观缺陷描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·功能</label><textarea id="n-bad_function" rows="2" placeholder="可选，功能异常描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·尺寸</label><textarea id="n-bad_size" rows="2" placeholder="可选，尺寸超差描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·设变</label><textarea id="n-bad_change" rows="2" placeholder="可选，设变描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·其他</label><textarea id="n-bad_other" rows="2" placeholder="可选"></textarea></div>'
+  view.innerHTML = '<div class="card n-new-card">'
+    // 左右两栏：左=基本信息，右=不良原因分析（字段 id 与提交校验保持一致）
+    + '<div class="n-new-grid">'
+    + '<div class="n-new-side">'
+    + '<div class="n-new-sec">基本信息</div>'
+    + '<div class="n-new-field"><label>料号 *</label><fluent-text-field id="n-part_no" placeholder="如 SN-1001" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>品名 *</label><fluent-text-field id="n-part_name" placeholder="不良品名称" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>销货单号</label><fluent-text-field id="n-sales_no" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>机型</label><fluent-text-field id="n-model" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>数量 *</label><fluent-text-field id="n-qty" type="number" min="1" placeholder="如 100" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>不良类型 *</label><fluent-select id="n-bad_type" required>' + badOpts + '</fluent-select></div>'
+    + '<div class="n-new-field"><label>申请部门</label><fluent-select id="n-apply_dept">' + deptOpts + '</fluent-select></div>'
+    + '<div class="n-new-field"><label>喷码日期</label><fluent-text-field id="n-spray_date" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>客户</label><fluent-text-field id="n-customer" placeholder="可选"></fluent-text-field></div>'
+    + '</div>'
+    + '<div class="n-new-side">'
+    + '<div class="n-new-sec">不良原因分析</div>'
+    + '<div class="n-new-field"><label>管制/不良原因 *</label><textarea id="n-reason" rows="3" placeholder="描述不良现象、数量、批次等" required></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·外观</label><textarea id="n-bad_appearance" rows="2" placeholder="可选，外观缺陷描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·功能</label><textarea id="n-bad_function" rows="2" placeholder="可选，功能异常描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·尺寸</label><textarea id="n-bad_size" rows="2" placeholder="可选，尺寸超差描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·设变</label><textarea id="n-bad_change" rows="2" placeholder="可选，设变描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·其他</label><textarea id="n-bad_other" rows="2" placeholder="可选"></textarea></div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="n-new-sec">附件</div>'
+    + '<div class="n-new-files">'
+    + '<input type="file" class="ctl-file-input" id="n-files" multiple onchange="ctlNewFilesInfo()" />'
+    + '<span id="n-files-info" class="muted">支持图片/PDF/Office/压缩包/图纸，单个≤10MB，创建后自动上传</span>'
     + '</div>'
     + '<div class="nf-actions">'
     + '<span id="n-msg" class="muted"></span>'
@@ -62,6 +74,12 @@ async function submitNewOrder() {
     var err = ctlValidateNew(payload);
     if (err) throw new Error(err);
     var s = await api('POST', '/api/control/orders', payload);
+    // 创建成功后，上传所选附件（如有）。附件上传失败不影响建单成功。
+    var filesInput = $('#n-files');
+    if (filesInput && filesInput.files && filesInput.files.length) {
+      var r = await ctlUploadOrderFiles(s.id, filesInput.files);
+      if (r.fail) toast('已上传 ' + r.ok + ' 个附件，失败 ' + r.fail + ' 个', 'warn');
+    }
     toast('已创建管制申请单 ' + (s.order_no || ''), 'ok');
     location.hash = '#/detail?id=' + s.id;
   } catch (e) {

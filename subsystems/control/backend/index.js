@@ -5,6 +5,7 @@ function register(app) {
   require('./routes-ncr').register(app);
   require('./routes-label').register(app);
   require('./routes-settings').register(app);
+  require('./routes-files').register(app);
 }
 
 /**

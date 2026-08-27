@@ -125,4 +125,18 @@ CREATE TABLE IF NOT EXISTS control_settings (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 附件子表：管制单关联的文件/图片（简化：不分类，统一为"附件"，支持图片预览）
+-- filename 为磁盘随机文件名（uuid+扩展名），original_name 为原始文件名，两者分离避免路径穿越
+CREATE TABLE IF NOT EXISTS control_files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  filename VARCHAR(300) NOT NULL,              -- 磁盘存储文件名（uuid）
+  original_name VARCHAR(300),                  -- 原始文件名（展示/下载用）
+  mime_type VARCHAR(100),
+  file_size INT,
+  uploaded_by INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_control_files_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT IGNORE INTO control_settings (k, v) VALUES ('overdue_hours', 48);

@@ -63,6 +63,34 @@
 .nf-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 .nf-actions fluent-button { min-width: 160px; }
 
+/* 新建管制申请左右两栏布局：左=基本信息，右=不良原因分析 */
+.n-new-card { max-width: 980px; }
+.n-new-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.n-new-side { min-width: 0; }
+.n-new-sec { font-weight: 600; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.n-new-field { margin-bottom: 10px; }
+.n-new-field label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
+.n-new-field fluent-text-field, .n-new-field fluent-select, .n-new-field textarea { width: 100%; min-width: 0; }
+
+/* 详情/附件区块标题（与卡片成组） */
+.ctl-sec { font-weight: 600; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+
+/* 附件区（文件/图片）：新建页 + 详情页共用 */
+.n-new-files { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.ctl-files-card { margin-bottom: 0; }
+.ctl-files-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.ctl-file-input { max-width: 320px; font-size: 12px; }
+.ctl-files-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.ctl-file-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.ctl-file-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; flex: 0 0 auto; }
+.ctl-file-icon { flex: 0 0 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.ctl-file-meta { flex: 1 1 auto; min-width: 0; }
+.ctl-file-name { font-size: 13px; font-weight: 600; word-break: break-all; }
+.ctl-file-ops { display: flex; gap: 10px; flex: 0 0 auto; }
+.ctl-file-op { font-size: 12px; cursor: pointer; }
+.ctl-file-op:hover { text-decoration: underline; }
+.ctl-file-op.danger { color: var(--bad); }
+
 /* 详情页 Tab（复用 app.css detail-tabs/detail-tab 骨架，此处仅补子项间距） */
 .detail-tabs { flex-wrap: wrap; }
 .detail-tab { user-select: none; }
@@ -146,6 +174,7 @@
 }
 @media (max-width: 767px) {
   .nf-grid { grid-template-columns: 1fr; }
+  .n-new-grid { grid-template-columns: 1fr; }
   .ctl-form-grid { grid-template-columns: 1fr; }
   .ctl-board { grid-template-columns: 1fr; }
   .ctl-progress { gap: 4px; }

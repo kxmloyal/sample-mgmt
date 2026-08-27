@@ -1,4 +1,4 @@
-/** BUNDLE vbmtb8zm4i — 23 files */
+/** BUNDLE vbmtbeaoya — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -622,11 +622,11 @@ function ctlStatsHtml(orders, todo, overdueHours) {
   var today = orders.filter(function (o) { return ctlIsTodayApply(o); }).length;
   var over = active.filter(function (o) { return ctlDwellOf(o) > overdueHours; }).length;
   var cards = [
-    { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders', tip: '前往管制单列表' },
-    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders', tip: '前往管制单列表' },
+    { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders?active=1', tip: '前往管制单列表（进行中）' },
+    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders?today=1', tip: '前往管制单列表（今日新增）' },
     { n: todo.signCount, l: '待我签核', c: 'var(--warn)', hash: '#/todo', tip: '前往我的待办' },
     { n: todo.flowCount, l: '待我流转', c: '#065f46', hash: '#/todo', tip: '前往我的待办' },
-    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders', tip: '前往管制单列表' }
+    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
   ];
   var html = '<div class="kb-stats">' + cards.map(function (cd) {
     return '<div class="kb-stat" style="--stat-color:' + cd.c + '" onclick="location.hash=\'' + cd.hash + '\'" title="' + cd.tip + '">'
@@ -690,7 +690,7 @@ function ctlGotoOrders(statuses) {
 // 读取 route() 写入的 currentStatusFilter 作为初始状态筛选（看板阶段卡单击跳转）。
 
 var _ctlPager = { limit: 20, offset: 0, total: 0 };
-var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '' };
+var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '', active: false, today: false, overdue: false };
 var _ctlRows = [];            // 当前页已渲染行（委托单行内展开用，免重复请求）
 var _ctlNcrMap = {};          // order_id → ncr[] 聚合映射（委托单号列行内展开数据源）
 var _ctlExpandedOrder = null; // 当前行内展开的管制单 id
@@ -705,6 +705,10 @@ async function renderList() {
   $('#ctl-field-apply_dept').value = _ctlQuery.apply_dept;
   $('#ctl-field-bad_type').value = _ctlQuery.bad_type;
   $('#ctl-field-sort').value = _ctlQuery.sort;
+  // 看板统计卡联动：进行中/今日新增/超期滞留（router.js 写入的哈希 query 筛选）
+  _ctlQuery.active = currentActiveFilter;
+  _ctlQuery.today = currentTodayFilter;
+  _ctlQuery.overdue = currentOverdueFilter;
   await ctlFetchList(0);
 }
 
@@ -743,6 +747,10 @@ function ctlQueryString() {
   var q = [];
   var map = { q: _ctlQuery.q, status: _ctlQuery.status, apply_dept: _ctlQuery.apply_dept, bad_type: _ctlQuery.bad_type, sort: _ctlQuery.sort };
   for (var k in map) { if (map[k] !== '' && map[k] != null) q.push(k + '=' + encodeURIComponent(map[k])); }
+  // 看板统计卡联动 quick filter：为 true 时输出 active=1/today=1/overdue=1
+  if (_ctlQuery.active) q.push('active=1');
+  if (_ctlQuery.today) q.push('today=1');
+  if (_ctlQuery.overdue) q.push('overdue=1');
   return q.length ? '&' + q.join('&') : '';
 }
 
@@ -834,6 +842,8 @@ function ctlResetFilter() {
   $('#ctl-field-apply_dept').value = '';
   $('#ctl-field-bad_type').value = '';
   $('#ctl-field-sort').value = '';
+  _ctlQuery.active = _ctlQuery.today = _ctlQuery.overdue = false;
+  currentActiveFilter = currentTodayFilter = currentOverdueFilter = false;
   ctlFetchList(0);
 }
 
@@ -849,23 +859,35 @@ function renderNew() {
     .concat(CONTROL_BAD_TYPES.map(function (b) { return '<fluent-option value="' + b + '">' + b + '</fluent-option>'; })).join('');
   var deptOpts = ['<fluent-option value="">请选择申请部门</fluent-option>']
     .concat(CONTROL_DEPTS.map(function (d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; })).join('');
-  view.innerHTML = '<div class="card" style="max-width:760px">'
-    + '<div class="nf-grid">'
-    + '<div><label>料号 *</label><fluent-text-field id="n-part_no" placeholder="如 SN-1001" required></fluent-text-field></div>'
-    + '<div><label>品名 *</label><fluent-text-field id="n-part_name" placeholder="不良品名称" required></fluent-text-field></div>'
-    + '<div><label>销货单号</label><fluent-text-field id="n-sales_no" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>机型</label><fluent-text-field id="n-model" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>数量 *</label><fluent-text-field id="n-qty" type="number" min="1" placeholder="如 100" required></fluent-text-field></div>'
-    + '<div><label>不良类型 *</label><fluent-select id="n-bad_type" required>' + badOpts + '</fluent-select></div>'
-    + '<div><label>申请部门</label><fluent-select id="n-apply_dept">' + deptOpts + '</fluent-select></div>'
-    + '<div><label>喷码日期</label><fluent-text-field id="n-spray_date" placeholder="可选"></fluent-text-field></div>'
-    + '<div><label>客户</label><fluent-text-field id="n-customer" placeholder="可选"></fluent-text-field></div>'
-    + '<div class="nf-full"><label>管制/不良原因 *</label><textarea id="n-reason" rows="3" placeholder="描述不良现象、数量、批次等" required></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·外观</label><textarea id="n-bad_appearance" rows="2" placeholder="可选，外观缺陷描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·功能</label><textarea id="n-bad_function" rows="2" placeholder="可选，功能异常描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·尺寸</label><textarea id="n-bad_size" rows="2" placeholder="可选，尺寸超差描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·设变</label><textarea id="n-bad_change" rows="2" placeholder="可选，设变描述"></textarea></div>'
-    + '<div class="nf-full"><label>不良原因分析·其他</label><textarea id="n-bad_other" rows="2" placeholder="可选"></textarea></div>'
+  view.innerHTML = '<div class="card n-new-card">'
+    // 左右两栏：左=基本信息，右=不良原因分析（字段 id 与提交校验保持一致）
+    + '<div class="n-new-grid">'
+    + '<div class="n-new-side">'
+    + '<div class="n-new-sec">基本信息</div>'
+    + '<div class="n-new-field"><label>料号 *</label><fluent-text-field id="n-part_no" placeholder="如 SN-1001" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>品名 *</label><fluent-text-field id="n-part_name" placeholder="不良品名称" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>销货单号</label><fluent-text-field id="n-sales_no" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>机型</label><fluent-text-field id="n-model" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>数量 *</label><fluent-text-field id="n-qty" type="number" min="1" placeholder="如 100" required></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>不良类型 *</label><fluent-select id="n-bad_type" required>' + badOpts + '</fluent-select></div>'
+    + '<div class="n-new-field"><label>申请部门</label><fluent-select id="n-apply_dept">' + deptOpts + '</fluent-select></div>'
+    + '<div class="n-new-field"><label>喷码日期</label><fluent-text-field id="n-spray_date" placeholder="可选"></fluent-text-field></div>'
+    + '<div class="n-new-field"><label>客户</label><fluent-text-field id="n-customer" placeholder="可选"></fluent-text-field></div>'
+    + '</div>'
+    + '<div class="n-new-side">'
+    + '<div class="n-new-sec">不良原因分析</div>'
+    + '<div class="n-new-field"><label>管制/不良原因 *</label><textarea id="n-reason" rows="3" placeholder="描述不良现象、数量、批次等" required></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·外观</label><textarea id="n-bad_appearance" rows="2" placeholder="可选，外观缺陷描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·功能</label><textarea id="n-bad_function" rows="2" placeholder="可选，功能异常描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·尺寸</label><textarea id="n-bad_size" rows="2" placeholder="可选，尺寸超差描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·设变</label><textarea id="n-bad_change" rows="2" placeholder="可选，设变描述"></textarea></div>'
+    + '<div class="n-new-field"><label>不良原因分析·其他</label><textarea id="n-bad_other" rows="2" placeholder="可选"></textarea></div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="n-new-sec">附件</div>'
+    + '<div class="n-new-files">'
+    + '<input type="file" class="ctl-file-input" id="n-files" multiple onchange="ctlNewFilesInfo()" />'
+    + '<span id="n-files-info" class="muted">支持图片/PDF/Office/压缩包/图纸，单个≤10MB，创建后自动上传</span>'
     + '</div>'
     + '<div class="nf-actions">'
     + '<span id="n-msg" class="muted"></span>'
@@ -903,6 +925,12 @@ async function submitNewOrder() {
     var err = ctlValidateNew(payload);
     if (err) throw new Error(err);
     var s = await api('POST', '/api/control/orders', payload);
+    // 创建成功后，上传所选附件（如有）。附件上传失败不影响建单成功。
+    var filesInput = $('#n-files');
+    if (filesInput && filesInput.files && filesInput.files.length) {
+      var r = await ctlUploadOrderFiles(s.id, filesInput.files);
+      if (r.fail) toast('已上传 ' + r.ok + ' 个附件，失败 ' + r.fail + ' 个', 'warn');
+    }
     toast('已创建管制申请单 ' + (s.order_no || ''), 'ok');
     location.hash = '#/detail?id=' + s.id;
   } catch (e) {
@@ -1361,6 +1389,164 @@ function ctlSwitchTab(tab) {
 }
 
 
+/* --- subsystems/control/frontend/js/views/files.js --- */
+// subsystems/control/frontend/js/views/files.js — 管制单附件（文件/图片）前端模块
+// 提供：上传（FormData）、列表、图片缩略图+新窗口预览、下载、删除。简化：不分类，统一为"附件"。
+// api-base.js 的 api() 仅支持 JSON，此处附件上传走原生 fetch multipart。
+
+/** 附件预览/下载 URL（后端 inline + Content-Type，图片浏览器原生预览） */
+function ctlFileUrl(orderId, fileId) {
+  return '/api/control/orders/' + orderId + '/files/' + fileId + '/download';
+}
+
+function ctlFileIcon(mimeType) {
+  if (!mimeType) return '📎';
+  if (mimeType.startsWith('image/')) return '🖼️';
+  if (mimeType === 'application/pdf') return '📄';
+  if (/dwg|cad|step|iges|stl|sla/i.test(mimeType)) return '✏️';
+  if (/zip|rar|compress/i.test(mimeType)) return '📦';
+  return '📎';
+}
+
+function ctlFormatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/** 上传单文件到指定管制单 */
+async function ctlUploadOrderFile(orderId, file) {
+  var formData = new FormData();
+  formData.append('file', file);
+  var resp = await fetch('/api/control/orders/' + orderId + '/files', { method: 'POST', body: formData, credentials: 'same-origin' });
+  if (!resp.ok) {
+    var err = await resp.json().catch(function () { return { error: '上传失败' }; });
+    throw new Error(err.error || '上传失败');
+  }
+  return resp.json();
+}
+
+/** 批量上传（新建页提交成功后调用）：逐个上传，返回成功/失败计数 */
+async function ctlUploadOrderFiles(orderId, fileList) {
+  var files = Array.prototype.slice.call(fileList || []);
+  if (!files.length) return { ok: 0, fail: 0 };
+  var ok = 0, fail = 0;
+  for (var i = 0; i < files.length; i++) {
+    try { await ctlUploadOrderFile(orderId, files[i]); ok++; }
+    catch (e) { fail++; }
+  }
+  return { ok: ok, fail: fail };
+}
+
+/** 删除附件 */
+async function ctlDeleteOrderFile(orderId, fileId) {
+  return await api('DELETE', '/api/control/orders/' + orderId + '/files/' + fileId);
+}
+
+/** 加载附件列表并渲染到容器（详情页）；容器 id 由调用方传 #ctl-files */
+async function ctlLoadOrderFiles(orderId) {
+  var el = document.getElementById('ctl-files-list');
+  if (!el) return;
+  try {
+    var files = await api('GET', '/api/control/orders/' + orderId + '/files');
+    if (!files || !files.length) {
+      el.innerHTML = '<span class="muted">暂无附件，点击上方选择文件上传</span>';
+      return;
+    }
+    el.innerHTML = files.map(function (f) { return ctlFileItemHtml(orderId, f); }).join('');
+  } catch (e) {
+    el.innerHTML = '<span style="color:var(--bad)">附件加载失败</span>';
+  }
+}
+
+/** 单条附件渲染：图片缩略图 + 预览/下载/删除 */
+function ctlFileItemHtml(orderId, f) {
+  var isImage = f.mime_type && f.mime_type.startsWith('image/');
+  var html = '<div class="ctl-file-item">';
+  if (isImage) {
+    html += '<img class="ctl-file-thumb" src="' + ctlFileUrl(orderId, f.id) + '" alt="" onclick="ctlPreviewOrderFile(' + orderId + ',' + f.id + ',\'' + (f.mime_type || '') + '\')" />';
+  } else {
+    html += '<span class="ctl-file-icon">' + ctlFileIcon(f.mime_type) + '</span>';
+  }
+  html += '<span class="ctl-file-meta"><span class="ctl-file-name">' + e(f.original_name) + '</span>'
+    + '<br><small class="muted">' + ctlFormatFileSize(f.file_size) + ' · ' + fmt(f.created_at) + '</small></span>';
+  html += '<span class="ctl-file-ops">';
+  if (isImage) {
+    html += '<a class="link ctl-file-op" onclick="ctlPreviewOrderFile(' + orderId + ',' + f.id + ',\'' + (f.mime_type || '') + '\')">预览</a>';
+  }
+  html += '<a class="link ctl-file-op" href="' + ctlFileUrl(orderId, f.id) + '" download>下载</a>';
+  html += '<a class="link ctl-file-op danger" onclick="ctlDeleteOrderFilePrompt(' + orderId + ',' + f.id + ')">删除</a>';
+  html += '</span></div>';
+  return html;
+}
+
+/** 图片新窗口预览（用户确认：缩略图 + 新窗口预览） */
+function ctlPreviewOrderFile(orderId, fileId, mimeType) {
+  window.open(ctlFileUrl(orderId, fileId), '_blank');
+}
+
+/** 删除前置确认（避免误删），复用全局 confirm 弹窗 */
+function ctlDeleteOrderFilePrompt(orderId, fileId) {
+  if (!window.confirm('确定删除该附件？')) return;
+  ctlDeleteOrderFile(orderId, fileId).then(function () {
+    showToast('已删除');
+    ctlLoadOrderFiles(orderId);
+  }).catch(function (e) { showToast(e.message); });
+}
+
+/** 新建页「选择文件」后的提示文案 */
+function ctlNewFilesInfo() {
+  var input = document.getElementById('n-files');
+  var el = document.getElementById('n-files-info');
+  if (!input || !el) return;
+  var n = input.files ? input.files.length : 0;
+  el.textContent = n ? ('已选 ' + n + ' 个附件') : '';
+}
+
+/** 详情页附件区 HTML（新建页无需调用；供 renderDetailBody 直接拼接） */
+function ctlFilesSectionHtml(orderId) {
+  return '<div class="ctl-sec">附件</div><div class="card ctl-files-card">'
+    + '<div class="ctl-files-toolbar">'
+    + '<input type="file" class="ctl-file-input" id="ctl-file-input" multiple onchange="ctlDetailFilesSelected(' + orderId + ')" />'
+    + '<span class="muted">支持图片/PDF/Office/压缩包/图纸，单个≤10MB</span>'
+    + '</div>'
+    + '<div id="ctl-files-list" class="ctl-files-list"></div></div>';
+}
+
+/** 详情页选择文件后上传并刷列表；禁用按钮防重复提交 */
+var _ctlDetailUploading = false;
+async function ctlDetailFilesSelected(orderId) {
+  var input = document.getElementById('ctl-file-input');
+  if (!input || !input.files || !input.files.length || _ctlDetailUploading) return;
+  _ctlDetailUploading = true;
+  try {
+    var r = await ctlUploadOrderFiles(orderId, input.files);
+    showToast(r.fail ? ('上传完成 ' + r.ok + ' 个，失败 ' + r.fail + ' 个') : ('已上传 ' + r.ok + ' 个附件'), r.fail ? 'warn' : 'ok');
+    input.value = '';
+    ctlLoadOrderFiles(orderId);
+  } catch (e) {
+    showToast(e.message);
+  } finally {
+    _ctlDetailUploading = false;
+  }
+}
+
+// —— 详情页附件区注入 ——
+// 说明：detail-card.js 的 renderDetailBody 由 www 属主持有、当前用户无写权限，
+// 故在本模块（bundle 中位于 detail-card.js 之后加载）以「包裹原函数」方式追加附件区，
+// 避免修改受保护文件。原函数每次重置 #view 后再追加一次，天然幂等。
+var _ctlOrigRenderDetailBody = renderDetailBody;
+renderDetailBody = function () {
+  _ctlOrigRenderDetailBody();
+  var view = $('#view');
+  if (!view) return;
+  if (view.querySelector('.ctl-files-card')) return; // 防御：防止重复追加
+  view.insertAdjacentHTML('beforeend', ctlFilesSectionHtml(_ctlDetailId));
+  ctlLoadOrderFiles(_ctlDetailId);
+};
+
+
 /* --- subsystems/control/frontend/js/views/detail-modal.js --- */
 // subsystems/control/frontend/js/views/detail-modal.js — 管制单详情·操作模态与统一提交
 // 职责：模态配置（_ctlUtil._modalCfg）、统一打开（_ctlOpen）、统一提交（_ctlSubmit，trans/sign/ncr/rework/void）。
@@ -1648,6 +1834,9 @@ var currentControlId = null;
 var currentStatusFilter = '';
 var currentFocusNcr = '';   // 详情定位：聚合页行点击跳来，指示要展开高亮的委托单号
 var currentNcrNoFilter = ''; // 聚合页预过滤：详情卡「在委托单列表查看」跳来时预填委托单号
+var currentActiveFilter = false;  // 看板统计卡「进行中」联动筛选
+var currentTodayFilter = false;   // 看板统计卡「今日新增」联动筛选
+var currentOverdueFilter = false; // 看板统计卡「超期滞留」联动筛选
 
 // 简易元素构造器（自包含，不依赖其它子系统的 helper）
 function ctlEl(tag, cls, html) {
@@ -1698,6 +1887,9 @@ function route() {
   currentStatusFilter = q.status || '';
   currentFocusNcr = q.focusNcr || '';
   currentNcrNoFilter = q.ncr_no || '';
+  currentActiveFilter = q.active === '1' || q.active === 'true';
+  currentTodayFilter = q.today === '1' || q.today === 'true';
+  currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
   // 详情/标签打印需先选中单据；无 id 时引导去列表，避免「缺少单据编号」生硬报错
   if ((k === 'detail' || k === 'label') && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');
