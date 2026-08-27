@@ -22,6 +22,41 @@ function setCachedQR(sampleNo, width, dataUrl) {
   qrCache.set(key, dataUrl);
 }
 
+// 下载类接口角色门槛：仅 ADMIN/QA/RD（发行/制作环节）可下载标签与二维码文件
+var DOWNLOAD_ROLES = ['ADMIN', 'QA', 'RD'];
+async function assertDownloadRole(app, req, res) {
+  const u = await app.locals.currentUser(req);
+  if (!DOWNLOAD_ROLES.includes(u.role)) {
+    res.status(403).json({ error: '无权限下载，仅限管理员/品保/研发' });
+    return false;
+  }
+  return true;
+}
+
+// 标签 HTML 渲染（print/download 共用）：取样品 → 解析尺寸 → 生成 QR（LRU 缓存）→ 拼 HTML
+// download=true 时输出附件下载头且不自动弹打印（autoPrint 分离）
+async function renderLabel(s, req, res, download) {
+  const { sizeKey, scale, cw, ch } = parseSize(req);
+  var qrGenW = Math.round(132 * scale);
+  // QR 内容用不可枚举的 qr_token（兼容存量 qr_token 为空的历史数据回落 sample_no）
+  var qrContent = s.qr_token || s.sample_no;
+  var sendHtml = function (qrDataUrl) {
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    if (download) res.set('Content-Disposition', 'attachment; filename="' + s.sample_no + '_label.html"');
+    res.send(buildLabelHtml(s, qrDataUrl, true, !download, scale, sizeKey, cw, ch));
+  };
+  var cached = getCachedQR(qrContent, qrGenW);
+  if (cached) return sendHtml(cached);
+  try {
+    var qrDataUrl = await QRCode.toDataURL(qrContent, { width: qrGenW, margin: 1, errorCorrectionLevel: 'M' });
+    setCachedQR(qrContent, qrGenW, qrDataUrl);
+    sendHtml(qrDataUrl);
+  } catch (e) {
+    logger.error('生成标签失败: ' + e.message);
+    res.status(500).json({ error: '生成标签失败' });
+  }
+}
+
 function register(app) {
   const requireAuth = app.locals.requireAuth;
 
@@ -39,12 +74,12 @@ function register(app) {
     res.send(html);
   }));
 
-  // 打印标示卡（无QR，仅标示卡内容，品保发行后贴入标签空白区）
+  // 打印标示卡（无QR，仅标示卡内容，品保发行后贴入标签空白区，纸张=标签空白卡区尺寸）
   app.get('/api/samples/:id/card/print', requireAuth, asyncHandler(async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
-    const { sizeKey, scale } = parseSize(req);
-    const html = buildCardPrintHtml(s, scale, sizeKey);
+    const { sizeKey, cw, ch } = parseSize(req);
+    const html = buildCardPrintHtml(s, sizeKey, cw, ch);
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   }));
@@ -53,57 +88,20 @@ function register(app) {
   app.get('/api/samples/:id/label/print', requireAuth, asyncHandler(async (req, res) => {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
-    const { sizeKey, scale, cw, ch } = parseSize(req);
-    var qrGenW = Math.round(132 * scale);
-    // QR 内容用不可枚举的 qr_token（兼容存量 qr_token 为空的历史数据回落 sample_no）
-    var qrContent = s.qr_token || s.sample_no;
-    var cached = getCachedQR(qrContent, qrGenW);
-    if (cached) {
-      res.set('Content-Type', 'text/html; charset=utf-8');
-      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey, cw, ch));
-    }
-    QRCode.toDataURL(qrContent, { width: qrGenW, margin: 1, errorCorrectionLevel: 'M' })
-      .then(qrDataUrl => {
-        setCachedQR(qrContent, qrGenW, qrDataUrl);
-        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey, cw, ch);
-        res.set('Content-Type', 'text/html; charset=utf-8');
-        res.send(html);
-      })
-      .catch(e => {
-        logger.error('生成标签失败: '+e.message);
-        res.status(500).json({ error: '生成标签失败' });
-      });
+    await renderLabel(s, req, res, false);
   }));
 
-  // 下载标签（HTML附件，2:3布局）
+  // 下载标签（HTML附件，2:3布局，不自动打印）
   app.get('/api/samples/:id/label/download', requireAuth, asyncHandler(async (req, res) => {
+    if (!(await assertDownloadRole(app, req, res))) return;
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
-    const { sizeKey, scale, cw, ch } = parseSize(req);
-    var qrGenW = Math.round(132 * scale);
-    var qrContent = s.qr_token || s.sample_no;
-    var cached = getCachedQR(qrContent, qrGenW);
-    if (cached) {
-      res.set('Content-Type', 'text/html; charset=utf-8');
-      res.set('Content-Disposition', 'attachment; filename="'+s.sample_no+'_label.html"');
-      return res.send(buildLabelHtml(s, cached, true, scale, sizeKey, cw, ch));
-    }
-    QRCode.toDataURL(qrContent, { width: qrGenW, margin: 1, errorCorrectionLevel: 'M' })
-      .then(qrDataUrl => {
-        setCachedQR(qrContent, qrGenW, qrDataUrl);
-        const html = buildLabelHtml(s, qrDataUrl, true, scale, sizeKey, cw, ch);
-        res.set('Content-Type', 'text/html; charset=utf-8');
-        res.set('Content-Disposition', 'attachment; filename="'+s.sample_no+'_label.html"');
-        res.send(html);
-      })
-      .catch(e => {
-        logger.error('生成标签失败: '+e.message);
-        res.status(500).json({ error: '生成标签失败' });
-      });
+    await renderLabel(s, req, res, true);
   }));
 
   // 下载二维码（高分辨率 PNG，供条码打印软件导入）
   app.get('/api/samples/:id/qrcode/download', requireAuth, asyncHandler(async (req, res) => {
+    if (!(await assertDownloadRole(app, req, res))) return;
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
     res.set('Content-Type', 'image/png');

@@ -11,8 +11,8 @@ function renderPrintQueue(){
   '</div>';
 }
 function printAllCards(){
-  var sz=getPrintSize();
-  printQueue.forEach(function(c){window.open('/api/samples/'+c.id+'/card/print?size='+sz,'_blank');});
+  var qs=getPrintSizeQuery();
+  printQueue.forEach(function(c){window.open('/api/samples/'+c.id+'/card/print'+qs,'_blank');});
   printQueue=[];renderPrintQueue();
 }
 // 离开页面前提醒未打印队列

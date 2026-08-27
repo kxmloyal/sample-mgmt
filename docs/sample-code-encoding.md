@@ -21,7 +21,7 @@
 | 提供处 | 1 | `C`（客供）/ `T`（元山）/ `G`（元将五金塔岗分厂） | 新建样品时选择，存储值 `source_type` 与之相同 |
 | 机型 | 6 | `[A-Za-z0-9]` 6 位 | 取自机型短码 `model` 前 6 位（`slice(0,6)`）；新建时系统校验机型短码 6~20 位且必须存在于 `sample_models` 主数据 |
 | 组别 | 1 | `S` / `M` / `A` / `Q` / `E` / `I` | 站别中文映射（见下表），编码时由 `station` 转换 |
-| 流水号 | 3 | `001` ~ `999` | 按「机型」级递增（跨提供处 C/T/G、跨组别共享 001~999 空间），由 `sample_seqs` 序列表原子自增 |
+| 流水号 | 3 | `001` ~ `999` | 按「机型」级分配（跨提供处 C/T/G、跨组别共享 001~999 空间），优先复用已删除样品释放的最小空档，无空档时推进 `sample_seqs` 序列表 |
 | 版次 | 2 | `01` ~ `99` | 取标示卡版本 `card_version` 首个数字块；无数字默认 `01`，封顶 `99` |
 
 ### 组别映射（站别中文 → 组别代码）
@@ -38,22 +38,24 @@
 ## 3. 流水号生成算法
 
 1. 前缀 = 机型 6 位（如 `SF1225`），流水号在**整个机型内唯一**（跨提供处 C/T/G、跨组别 S/M/A/Q/E/I 共享 001~999 空间）。
-2. 取号（原子自增，无竞态）：
-   `INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 1) ON DUPLICATE KEY UPDATE cur_seq = cur_seq + 1`
-   随后 `SELECT cur_seq` 取值。
-3. 下一个流水号 = `cur_seq`，不足 3 位左侧补零（`001` 起）。
-4. **上限 999**：某机型已达 999 后，新申请报错 `该机型已达上限 999`，需更换机型。
+2. 取号（2026-08-21 起，最小空档复用）：
+   - 确保序列表行存在（`INSERT ... ON DUPLICATE KEY UPDATE cur_seq = cur_seq`，no-op）；
+   - 行锁读 `cur_seq`（`SELECT ... FOR UPDATE`，记录该机型已分配的最大值）；
+   - 查询该机型现存样品已占用序号（`SELECT sample_no FROM samples WHERE SUBSTRING(sample_no,3,6)=机型6位`）；
+   - 取**最小未占用序号**：被删除样品的序号自动成为空档，优先复用；无空档时 `UPDATE sample_seqs` 将 `cur_seq` 推进为新序号。
+3. 下一个流水号 = 该最小未占用序号，不足 3 位左侧补零（`001` 起）。
+4. **上限 999**：某机型 001~999 全部被占用后，新申请报错 `该机型已达上限 999`，需更换机型。
 
 ### 并发处理
 
-- 序列表原子自增消除 MAX+1 并发竞态；同机型并发创建时由 InnoDB 行锁串行化。
-- 序号与 `createSample` 同事务：SAVEPOINT 回滚时序号一并回滚，重试不跳号、编号连续。
+- 序列表行锁（`FOR UPDATE`）+ 占用序号锁定读消除「先查后插」的重复取号竞态；同机型并发创建时由 InnoDB 行锁串行化。
+- 序号与 `createSample` 同事务：SAVEPOINT 回滚时样品 INSERT 一并回滚，重试时重新取号（占用集合来自 samples 表，未提交样品不计入，不丢号）。
 - 兜底：`samples.sample_no` 为 UNIQUE 索引，`dao.js createSample` 对唯一键冲突（`ER_DUP_ENTRY`）以 SAVEPOINT 重试最多 3 次。
-- 手工删除样品后 `cur_seq` 不回退（不回号，安全）；外部直接 INSERT 带编号不更新序列表（已知限制）。
+- **删除样品后序号自动释放**（2026-08-21 起）：手工删除 `NEW`/`PRODUCED` 样品后，其流水号成为空档，下次新建同机型样品时优先复用（不依赖删除时回写 `cur_seq`，天然并发安全）；外部直接 INSERT 带编号不更新序列表（已知限制）。
 
 ### 编号预览（不消耗序号）
 
-`GET /api/samples/code-preview` 走只读模拟（存量机型 MAX+1），不写 `sample_seqs`；实际编号以提交后 `generateSampleCode` 结果为准。
+`GET /api/samples/code-preview` 走只读模拟（按存量样品找最小未占用序号），不写 `sample_seqs`；实际编号以提交后 `generateSampleCode` 结果为准。
 
 ## 4. 完整编号正则
 
@@ -91,7 +93,7 @@
 3. 排查下游：新建/预览接口（`routes-samples.js`）、扫码（`routes-scan.js`）、前端列表/详情/标示卡展示、测试用例（seed 数据、`tests/`）；
 4. 组别/提供处新增映射需同步前端下拉数据源，避免编码生成与界面可选值不一致；
 5. 流水号算法变更（如改为独立序列表）需评估并发与回滚方案，禁止直接删除 MAX+1 逻辑。
-6. 序列表（`sample_seqs`）为流水号唯一事实来源：新建/预览/扫码逻辑改动 MUST 评估序列表一致性；部署顺序为「schema.sql 建表（重启自动）→ 初始化脚本回填存量 MAX → 新代码生效」。
+6. 序列表（`sample_seqs`）记录机型已分配的最大序号（非唯一事实来源：占用情况以 `samples` 表为准，删除释放由生成时最小空档扫描天然处理）；新建/预览/扫码逻辑改动 MUST 评估序列表一致性；部署顺序为「schema.sql 建表（重启自动）→ 初始化脚本回填存量 MAX → 新代码生效」。
 7. 关联 CLI 脚本（如 `init-sample-seqs.js`）独立运行 MUST 顶部先 `require('dotenv').config()` 再 require db（db.js 配置模块加载时求值，缺加载会 Access denied，详见 CONTRIBUTING.md）。
 
 ## 8. 关联文件

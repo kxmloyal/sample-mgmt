@@ -28,9 +28,12 @@ function extractVersion(cardVersion) {
   return String(Math.min(parseInt(m[1], 10), 99)).padStart(2, '0');
 }
 
-// 生成完整编号；流水号按 机型（6 位）级递增（跨提供处/组别共享 001~999）
-// 取号方式：sample_seqs 序列表原子自增（INSERT ... ON DUPLICATE KEY UPDATE），消除 MAX+1 并发竞态
-// 必须与 createSample 同一事务（conn）调用：SAVEPOINT 回滚时序号一并回滚，编号连续不跳号
+// 生成完整编号；流水号按 机型（6 位）级共享 001~999（跨提供处/组别同一序号空间）
+// 取号策略（2026-08-21 起）：优先复用「最小未占用序号」——删除样品后其序号自动释放，
+// 下次新建复用该空档；无空档时推进 sample_seqs.cur_seq（记录已分配最大值）。
+// 并发安全：确保序列表行存在（no-op upsert）+ 行锁（FOR UPDATE）读 cur_seq + 锁定读
+// 占用序号，消除「先查后插」的重复取号竞态；必须与 createSample 同一事务（conn）调用，
+// SAVEPOINT 回滚时样品 INSERT 一并回滚，重试时重新取号不丢号。
 // opts: { source_type, model, station, card_version, conn?, query? }
 async function generateSampleCode(opts) {
   const source = String(opts.source_type || '').toUpperCase();
@@ -40,23 +43,46 @@ async function generateSampleCode(opts) {
   const modelCode = String(opts.model || '').slice(0, 6);
   if (modelCode.length < 6) throw new Error('机型编码至少 6 位');
   const prefix = modelCode; // 机型 6 位：同机型跨提供处/组别共享流水号空间
-  const upsert = 'INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 1) ON DUPLICATE KEY UPDATE cur_seq = cur_seq + 1';
-  const select = 'SELECT cur_seq FROM sample_seqs WHERE prefix = ?';
-  let seq;
+
+  // 确保序列表行存在（no-op upsert），随后行锁读已分配最大值
+  const upsert = 'INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 0) ON DUPLICATE KEY UPDATE cur_seq = cur_seq';
+  const lockSel = 'SELECT cur_seq FROM sample_seqs WHERE prefix = ? FOR UPDATE';
+  // 该机型现存样品占用序号（编号第 3~8 位为机型 6 位）
+  const usedSql = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
+
+  let curSeq, usedRows;
   if (opts.conn) {
     await opts.conn.execute(upsert, [prefix]);
-    seq = Number((await opts.conn.execute(select, [prefix]))[0][0].cur_seq);
+    curSeq = Number((await opts.conn.execute(lockSel, [prefix]))[0][0].cur_seq);
+    usedRows = (await opts.conn.execute(usedSql, [prefix]))[0];
   } else if (opts.query) {
     await opts.query(upsert, [prefix]);
-    seq = Number((await opts.query(select, [prefix]))[0].cur_seq);
+    const rows = await opts.query(lockSel, [prefix]);
+    curSeq = Number(rows && rows[0] ? rows[0].cur_seq : 0);
+    usedRows = await opts.query(usedSql, [prefix]);
   } else {
     throw new Error('generateSampleCode 缺少 query 或 conn');
   }
+
+  // 找最小未占用序号：被删除样品的序号成为空档，优先复用（序号释放）
+  const used = new Set();
+  (usedRows || []).forEach(function (r) {
+    const p = parseSampleCode(r.sample_no);
+    if (p) used.add(Number(p.seq));
+  });
+  let seq = 1;
+  while (used.has(seq)) seq++;
   if (seq > 999) throw new Error('该机型已达上限 999');
+  if (seq > curSeq) {
+    // 无空档可复用，推进序列表记录已分配最大值
+    const upd = 'UPDATE sample_seqs SET cur_seq = ? WHERE prefix = ?';
+    if (opts.conn) await opts.conn.execute(upd, [seq, prefix]);
+    else await opts.query(upd, [seq, prefix]);
+  }
   return source + '-' + modelCode + '-' + groupCode + '-' + String(seq).padStart(3, '0') + '-' + extractVersion(opts.card_version);
 }
 
-// 编号预览：只读模拟（按存量机型 MAX+1），不写 sample_seqs，避免预览消耗序号
+// 编号预览：只读模拟（按存量样品找最小未占用序号），不写 sample_seqs，避免预览消耗序号
 // 仅供展示，实际编号以提交后 generateSampleCode 结果为准
 // opts: { source_type, model, station, card_version, conn?, query? }
 async function previewSampleCode(opts) {
@@ -66,16 +92,22 @@ async function previewSampleCode(opts) {
   if (!groupCode) throw new Error('组别无效：' + opts.station);
   const modelCode = String(opts.model || '').slice(0, 6);
   if (modelCode.length < 6) throw new Error('机型编码至少 6 位');
-  const sql = 'SELECT COALESCE(MAX(CAST(SUBSTRING(sample_no, 12, 3) AS UNSIGNED)), 0) AS m FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
+  const usedSql = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
   let rows;
   if (opts.conn) {
-    rows = (await opts.conn.execute(sql, [modelCode]))[0];
+    rows = (await opts.conn.execute(usedSql, [modelCode]))[0];
   } else if (opts.query) {
-    rows = await opts.query(sql, [modelCode]);
+    rows = await opts.query(usedSql, [modelCode]);
   } else {
     throw new Error('previewSampleCode 缺少 query 或 conn');
   }
-  const next = Number(rows[0].m) + 1;
+  const used = new Set();
+  (rows || []).forEach(function (r) {
+    const p = parseSampleCode(r.sample_no);
+    if (p) used.add(Number(p.seq));
+  });
+  let next = 1;
+  while (used.has(next)) next++;
   if (next > 999) throw new Error('该机型已达上限 999');
   return source + '-' + modelCode + '-' + groupCode + '-' + String(next).padStart(3, '0') + '-' + extractVersion(opts.card_version);
 }

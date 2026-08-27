@@ -31,7 +31,7 @@ async function viewNew(){
     '<div class="nf-actions">'+
     '<div id="n-preview" class="muted" style="font-size:13px"></div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
-    '<fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button>'+
+    '<fluent-button id="n-submit" appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button>'+
     '<span id="n-msg" class="muted"></span>'+
     '</div></div></div>';
   try {
@@ -76,7 +76,13 @@ async function _refreshPreview(){
     box.textContent='编号预览：'+r.sample_no;
   }catch(e){ box.textContent=''; }
 }
+// 防重复提交：连续点击确认只会创建一次（提交中禁用按钮 + 标志位拦截）
+let _nSubmitting=false;
 async function submitNew(){
+  if(_nSubmitting) return;
+  _nSubmitting=true;
+  const btn=$('#n-submit');
+  if(btn) btn.disabled=true;
   $('#n-msg').textContent='';
   try{
     const payload={
@@ -95,10 +101,13 @@ async function submitNew(){
     openPrintLabel(s);
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
   }catch(e){$('#n-msg').textContent=e.message;}
+  finally{
+    _nSubmitting=false;
+    if(btn) btn.disabled=false;
+  }
 }
 function openPrintLabel(s){
-  var sz=getPrintSize();
-  window.open('/api/samples/'+s.id+'/label/print?size='+sz,'_blank');
+  window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');
 }
 async function printSampleLabel(id){
   const s=await api('GET','/api/samples/'+id);

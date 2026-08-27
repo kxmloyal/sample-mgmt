@@ -88,8 +88,7 @@ function handleScanSuccess(r){
       printQueue.push({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
       renderPrintQueue();
     }else{
-      var sz=getPrintSize();
-      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print?size='+sz,'_blank');},600);
+      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print'+getPrintSizeQuery(),'_blank');},600);
     }
   }
   if(contChecked){

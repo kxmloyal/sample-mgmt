@@ -1,4 +1,4 @@
-/** BUNDLE vbmsrcf8kj — 24 files */
+/** BUNDLE vbmt31afb0 — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -215,6 +215,17 @@ const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=nu
 // 读取用户首选打印尺寸，默认中标(70mm)
 function getPrintSize(){
   try{return localStorage.getItem('printSize')||'medium';}catch(e){return 'medium';}
+}
+// 拼接打印 URL 尺寸参数：custom 档携带真实宽高，保证标示卡打印跟随标签纸尺寸
+function getPrintSizeQuery(){
+  var sz=getPrintSize();
+  if(sz==='custom'){
+    try{
+      var w=localStorage.getItem('printCustomW'),h=localStorage.getItem('printCustomH');
+      if(w&&h)return '?size=custom&customW='+w+'&customH='+h;
+    }catch(e){}
+  }
+  return '?size='+sz;
 }
 
 
@@ -518,7 +529,7 @@ async function viewNew(){
     '<div class="nf-actions">'+
     '<div id="n-preview" class="muted" style="font-size:13px"></div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
-    '<fluent-button appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button>'+
+    '<fluent-button id="n-submit" appearance="accent" onclick="submitNew()">创建样品并生成条码</fluent-button>'+
     '<span id="n-msg" class="muted"></span>'+
     '</div></div></div>';
   try {
@@ -563,7 +574,13 @@ async function _refreshPreview(){
     box.textContent='编号预览：'+r.sample_no;
   }catch(e){ box.textContent=''; }
 }
+// 防重复提交：连续点击确认只会创建一次（提交中禁用按钮 + 标志位拦截）
+let _nSubmitting=false;
 async function submitNew(){
+  if(_nSubmitting) return;
+  _nSubmitting=true;
+  const btn=$('#n-submit');
+  if(btn) btn.disabled=true;
   $('#n-msg').textContent='';
   try{
     const payload={
@@ -582,10 +599,13 @@ async function submitNew(){
     openPrintLabel(s);
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
   }catch(e){$('#n-msg').textContent=e.message;}
+  finally{
+    _nSubmitting=false;
+    if(btn) btn.disabled=false;
+  }
 }
 function openPrintLabel(s){
-  var sz=getPrintSize();
-  window.open('/api/samples/'+s.id+'/label/print?size='+sz,'_blank');
+  window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');
 }
 async function printSampleLabel(id){
   const s=await api('GET','/api/samples/'+id);
@@ -1021,7 +1041,7 @@ async function saveCard(id) {
   if (btn) btn.disabled = false;
 }
 
-function printCard(id) { var sz = getPrintSize(); window.open('/api/samples/' + id + '/card/print?size=' + sz, '_blank'); }
+function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
 
 
 /* --- subsystems/samples/frontend/js/views/scan-camera.js --- */
@@ -1115,8 +1135,7 @@ function handleScanSuccess(r){
       printQueue.push({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
       renderPrintQueue();
     }else{
-      var sz=getPrintSize();
-      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print?size='+sz,'_blank');},600);
+      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print'+getPrintSizeQuery(),'_blank');},600);
     }
   }
   if(contChecked){
@@ -1163,8 +1182,8 @@ function renderPrintQueue(){
   '</div>';
 }
 function printAllCards(){
-  var sz=getPrintSize();
-  printQueue.forEach(function(c){window.open('/api/samples/'+c.id+'/card/print?size='+sz,'_blank');});
+  var qs=getPrintSizeQuery();
+  printQueue.forEach(function(c){window.open('/api/samples/'+c.id+'/card/print'+qs,'_blank');});
   printQueue=[];renderPrintQueue();
 }
 // 离开页面前提醒未打印队列
@@ -1651,7 +1670,7 @@ var HELP_DATA=[
     items:[
       {h:'标签打印',body:'新建样品后自动弹出\n左半：QR码（含样品编号+状态）+ 基本信息\n右半：空白标示卡填写区\n顶部可选尺寸：小号/中标/大号/自定义'},
       {h:'标示卡打印',body:'品保发行后自动弹出 / 样品详情页手动打印\n尺寸自动跟随标签设置\n点击打印按钮调起浏览器打印对话框'},
-      {h:'尺寸选择',body:'标签3档预设：小37×18mm / 中52×25mm / 大74×35mm\n自定义：30~150mm自由输入\n标示卡自动等比缩放跟随标签尺寸'}
+      {h:'尺寸选择',body:'标签3档预设：小37×18mm / 中52×25mm / 大60×40mm\n自定义：30~150mm自由输入\n标示卡自动等比缩放跟随标签尺寸'}
     ]
   },
   {

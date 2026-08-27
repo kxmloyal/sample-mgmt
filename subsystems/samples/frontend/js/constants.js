@@ -7,3 +7,14 @@ const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=nu
 function getPrintSize(){
   try{return localStorage.getItem('printSize')||'medium';}catch(e){return 'medium';}
 }
+// 拼接打印 URL 尺寸参数：custom 档携带真实宽高，保证标示卡打印跟随标签纸尺寸
+function getPrintSizeQuery(){
+  var sz=getPrintSize();
+  if(sz==='custom'){
+    try{
+      var w=localStorage.getItem('printCustomW'),h=localStorage.getItem('printCustomH');
+      if(w&&h)return '?size=custom&customW='+w+'&customH='+h;
+    }catch(e){}
+  }
+  return '?size='+sz;
+}

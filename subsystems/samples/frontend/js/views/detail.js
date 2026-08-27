@@ -179,4 +179,4 @@ async function saveCard(id) {
   if (btn) btn.disabled = false;
 }
 
-function printCard(id) { var sz = getPrintSize(); window.open('/api/samples/' + id + '/card/print?size=' + sz, '_blank'); }
+function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
