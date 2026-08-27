@@ -71,5 +71,30 @@
     "subsystems/projects/frontend/js/views/task-detail.js",
     "subsystems/projects/frontend/js/views/workflow.js",
     "subsystems/projects/frontend/js/router.js"
+  ],
+  "control": [
+    "shared/frontend/shared/utils.js",
+    "shared/frontend/api-base.js",
+    "shared/frontend/modal.js",
+    "subsystems/control/frontend/js/constants.js",
+    "subsystems/control/frontend/js/constants/label.js",
+    "subsystems/control/frontend/js/api.js",
+    "subsystems/control/frontend/js/progress.js",
+    "subsystems/control/frontend/js/todo.js",
+    "subsystems/control/frontend/js/settings.js",
+    "subsystems/control/frontend/js/views/dashboard.js",
+    "subsystems/control/frontend/js/views/list.js",
+    "subsystems/control/frontend/js/views/new.js",
+    "subsystems/control/frontend/js/views/ncr-tab.js",
+    "subsystems/control/frontend/js/views/ncr-list.js",
+    "subsystems/control/frontend/js/views/ncr-form.js",
+    "subsystems/control/frontend/js/views/ncr-form-view.js",
+    "subsystems/control/frontend/js/views/detail-card.js",
+    "subsystems/control/frontend/js/views/detail-tabs.js",
+    "subsystems/control/frontend/js/views/detail-modal.js",
+    "subsystems/control/frontend/js/views/label.js",
+    "subsystems/control/frontend/js/views/logs.js",
+    "subsystems/control/frontend/js/views/todo.js",
+    "subsystems/control/frontend/js/router.js"
   ]
 }

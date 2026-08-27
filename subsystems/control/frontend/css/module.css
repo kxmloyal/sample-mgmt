@@ -1,0 +1,186 @@
+/* subsystems/control/frontend/css/module.css — 管制流程管理子系统专属样式 */
+/* 状态 badge 颜色取自 manifest.stateMachine.states（唯一事实来源） */
+
+/* 12 个管制状态 badge */
+.b-DRAFT { background: #f0f0f0; color: #666666; }
+.b-SIGNING { background: #fef3c7; color: #92400e; }
+.b-LABELED { background: #ecfeff; color: #155e75; }
+.b-CONTROL_STORED { background: #dcfce7; color: #166534; }
+.b-NCR_DONE { background: #dbeafe; color: #1d4ed8; }
+.b-DISPOSAL_SIGNING { background: #fed7aa; color: #9a3412; }
+.b-REWORK_OPENED { background: #e0e7ff; color: #3730a3; }
+.b-REWORKING { background: #dbeafe; color: #1d4ed8; }
+.b-REWORK_REPORTED { background: #ede9fe; color: #7c3aed; }
+.b-REIN_STOCK { background: #d1fae5; color: #065f46; }
+.b-SHIPPED { background: #f0fdfa; color: #115e59; }
+.b-RETIRED { background: #f0f0f0; color: #999999; }
+
+/* 11 步进度步骤条 */
+.ctl-progress { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.ctl-step { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--muted); background: var(--panel); }
+.ctl-step-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--line); color: var(--muted); font-size: 11px; }
+.ctl-step.done { border-color: var(--ok); color: var(--text); }
+.ctl-step.done .ctl-step-dot { background: var(--ok); color: #fff; }
+.ctl-step.current { border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.ctl-step.current .ctl-step-dot { background: var(--brand); color: #fff; }
+
+/* 5 阶段卡 */
+.ctl-stage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.ctl-stage { background: var(--panel); border: var(--card-border); border-radius: var(--card-radius); padding: 10px 12px; }
+.ctl-stage-name { font-size: 13px; font-weight: 600; }
+.ctl-stage-count { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.ctl-stage.done { border-color: var(--ok); }
+.ctl-stage.done .ctl-stage-name { color: var(--ok); }
+.ctl-stage.current { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.ctl-stage.current .ctl-stage-name { color: var(--brand); }
+
+/* 看板「列式看板」：5 阶段为列（列头计数 + 列内管制单卡片，列等高 + 列内滚动） */
+.ctl-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.ctl-board-col { display: flex; flex-direction: column; background: var(--panel); border: var(--card-border); border-radius: var(--card-radius); overflow: hidden; }
+.ctl-board-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 3px solid var(--col-color); cursor: pointer; user-select: none; transition: var(--card-hover); }
+.ctl-board-head:hover { background: #f8fafc; }
+.ctl-board-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.ctl-board-count { flex: 0 0 auto; min-width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; background: var(--col-color); color: #fff; font-size: 12px; font-weight: 700; }
+.ctl-board-cards { display: flex; flex-direction: column; gap: 8px; padding: 10px; flex: 1 1 auto; min-height: 80px; max-height: calc(100vh - 300px); overflow-y: auto; }
+.ctl-board-card { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-decoration: none; color: inherit; transition: var(--card-hover); }
+.ctl-board-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); border-color: var(--col-color); }
+.ctl-board-card + .ctl-board-card { margin-top: 0; }
+.ctl-board-no { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl-board-part { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl-board-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.ctl-board-meta .badge { white-space: nowrap; }
+.ctl-board-meta .ctl-dwell { margin-left: auto; }
+.ctl-board-empty { grid-column: 1 / -1; color: var(--muted); font-size: 12px; text-align: center; padding: 16px 0; }
+
+/* 看板「滞留告警」停留时长列 */
+.ctl-dwell { min-width: 40px; text-align: right; font-weight: 600; color: var(--warn); white-space: nowrap; }
+
+/* 新建管制申请表单（与样品 nf-grid 一致） */
+.nf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.nf-grid > div { min-width: 0; }
+.nf-grid fluent-text-field, .nf-grid fluent-select, .nf-grid textarea { margin-bottom: 0; width: 100%; min-width: 0; }
+.nf-full { grid-column: 1 / -1; }
+.nf-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.nf-actions fluent-button { min-width: 160px; }
+
+/* 详情页 Tab（复用 app.css detail-tabs/detail-tab 骨架，此处仅补子项间距） */
+.detail-tabs { flex-wrap: wrap; }
+.detail-tab { user-select: none; }
+
+/* 会签列表 */
+.ctl-sign { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ctl-sign .sign-seq { flex: 0 0 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--line); color: var(--muted); font-size: 12px; }
+.ctl-sign .sign-name { font-weight: 600; }
+.ctl-sign .sign-dept { color: var(--muted); font-size: 12px; }
+.ctl-sign .sign-state { margin-left: auto; }
+
+/* 详情字段分组卡片（复用 app.css overview-cards/overview-card/field-grid） */
+.overview-card.full { grid-column: 1 / -1; }
+
+/* 详情页操作按钮区 */
+.ctl-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+/* 报工/委托单/会签表单浮层输入 */
+.ctl-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 10px; }
+.ctl-form-grid > div { min-width: 0; }
+.ctl-form-grid .nf-full { grid-column: 1 / -1; }
+
+/* 看板顶部汇总统计卡 + 阈值入口（.kb-stat 协议见 app.css） */
+.ctl-th-gear { display: flex; justify-content: flex-end; margin: -6px 0 10px; }
+.ctl-th-gear .btn { font-size: 12px; }
+
+/* 看板卡片增强：数量·不良类型标签 + 下一步提示 + 超期高亮 */
+.ctl-board-tags { font-size: 11px; color: var(--muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl-board-next { font-size: 11px; color: var(--brand); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl-board-card.over { border-color: var(--bad); }
+.ctl-board-card.over:hover { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad), var(--card-shadow-hover); }
+.ctl-dwell.over { color: var(--bad); }
+
+/* 角色待办区（看板顶部） */
+.ctl-todo { display: flex; flex-direction: column; gap: 12px; }
+.todo-sec { background: var(--panel); border: var(--card-border); border-radius: var(--card-radius); padding: 12px 14px; }
+.todo-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.todo-title .n { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 10px; background: var(--brand); color: #fff; font-size: 12px; margin-left: 4px; }
+.todo-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px; text-decoration: none; color: inherit; }
+.todo-item:last-child { border-bottom: 0; }
+.todo-item:hover { color: var(--brand); }
+.todo-item .mono { font-weight: 600; }
+.todo-item .badge { margin-left: auto; }
+.todo-hint { color: var(--muted); }
+
+/* NCR 不良品委托单展开卡 */
+.ncr-list { display: flex; flex-direction: column; gap: 8px; }
+.ncr-item { border: 1px solid var(--line); border-radius: 8px; }
+.ncr-item summary { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; list-style: none; }
+.ncr-item summary::-webkit-details-marker { display: none; }
+.ncr-item summary:hover { background: #f8fafc; }
+.ncr-no { font-weight: 600; }
+.ncr-route { flex: 1 1 auto; color: var(--muted); font-size: 12px; }
+.ncr-time { color: var(--muted); font-size: 12px; }
+.ncr-detail { padding: 4px 14px 12px; }
+.ncr-foot { display: flex; justify-content: flex-end; padding: 0 14px 10px; }
+.ncr-foot a { font-size: 12px; color: var(--brand); text-decoration: none; }
+.ncr-foot a:hover { text-decoration: underline; }
+.ncr-item.ncr-focus { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); background: #eef2ff; }
+
+/* 列表「委托单号」列行内展开全部 NCR */
+.ncr-toggle { cursor: pointer; color: var(--brand); font-weight: 600; }
+.ncr-toggle:hover { text-decoration: underline; }
+.ncr-expand-row td { padding: 0; background: var(--panel); }
+.ncr-expand-cell { padding: 10px 14px; border-top: 1px dashed var(--line); }
+
+/* 阈值设置弹窗（超期滞留） */
+.ctl-th { display: flex; flex-direction: column; gap: 16px; }
+.ctl-th-presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl-th-label { font-size: 12px; color: var(--muted); }
+.ctl-th-field { display: flex; flex-direction: column; gap: 6px; }
+.ctl-th-field label { font-size: 13px; font-weight: 600; }
+.ctl-th-sub { font-size: 12px; font-weight: 400; color: var(--muted); }
+.ctl-th-input-row { display: flex; align-items: center; gap: 8px; }
+.ctl-th-input-row input { width: 140px; }
+.ctl-th-hint { font-size: 12px; color: var(--muted); }
+
+/* 响应式：窄屏降列、手机单栏 */
+@media (max-width: 900px) {
+  .ctl-board { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@media (max-width: 767px) {
+  .nf-grid { grid-template-columns: 1fr; }
+  .ctl-form-grid { grid-template-columns: 1fr; }
+  .ctl-board { grid-template-columns: 1fr; }
+  .ctl-progress { gap: 4px; }
+}
+
+/* 不良品委托单电子表单（单张可打印，栏位对应 GYS-Q2-008_01 REV_1） */
+.ctl-ncr-form { background: #fff; border: 1px solid var(--line); border-radius: var(--card-radius); padding: 18px 20px; max-width: 900px; margin: 0 auto; }
+.ncr-toolbar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.ncr-head { text-align: center; border-bottom: 2px solid #334155; padding-bottom: 8px; margin-bottom: 10px; }
+.ncr-title { font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: 4px; }
+.ctl-ncr-form .ncr-no { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.ncr-sec { font-size: 13px; font-weight: 700; color: #334155; margin: 14px 0 8px; padding-left: 8px; border-left: 3px solid var(--brand); }
+.ncr-row { display: grid; gap: 0; border: 1px solid var(--line); }
+.ncr-c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ncr-row + .ncr-row { border-top: 0; }
+.ncr-full { grid-template-columns: 1fr; }
+.ncr-cell { display: flex; min-width: 0; border-left: 1px solid var(--line); }
+.ncr-cell:first-child { border-left: 0; }
+.ncr-f { flex: 0 0 96px; padding: 8px 10px; background: #f8fafc; font-size: 12px; font-weight: 600; color: #475569; border-right: 1px solid var(--line); display: flex; align-items: center; white-space: nowrap; }
+.ncr-v { flex: 1 1 auto; padding: 8px 10px; font-size: 13px; color: var(--text); word-break: break-word; display: flex; align-items: center; }
+.ncr-row.ncr-full .ncr-f { flex: 0 0 120px; }
+
+/* 打印：隐藏页面骨架/工具按钮，仅打印表单本体 */
+@media print {
+  body * { visibility: hidden; }
+  .ctl-ncr-form, .ctl-ncr-form * { visibility: visible; }
+  .ctl-ncr-form { position: absolute; left: 0; top: 0; width: 100%; max-width: none; border: 0; box-shadow: none; }
+  .ncr-toolbar { display: none; }
+  .ncr-page { margin: 0; padding: 0; }
+}
+
+/* 窄屏降级：4 栏表单降为 2 栏 */
+@media (max-width: 767px) {
+  .ncr-c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ncr-cell { border-top: 1px solid var(--line); border-left: 0; }
+  .ncr-cell:nth-child(-n+2) { border-top: 0; }
+  .ncr-f { flex-basis: 84px; }
+}

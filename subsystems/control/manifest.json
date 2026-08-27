@@ -1,0 +1,79 @@
+{
+  "id": "control",
+  "name": "管制流程管理",
+  "description": "覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程",
+  "version": "1.0.0",
+  "deployed": false,
+  "icon": "shield",
+  "route": {
+    "prefix": "/api/control",
+    "entry": "/subsystems/control/frontend/index.html",
+    "hashBase": "/control"
+  },
+  "database": {
+    "tables": [
+      { "name": "control_orders", "schema": "db/schema.sql" },
+      { "name": "control_signs", "schema": "db/schema.sql" },
+      { "name": "control_ncr_logs", "schema": "db/schema.sql" },
+      { "name": "control_rework_logs", "schema": "db/schema.sql" },
+      { "name": "control_logs", "schema": "db/schema.sql" },
+      { "name": "control_seqs", "schema": "db/schema.sql" },
+      { "name": "control_settings", "schema": "db/schema.sql" }
+    ]
+  },
+  "roles": {
+    "use": ["ADMIN", "RD", "QA", "CUSTODY", "ME"],
+    "admin": ["ADMIN"]
+  },
+  "navigation": [
+    { "key": "dashboard", "label": "管制看板", "icon": "chart", "view": "renderDashboard", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "todo", "label": "我的待办", "icon": "todo", "view": "renderTodo", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "orders", "label": "管制单列表", "icon": "list", "view": "renderList", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "ncr", "label": "不良品委托单", "icon": "file", "view": "renderNcrList", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "new", "label": "新建管制申请", "icon": "add", "view": "renderNew", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "detail", "label": "单据详情", "icon": "file", "view": "renderDetail", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "label", "label": "管制标签打印", "icon": "qr", "view": "renderLabel", "roles": ["ADMIN", "RD", "QA", "CUSTODY", "ME"] },
+    { "key": "logs", "label": "操作日志", "icon": "history", "view": "renderLogs", "roles": ["ADMIN"] }
+  ],
+  "stateMachine": {
+    "initial": "DRAFT",
+    "states": {
+      "DRAFT": { "label": "申请草稿", "color": "#666666", "bg": "#f0f0f0" },
+      "SIGNING": { "label": "管制会签中", "color": "#92400e", "bg": "#fef3c7" },
+      "LABELED": { "label": "已贴管制标签", "color": "#155e75", "bg": "#ecfeff" },
+      "CONTROL_STORED": { "label": "已入管制仓", "color": "#166534", "bg": "#dcfce7" },
+      "NCR_DONE": { "label": "不良品委托单已开", "color": "#1d4ed8", "bg": "#dbeafe" },
+      "DISPOSAL_SIGNING": { "label": "处理方式会签中", "color": "#9a3412", "bg": "#fed7aa" },
+      "REWORK_OPENED": { "label": "重工工单已开", "color": "#3730a3", "bg": "#e0e7ff" },
+      "REWORKING": { "label": "重工执行中", "color": "#1d4ed8", "bg": "#dbeafe" },
+      "REWORK_REPORTED": { "label": "已报工", "color": "#7c3aed", "bg": "#ede9fe" },
+      "REIN_STOCK": { "label": "已入库", "color": "#065f46", "bg": "#d1fae5" },
+      "SHIPPED": { "label": "已出货", "color": "#115e59", "bg": "#f0fdfa" },
+      "RETIRED": { "label": "已作废", "color": "#999999", "bg": "#f0f0f0" }
+    },
+    "transitions": [
+      { "from": "DRAFT", "to": "SIGNING", "action": "SUBMIT", "role": ["CUSTODY", "ME"], "label": "提交会签" },
+      { "from": "SIGNING", "to": "LABELED", "action": "SIGN_OK", "role": ["QA"], "label": "闸口①会签通过/贴标" },
+      { "from": "LABELED", "to": "CONTROL_STORED", "action": "STORE", "role": ["CUSTODY"], "label": "入管制仓" },
+      { "from": "CONTROL_STORED", "to": "NCR_DONE", "action": "CREATE_NCR", "role": ["QA"], "label": "开不良品委托单" },
+      { "from": "NCR_DONE", "to": "DISPOSAL_SIGNING", "action": "DISPATCH", "role": ["QA"], "label": "发起处理方式会签" },
+      { "from": "DISPOSAL_SIGNING", "to": "REWORK_OPENED", "action": "DISPOSAL_OK", "role": ["QA", "RD"], "label": "闸口②会签通过" },
+      { "from": "REWORK_OPENED", "to": "REWORKING", "action": "START", "role": ["ME"], "label": "生产确认开工" },
+      { "from": "REWORKING", "to": "REWORK_REPORTED", "action": "REPORT", "role": ["CUSTODY", "ME"], "label": "报工" },
+      { "from": "REWORK_REPORTED", "to": "REIN_STOCK", "action": "IN_STOCK", "role": ["CUSTODY", "ME"], "label": "入库" },
+      { "from": "REIN_STOCK", "to": "SHIPPED", "action": "SHIP", "role": ["CUSTODY", "ME"], "label": "出货" },
+      { "from": "SIGNING", "to": "DRAFT", "action": "SIGN_REJECT", "role": ["QA", "RD", "ME", "CUSTODY"], "label": "闸口①会签退回" },
+      { "from": "DISPOSAL_SIGNING", "to": "NCR_DONE", "action": "DISPOSAL_REJECT", "role": ["QA", "RD"], "label": "闸口②会签退回" },
+      { "from": "DRAFT", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "SIGNING", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "LABELED", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "CONTROL_STORED", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "NCR_DONE", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "DISPOSAL_SIGNING", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "REWORK_OPENED", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "REWORKING", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "REWORK_REPORTED", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" },
+      { "from": "REIN_STOCK", "to": "RETIRED", "action": "VOID", "role": ["ADMIN"], "label": "作废" }
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f766e" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 L28 7 V16 C28 24 22 29 16 31 C10 29 4 24 4 16 V7 Z' fill='%230f766e'/><text x='16' y='21' text-anchor='middle' fill='white' font-size='13' font-family='sans-serif'>C</text></svg>" />
+<title>制造品质管理系统 - 管制流程管理</title>
+<link rel="stylesheet" href="/css/app.css?v=20260805b" />
+<link rel="stylesheet" href="/subsystems/control/frontend/css/module.css?v=bctl5" />
+<link rel="preload" href="/vendor/fluentui-web-components.js" as="script" />
+<script type="module" src="/vendor/fluentui-web-components.js"></script>
+</head>
+<body>
+
+<fluent-provider id="provider" style="background:var(--bg);color:var(--text)">
+<div id="login" style="display:none">
+  <div class="login-card">
+    <h1>制造品质管理系统</h1>
+    <p class="sub">管制 · 会签 · 贴标 · 重工 · 出货</p>
+    <label>账号</label>
+    <fluent-text-field id="lg-user" placeholder="如 rd01 / qa01 / mfg01 / admin" appearance="outline"></fluent-text-field>
+    <label>密码</label>
+    <fluent-text-field id="lg-pass" type="password" placeholder="密码" appearance="outline" onkeydown="if(event.key==='Enter')doLogin()"></fluent-text-field>
+    <fluent-button appearance="accent" style="width:100%;margin-top:18px" onclick="doLogin()">登录</fluent-button>
+    <div class="login-err" id="lg-err"></div>
+    <div class="hint" id="demo-hint" style="display:none">
+      演示账号：<br/>
+      rd01 / rd123（研发·研发部）<br/>
+      qa01 / qa123（品保·品保文管中心）<br/>
+      mfg01 / mfg123（保管·制造部）<br/>
+      fqc01 / fqc123（保管·FQC）<br/>
+      me01 / me123（生技·生技部）<br/>
+      admin / admin123（管理员）
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="side">
+    <div class="logo">管制流程管理</div>
+    <div class="nav" id="nav"></div>
+    <div class="me">
+      <div><b id="me-name"></b></div>
+      <div id="me-role" class="muted"></div>
+      <div class="me-actions">
+        <a class="btn sm" href="/portal.html">← 返回门户</a>
+        <button class="me-link" onclick="doLogout()">退出登录</button>
+      </div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div></div>
+    <div id="view"></div>
+  </div>
+</div>
+</fluent-provider>
+
+<div class="toast" id="toast"></div>
+
+<script src="/subsystems/control/frontend/js/bundle.js?v=bmtb8zm4i" defer></script>
+</body>
+</html>

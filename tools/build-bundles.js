@@ -14,7 +14,8 @@ const INIT = {
   samples:  "window.addEventListener('hashchange',route);boot();",
   fixtures: "window.addEventListener('hashchange',routeFixture);bootFixture();",
   workbench:"window.addEventListener('hashchange',route);boot();",
-  projects: "window.addEventListener('hashchange',route);boot('项目追踪');"
+  projects: "window.addEventListener('hashchange',route);boot('项目追踪');",
+  control:  "window.addEventListener('hashchange',route);boot('管制流程管理');"
 };
 
 const sourcesPath = path.join(__dirname, 'bundle-sources.json');
@@ -40,6 +41,11 @@ for (const [id, scripts] of Object.entries(sources)) {
 
   let out = '/** BUNDLE v' + BUNDLE_VER + ' — ' + scripts.length + ' files */\n';
   out += sharedConstantsHeader();
+  // 管制子系统专属流程常量：注入 CONTROL_FLOW（与后端 flow.js require data/control-flow.json 同源，仅 control bundle 携带）
+  if (id === 'control') {
+    const controlFlow = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'control-flow.json'), 'utf-8'));
+    out += 'var CONTROL_FLOW = ' + JSON.stringify(controlFlow) + ';\n';
+  }
   let total = 0;
   for (const s of scripts) {
     const fp = path.join(ROOT, s);
