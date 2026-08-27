@@ -1,5 +1,11 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
+const path = require('path');
+const os = require('os');
+// 测试进程日志隔离：重定向到系统临时目录，避免非 www 用户向生产 logs/ 写入时 EACCES（logs/app-*.log 归 www 所有）
+// logger.js 用 path.join(__dirname(项目根), LOG_DIR) 解析日志目录，因此需传相对项目根的路径，否则绝对路径会被拼进项目 tmp/
+const projectRoot = path.join(__dirname, '..', '..');
+if (!process.env.LOG_DIR) process.env.LOG_DIR = path.relative(projectRoot, path.join(os.tmpdir(), 'sample-mgmt-test-logs'));
 let app;
 
 async function getApp() {

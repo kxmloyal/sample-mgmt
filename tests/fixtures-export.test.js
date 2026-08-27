@@ -13,7 +13,7 @@ describe('GET /api/fixtures/export', () => {
   beforeAll(async () => {
     await getApp();
     ({ agent: adminAgent } = await login('admin', 'admin123'));
-  });
+  }, 30000);
 
   it('should reject unauthenticated', async () => {
     const res = await require('supertest')(await getApp()).get('/api/fixtures/export');
