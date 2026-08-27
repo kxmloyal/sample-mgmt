@@ -62,7 +62,7 @@ describe('任务 CRUD 与乐观锁', () => {
   test('owner 创建任务', async () => {
     const res = await pm.agent.post('/api/projects/' + pid + '/tasks').send({
       title: '任务A', description: 'd', category: '质量', priority: 'H',
-      assignee_id: pm.user.id, planned_date: '2026-08-20'
+      assignee_id: pm.user.id, planned_date: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
     });
     expect(res.status).toBe(201);
     tid = res.body.id;

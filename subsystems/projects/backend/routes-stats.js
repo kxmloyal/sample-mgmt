@@ -1,6 +1,10 @@
 // subsystems/projects/backend/routes-stats.js — 看板聚合/趋势/导出/工作流配置 + 子系统用户列表（Task 7 实现 + Task 10 补充）
 const D = require('../../../db');
 const wf = require('./workflow-config');
+const cache = require('../../../shared/cache');
+
+// 看板统计为弱一致只读聚合：进程内 TTL 缓存，重复打开/刷新看板时近零 SQL 成本（最长接受 30s 延迟）
+const STATS_CACHE_KEY = 'pj_stats_dashboard';
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -9,7 +13,12 @@ function register(app) {
   // 看板统计
   app.get('/api/projects/stats', requireAuth, async (req, res) => {
     try {
-      res.json(await D.statsDashboard());
+      let cached = cache.get(STATS_CACHE_KEY);
+      if (cached === undefined) {
+        cached = await D.statsDashboard();
+        cache.set(STATS_CACHE_KEY, cached, 30000);
+      }
+      res.json(cached);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -80,13 +89,14 @@ function register(app) {
         return res.status(400).json({ error: '状态必须包含 NOT_STARTED/IN_PROGRESS/DONE/OVERDUE 四态' });
       if (!Array.isArray(body.transitions) || body.transitions.length === 0)
         return res.status(400).json({ error: 'transitions 必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         // 行锁（9.3）
         await conn.execute("SELECT id FROM project_workflow WHERE flow_key='task' FOR UPDATE");
         await wf.saveWorkflow(conn, { initial: body.initial || 'NOT_STARTED', states: body.states, transitions: body.transitions }, u.id);
         await D.addProjectLog(conn, 'config', 1, 'CONFIG', JSON.stringify({ states: body.states, transitions: body.transitions }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

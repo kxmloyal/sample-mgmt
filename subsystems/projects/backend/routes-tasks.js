@@ -27,17 +27,19 @@ function register(app) {
       const pid = Number(req.params.id);
       const title = (req.body.title || '').trim();
       if (!title) return res.status(400).json({ error: '任务名称必填' });
-      await D.withTransaction(async conn => {
-        const p = await D.getProject(conn, pid);
-        if (!p) return res.status(404).json({ error: '项目不存在' });
-        const acc = await perm.getProjectAccess(conn, pid, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isMember) return res.status(403).json({ error: '非项目成员无权创建任务' });
-        const t = await D.createTask({ project_id: pid, title, description: req.body.description,
+      // 读取校验在事务外执行；事务内仅写入，响应在提交后发送（事务内发响应会导致连接池状态异常，数据未持久化即返回假 201）
+      const p = await D.getProject(null, pid);
+      if (!p) return res.status(404).json({ error: '项目不存在' });
+      const acc = await perm.getProjectAccess(null, pid, u.id);
+      if (!perm.isGlobalManager(u.role) && !acc.isMember) return res.status(403).json({ error: '非项目成员无权创建任务' });
+      const t = await D.withTransaction(async conn => {
+        const task = await D.createTask({ project_id: pid, title, description: req.body.description,
           category: req.body.category, priority: req.body.priority, assignee_id: req.body.assignee_id || null,
           planned_date: req.body.planned_date || null, created_by: u.id }, conn);
-        await D.addProjectLog(conn, 'task', t.id, 'CREATE', JSON.stringify({ title }), u.id);
-        res.status(201).json({ id: t.id });
+        await D.addProjectLog(conn, 'task', task.id, 'CREATE', JSON.stringify({ title }), u.id);
+        return task;
       });
+      res.status(201).json({ id: t.id });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -72,18 +74,20 @@ function register(app) {
     try {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
-      await D.withTransaction(async conn => {
+      // 事务内读取与写入保持原子性；响应在事务外发送（事务内发响应会导致连接池状态异常，数据未持久化即返回假成功）
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权编辑该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权编辑该任务' } };
         const body = req.body || {};
         // C1 修复：状态只能通过 /status 流转接口变更，编辑接口禁止改 status（防绕过状态机/CAS/依赖校验/留痕）
-        if (body.status !== undefined) return res.status(400).json({ error: '状态请通过状态流转操作变更' });
+        if (body.status !== undefined) return { status: 400, body: { error: '状态请通过状态流转操作变更' } };
         const r = await D.updateTask(conn, tid, body, Number(body.version));
-        if (r.changed === 0) return res.status(409).json({ error: '数据已被他人修改，请刷新后重试' });
+        if (r.changed === 0) return { status: 409, body: { error: '数据已被他人修改，请刷新后重试' } };
         await D.addProjectLog(conn, 'task', tid, 'UPDATE', JSON.stringify({ fields: Object.keys(body).filter(k => k !== 'version') }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -92,14 +96,15 @@ function register(app) {
     try {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, false)) return res.status(403).json({ error: '无权删除该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, false)) return { status: 403, body: { error: '无权删除该任务' } };
         await D.deleteTaskCascade(conn, tid);
         await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -110,25 +115,25 @@ function register(app) {
       const tid = Number(req.params.tid);
       const action = (req.body.action || '').trim();
       if (!action) return res.status(400).json({ error: 'action 必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         // 事务内读取最新配置（缓解新旧混合）
         const cfg = await wf.loadWorkflow(conn);
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
         const tr = cfg.transitions.find(x => x.action === action && x.from === t.status);
         if (!tr) {
           // CAS 语义：action 合法但当前状态不匹配 = 状态已并发变更 → 409；action 不存在 → 400
           const any = cfg.transitions.find(x => x.action === action);
-          return res.status(any ? 409 : 400).json({ error: any ? '任务状态已变更，请刷新后重试' : '当前状态不允许该操作' });
+          return { status: any ? 409 : 400, body: { error: any ? '任务状态已变更，请刷新后重试' : '当前状态不允许该操作' } };
         }
         if (!await wf.resolveRole(conn, tr.role, u, t))
-          return res.status(403).json({ error: '无权限执行该操作' });
+          return { status: 403, body: { error: '无权限执行该操作' } };
         // 依赖校验：进入 IN_PROGRESS/DONE 前，前置任务须全部 DONE
         if (tr.to === 'IN_PROGRESS' || tr.to === 'DONE') {
           const pending = await D.fetchOne(conn,
             'SELECT COUNT(*) AS c FROM project_task_deps d JOIN project_tasks p ON p.id=d.depends_on_id ' +
             'WHERE d.task_id=? AND p.status<>\'DONE\'', [tid]);
-          if (pending && pending.c > 0) return res.status(409).json({ error: '存在未完成的前置任务，禁止流转' });
+          if (pending && pending.c > 0) return { status: 409, body: { error: '存在未完成的前置任务，禁止流转' } };
         }
         // 自动延期批量（与手动流转同事务，CAS 保证互斥：已超期则手动流转必然 409）
         await conn.execute(
@@ -137,15 +142,16 @@ function register(app) {
         // 手动流转 CAS（WHERE status=读取时的旧值，affectedRows=0 → 并发冲突）
         const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
           [tr.to, tid, t.status]);
-        if (r[0].affectedRows === 0) return res.status(409).json({ error: '任务状态已变更，请刷新后重试' });
+        if (r[0].affectedRows === 0) return { status: 409, body: { error: '任务状态已变更，请刷新后重试' } };
         // DONE 附加：progress=100 + actual_date 回写（首次完成记录）
         if (tr.to === 'DONE') {
           await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
         }
         await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action }), u.id);
         const nt = await D.getTask(conn, tid);
-        res.json({ task: nt, message: tr.label });
+        return { status: 200, body: { task: nt, message: tr.label } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -163,14 +169,15 @@ function register(app) {
       const tid = Number(req.params.tid);
       const title = (req.body.title || '').trim();
       if (!title) return res.status(400).json({ error: '子任务名称必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         const s = await D.createSubtask({ task_id: tid, title, assignee_id: req.body.assignee_id, planned_date: req.body.planned_date, created_by: u.id }, conn);
         await D.addProjectLog(conn, 'subtask', s.id, 'CREATE', JSON.stringify({ title }), u.id);
-        res.status(201).json({ id: s.id });
+        return { status: 201, body: { id: s.id } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 子任务编辑（乐观锁）
@@ -179,15 +186,16 @@ function register(app) {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
       const sid = Number(req.params.sid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         const r = await D.updateSubtask(conn, sid, req.body, Number(req.body.version));
-        if (r.changed === 0) return res.status(409).json({ error: '数据已被他人修改，请刷新后重试' });
+        if (r.changed === 0) return { status: 409, body: { error: '数据已被他人修改，请刷新后重试' } };
         await D.addProjectLog(conn, 'subtask', sid, 'UPDATE', '', u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 子任务删除
@@ -196,14 +204,15 @@ function register(app) {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
       const sid = Number(req.params.sid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, false)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, false)) return { status: 403, body: { error: '无权操作该任务' } };
         await D.deleteSubtask(conn, sid);
         await D.addProjectLog(conn, 'subtask', sid, 'DELETE', '', u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 子任务状态流转（CAS，三态）
@@ -216,18 +225,19 @@ function register(app) {
       const MAP = { START: { from: 'NOT_STARTED', to: 'IN_PROGRESS' }, COMPLETE: { from: 'IN_PROGRESS', to: 'DONE' } };
       const m = MAP[action];
       if (!m) return res.status(400).json({ error: '非法子任务操作' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         const r = await D.casSubtaskStatus(conn, sid, m.from, m.to);
-        if (r.changed === 0) return res.status(409).json({ error: '子任务状态已变更，请刷新后重试' });
+        if (r.changed === 0) return { status: 409, body: { error: '子任务状态已变更，请刷新后重试' } };
         // v2：COMPLETE 后联动父任务进度（同事务）
         if (action === 'COMPLETE') await D.syncSubtaskProgress(conn, tid);
         await D.addProjectLog(conn, 'subtask', sid, 'STATUS_CHANGE', JSON.stringify(m), u.id);
         const s = await D.fetchOne(conn, 'SELECT * FROM project_subtasks WHERE id=?', [sid]);
-        res.json(s);
+        return { status: 200, body: s };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 评论列表/发表/删除（作者/ADMIN/PM 可删）
@@ -243,29 +253,31 @@ function register(app) {
       const tid = Number(req.params.tid);
       const content = (req.body.content || '').trim();
       if (!content) return res.status(400).json({ error: '评论内容必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         const c = await D.createComment(conn, tid, content, u.id);
         await D.addProjectLog(conn, 'comment', c.id, 'COMMENT', JSON.stringify({ content }), u.id);
-        res.status(201).json({ id: c.id });
+        return { status: 201, body: { id: c.id } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   app.delete('/api/projects/tasks/:tid/comments/:cid', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
       const cid = Number(req.params.cid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const c = await D.fetchOne(conn, 'SELECT * FROM project_task_comments WHERE id=?', [cid]);
-        if (!c) return res.status(404).json({ error: '评论不存在' });
+        if (!c) return { status: 404, body: { error: '评论不存在' } };
         if (u.role !== 'ADMIN' && u.role !== 'PM' && c.operator_id !== u.id)
-          return res.status(403).json({ error: '仅作者或管理员可删除' });
+          return { status: 403, body: { error: '仅作者或管理员可删除' } };
         await D.deleteComment(conn, cid);
         await D.addProjectLog(conn, 'comment', cid, 'DELETE', '', u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // A3 批量操作（事务内逐条 canEditTask 校验 + 留痕；无权限/状态不允许条目跳过并统计；单批上限 100）

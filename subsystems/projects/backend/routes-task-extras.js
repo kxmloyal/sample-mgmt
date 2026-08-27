@@ -26,21 +26,22 @@ function register(app) {
       const tid = Number(req.params.tid);
       const depId = Number(req.body.depends_on_id);
       if (!depId) return res.status(400).json({ error: 'depends_on_id 必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
-        if (depId === tid) return res.status(400).json({ error: '不能依赖自己' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
+        if (depId === tid) return { status: 400, body: { error: '不能依赖自己' } };
         // v2：加依赖同项目校验（depends_on_id 的 project_id 必须与当前任务一致，否则 400；不存在 404）
         const depTask = await D.fetchOne(conn, 'SELECT project_id FROM project_tasks WHERE id=?', [depId]);
-        if (!depTask) return res.status(404).json({ error: '前置任务不存在' });
-        if (depTask.project_id !== t.project_id) return res.status(400).json({ error: '只能依赖同一项目内的任务' });
-        if (await D.hasCycle(conn, tid, depId)) return res.status(400).json({ error: '存在循环依赖，禁止添加' });
+        if (!depTask) return { status: 404, body: { error: '前置任务不存在' } };
+        if (depTask.project_id !== t.project_id) return { status: 400, body: { error: '只能依赖同一项目内的任务' } };
+        if (await D.hasCycle(conn, tid, depId)) return { status: 400, body: { error: '存在循环依赖，禁止添加' } };
         const r = await D.addTaskDep(conn, tid, depId, u.id);
-        if (r.changed === 0) return res.status(409).json({ error: '该依赖已存在' });
+        if (r.changed === 0) return { status: 409, body: { error: '该依赖已存在' } };
         await D.addProjectLog(conn, 'task', tid, 'LINK', JSON.stringify({ dep: depId }), u.id);
-        res.status(201).json({ ok: 1 });
+        return { status: 201, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 移除依赖
@@ -49,14 +50,15 @@ function register(app) {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
       const depId = Number(req.params.depId);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         await D.removeTaskDep(conn, tid, depId);
         await D.addProjectLog(conn, 'task', tid, 'LINK', JSON.stringify({ unlink: depId }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -77,14 +79,15 @@ function register(app) {
         const u = await currentUser(req);
         const tid = Number(req.params.tid);
         if (!req.file) return res.status(400).json({ error: '未收到文件' });
-        await D.withTransaction(async conn => {
+        const r2 = await D.withTransaction(async conn => {
           const t = await D.getTask(conn, tid);
-          if (!t) return res.status(404).json({ error: '任务不存在' });
-          if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+          if (!t) return { status: 404, body: { error: '任务不存在' } };
+          if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
           const f = await D.createTaskFile(conn, tid, { file_name: req.file.originalname, file_path: req.file.filename, size: req.file.size }, u.id);
           await D.addProjectLog(conn, 'task', tid, 'FILE_UPLOAD', JSON.stringify({ file_name: req.file.originalname }), u.id);
-          res.status(201).json({ id: f.id, file_name: req.file.originalname, url: '/uploads/projects/' + req.file.filename });
+          return { status: 201, body: { id: f.id, file_name: req.file.originalname, url: '/uploads/projects/' + req.file.filename } };
         });
+        res.status(r2.status).json(r2.body);
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
   // 删除附件
@@ -93,14 +96,15 @@ function register(app) {
       const u = await currentUser(req);
       const tid = Number(req.params.tid);
       const fid = Number(req.params.fid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         await D.deleteTaskFile(conn, fid);
         await D.addProjectLog(conn, 'task', tid, 'FILE_DELETE', JSON.stringify({ fid }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -121,15 +125,16 @@ function register(app) {
       const refId = Number(req.body.ref_id);
       if (!['sample', 'fixture'].includes(refType) || !refId)
         return res.status(400).json({ error: 'ref_type(sample/fixture) 与 ref_id 必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         const r = await D.addTaskLink(conn, tid, refType, refId);
-        if (r.changed === 0) return res.status(409).json({ error: '已关联该对象' });
+        if (r.changed === 0) return { status: 409, body: { error: '已关联该对象' } };
         await D.addProjectLog(conn, 'task', tid, 'LINK', JSON.stringify({ ref_type: refType, ref_id: refId }), u.id);
-        res.status(201).json({ ok: 1 });
+        return { status: 201, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
   // 取消关联
@@ -139,14 +144,15 @@ function register(app) {
       const tid = Number(req.params.tid);
       const refType = req.params.refType;
       const refId = Number(req.params.refId);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const t = await D.getTask(conn, tid);
-        if (!t) return res.status(404).json({ error: '任务不存在' });
-        if (!await canEditTask(conn, u, t, true)) return res.status(403).json({ error: '无权操作该任务' });
+        if (!t) return { status: 404, body: { error: '任务不存在' } };
+        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权操作该任务' } };
         await D.removeTaskLink(conn, tid, refType, refId);
         await D.addProjectLog(conn, 'task', tid, 'LINK', JSON.stringify({ unlink: refType + ':' + refId }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

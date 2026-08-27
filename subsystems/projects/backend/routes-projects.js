@@ -21,12 +21,14 @@ function register(app) {
       if (u.role !== 'ADMIN' && u.role !== 'PM') return res.status(403).json({ error: '仅管理员或项目经理可创建项目' });
       const name = (req.body.name || '').trim();
       if (!name) return res.status(400).json({ error: '项目名称必填' });
-      await D.withTransaction(async conn => {
+      let created;
+      created = await D.withTransaction(async conn => {
         const p = await D.createProject({ name, description: req.body.description, created_by: u.id }, conn);
         await D.addMember(conn, p.id, u.id, 1);
         await D.addProjectLog(conn, 'project', p.id, 'CREATE', JSON.stringify({ name }), u.id);
-        res.status(201).json({ id: p.id, name });
+        return p;
       });
+      res.status(201).json({ id: created.id, name });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -48,13 +50,14 @@ function register(app) {
       if (!p) return res.status(404).json({ error: '项目不存在' });
       const name = (req.body.name || '').trim();
       if (!name) return res.status(400).json({ error: '项目名称必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const acc = await perm.getProjectAccess(conn, id, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权编辑该项目' });
+        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权编辑该项目' } };
         await D.updateProject(conn, id, { name, description: req.body.description });
         await D.addProjectLog(conn, 'project', id, 'UPDATE', JSON.stringify({ name }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -63,17 +66,18 @@ function register(app) {
     try {
       const u = await currentUser(req);
       const id = Number(req.params.id);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const p = await D.getProject(conn, id);
-        if (!p) return res.status(404).json({ error: '项目不存在' });
+        if (!p) return { status: 404, body: { error: '项目不存在' } };
         const acc = await perm.getProjectAccess(conn, id, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权删除该项目' });
+        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权删除该项目' } };
         const c = await D.countProjectTasks(conn, id);
-        if (c > 0) return res.status(409).json({ error: '项目下存在任务，禁止删除' });
+        if (c > 0) return { status: 409, body: { error: '项目下存在任务，禁止删除' } };
         await D.deleteProject(conn, id);
         await D.addProjectLog(conn, 'project', id, 'DELETE', JSON.stringify({ name: p.name }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -92,15 +96,16 @@ function register(app) {
       const id = Number(req.params.id);
       const userId = Number(req.body.user_id);
       if (!userId) return res.status(400).json({ error: 'user_id 必填' });
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const acc = await perm.getProjectAccess(conn, id, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权管理成员' });
+        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权管理成员' } };
         const target = await D.getUserById(userId);
-        if (!target) return res.status(404).json({ error: '用户不存在' });
+        if (!target) return { status: 404, body: { error: '用户不存在' } };
         await D.addMember(conn, id, userId, 0);
         await D.addProjectLog(conn, 'member', id, 'CREATE', JSON.stringify({ user_id: userId }), u.id);
-        res.status(201).json({ ok: 1 });
+        return { status: 201, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -110,22 +115,23 @@ function register(app) {
       const u = await currentUser(req);
       const id = Number(req.params.id);
       const uid = Number(req.params.uid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const acc = await perm.getProjectAccess(conn, id, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权管理成员' });
+        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权管理成员' } };
         if (req.body.is_owner) {
           // W3 修复：目标必须是项目成员，防 setOwner 的 clear 生效 + set 0 行导致项目 owner 被清空
           const tgt = await D.fetchOne(conn, 'SELECT 1 AS x FROM project_members WHERE project_id=? AND user_id=?', [id, uid]);
-          if (!tgt) return res.status(400).json({ error: '目标用户不是项目成员' });
+          if (!tgt) return { status: 400, body: { error: '目标用户不是项目成员' } };
           await D.setOwner(conn, id, uid);
           await D.addProjectLog(conn, 'member', id, 'UPDATE', JSON.stringify({ owner: uid }), u.id);
         } else {
-          if (acc.isOwner && u.id === uid) return res.status(400).json({ error: '不能移除自己（负责人）' });
+          if (acc.isOwner && u.id === uid) return { status: 400, body: { error: '不能移除自己（负责人）' } };
           await D.removeMember(conn, id, uid);
           await D.addProjectLog(conn, 'member', id, 'DELETE', JSON.stringify({ user_id: uid }), u.id);
         }
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -135,15 +141,16 @@ function register(app) {
       const u = await currentUser(req);
       const id = Number(req.params.id);
       const uid = Number(req.params.uid);
-      await D.withTransaction(async conn => {
+      const r2 = await D.withTransaction(async conn => {
         const acc = await perm.getProjectAccess(conn, id, u.id);
-        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return res.status(403).json({ error: '无权管理成员' });
+        if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权管理成员' } };
         // W2 修复：与 PUT 一致，owner 不可移除自己（防 DELETE 别名绕过保护）
-        if (acc.isOwner && u.id === uid) return res.status(400).json({ error: '不能移除自己（负责人）' });
+        if (acc.isOwner && u.id === uid) return { status: 400, body: { error: '不能移除自己（负责人）' } };
         await D.removeMember(conn, id, uid);
         await D.addProjectLog(conn, 'member', id, 'DELETE', JSON.stringify({ user_id: uid }), u.id);
-        res.json({ ok: 1 });
+        return { status: 200, body: { ok: 1 } };
       });
+      res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

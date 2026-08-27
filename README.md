@@ -144,6 +144,7 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 - **项目列表**：项目 CRUD + 成员管理（添加/转让 owner/移除）；有任务的项目禁止删除（409）
 - **状态机管理**（仅 ADMIN）：可视化编辑 4 态标签/颜色 + 转移规则，保存即时生效
 - **并发防护**：任务编辑乐观锁（version 冲突 409）、状态流转 CAS、工作流配置行锁、同事务留痕
+- **看板统计性能**：`GET /api/projects/stats` 采用标量条件聚合 + 并行查询 + 30s 进程内 TTL 缓存 + `(status, planned_date)`/`(status, created_at)` 复合索引，消除全表扫描，看板首查显著提速（详见 [RELEASE-v2.0.1.md](docs/RELEASE-v2.0.1.md)）
 
 ### v2 交互升级（2026-08-06）
 

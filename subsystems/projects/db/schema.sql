@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS project_tasks (
   created_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY idx_project (project_id), KEY idx_status (status), KEY idx_assignee (assignee_id)
+  KEY idx_project (project_id), KEY idx_status (status), KEY idx_assignee (assignee_id),
+  KEY idx_status_planned (status, planned_date), KEY idx_status_created (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS project_subtasks (
