@@ -72,6 +72,12 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 - 尺寸选择（3档预设 + 自定义 30~150mm）
 - 连续扫码打印队列 + 批量打印
 
+### 标签与标示卡标准化规则
+
+- 完整规范：[docs/label-card-standard.md](docs/label-card-standard.md)
+- 规则库引用：AGENTS.md 第 24 节（强制）
+- **核心**：标签与标示卡均以 `samples` 表为唯一事实来源，实时派生、无独立副本；字段变更只需更新样品一次，另一视图自动同步，已打印旧纸需人工重新打印更换。
+
 ---
 
 ## 治具管理
