@@ -29,8 +29,9 @@ function extractVersion(cardVersion) {
 }
 
 // 生成完整编号；流水号按 机型（6 位）级共享 001~999（跨提供处/组别同一序号空间）
-// 取号策略（2026-08-21 起）：优先复用「最小未占用序号」——删除样品后其序号自动释放，
-// 下次新建复用该空档；无空档时推进 sample_seqs.cur_seq（记录已分配最大值）。
+// 取号策略（T13 修订）：优先取「最小未占用序号」；软删除后编号不复用——软删样品行仍
+// 留在 samples 表，usedSql 刻意不加 deleted_at 过滤，已删序号仍视为占用（防止旧实物
+// QR 扫码指向新样品）；无空档时推进 sample_seqs.cur_seq（记录已分配最大值）。
 // 并发安全：确保序列表行存在（no-op upsert）+ 行锁（FOR UPDATE）读 cur_seq + 锁定读
 // 占用序号，消除「先查后插」的重复取号竞态；必须与 createSample 同一事务（conn）调用，
 // SAVEPOINT 回滚时样品 INSERT 一并回滚，重试时重新取号不丢号。
@@ -47,7 +48,7 @@ async function generateSampleCode(opts) {
   // 确保序列表行存在（no-op upsert），随后行锁读已分配最大值
   const upsert = 'INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 0) ON DUPLICATE KEY UPDATE cur_seq = cur_seq';
   const lockSel = 'SELECT cur_seq FROM sample_seqs WHERE prefix = ? FOR UPDATE';
-  // 该机型现存样品占用序号（编号第 3~8 位为机型 6 位）
+  // 该机型全部样品占用序号（含软删行，编号永不复用；编号第 3~8 位为机型 6 位）
   const usedSql = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
 
   let curSeq, usedRows;
@@ -64,7 +65,7 @@ async function generateSampleCode(opts) {
     throw new Error('generateSampleCode 缺少 query 或 conn');
   }
 
-  // 找最小未占用序号：被删除样品的序号成为空档，优先复用（序号释放）
+  // 找最小未占用序号：软删样品行仍在表内且 usedSql 不过滤 deleted_at（刻意），其序号仍算占用
   const used = new Set();
   (usedRows || []).forEach(function (r) {
     const p = parseSampleCode(r.sample_no);

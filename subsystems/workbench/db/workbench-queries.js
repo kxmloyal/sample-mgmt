@@ -49,7 +49,8 @@ var unionSQL = `
     s.created_at,
     s.updated_at
   FROM samples s
-  WHERE s.status IN ('NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING')
+  -- T13：排除软删除样品
+  WHERE s.deleted_at IS NULL AND s.status IN ('NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING')
 
   UNION ALL
 

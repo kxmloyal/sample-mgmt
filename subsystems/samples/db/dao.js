@@ -62,9 +62,9 @@ module.exports = function createDao(deps) {
     throw lastErr || new Error('createSample 重试 3 次仍失败');
   }
 
-  function getSampleById(id) { return one('SELECT * FROM samples WHERE id = ?', [id]); }
-  function getSampleByNo(sample_no) { return one('SELECT * FROM samples WHERE sample_no = ?', [sample_no]); }
-  function getSampleByToken(qr_token) { return one('SELECT * FROM samples WHERE qr_token = ?', [qr_token]); }
+  function getSampleById(id) { return one('SELECT * FROM samples WHERE id = ? AND deleted_at IS NULL', [id]); }
+  function getSampleByNo(sample_no) { return one('SELECT * FROM samples WHERE sample_no = ? AND deleted_at IS NULL', [sample_no]); }
+  function getSampleByToken(qr_token) { return one('SELECT * FROM samples WHERE qr_token = ? AND deleted_at IS NULL', [qr_token]); }
 
   // 时区统一：next_inspect_at/valid_until 存 ISO UTC 字符串（如 2026-09-05T04:00:00.000Z）
   // 与 UTC_TIMESTAMP() 规范化后比较，修复旧逻辑用本地 NOW() 比较导致逾期判定差 8 小时
@@ -74,7 +74,7 @@ module.exports = function createDao(deps) {
 
   function listSamples(opts) {
     opts = opts || {};
-    var where = [], params = [];
+    var where = ['deleted_at IS NULL'], params = [];
     if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
     if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
     if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
@@ -97,7 +97,7 @@ module.exports = function createDao(deps) {
 
   function countAllSamples(opts) {
     opts = opts || {};
-    var where = [], params = [];
+    var where = ['deleted_at IS NULL'], params = [];
     if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
     if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
     if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
@@ -146,27 +146,28 @@ module.exports = function createDao(deps) {
     return await fetchOne(conn, 'SELECT * FROM samples WHERE id = ?', [s.id]);
   }
 
+  // T13 软删除：deleted_at 置位 + version 推进；scan_logs 保留（审计不断链）
+  // 单条 UPDATE 原子生效（原为 scan_logs/samples 双 DELETE 才需事务包裹，软删后仅一条语句）
   async function deleteSample(id) {
-    await run('DELETE FROM scan_logs WHERE sample_id=?', [id]);
-    await run('DELETE FROM samples WHERE id=?', [id]);
+    await run('UPDATE samples SET deleted_at=UTC_TIMESTAMP(), version=version+1 WHERE id=?', [id]);
   }
 
-  function countSamplesByStatus() { return q('SELECT status, COUNT(*) AS cnt FROM samples GROUP BY status'); }
-  function listOverdueSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
-  function listDueSoonSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
+  function countSamplesByStatus() { return q('SELECT status, COUNT(*) AS cnt FROM samples WHERE deleted_at IS NULL GROUP BY status'); }
+  function listOverdueSamples() { return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+  function listDueSoonSamples() { return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
   // T12.4: RETURNING 停留超时（默认 72 小时）待办查询——供 QA/ADMIN 看板/工作台挂载兜底提醒
   // 口径：status=RETURNING 且 updated_at 早于 N 小时前（RETURNING 期间无其他写操作，updated_at 近似进入退回审核的时刻）
   function listReturningOverdue(hours) {
     var h = Math.floor(Number(hours));
     if (!h || h <= 0) h = 72;
-    return q("SELECT * FROM samples WHERE status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
+    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
   }
 
   function listMyPendingSamples(role, userId) {
-    if (role === 'RD') return q("SELECT * FROM samples WHERE status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?) ORDER BY id DESC LIMIT 50", [userId]);
-    if (role === 'QA') return q("SELECT * FROM samples WHERE status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 50");
-    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE status='RELEASED' ORDER BY id DESC LIMIT 50");
-    return q('SELECT * FROM samples ORDER BY id DESC LIMIT 50');
+    if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 50", [userId]);
+    if (role === 'QA') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 50");
+    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RELEASED' ORDER BY id DESC LIMIT 50");
+    return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 50');
   }
 
   // 日志
@@ -188,8 +189,8 @@ module.exports = function createDao(deps) {
   function getModelByCode(code) { return one('SELECT * FROM sample_models WHERE code = ?', [code]); }
   function createModel(data) { return run('INSERT INTO sample_models (code,full_name,created_by) VALUES (?,?,?)', [data.code, data.full_name, data.created_by || null]).then(function () { return getModelByCode(data.code); }); }
   function deleteModel(id) { return run('DELETE FROM sample_models WHERE id=?', [id]); }
-  function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE model = ?', [code]).then(function (rows) { return rows[0].c; }); }
-  function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
+  function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE deleted_at IS NULL AND model = ?', [code]).then(function (rows) { return rows[0].c; }); }
+  function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
 
   return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
 };

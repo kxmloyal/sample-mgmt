@@ -227,17 +227,17 @@ function register(app) {
     }
   });
 
-  // 删除样品（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行）
+  // 删除样品=软删除 deleted_at 置位（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行；T13 起日志保留、编号不复用）
   app.delete('/api/samples/:id', requireAuth, asyncHandler(async (req, res) => {
     const u = await currentUser(req);
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
     if (!['NEW', 'PRODUCED'].includes(s.status))
-      return res.status(400).json({ error: '仅允许取消NEW或PRODUCED状态的样品' });
+      return res.status(400).json({ error: '仅允许删除NEW或PRODUCED状态的样品' });
     if (u.role !== 'ADMIN' && s.created_by !== u.id)
-      return res.status(403).json({ error: '无权限：仅管理员或创建者可取消' });
+      return res.status(403).json({ error: '无权限：仅管理员或创建者可删除' });
     await D.deleteSample(s.id);
-    logger.info('样品已取消: '+s.sample_no+' by '+u.username);
+    logger.info('样品已删除(软删除): '+s.sample_no+' by '+u.username);
     res.json({ ok: true });
   }));
 
