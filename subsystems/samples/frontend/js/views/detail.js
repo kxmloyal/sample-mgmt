@@ -26,6 +26,7 @@ function renderTab(tab, id) {
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
   // innerHTML 注入的 selected 属性在 FAST 下不生效，需显式回显下拉值
   if (tab === 'card') applyDetailCardValues(s);
+  if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步加载历史照片区（T14）
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -119,10 +120,40 @@ function _buildLogsTab(s, id) {
 function _buildImageTab(s, id) {
   var mainImg = s.produced_image || s.image;
   var h = '<div style="text-align:center;padding:16px">';
-  if (mainImg) h += '<div style="margin-bottom:12px"><img src="' + e(mainImg) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(\'' + e(mainImg) + '\')" alt="样品图片"/></div>';
+  if (mainImg) h += '<div style="margin-bottom:12px"><img id="detail-main-img" src="' + e(mainImg) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(this.src)" alt="样品图片"/></div>';
   if (s.inspect_image) h += '<div style="margin-bottom:12px"><div class="label">复检照片</div><img src="' + e(s.inspect_image) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(\'' + e(s.inspect_image) + '\')" alt="复检照片"/></div>';
   if (!mainImg && !s.inspect_image) h += '<div class="muted">暂无图片</div>';
+  h += '<div id="detail-img-history" style="display:none;margin-top:12px"></div>';
   return h + '<div style="margin-top:12px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div></div>';
+}
+
+// 历史照片区（T14 全量留痕）：进入大图 Tab 后异步拉取该样品全部制作/复检照片缩略图；
+// 点击缩略图切换主图（点主图可全屏）；无历史时该区保持隐藏
+async function loadImageHistory(id) {
+  var box = document.getElementById('detail-img-history');
+  if (!box) return;
+  var list = [];
+  try { list = await api('GET', '/api/samples/' + id + '/images'); } catch (err) { return; }
+  box = document.getElementById('detail-img-history');
+  if (!box) return; // 响应到达时 Tab 已切换，丢弃过期渲染
+  if (!list || !list.length) return;
+  var KIND_CN = { produce: '制作', inspect: '复检' };
+  var h = '<div class="label" style="margin-bottom:6px">历史照片</div><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+  list.forEach(function (it) {
+    var tip = (KIND_CN[it.kind] || it.kind) + (it.ts ? ' ' + it.ts : '');
+    h += '<img src="' + e(it.url) + '" title="' + e(tip) + '" alt="' + e(tip) + '"' +
+      ' style="width:72px;height:72px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid #ddd"' +
+      ' onclick="switchMainImage(\'' + e(it.url) + '\')"/>';
+  });
+  box.innerHTML = h + '</div>';
+  box.style.display = '';
+}
+
+// 历史缩略图点击：有主图则切换主图，无主图（样品无当前图）则直接全屏查看
+function switchMainImage(url) {
+  var m = document.getElementById('detail-main-img');
+  if (m) m.src = url;
+  else showImageView(url);
 }
 
 function showImageView(src) {

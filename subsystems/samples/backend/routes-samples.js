@@ -15,6 +15,16 @@ function invalidateModelCaches() { MODEL_CACHE_KEYS.forEach(function (k) { cache
 const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
 const UPLOAD_MAX_SIZE = parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10);
 
+// 图片魔数（文件头）校验（T14）：不信任 data URL 声明的 MIME，声明类型与实际内容不符时拒绝落盘
+function matchImageMagic(buf, ext) {
+  if (!buf || buf.length < 4) return false;
+  if (ext === 'jpg') return buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
+  if (ext === 'png') return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
+  if (ext === 'gif') return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38;
+  if (ext === 'webp') return buf.length >= 12 && buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP';
+  return false;
+}
+
 // 保存样品图片（同步落盘后再返回 URL，避免 DB 入库但文件未写入的脏数据）
 async function saveSampleImage(dataUrl, sampleNo) {
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return null;
@@ -24,11 +34,13 @@ async function saveSampleImage(dataUrl, sampleNo) {
   if (!['jpg', 'png', 'gif', 'webp'].includes(ext)) return null;
   const size = Buffer.byteLength(m[2], 'base64');
   if (size > UPLOAD_MAX_SIZE) { logger.warn('图片过大:' + size); return null; }
+  const buf = Buffer.from(m[2], 'base64');
+  if (!matchImageMagic(buf, ext)) { logger.warn('图片内容与声明类型不符(魔数校验失败): ' + sampleNo + '.' + ext); return null; }
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   const fname = sampleNo + '.' + ext;
   const filePath = path.join(UPLOAD_DIR, fname);
   try {
-    await fs.promises.writeFile(filePath, Buffer.from(m[2], 'base64'));
+    await fs.promises.writeFile(filePath, buf);
     return '/uploads/' + fname;
   } catch (e) { logger.error('保存图片失败: ' + e.message); return null; }
 }
@@ -180,6 +192,30 @@ function register(app) {
     await D.deleteModel(m.id);
     invalidateModelCaches();
     res.json({ ok: true });
+  }));
+
+  // 历史照片列表（T14 全量留痕，只读）：列出 uploads 中该样品编号前缀的制作/复检图片
+  // 安全：文件名仅来自 readdir 结果拼 URL（不接受用户输入路径段），sample_no 由 DB 取出做前缀匹配，无路径穿越面
+  app.get('/api/samples/:id/images', requireAuth, asyncHandler(async (req, res) => {
+    const s = await D.getSampleById(Number(req.params.id));
+    if (!s) return res.status(404).json({ error: '样品不存在' });
+    const prefix = s.sample_no + '_';
+    let files = [];
+    try { files = await fs.promises.readdir(UPLOAD_DIR); } catch (e) { /* uploads 目录不存在视为无历史 */ }
+    const out = [];
+    files.forEach(function (f) {
+      if (f.indexOf(prefix) !== 0) return;
+      // 兼容固定旧名 {no}_prod.png / {no}_insp.png 与时间戳新名 {no}_prod_YYYYMMDD-HHmmss.png
+      const m = f.slice(prefix.length).match(/^(prod|insp)(?:_(\d{8}-\d{6}))?\.(jpg|png|gif|webp)$/i);
+      if (!m) return;
+      out.push({ url: '/uploads/' + f, kind: m[1].toLowerCase() === 'prod' ? 'produce' : 'inspect', ts: m[2] || '' });
+    });
+    // 按文件名时间倒序：有 ts 的按 ts 降序；固定旧名（无 ts）排最后；同 ts 按文件名降序
+    out.sort(function (a, b) {
+      if (a.ts !== b.ts) return a.ts === '' ? 1 : b.ts === '' ? -1 : (a.ts < b.ts ? 1 : -1);
+      return a.url < b.url ? 1 : a.url > b.url ? -1 : 0;
+    });
+    res.json(out);
   }));
 
   app.get('/api/samples/:id', requireAuth, asyncHandler(async (req, res) => {

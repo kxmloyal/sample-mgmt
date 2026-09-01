@@ -88,7 +88,8 @@ async function applyAction(chosenAction, ctx) {
   if (chosenAction === 'PRODUCE') {
     const img = req.body.image;
     if (!img || typeof img !== 'string') return { status: 400, error: '请上传制作照片' };
-    const prodImgUrl = await saveSampleImage(img, s.sample_no + '_prod');
+    // 制作照片文件名时间戳化（T14 全量留痕，与复检照片同策略）：多次制作不再互相覆盖；旧固定名 {no}_prod.png 不动（兼容）
+    const prodImgUrl = await saveSampleImage(img, s.sample_no + '_prod_' + tsStamp(new Date()));
     if (!prodImgUrl) return { status: 500, error: '制作照片保存失败，请重试' };
     updated.produced_image = prodImgUrl;
     updated.status = 'PRODUCED';
