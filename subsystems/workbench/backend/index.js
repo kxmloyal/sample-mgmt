@@ -32,12 +32,15 @@ function register(app) {
       var filters = parseWorkbenchFilters(req.query);
       if (filters.error) return res.status(400).json({ error: filters.error });
       var settings = await getSettings(); // {warn,bad} 小时，缺省 72/168
-      var base = buildWorkbenchSQL(filters);
-      var [rows] = await pool.query(base.sql, base.params);
+      // 卡片统计基于「未按部门筛选」的全量：避免点击部门卡后其它部门卡消失（对齐 samples/fixtures 卡片交互协议）
+      var cardFilters = Object.assign({}, filters);
+      delete cardFilters.dept;
+      var cardBase = buildWorkbenchSQL(cardFilters);
+      var [cardRows] = await pool.query(cardBase.sql, cardBase.params);
 
       // 等级计算（后端权威版本）
       var applySet = {}; // 申请部门去重列表（apply_dept 下拉数据源）
-      rows.forEach(function(r) {
+      cardRows.forEach(function(r) {
         var od = calcOverdue(r, settings);
         r.overdue_level = od.level;
         r.overdue_label = od.label;
@@ -48,21 +51,25 @@ function register(app) {
       // 等级过滤（服务端，非前端内存）
       if (filters.level !== '') {
         var lv = Number(filters.level);
-        rows = rows.filter(function(r) { return r.overdue_level === lv; });
+        cardRows = cardRows.filter(function(r) { return r.overdue_level === lv; });
       }
       // 排序：等级降序 + 停留时长降序 + 类型/编号稳定序
-      rows.sort(function(a, b) {
+      cardRows.sort(function(a, b) {
         if (a.overdue_level !== b.overdue_level) return b.overdue_level - a.overdue_level;
         if (a.dwell_hours !== b.dwell_hours) return b.dwell_hours - a.dwell_hours;
         if (a.item_type !== b.item_type) return a.item_type > b.item_type ? 1 : -1;
         return a.item_no > b.item_no ? 1 : -1;
       });
 
-      // 统计（基于过滤后全量，不受分页影响）
+      // 明细列表：在卡片全量基础上按部门内存过滤（仅影响 items/total，不影响卡片统计）
+      var rows = cardRows;
+      if (filters.dept) rows = cardRows.filter(function(r) { return r.resp_dept === filters.dept; });
+
+      // 统计（基于卡片全量，不受部门筛选/分页影响；deptStats 保留全部部门卡）
       var total = rows.length;
-      var summary = { total: total, d3in: 0, d37: 0, d7: 0, dormant: 0 };
+      var summary = { total: cardRows.length, d3in: 0, d37: 0, d7: 0, dormant: 0 };
       var deptMap = {};
-      rows.forEach(function(r) {
+      cardRows.forEach(function(r) {
         if (r.overdue_level === 0) summary.d3in++;
         else if (r.overdue_level === 1) summary.d37++;
         else summary.d7++;

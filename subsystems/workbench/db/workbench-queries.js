@@ -63,8 +63,8 @@ var unionSQL = `
     -- 呆滞天数：超过 fixtures_settings.dormant_days 阈值返回天数，否则 NULL（非呆滞）
     CASE
       WHEN f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')
-       AND DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = f.id), f.created_at)) >= COALESCE((SELECT v FROM fixtures_settings WHERE k = 'dormant_days'), 60)
-      THEN DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = f.id), f.created_at))
+       AND DATEDIFF(NOW(), COALESCE(flg.last_log_at, f.created_at)) >= COALESCE((SELECT v FROM fixtures_settings WHERE k = 'dormant_days'), 60)
+      THEN DATEDIFF(NOW(), COALESCE(flg.last_log_at, f.created_at))
       ELSE NULL
     END AS dormant_days,
     CASE f.status
@@ -113,6 +113,12 @@ var unionSQL = `
     f.created_at,
     f.updated_at
   FROM fixtures f
+  -- 子查询优化：治具最近活动时间由逐行相关子查询改为 LEFT JOIN 派生表（每治具一次聚合），避免随治具数线性执行
+  LEFT JOIN (
+    SELECT fixture_id, MAX(created_at) AS last_log_at
+    FROM fixture_logs
+    GROUP BY fixture_id
+  ) flg ON flg.fixture_id = f.id
   WHERE f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE')
 
   UNION ALL

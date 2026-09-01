@@ -7,6 +7,11 @@ var AR = require('./fixture-actions-repair');
 var AS = require('./fixture-actions-special');
 var { toCsv, sendCsv } = require('../../../shared/csv');
 var MD = require('../db/models-dao');
+var cache = require('../../../shared/cache');
+
+// 机型主数据为共享表(sample_models)：治具侧新增/编辑机型须失效样品侧机型/下拉缓存
+var SHARED_MODEL_KEYS = ['sl_sample_models', 'sl_sample_model_options'];
+function invalidateSharedModelCaches() { SHARED_MODEL_KEYS.forEach(function (k) { cache.del(k); }); }
 
 function register(app) {
   var requireAuth = app.locals.requireAuth;
@@ -136,8 +141,14 @@ function register(app) {
 
   // 治具配置：读取（登录即可）；settings 为固定路径，必须放在 :id 之前
   app.get('/api/fixtures/settings', requireAuth, async function(req, res) {
-    var dormantDays = Number(await D.getFixtureSetting('dormant_days', 60)) || 60;
-    res.json({ dormant_days: dormantDays });
+    // 字典缓存：阈值配置低变，TTL 60s（见 AGENTS.md 性能优化）
+    var cached = cache.get('sl_fixture_settings');
+    if (cached === undefined) {
+      var dormantDays = Number(await D.getFixtureSetting('dormant_days', 60)) || 60;
+      cached = { dormant_days: dormantDays };
+      cache.set('sl_fixture_settings', cached);
+    }
+    res.json(cached);
   });
 
   // 治具配置：更新（仅 ADMIN，dormant_days 范围 1~365）
@@ -147,6 +158,7 @@ function register(app) {
     var days = Number(req.body && req.body.dormant_days);
     if (!days || days < 1 || days > 365) return res.status(400).json({ error: '呆滞阈值须为 1~365 天' });
     await D.setFixtureSetting('dormant_days', String(days));
+    cache.del('sl_fixture_settings');
     res.json({ dormant_days: days });
   });
 
@@ -200,6 +212,7 @@ function register(app) {
       if (!/^[A-Za-z0-9]+$/.test(code)) return res.status(400).json({ error: '机型短码仅允许字母和数字' });
       if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
       var m = await MD.createModel({ code: code, full_name: full_name, created_by: u.id });
+      invalidateSharedModelCaches();
       res.json(m);
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
@@ -217,6 +230,7 @@ function register(app) {
       var full_name = ((req.body || {}).full_name || '').trim();
       if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
       var updated = await MD.updateModelName(m.id, full_name);
+      invalidateSharedModelCaches();
       res.json(updated);
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型全称已存在' });
