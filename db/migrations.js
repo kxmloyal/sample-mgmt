@@ -126,6 +126,12 @@ async function migrateSamplesOptimisticLock(pool) {
   catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
 }
 
+async function migrateSamplesSoftDelete(pool) {
+  // 样品软删除底座：deleted_at 列（2026-09-01，幂等）
+  try { await pool.execute('ALTER TABLE samples ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+}
+
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
   await migrateFixtureFiles(pool);
@@ -136,6 +142,7 @@ async function runMigrations(pool) {
   await migrateControlNcrForm(pool);
   await migrateProjectTaskIndexes(pool);
   await migrateSamplesOptimisticLock(pool);
+  await migrateSamplesSoftDelete(pool);
 }
 
 module.exports = { runMigrations };
