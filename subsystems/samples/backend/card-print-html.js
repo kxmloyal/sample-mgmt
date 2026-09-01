@@ -1,48 +1,45 @@
 // routes/card-print-html.js — 标示卡打印 HTML 生成（与标签页解耦，随标签尺寸 contain 缩放）
-// 由 card-html.js 拆分而来（Issue #6）：buildCardPrintHtml + fmtDateYYMMDD 独立成文件
+// 由 card-html.js 拆分而来（Issue #6）：buildCardPrintHtml + fmtDateUTC 独立成文件
 // T17：抽出 buildCardFragment（卡片本体片段）供单卡/批量复用；新增 buildBatchCardPrintHtml（单页多卡 + @page 分页）
 const { LIMIT_LABELS, SOURCE_TYPES, SOURCE_TYPES_SHORT, PRESET_MM } = require('./card-constants');
 const { escapeHtml } = require('./html-utils');
 
-// 有效期格式化：yy/mm/dd（如 26/12/31），空值返回占位符
-function fmtDateYYMMDD(t) {
+// 【口径】有效期/复检日一律按 UTC 日期（YYYY-MM-DD）显示，前后端三处一致
+// （本文件打印卡 / card-page.js 匿名卡 / detail.js 详情页），避免服务器时区致 00:00–08:00 CST 发行日差一天
+// 有效期格式化：UTC 日期 YYYY-MM-DD（如 2027-08-31），空值返回占位符
+function fmtDateUTC(t) {
   if (!t) return '______';
   const d = new Date(t);
-  const yy = String(d.getFullYear()).slice(2);
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  return yy+'/'+mm+'/'+dd;
+  return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
 }
 
-// 纸张/空白卡区尺寸换算：预设三档与标签页共用 PRESET_MM；自定义用真实宽高，缺高时按标签 280×133 基准等比
+// 纸张/空白卡区尺寸换算：预设三档与标签页共用 PRESET_MM；自定义用真实宽高，
+// 缺高时按大号宽高比（60:40）等比补高（与 card-html.js parseSize 缺高分支同口径，防御性兜底）
+// 【T19 mm 直出】布局公式全程以 mm 浮点计算，最终一次性取整，消除 mm→px→mm 往返漂移（≤1mm）；
+// @page/.sheet 尺寸与 PRESET_MM 严格同源（px 布局常量按 CSS 1mm=96/25.4px 严格折 mm）
 // 返回 { sk, blankWmm, blankHmm, labelMm, sizeName }（单卡/批量共用，保证 @page 与顶栏显示同源）
+var PX_PER_MM = 96 / 25.4; // CSS 物理像素严格换算（1in = 96px = 25.4mm）
 function sheetGeom(sizeKey, cw, ch) {
   var sk = (sizeKey === 'small' || sizeKey === 'medium' || sizeKey === 'large' || sizeKey === 'custom') ? sizeKey : 'large';
-  var P2M = 0.265;
-  var M2P = 3.7795;
   var pWmm, pHmm;
   if (sk === 'custom' && cw) {
     pWmm = cw;
-    pHmm = ch || Math.round(133 * (cw / 74.2) * P2M * 10) / 10;
+    pHmm = ch || Math.round(cw * (PRESET_MM.large[1] / PRESET_MM.large[0]) * 10) / 10;
   } else {
     var mm = PRESET_MM[sk] || PRESET_MM.large;
     pWmm = mm[0]; pHmm = mm[1];
   }
-  var paperWpx = Math.round(pWmm * M2P);
-  var paperHpx = Math.round(pHmm * M2P);
-  // 空白卡区 = 标签纸去掉 QR 侧边后的实际贴入区（与 card-html.js buildLabelHtml 的 .lab 布局公式保持一致）：
-  // .qr-side 宽=round(100×scale)、pad=round(10×scale)、gap=round(7×scale)、borderW=scale≥0.7?2:1
+  // 空白卡区 = 标签纸去掉 QR 侧边后的实际贴入区（与 card-html.js buildLabelHtml 的 .lab 布局公式同源）：
+  // .qr-side 宽=100×scale、pad=10×scale、gap=7×scale、borderW=scale≥0.7?2:1（px，按 PX_PER_MM 折 mm 浮点）
   // 自定义档 scale 随实际宽度变化，因此空白卡区自动跟随标签尺寸缩放
   var lscale = pWmm / 74.2;
-  var qrSideW = Math.round(100 * lscale);
-  var lpad = Math.round(10 * lscale);
-  var lgap = Math.round(7 * lscale);
-  var lborder = lscale >= 0.7 ? 2 : 1;
-  var blankWpx = paperWpx - qrSideW - lpad * 2 - lgap - lborder * 2;
-  var blankHpx = paperHpx - lpad * 2 - lborder * 2;
-  // 空白卡区 mm（整数，@page 写死 + 顶栏显示同源，打印对话框按整数选纸）
-  var blankWmm = Math.round(blankWpx / M2P);
-  var blankHmm = Math.round(blankHpx / M2P);
+  var qrSideMm = 100 * lscale / PX_PER_MM;
+  var lpadMm = 10 * lscale / PX_PER_MM;
+  var lgapMm = 7 * lscale / PX_PER_MM;
+  var lborderMm = (lscale >= 0.7 ? 2 : 1) / PX_PER_MM;
+  // 空白卡区 mm（全程浮点、一次性取整，@page 写死 + 顶栏显示同源，打印对话框按整数选纸）
+  var blankWmm = Math.round(pWmm - qrSideMm - lpadMm * 2 - lgapMm - lborderMm * 2);
+  var blankHmm = Math.round(pHmm - lpadMm * 2 - lborderMm * 2);
   return {
     sk: sk,
     blankWmm: blankWmm,
@@ -98,7 +95,7 @@ function buildCardFragment(s) {
   var sourceShort = escapeHtml(SOURCE_TYPES_SHORT[s.source_type] || SOURCE_TYPES[s.source_type] || '');
   var sourceLabel = sourceCode ? (sourceShort ? sourceCode + '·' + sourceShort : sourceCode) : '';
   var limitLabel = escapeHtml(LIMIT_LABELS[s.limit_item] || s.limit_item || '');
-  var validStr = fmtDateYYMMDD(s.valid_until);
+  var validStr = fmtDateUTC(s.valid_until);
   var now = new Date();
   var expired = s.valid_until && new Date(s.valid_until) < now;
   var validColor = expired ? 'font-weight:700' : '';
@@ -193,4 +190,4 @@ FIT_SCRIPT_BATCH+
 '</body></html>';
 }
 
-module.exports = { buildCardPrintHtml, buildBatchCardPrintHtml, buildCardFragment, fmtDateYYMMDD };
+module.exports = { buildCardPrintHtml, buildBatchCardPrintHtml, buildCardFragment, fmtDateUTC };

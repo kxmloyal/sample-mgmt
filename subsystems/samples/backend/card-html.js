@@ -1,5 +1,5 @@
 // routes/card-html.js — 标签 HTML 生成 + 尺寸解析
-// 标示卡打印（buildCardPrintHtml + fmtDateYYMMDD）已拆至 ./card-print-html.js
+// 标示卡打印（buildCardPrintHtml + fmtDateUTC）已拆至 ./card-print-html.js
 const { LIMIT_LABELS, SOURCE_TYPES, PRESET_MM } = require('./card-constants');
 const { buildCardPrintHtml } = require('./card-print-html');
 const { escapeHtml } = require('./html-utils');
@@ -15,6 +15,9 @@ function parseSize(req) {
     if (!(Number.isFinite(cw) && cw >= 30 && cw <= 150)) cw = null;
     ch = Number(req.query.customH);
     if (!(Number.isFinite(ch) && ch >= 10 && ch <= 150)) ch = null;
+    // 宽合法但高缺失/非法：按大号宽高比（60:40）等比补高，兑现上方注释「任一非法/缺失按等比兼容」
+    // （与 card-print-html.js sheetGeom 缺高分支同口径；card-constants.js 不在本任务清单，两文件各自实现保持一致）
+    if (cw !== null && ch === null) ch = Math.round(cw * (PRESET_MM.large[1] / PRESET_MM.large[0]) * 10) / 10;
   } else {
     // 预设档：真实纸张尺寸（mm）以 PRESET_MM 为唯一来源，支持独立宽高（如大号 60×40）
     var mm = PRESET_MM[sizeKey] || PRESET_MM.large;

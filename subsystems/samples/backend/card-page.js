@@ -3,11 +3,29 @@ const D = require('../../../db');
 const { SOURCE_TYPES } = require('./card-constants');
 const { escapeHtml } = require('./html-utils');
 
+// 【口径】有效期/复检日一律按 UTC 日期（YYYY-MM-DD）显示，前后端三处一致
+// （card-print-html.js 打印卡 / 本文件匿名卡 / detail.js 详情页）
+function fmtDateUTC(t) {
+  if (!t) return '—';
+  const d = new Date(t);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+
+// 日志时间保留到时分秒（操作审计语义，非有效期口径）
 function fmtCard(t) {
   if (!t) return '—';
   const d = new Date(t);
   return d.toLocaleString('zh-CN', { hour12: false });
 }
+
+// 动作中文名（与 shared/frontend/api-base.js ACTION_CN 同源，匿名页仅取样品动作子集）
+// §六.4：公开匿名接口不得泄露用户/部门敏感数据 —— 日志仅显示动作+时间，不输出 role/dept；签署人姓名脱敏为「已签署」
+const ACTION_CN = {
+  CREATE: '新建样品', PRODUCE: '确认制作完成', RELEASE: '正式发行', INSPECT: '复检完成', INSPECT_EARLY: '提前复检',
+  CUSTODY: '接收保管', EDIT_CARD: '修正标示卡', EDIT_STORAGE: '修改储位',
+  RETURN_REQUEST: '申请退回', RE_RELEASE: '重新发行', RETIRE_RECREATE: '退回研发重做', RETIRE_ONLY: '直接作废',
+  RETURN_REJECT: '拒绝退回', RECREATE: '创建替代品', RECREATE_REPLACED: '被替代', UPDATE_CARD: '更新标示卡信息'
+};
 
 async function cardPageHtml(s) {
   const logs = (await D.listLogsBySample(s.id) || []).slice(0, 2);
@@ -23,7 +41,7 @@ async function cardPageHtml(s) {
     logsHtml = '<div class="divider"></div>\n' +
     '  <div class="section-title">最近操作</div>\n' +
     logs.map(l=>
-      '<div class="log-item">' + fmtCard(l.created_at) + ' \u00b7 ' + escapeHtml(l.action) + ' \u00b7 ' + escapeHtml(l.role||'') + '/' + escapeHtml(l.dept||'') + '</div>'
+      '<div class="log-item">' + fmtCard(l.created_at) + ' \u00b7 ' + escapeHtml(ACTION_CN[l.action] || l.action) + '</div>'
     ).join('\n');
   }
 
@@ -62,11 +80,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="row"><span class="lbl">来源</span><span class="val">${sourceLabel}</span></div>
   <div class="row"><span class="lbl">版次</span><span class="val">${escapeHtml(s.card_version)||'—'}</span></div>
   <div class="row"><span class="lbl">样品数值</span><span class="val">${escapeHtml(s.test_data)||'—'}</span></div>
-  <div class="row"><span class="lbl">有效期</span><span class="val" style="${validClass}">${s.valid_until?fmtCard(s.valid_until):'—'}${expired?' <span class="badge-expired">已过期</span>':''}</span></div>
+  <div class="row"><span class="lbl">有效期</span><span class="val" style="${validClass}">${s.valid_until?fmtDateUTC(s.valid_until):'—'}${expired?' <span class="badge-expired">已过期</span>':''}</span></div>
   <div class="divider"></div>
   <div class="section-title">签署</div>
-  <div class="row"><span class="lbl">制作</span><span class="val">${escapeHtml(s.signed_by_rd)||'—'}</span></div>
-  <div class="row"><span class="lbl">确认</span><span class="val">${escapeHtml(s.signed_by_qa)||'—'}</span></div>
+  <div class="row"><span class="lbl">制作</span><span class="val">${s.signed_by_rd?'已签署':'—'}</span></div>
+  <div class="row"><span class="lbl">确认</span><span class="val">${s.signed_by_qa?'已签署':'—'}</span></div>
   <div class="divider"></div>
   <div class="section-title">规格/型号</div>
   <div class="row"><span class="lbl">机型</span><span class="val">${escapeHtml(s.model)||'—'}</span></div>
