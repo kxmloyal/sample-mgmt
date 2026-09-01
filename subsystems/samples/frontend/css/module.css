@@ -32,23 +32,31 @@
 
 /* 头部操作组小图标按钮 */
 .pv-actions{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
-.pv-icon-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 7px;font-size:14px;line-height:1;cursor:pointer}
+.pv-icon-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;font-size:12px;line-height:1.4;cursor:pointer;white-space:nowrap}
 .pv-icon-btn:hover{background:#f3f4f6}
 
-/* 密度自适应宽度 */
-#fluent-modal{transition:width .25s ease;max-width:96vw}
-#fluent-modal.d-low{width:560px}
-#fluent-modal.d-mid{width:800px}
-#fluent-modal.d-high{width:960px}
+/* 密度自适应宽度（max-width 必须挂在密度类上：app.css 的 fluent-dialog#fluent-modal 有 max-width:900px，
+   特异性 101 高于裸 #fluent-modal 的 100，不带类名覆盖会使 960px 档被截为 900px） */
+#fluent-modal{transition:width .25s ease}
+#fluent-modal.d-low{width:560px;max-width:96vw}
+#fluent-modal.d-mid{width:800px;max-width:96vw}
+#fluent-modal.d-high{width:960px;max-width:96vw}
 @media(max-width:767px){#fluent-modal.d-low,#fluent-modal.d-mid,#fluent-modal.d-high{width:94vw}}
 
-/* 日志时间线 */
-.tl{margin:4px 0 0 12px;padding-left:20px;border-left:2px solid #e5e7eb}
+/* 详情弹窗观感对齐预览稿（dm-modal 作用域，仅详情弹窗，不影响其他弹窗） */
+#fluent-modal.dm-modal{box-shadow:0 20px 50px rgba(15,23,42,.25)}
+#fluent-modal.dm-modal .modal-foot{background:#fff}
+.dm-pad{padding:6px 18px 14px}
+
+/* 日志时间线（预览稿样式：整条竖线 + 白心蓝圈节点） */
+.tl{position:relative;margin:4px 0 0 6px;padding-left:26px}
+.tl::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:#e2e8f0}
 .tl-item{position:relative;padding:7px 0 9px}
-.tl-item::before{content:'';position:absolute;left:-23px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px #fff}
+.tl-item::before{content:'';position:absolute;left:-25px;top:11px;width:8px;height:8px;border-radius:50%;background:#fff;border:3px solid var(--brand)}
 .tl-act{font-weight:600}
-.tl-flow{font-size:12px;color:var(--muted);margin-left:8px}
+.tl-flow{font-size:12px;color:var(--brand);margin-left:8px}
 .tl-meta{font-size:12px;color:var(--muted);margin-top:2px}
 .tl-note{font-size:13px;margin-top:4px;word-break:break-all}
 .tl-note.folded{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
-.tl-note.folded::after{content:' ▸ 展开';color:var(--brand);font-size:12px;white-space:nowrap}
+.tl-note.folded::after{content:' ⌄ 展开';color:var(--brand);font-size:12px;white-space:nowrap}
+.tl-note.can-fold:not(.folded)::after{content:' ⌃ 折叠';color:var(--brand);font-size:12px;cursor:pointer}

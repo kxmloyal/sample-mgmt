@@ -24,9 +24,9 @@ async function viewDetail(id) {
 
 // D1.3 头部：编号 + 徽章 + 操作组
 function _buildHeadHTML(s, id) {
-  var acts = [['🖨', '打印标示卡', 'printCard(' + id + ')'],
-    ['🏷', '打印标签', 'window.open(\'/api/samples/' + id + '/label/print\'+getPrintSizeQuery(),\'_blank\')'],
-    ['⬇', '下载二维码', 'downloadQR(' + id + ')']];
+  var acts = [['🖨 标示卡', '打印标示卡', 'printCard(' + id + ')'],
+    ['🏷 标签', '打印标签', 'window.open(\'/api/samples/' + id + '/label/print\'+getPrintSizeQuery(),\'_blank\')'],
+    ['⬇ 二维码', '下载二维码', 'downloadQR(' + id + ')']];
   return '<b>' + e(s.sample_no) + '</b>' + statusBadge(s) + '<span class="pv-actions">' +
     acts.map(function(a) { return '<button class="pv-icon-btn" title="' + a[1] + '" onclick="' + a[2] + '">' + a[0] + '</button>'; }).join('') + '</span>';
 }
@@ -34,7 +34,7 @@ function _buildHeadHTML(s, id) {
 // D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式 D2 进 module.css）
 function _applyDetailDensity(tab) {
   var d = document.querySelector('.modal-mask fluent-dialog');
-  if (d) { d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
+  if (d) { d.classList.add('dm-modal'); d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
 }
 
 // D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
@@ -79,7 +79,7 @@ function _buildTabContent(s, id, tab) {
   else if (tab === 'logs') html = _buildLogsTab(s, id);
   else if (tab === 'card') html = _buildCardTab(s, id);
   else if (tab === 'image') html = _buildImageTab(s, id);
-  return html;
+  return '<div class="dm-pad">' + html + '</div>'; // 统一内容呼吸感（对齐预览稿）
 }
 
 function _buildTabsHTML(s, id, activeTab) {
@@ -153,17 +153,17 @@ function _cardLogs(s, id) {
 // 流向映射：action → '从状态 ➜ 到状态'；自环类（EDIT_CARD/EDIT_STORAGE/INSPECT*）标注自环
 var _LOG_FLOW = {
   CREATE: '—',
-  PRODUCE: 'NEW ➜ 制作完成',
-  RELEASE: '制作完成 ➜ 已发行',
-  CUSTODY: '已发行 ➜ 保管中',
-  INSPECT: '已发行（自环）', INSPECT_EARLY: '已发行（自环）', INSPECT_CUSTODY: '保管中（自环）',
-  EDIT_CARD: '修正标示卡（自环）', EDIT_STORAGE: '修改储位（自环）',
-  RETURN_REQUEST: '保管中 ➜ 退回审核',
-  RE_RELEASE: '退回审核 ➜ 已发行',
-  RETIRE_RECREATE: '退回审核 ➜ 已作废',
-  RETURN_REJECT: '退回审核 ➜ 保管中',
-  RETIRE_ONLY: '➜ 已作废', RECREATE: '➜ 已作废', FORCE_RETIRE: '➜ 已作废',
-  FORCE_REASSIGN: '退回审核（改派）'
+  PRODUCE: '⬆ NEW ➜ 制作完成',
+  RELEASE: '⬆ 制作完成 ➜ 已发行',
+  CUSTODY: '⬆ 已发行 ➜ 保管中',
+  INSPECT: '⬆ 已发行（自环）', INSPECT_EARLY: '⬆ 已发行（自环）', INSPECT_CUSTODY: '⬆ 保管中（自环）',
+  EDIT_CARD: '⬆ 修正标示卡（自环）', EDIT_STORAGE: '⬆ 修改储位（自环）',
+  RETURN_REQUEST: '⬆ 保管中 ➜ 退回审核',
+  RE_RELEASE: '⬆ 退回审核 ➜ 已发行',
+  RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
+  RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
+  RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废',
+  FORCE_REASSIGN: '⬆ 退回审核（改派）'
 };
 
 function _buildLogsTab(s, id) {
@@ -175,7 +175,7 @@ function _buildLogsTab(s, id) {
     h += '<div class="tl-item">' +
       '<div><span class="tl-act">' + (ACTION_CN[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
       '<div class="tl-meta">' + fmt(l.created_at) + ' · ' + e(l.role || '—') + (l.dept ? '/' + e(l.dept) : '') + (l.location ? ' · ' + e(l.location) : '') + '</div>' +
-      (note ? '<div class="tl-note' + (fold ? ' folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
+      (note ? '<div class="tl-note' + (fold ? ' can-fold folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
       '</div>';
   });
   if (!logs.length) h += '<div class="muted">暂无日志</div>';
