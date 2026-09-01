@@ -5,11 +5,12 @@
 
 ## 1. 项目一句话
 
-制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含样品管理、治具管理与全局工作台三大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
+制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
 **子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
 
 <!-- AUTO-SUBSYSTEMS:START -->
+- **管制流程管理**(`control`)：覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程
 - **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
 - **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
 - **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程

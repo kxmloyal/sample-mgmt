@@ -19,6 +19,7 @@ server.js 启动
 **当前子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
 
 <!-- AUTO-SUBSYSTEMS:START -->
+- **管制流程管理**(`control`)：覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程
 - **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
 - **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
 - **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
@@ -195,7 +196,7 @@ module.exports = { register, initDB, seed };
 
 ## 7. 迁移与兼容性清单
 
-样品管理、治具管理已随 Phase 5/6 迁移至子系统目录，全局工作台按协议新增：
+样品管理、治具管理已随 Phase 5/6 迁移至子系统目录，全局工作台/项目追踪/管制流程管理按协议新增：
 
 | 现有功能 | 影响 | 说明 |
 |---|---|---|
@@ -203,6 +204,8 @@ module.exports = { register, initDB, seed };
 | 治具路由/入口 | 已迁移 | `routes/fixtures.js`、`public/fixture.html` 已迁至 `subsystems/fixtures/` |
 | 扫码台 | 不变 | 状态机逻辑完全保持 |
 | 治具管理 | 不变 | 独立子系统目录隔离 |
+| 项目追踪 | 按协议新增 | 独立子系统目录 `subsystems/projects/`，经门户统一访问 |
+| 管制流程管理 | 按协议新增 | 独立子系统目录 `subsystems/control/`，经门户统一访问 |
 | 用户管理 | 不变 | 全局共享 `users` 表 |
 | 操作日志 | 不变 | 各子系统写入 `scan_logs`/`fixture_logs` |
 
