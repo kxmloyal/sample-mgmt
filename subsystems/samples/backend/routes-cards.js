@@ -38,8 +38,8 @@ async function assertDownloadRole(app, req, res) {
 async function renderLabel(s, req, res, download) {
   const { sizeKey, scale, cw, ch } = parseSize(req);
   var qrGenW = Math.round(132 * scale);
-  // QR 内容用不可枚举的 qr_token（兼容存量 qr_token 为空的历史数据回落 sample_no）
-  var qrContent = s.qr_token || s.sample_no;
+  // QR 直接编码样品编号 sample_no，扫码即显示编号（已弃用 qr_token 作为内容，用户明确取舍防枚举特性）
+  var qrContent = s.sample_no;
   var sendHtml = function (qrDataUrl) {
     res.set('Content-Type', 'text/html; charset=utf-8');
     if (download) res.set('Content-Disposition', 'attachment; filename="' + s.sample_no + '_label.html"');
@@ -106,7 +106,8 @@ function register(app) {
     if (!s) return res.status(404).json({ error: '样品不存在' });
     res.set('Content-Type', 'image/png');
     res.set('Content-Disposition', 'attachment; filename="'+s.sample_no+'_QR.png"');
-    QRCode.toFileStream(res, s.qr_token || s.sample_no, { width: 600, margin: 1, errorCorrectionLevel: 'M' });
+    // QR 直接编码 sample_no，扫码显示编号（旧 qr_token 内容已弃用，如需查旧码走 getSampleByToken）
+    QRCode.toFileStream(res, s.sample_no, { width: 600, margin: 1, errorCorrectionLevel: 'M' });
   }));
 
   // 预览二维码（PNG流）
@@ -114,7 +115,7 @@ function register(app) {
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
     res.set('Content-Type', 'image/png');
-    QRCode.toFileStream(res, s.qr_token || s.sample_no, { width: 320, margin: 1, errorCorrectionLevel: 'M' });
+    QRCode.toFileStream(res, s.sample_no, { width: 320, margin: 1, errorCorrectionLevel: 'M' });
   }));
 }
 
