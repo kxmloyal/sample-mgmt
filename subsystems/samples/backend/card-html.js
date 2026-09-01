@@ -78,27 +78,27 @@ function buildLabelHtml(s, qrDataUrl, blankCard, autoPrint, scale, sizeKey, cw, 
   var tight = scale < 0.6;
   var nameLines = Math.min(estTextLines(s.name, nameSize, qrSideW), tight ? 1 : 2);
   var metaLines = Math.min(estTextLines(meta, metaSize, qrSideW), tight ? 1 : 2);
-  var specLines = Math.min(estTextLines(s.spec, specSize, qrSideW), tight ? 2 : 3);
+  var specLines = estTextLines(s.spec, specSize, qrSideW);   // 规格不截断：完整行数参与高度/二维码估算
   var noLines = estTextLines(s.sample_no, noSize, qrSideW);
   var textBlockH = noLines * noSize * 1.2 + 3 + nameLines * nameSize * 1.4 + metaLines * metaSize * 1.3 + specLines * specSize * 1.2 + 1;
   var qrImgW = Math.min(Math.round(66 * scale), Math.max(Math.round(innerH - textBlockH), 12));
   if (qrImgW < 24) {
-    // 二维码余量不足：名称/机型/规格收紧为单行，优先保障二维码可识别尺寸
+    // 二维码余量不足：名称/机型收紧为单行（规格保持完整显示），优先保障二维码可识别尺寸
     nameLines = Math.min(estTextLines(s.name, nameSize, qrSideW), 1);
     metaLines = Math.min(estTextLines(meta, metaSize, qrSideW), 1);
-    specLines = Math.min(estTextLines(s.spec, specSize, qrSideW), 1);
+    specLines = estTextLines(s.spec, specSize, qrSideW);
     textBlockH = noLines * noSize * 1.2 + 3 + nameLines * nameSize * 1.4 + metaLines * metaSize * 1.3 + specLines * specSize * 1.2 + 1;
     qrImgW = Math.min(Math.round(66 * scale), Math.max(Math.round(innerH - textBlockH), 12));
   }
   var cardSide = blankCard
     ? '<div style="flex:1;min-width:0;padding:0 '+cardPad+'px;border-left:1.5px dashed #666">'+
-         '<div style="font-weight:700;font-size:'+cardTitle+'px;text-align:center;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px">\u6807\u793a\u5361\uff08\u53d1\u884c\u540e\u6253\u5370\u8d34\u5165\uff09</div>'+
-         '<div style="font-size:'+cardText+'px;color:#ccc;line-height:1.6">'+
-           '<div><span style="color:#d5d5d5">\u7c7b\u578b</span> ___ <span style="color:#d5d5d5">\u6765\u6e90</span> ___ <span style="color:#d5d5d5">\u7248\u6b21</span> ___</div>'+
-           '<div><span style="color:#d5d5d5">\u9879\u76ee</span> ________ <span style="color:#d5d5d5">\u6709\u6548\u671f</span> ________</div>'+
-           '<div><span style="color:#d5d5d5">\u6837\u54c1\u6570\u503c</span> ________________________</div>'+
-           '<div><span style="color:#d5d5d5">\u5236\u4f5c</span> ________ <span style="color:#d5d5d5">\u786e\u8ba4</span> ________</div>'+
-           '<div><span style="color:#d5d5d5">\u5907\u6ce8</span> ____________________________</div>'+
+         '<div style="font-weight:700;font-size:'+cardTitle+'px;text-align:center;color:#000;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px">\u6807\u793a\u5361\uff08\u53d1\u884c\u540e\u6253\u5370\u8d34\u5165\uff09</div>'+
+         '<div style="font-size:'+cardText+'px;color:#000;line-height:1.6">'+
+           '<div><span style="color:#000">\u7c7b\u578b</span> ___ <span style="color:#000">\u6765\u6e90</span> ___ <span style="color:#000">\u7248\u6b21</span> ___</div>'+
+           '<div><span style="color:#000">\u9879\u76ee</span> ________ <span style="color:#000">\u6709\u6548\u671f</span> ________</div>'+
+           '<div><span style="color:#000">\u6837\u54c1\u6570\u503c</span> ________________________</div>'+
+           '<div><span style="color:#000">\u5236\u4f5c</span> ________ <span style="color:#000">\u786e\u8ba4</span> ________</div>'+
+           '<div><span style="color:#000">\u5907\u6ce8</span> ____________________________</div>'+
          '</div>'+
        '</div>'
     : '';
@@ -124,17 +124,19 @@ function buildLabelHtml(s, qrDataUrl, blankCard, autoPrint, scale, sizeKey, cw, 
 '.size-bar{position:fixed;top:0;left:0;right:0;z-index:999;background:#fff;border-bottom:1px solid #e5e7eb;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:12px;font-family:sans-serif}\n'+
 '.size-bar select{padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px}\n'+
 '.size-bar button{margin-left:auto;padding:4px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}\n'+
-'.lab{width:'+paperWmm+'mm;height:'+paperHmm+'mm;border:'+borderW+'px solid #000;border-radius:'+radius+'px;padding:'+pad+'px;display:flex;gap:'+gap+'px}\n'+
+'.sheet{width:'+paperWmm+'mm;height:'+paperHmm+'mm;display:flex;align-items:center;justify-content:center}\n'+
+'.lab{width:'+labW+'px;border:'+borderW+'px solid #000;border-radius:'+radius+'px;padding:'+pad+'px;display:flex;gap:'+gap+'px}\n'+
 '.qr-side{width:'+qrSideW+'px;flex-shrink:0;text-align:center}\n'+
 '.qr-side img{width:'+qrImgW+'px;height:'+qrImgW+'px;display:block;margin:0 auto}\n'+
 '.qr-side .no{font-weight:700;font-size:'+noSize+'px;margin-top:3px;line-height:1.2}\n'+
 '.qr-side .name{font-size:'+nameSize+'px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:'+nameLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
-'.qr-side .meta{font-size:'+metaSize+'px;color:#333;line-height:1.3;display:-webkit-box;-webkit-line-clamp:'+metaLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
-'.qr-side .spec{font-size:'+specSize+'px;color:#444;line-height:1.2;margin-top:1px;display:-webkit-box;-webkit-line-clamp:'+specLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
+'.qr-side .meta{font-size:'+metaSize+'px;color:#000;line-height:1.3;display:-webkit-box;-webkit-line-clamp:'+metaLines+';-webkit-box-orient:vertical;overflow:hidden}\n'+
+'.qr-side .spec{font-size:'+specSize+'px;color:#000;line-height:1.2;margin-top:1px;word-break:break-word}\n'+
 '.footer-note{font-size:'+footerSize+'px;color:#666;text-align:center;margin-top:5px}\n'+
 '@media print{.size-bar{display:none}body{min-height:0;padding-top:0;justify-content:flex-start}html,body{width:auto;height:auto;overflow:hidden}.footer-note{display:none}}\n'+
 '</style></head><body>\n'+
 '<div class="size-bar">打印尺寸: <select onchange="changeSize(this.value)">'+sizeOpts+'</select><span style="color:#b45309;font-size:11px">打印时在打印对话框选择标签纸尺寸并设缩放 100%，即可铺满纸张</span><button onclick="window.print()">打印</button></div>\n'+
+'<div class="sheet">\n'+
 '<div class="lab">\n'+
 '  <div class="qr-side">\n'+
 '    <img src="'+qrDataUrl+'" alt="QR"/>\n'+
@@ -144,6 +146,7 @@ function buildLabelHtml(s, qrDataUrl, blankCard, autoPrint, scale, sizeKey, cw, 
 '    <div class="spec">'+escapeHtml(s.spec||'')+'</div>\n'+
 '  </div>\n'+
 '  '+cardSide+'\n'+
+'</div>\n'+
 '</div>\n'+
 '<div class="footer-note">\u8d34\u4e8e\u6837\u54c1\u5e76\u626b\u7801\u786e\u8ba4</div>\n'+
 '<script>\n'+
@@ -164,7 +167,13 @@ function buildLabelHtml(s, qrDataUrl, blankCard, autoPrint, scale, sizeKey, cw, 
 '    location.search="?size="+v;\n'+
 '  }\n'+
 '}\n'+
-(autoPrint ? 'window.onload=function(){setTimeout(function(){window.print()},600);};\n' : '')+
+'function fitCard(){\n'+
+'  var sh=document.querySelector(".sheet"),c=document.querySelector(".lab");\n'+
+'  var s=Math.min(1,Math.min(sh.clientWidth/c.offsetWidth,sh.clientHeight/c.offsetHeight));\n'+
+'  c.style.transformOrigin="center";c.style.transform="scale("+s+")";\n'+
+'}\n'+
+'window.addEventListener("resize",fitCard);\n'+
+(autoPrint ? 'window.onload=function(){fitCard();setTimeout(function(){window.print()},600);};\n' : 'window.onload=function(){fitCard();};\n')+
 '</script>\n'+
 '</body></html>';
 }

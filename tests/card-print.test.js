@@ -34,8 +34,12 @@ describe('autoPrint 分离（Issue #2）', () => {
   it('autoPrint=true 页面加载后自动弹打印', () => {
     expect(buildLabelHtml(s, 'x', true, true, 1, 'large', 60, 40)).toContain('window.onload');
   });
-  it('autoPrint=false（下载场景）不含自动打印脚本', () => {
-    expect(buildLabelHtml(s, 'x', true, false, 1, 'large', 60, 40)).not.toContain('window.onload');
+  it('autoPrint=false（下载场景）不自动打印（仍含 fitCard 屏幕自适应缩放）', () => {
+    // 2026-09-01：下载页也会注入 window.onload=fitCard() 做屏幕自适应，但不允许自动打印
+    const html = buildLabelHtml(s, 'x', true, false, 1, 'large', 60, 40);
+    // 页面固定有手动打印按钮 onclick="window.print()"，断言针对自动打印脚本特征串
+    expect(html).not.toContain('setTimeout(function(){window.print()}');
+    expect(html).toContain('window.onload=function(){fitCard();}');
   });
 });
 

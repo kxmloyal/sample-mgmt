@@ -65,7 +65,7 @@ function buildCardPrintHtml(s, sizeKey, cw, ch) {
   var validStr = fmtDateYYMMDD(s.valid_until);
   var now = new Date();
   var expired = s.valid_until && new Date(s.valid_until) < now;
-  var validColor = expired ? 'color:#dc2626;font-weight:700' : '';
+  var validColor = expired ? 'font-weight:700' : '';
 
   return '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>\u6807\u793a\u5361 '+escapeHtml(s.sample_no)+'</title>\n'+
 '<style>\n'+
@@ -75,10 +75,10 @@ function buildCardPrintHtml(s, sizeKey, cw, ch) {
 '.size-bar button{margin-left:auto;padding:4px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}\n'+
 '.sheet{width:'+blankWmm+'mm;height:'+blankHmm+'mm;display:flex;align-items:center;justify-content:center}\n'+
 '.crd{width:'+cardW+'px;border:'+borderW+'px solid #000;border-radius:'+radius+'px;padding:'+pad+'px;font-size:'+fontSize+'px;line-height:1.5}\n'+
-'.crd .title{font-weight:700;font-size:'+titleSize+'px;text-align:center;color:#6b7280;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px}\n'+
+'.crd .title{font-weight:700;font-size:'+titleSize+'px;text-align:center;color:#000;border-bottom:1px solid #e5e7eb;padding-bottom:2px;margin-bottom:4px}\n'+
 '.crd .grid{display:grid;grid-template-columns:'+gridCol+'px 1fr '+gridCol+'px 1fr;gap:'+gap1+'px '+gap2+'px}\n'+
-'.crd .lbl{color:#999;white-space:nowrap;text-align:right}\n'+
-'.crd .val{color:#333;white-space:nowrap}\n'+
+'.crd .lbl{color:#000;white-space:nowrap;text-align:right}\n'+
+'.crd .val{color:#000;white-space:nowrap}\n'+
 '.crd .full{grid-column:1/-1;display:flex;gap:3px;min-width:0;overflow:visible}\n'+
 '.crd .full .lbl{min-width:'+gridCol+'px;flex-shrink:0}\n'+
 '.crd .full .val{min-width:0;flex:1;white-space:normal;word-break:break-word}\n'+
