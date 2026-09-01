@@ -17,6 +17,8 @@ async function seed() {
     { username: 'qa01',    password: 'qa123',    role: 'QA',     dept: '品保文管中心', display_name: '品保文管员' },
     { username: 'mfg01',   password: 'mfg123',   role: 'CUSTODY', dept: '制造部',  display_name: '制造部保管员' },
     { username: 'fqc01',   password: 'fqc123',   role: 'CUSTODY', dept: 'FQC',     display_name: 'FQC保管员' },
+    { username: 'pmc01',   password: 'pmc123',   role: 'CUSTODY', dept: '生管部',  display_name: '生管员' },
+    { username: 'wh01',    password: 'wh123',    role: 'CUSTODY', dept: '资材部',  display_name: '仓库保管员' },
     { username: 'me01',    password: 'me123',    role: 'ME',     dept: '生技部',   display_name: '生技工程师' },
   ];
 

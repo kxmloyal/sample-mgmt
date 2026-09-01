@@ -1,8 +1,8 @@
-/** BUNDLE vbmtbjm8bp — 24 files */
+/** BUNDLE vbmtbkeeii — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
-var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
+var DEPTS = ["系统","研发部","品保文管中心","制造部","资材部","FQC","生技部","项目部"];
 var CONTROL_FLOW = {"statusOrder":["DRAFT","SIGNING","LABELED","CONTROL_STORED","NCR_DONE","DISPOSAL_SIGNING","REWORK_OPENED","REWORKING","REWORK_REPORTED","REIN_STOCK","SHIPPED"],"stageOfStatus":{"DRAFT":1,"SIGNING":1,"LABELED":2,"CONTROL_STORED":2,"NCR_DONE":3,"DISPOSAL_SIGNING":3,"REWORK_OPENED":4,"REWORKING":4,"REWORK_REPORTED":4,"REIN_STOCK":5,"SHIPPED":5},"signNodes":[{"node_key":"APPLY_SIGN","node_name":"申请管制会签","trigger_status":"SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"},{"seq":3,"role":"CUSTODY","dept":"生管"},{"seq":4,"role":"CUSTODY","dept":"制造部"},{"seq":5,"role":"CUSTODY","dept":"仓库"}]},{"node_key":"DISPOSAL_SIGN","node_name":"处理方式会签","trigger_status":"DISPOSAL_SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"}]}],"stepDefs":[{"seq":1,"key":"apply","label":"申请","stage":1},{"seq":2,"key":"sign1","label":"会签(闸口①)","stage":1},{"seq":3,"key":"label","label":"贴标","stage":2},{"seq":4,"key":"store","label":"入仓","stage":2},{"seq":5,"key":"ncr","label":"开NCR","stage":3},{"seq":6,"key":"sign2","label":"处理会签(闸口②)","stage":3},{"seq":7,"key":"rework_open","label":"开重工单","stage":4},{"seq":8,"key":"schedule","label":"排产","stage":4},{"seq":9,"key":"report","label":"报工","stage":4},{"seq":10,"key":"in_stock","label":"入库","stage":5},{"seq":11,"key":"ship","label":"出货","stage":5}],"stageDefs":[{"stage":1,"key":"apply_sign","name":"申请与会签","dept":["品保","研发","生管","制造部","仓库"]},{"stage":2,"key":"label_store","name":"贴标与入仓","dept":["品保","仓库"]},{"stage":3,"key":"ncr_disposal","name":"NCR与处理会签","dept":["品保","研发"]},{"stage":4,"key":"rework","name":"重工执行","dept":["生管","制造部","仓库"]},{"stage":5,"key":"in_stock_ship","name":"入库出货","dept":["仓库","制造部"]}]};
 
 /* --- shared/frontend/shared/utils.js --- */
@@ -235,7 +235,7 @@ var CONTROL_ACTION_CN = {
 var CONTROL_BAD_TYPES = ['外观不良', '功能不良', '尺寸不良', '性能不良', '包装不良', '其它'];
 
 // 申请部门（新建时下拉，缺省覆盖常见单位）
-var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '生产', '仓库', '制造部', 'FQC', '生技部'];
+var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制造部', 'FQC', '生技部'];
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
 var CONTROL_TRANSITIONS = [

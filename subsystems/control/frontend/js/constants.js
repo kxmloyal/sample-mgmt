@@ -25,7 +25,7 @@ var CONTROL_ACTION_CN = {
 var CONTROL_BAD_TYPES = ['外观不良', '功能不良', '尺寸不良', '性能不良', '包装不良', '其它'];
 
 // 申请部门（新建时下拉，缺省覆盖常见单位）
-var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '生产', '仓库', '制造部', 'FQC', '生技部'];
+var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制造部', 'FQC', '生技部'];
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
 var CONTROL_TRANSITIONS = [

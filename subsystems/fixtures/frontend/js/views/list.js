@@ -49,7 +49,7 @@ async function loadFixtureList() {
     var html = '<div class="filters">';
     html += '<fluent-text-field placeholder="搜索编号/名称…" value="' + e(fixtureListState.search) + '" oninput="debounceRenderFixtureList(this.value)"></fluent-text-field>';
     html += '<select onchange="filterFixtureListStatus(this.value)"><option value="">全部状态</option>' + Object.keys(STATUS).filter(function(k) { return ['NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING'].indexOf(k) === -1; }).map(function(k) { return '<option value="' + k + '"' + (fixtureListState.status === k ? ' selected' : '') + '>' + (STATUS[k] || k) + '</option>'; }).join('') + '</select>';
-    var deptList = typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','FQC','生技部','项目部','系统'];
+    var deptList = typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统'];
     html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + deptList.map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
     html += '<select onchange="filterFixtureListDormant(this.value)"><option value="">全部(含呆滞)</option><option value="1"' + (fixtureListState.dormant === '1' ? ' selected' : '') + '>仅看呆滞</option></select>';
     html += '<select id="fx-model-filter" onchange="filterFixtureListModel(this.value)"><option value="">全部机型</option>' + (window._fxModels || []).map(function(m) { return '<option value="' + e(m.code) + '"' + (fixtureListState.model === m.code ? ' selected' : '') + '>' + e(m.code) + ' · ' + e(m.full_name) + (m.fixture_count ? ' (' + m.fixture_count + ')' : '') + '</option>'; }).join('') + '</select>';

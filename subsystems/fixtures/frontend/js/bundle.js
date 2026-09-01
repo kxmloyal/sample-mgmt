@@ -1,8 +1,8 @@
-/** BUNDLE vbmsrcf8kj — 17 files */
+/** BUNDLE vbmtbkaco2 — 17 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
-var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
+var DEPTS = ["系统","研发部","品保文管中心","制造部","资材部","FQC","生技部","项目部"];
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -999,7 +999,7 @@ async function loadFixtureList() {
     var html = '<div class="filters">';
     html += '<fluent-text-field placeholder="搜索编号/名称…" value="' + e(fixtureListState.search) + '" oninput="debounceRenderFixtureList(this.value)"></fluent-text-field>';
     html += '<select onchange="filterFixtureListStatus(this.value)"><option value="">全部状态</option>' + Object.keys(STATUS).filter(function(k) { return ['NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING'].indexOf(k) === -1; }).map(function(k) { return '<option value="' + k + '"' + (fixtureListState.status === k ? ' selected' : '') + '>' + (STATUS[k] || k) + '</option>'; }).join('') + '</select>';
-    var deptList = typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','FQC','生技部','项目部','系统'];
+    var deptList = typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统'];
     html += '<select onchange="filterFixtureListDept(this.value)"><option value="">全部部门</option>' + deptList.map(function(d) { return '<option value="' + d + '"' + (fixtureListState.dept === d ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
     html += '<select onchange="filterFixtureListDormant(this.value)"><option value="">全部(含呆滞)</option><option value="1"' + (fixtureListState.dormant === '1' ? ' selected' : '') + '>仅看呆滞</option></select>';
     html += '<select id="fx-model-filter" onchange="filterFixtureListModel(this.value)"><option value="">全部机型</option>' + (window._fxModels || []).map(function(m) { return '<option value="' + e(m.code) + '"' + (fixtureListState.model === m.code ? ' selected' : '') + '>' + e(m.code) + ' · ' + e(m.full_name) + (m.fixture_count ? ' (' + m.fixture_count + ')' : '') + '</option>'; }).join('') + '</select>';

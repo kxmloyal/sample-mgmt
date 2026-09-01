@@ -96,7 +96,7 @@ html,body{height:auto;min-height:100%;overflow:auto}
 //   2) 角色枚举加入 PM（与项目追踪子系统 ADMIN/PM 权限对齐）
 var ROLE_OPTIONS = '<fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option><fluent-option value="PM">项目经理 PM</fluent-option>';
 // 部门下拉选项：单一事实来源 = data/depts.json，由 /js/shared-constants.js 注入 DEPTS（2026-08-06 研发中心→研发部）
-var DEPT_OPTIONS = (window.DEPTS || ['系统','研发部','品保文管中心','制造部','FQC','生技部','项目部']).map(function(d){ return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
+var DEPT_OPTIONS = (window.DEPTS || ['系统','研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部']).map(function(d){ return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
 
 // 受保护账号判定（与后端 routes/misc.js 批量接口保护逻辑一致）
 function isProtected(u){ return u.id === 1 || u.username === 'admin' || (me && u.id === me.id); }
