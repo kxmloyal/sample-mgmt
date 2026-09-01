@@ -34,6 +34,9 @@ function allowedActions(role, status, next_inspect_at, retire_assigned_rd, curre
   // 品保审核退回（4 分支）
   if (role === 'QA' && status === 'RETURNING') { actions.push('RE_RELEASE'); actions.push('RETIRE_RECREATE'); actions.push('RETIRE_ONLY'); actions.push('RETURN_REJECT'); }
 
+  // T12.3 ADMIN 兜底转移：退回审核卡死（QA 缺位/指派人不可用）时强制改派 / 强制作废
+  if (role === 'ADMIN' && status === 'RETURNING') { actions.push('FORCE_REASSIGN'); actions.push('FORCE_RETIRE'); }
+
   // RD 重做替代品（retire_assigned_rd 存用户 ID，用字符串比较兼容 int/string）
   if (role === 'RD' && status === 'RETURNING' && String(retire_assigned_rd) === String(currentUserId)) actions.push('RECREATE');
 
@@ -54,8 +57,9 @@ function register(app) {
     const u = await currentUser(req);
     const actions = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
     // 仅 RETURNING 状态下按需加载 RD 用户（SQL WHERE 过滤，避免全量 listUsers 内存过滤）
+    // T12.2: 指派下拉只列启用状态的 RD（禁用账号不可被指派）；按状态而非角色加载，ADMIN 兜底改派同样可用
     const rdUsers = s.status === 'RETURNING'
-      ? (await D.listRdUsers()).map(x => ({ id: x.id, display_name: x.display_name || x.username, dept: x.dept }))
+      ? (await D.listActiveRdUsers()).map(x => ({ id: x.id, display_name: x.display_name || x.username, dept: x.dept }))
       : [];
     res.json({ sample: s, allowedActions: actions, rdUsers });
   }));

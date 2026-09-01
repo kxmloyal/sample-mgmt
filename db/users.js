@@ -15,6 +15,8 @@ module.exports = function({ q, one, dbRef }) {
   function listUsers() { return q('SELECT ' + safeCols() + ' FROM users ORDER BY id'); }
   // 仅查询 RD 用户（供 /api/resolve 在 RETURNING 状态下按需调用，避免全量 listUsers 内存过滤）
   function listRdUsers() { return q("SELECT id,display_name,username,dept FROM users WHERE role='RD' ORDER BY id"); }
+  // T12.2: 仅启用状态的 RD 用户（扫码台指派下拉专用；原 listRdUsers 保留不动，其余调用方不受影响）
+  function listActiveRdUsers() { return q("SELECT id,display_name,username,dept FROM users WHERE role='RD' AND enabled=1 ORDER BY id"); }
   // 更新用户（仅 ADMIN 调用；display_name/password_hash 按传入字段动态更新）
   async function updateUser(id, fields) {
     const sets = [], vals = [];
@@ -57,6 +59,6 @@ module.exports = function({ q, one, dbRef }) {
     await exec('UPDATE users SET password_hash=? WHERE id IN (' + placeholders(ids) + ')', [passwordHash].concat(ids), conn);
     return ids.length;
   }
-  return { createUser, getUserById, getUserByUsername, listUsers, listRdUsers, updateUser,
+  return { createUser, getUserById, getUserByUsername, listUsers, listRdUsers, listActiveRdUsers, updateUser,
     deleteUsers, setUsersEnabled, updateUsers, resetPasswords };
 };

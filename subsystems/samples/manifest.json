@@ -247,6 +247,24 @@
       },
       {
         "from": "RETURNING",
+        "to": "RETURNING",
+        "action": "FORCE_REASSIGN",
+        "role": [
+          "ADMIN"
+        ],
+        "label": "强制改派"
+      },
+      {
+        "from": "RETURNING",
+        "to": "RETIRED",
+        "action": "FORCE_RETIRE",
+        "role": [
+          "ADMIN"
+        ],
+        "label": "强制作废"
+      },
+      {
+        "from": "RETURNING",
         "to": "RETIRED",
         "action": "RECREATE",
         "role": [

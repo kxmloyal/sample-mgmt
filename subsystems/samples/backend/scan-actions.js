@@ -162,11 +162,14 @@ async function applyAction(chosenAction, ctx) {
   } else if (chosenAction === 'RETIRE_RECREATE') {
     const assignedRd = (req.body.retire_assigned_rd || '').trim();
     if (!assignedRd) return { status: 400, error: '请选择指派重新制作的研发人员' };
+    // T12.1 指派校验：目标须存在 + 角色为 RD + 启用状态（杜绝指派到不存在/非研发/已禁用账号）
+    const assignedUser = await D.getUserById(Number(assignedRd));
+    if (!assignedUser || assignedUser.role !== 'RD' || Number(assignedUser.enabled) !== 1)
+      return { status: 400, error: '指派对象须为启用状态的研发人员' };
     // 保持 RETURNING 状态，仅设置指派信息，等待 RD 扫码执行 RECREATE
     updated.retired_reason = note || '退回研发重新制作';
     updated.retire_assigned_rd = assignedRd;
-    const assignedUser = await D.getUserById(Number(assignedRd));
-    const assignedLabel = assignedUser ? (assignedUser.display_name || assignedUser.username) : assignedRd;
+    const assignedLabel = assignedUser.display_name || assignedUser.username;
     logData = { sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel };
   } else if (chosenAction === 'RETIRE_ONLY') {
     if (!note || !note.trim()) return { status: 400, error: '请填写作废原因' };
@@ -193,6 +196,22 @@ async function applyAction(chosenAction, ctx) {
       }
     }
     logData = { sample_id: s.id, action: 'RETURN_REJECT', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
+  } else if (chosenAction === 'FORCE_REASSIGN') {
+    // T12.3 ADMIN 兜底：退回审核卡死时强制改派重做研发（存在性/角色/enabled 校验同 T12.1）
+    const targetRd = (req.body.retire_assigned_rd || '').trim();
+    if (!targetRd) return { status: 400, error: '请选择改派的研发人员' };
+    const targetUser = await D.getUserById(Number(targetRd));
+    if (!targetUser || targetUser.role !== 'RD' || Number(targetUser.enabled) !== 1)
+      return { status: 400, error: '指派对象须为启用状态的研发人员' };
+    updated.retire_assigned_rd = targetRd;
+    logData = { sample_id: s.id, action: 'FORCE_REASSIGN', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制改派至 ' + (targetUser.display_name || targetUser.username) };
+  } else if (chosenAction === 'FORCE_RETIRE') {
+    // T12.3 ADMIN 兜底：退回审核卡死时强制作废（原因必填，日志前缀留痕）
+    if (!note || !note.trim()) return { status: 400, error: '请填写作废原因' };
+    updated.status = 'RETIRED';
+    updated.retired_reason = note.trim();
+    updated.retire_assigned_rd = null;
+    logData = { sample_id: s.id, action: 'FORCE_RETIRE', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制作废：' + note.trim() };
   } else if (chosenAction === 'RECREATE') {
     // 4 步写事务：createSample(新) + updateSample(旧→RETIRED) + 2 addLog
     const newSample = await D.withTransaction(async conn => {

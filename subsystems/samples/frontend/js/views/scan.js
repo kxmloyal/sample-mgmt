@@ -1,6 +1,6 @@
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
-var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检'};
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -149,6 +149,10 @@ async function confirmScan(action,btn){
     code=wizardSample.sample_no;
   }
   var body={code:code,action:action};
+  // T12.3: ADMIN 兜底转移二次确认（高危操作，先拦截确认再提交）
+  if(action==='FORCE_REASSIGN'||action==='FORCE_RETIRE'){
+    if(!confirm(action==='FORCE_REASSIGN'?'确认强制改派该样品的重做研发人员？':'确认强制作废该样品？此操作不可撤销！'))return;
+  }
   if(action==='PRODUCE'||action==='INSPECT'||action==='INSPECT_CUSTODY'){
     var f=document.getElementById('scan-img').files[0];
     if(!f){toast('请上传照片','err');return;}
@@ -170,6 +174,13 @@ async function confirmScan(action,btn){
   if(action==='RETIRE_RECREATE'){
     var rdEl=document.getElementById('scan-rd-select');if(rdEl&&rdEl.value)body.retire_assigned_rd=rdEl.value;
     var noteEl3=document.getElementById('scan-note');if(noteEl3&&noteEl3.value.trim())body.note=noteEl3.value.trim();
+  }
+  if(action==='FORCE_REASSIGN'){
+    var frdEl=document.getElementById('scan-rd-select');if(frdEl&&frdEl.value)body.retire_assigned_rd=frdEl.value;
+    var fnoteEl=document.getElementById('scan-note');if(fnoteEl&&fnoteEl.value.trim())body.note=fnoteEl.value.trim();
+  }
+  if(action==='FORCE_RETIRE'){
+    var fnoteEl2=document.getElementById('scan-note');if(fnoteEl2&&fnoteEl2.value.trim())body.note=fnoteEl2.value.trim();
   }
   if(action==='EDIT_CARD'){
     var tEl=$('#scan-card-type');if(tEl&&tEl.value)body.sample_type=tEl.value;

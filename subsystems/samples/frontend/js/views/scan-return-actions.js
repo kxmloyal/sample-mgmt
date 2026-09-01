@@ -18,6 +18,17 @@ function renderReturnActions(action,s){
     return '<label>指派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+rdOptions+'</fluent-select>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：需重新制作"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\',this)">确认作废并指派重做</fluent-button></div>';
+  }else if(action==='FORCE_REASSIGN'){
+    // T12.3 ADMIN 兜底：强制改派（下拉数据源同 RETIRE_RECREATE，/api/resolve 在 RETURNING 下对全角色返回 rdUsers）
+    var frdOptions=(window._scanRdUsers||[]).map(function(u){return '<fluent-option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</fluent-option>';}).join('');
+    return '<p style="font-size:12px;color:#b45309">管理员兜底：退回审核流程卡死时，强制改派重做研发人员（提交前将二次确认）</p>'+
+      '<label>改派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+frdOptions+'</fluent-select>'+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：原指派人不可用，改派"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#b45309" onclick="confirmScan(\'FORCE_REASSIGN\',this)">强制改派</fluent-button></div>';
+  }else if(action==='FORCE_RETIRE'){
+    return '<p style="font-size:12px;color:#dc2626">管理员兜底：退回审核流程卡死时，强制作废该样品（不可撤销，提交前将二次确认）</p>'+
+      '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述强制作废原因"></textarea>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'FORCE_RETIRE\',this)">强制作废</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+

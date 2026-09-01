@@ -154,6 +154,13 @@ module.exports = function createDao(deps) {
   function countSamplesByStatus() { return q('SELECT status, COUNT(*) AS cnt FROM samples GROUP BY status'); }
   function listOverdueSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
   function listDueSoonSamples() { return q("SELECT * FROM samples WHERE status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
+  // T12.4: RETURNING 停留超时（默认 72 小时）待办查询——供 QA/ADMIN 看板/工作台挂载兜底提醒
+  // 口径：status=RETURNING 且 updated_at 早于 N 小时前（RETURNING 期间无其他写操作，updated_at 近似进入退回审核的时刻）
+  function listReturningOverdue(hours) {
+    var h = Math.floor(Number(hours));
+    if (!h || h <= 0) h = 72;
+    return q("SELECT * FROM samples WHERE status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
+  }
 
   function listMyPendingSamples(role, userId) {
     if (role === 'RD') return q("SELECT * FROM samples WHERE status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?) ORDER BY id DESC LIMIT 50", [userId]);
@@ -184,5 +191,5 @@ module.exports = function createDao(deps) {
   function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE model = ?', [code]).then(function (rows) { return rows[0].c; }); }
   function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
 
-  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
+  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
 };
