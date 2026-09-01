@@ -120,6 +120,12 @@ async function migrateProjectTaskIndexes(pool) {
   }
 }
 
+async function migrateSamplesOptimisticLock(pool) {
+  // 样品乐观锁底座：version 列（2026-09-01，幂等）
+  try { await pool.execute('ALTER TABLE samples ADD COLUMN version INT NOT NULL DEFAULT 1'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+}
+
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
   await migrateFixtureFiles(pool);
@@ -129,6 +135,7 @@ async function runMigrations(pool) {
   await migrateControlNcrDetail(pool);
   await migrateControlNcrForm(pool);
   await migrateProjectTaskIndexes(pool);
+  await migrateSamplesOptimisticLock(pool);
 }
 
 module.exports = { runMigrations };
