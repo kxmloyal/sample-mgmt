@@ -111,11 +111,38 @@ module.exports = function createDao(deps) {
     return q(sql, params).then(function(rows) { return rows[0].total; });
   }
 
-  async function updateSample(s, conn) {
-    var sql = 'UPDATE samples SET status=?, produced_at=?, released_at=?, release_cycle_days=?, next_inspect_at=?, custody_dept=?, storage_location=?, model=?, station=?, image=?, produced_image=?, inspect_image=?, notes=?, sample_type=?, limit_item=?, source_type=?, valid_until=?, card_version=?, test_standard=?, test_data=?, signed_by_rd=?, signed_by_qa=?, retired_reason=?, replaced_by=?, replaces=?, retire_assigned_rd=? WHERE id=?';
+  // updateSample(s, conn, expectedVersion)：全量字段覆盖更新，返回更新后的行
+  // expectedVersion（可选，乐观锁 CAS 版本号）：
+  //   - 传入时 SET 子句追加 version=version+1，WHERE 条件变为 id=? AND version=?；
+  //     版本已被并发修改推进时 affectedRows===0，抛出 code='CONFLICT' 的 Error（message='VERSION_CONFLICT'），
+  //     供状态机路由（T3/T5）捕获后返回 HTTP 409；
+  //   - 不传（undefined/null）时保持旧行为完全不变（无版本条件、不抛冲突），向后兼容，
+  //     供非状态机写路径（seed/旧路由）过渡使用。
+  // 返回值兼容旧调用方；新增异常场景：仅当传入 expectedVersion 且版本冲突时抛 code='CONFLICT'。
+  // 注意：连接池 run 包装器丢弃 execute 返回值（拿不到 affectedRows），精确 CAS 检测依赖事务连接 conn
+  // （conn.execute 返回 ResultSetHeader）；非 conn 路径传 expectedVersion 时降级为更新后回读 version 比对。
+  async function updateSample(s, conn, expectedVersion) {
+    var cas = expectedVersion !== undefined && expectedVersion !== null;
+    var sql = 'UPDATE samples SET status=?, produced_at=?, released_at=?, release_cycle_days=?, next_inspect_at=?, custody_dept=?, storage_location=?, model=?, station=?, image=?, produced_image=?, inspect_image=?, notes=?, sample_type=?, limit_item=?, source_type=?, valid_until=?, card_version=?, test_standard=?, test_data=?, signed_by_rd=?, signed_by_qa=?, retired_reason=?, replaced_by=?, replaces=?, retire_assigned_rd=?' + (cas ? ', version=version+1' : '') + ' WHERE id=?' + (cas ? ' AND version=?' : '');
     var params = [s.status, s.produced_at || null, s.released_at || null, s.release_cycle_days ?? null, s.next_inspect_at || null, s.custody_dept || null, s.storage_location || null, s.model ?? null, s.station ?? null, s.image ?? null, s.produced_image ?? null, s.inspect_image ?? null, s.notes || null, s.sample_type ?? '', s.limit_item ?? '', s.source_type ?? '', s.valid_until ?? null, s.card_version ?? '', s.test_standard ?? '', s.test_data ?? '', s.signed_by_rd ?? '', s.signed_by_qa ?? '', s.retired_reason ?? null, s.replaced_by ?? null, s.replaces ?? null, s.retire_assigned_rd ?? null, s.id];
-    if (conn) await conn.execute(sql, params);
-    else await run(sql, params);
+    if (cas) params.push(expectedVersion);
+    var affected = 1;
+    if (conn) {
+      var res = await conn.execute(sql, params);
+      affected = res[0] && typeof res[0].affectedRows === 'number' ? res[0].affectedRows : 1;
+    } else {
+      await run(sql, params);
+      if (cas) {
+        // 降级校验：run 无 affectedRows，回读 version 应等于 expectedVersion+1，否则视为版本冲突
+        var cur = await fetchOne(null, 'SELECT version FROM samples WHERE id = ?', [s.id]);
+        if (!cur || cur.version !== expectedVersion + 1) affected = 0;
+      }
+    }
+    if (cas && affected === 0) {
+      var err = new Error('VERSION_CONFLICT');
+      err.code = 'CONFLICT';
+      throw err;
+    }
     return await fetchOne(conn, 'SELECT * FROM samples WHERE id = ?', [s.id]);
   }
 
