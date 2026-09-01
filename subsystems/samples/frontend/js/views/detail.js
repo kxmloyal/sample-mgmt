@@ -37,6 +37,7 @@ function _applyDetailDensity(tab) {
   if (d) { d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
 }
 
+// D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
@@ -45,10 +46,30 @@ function renderTab(tab, id) {
   _detailTab = tab;
   var body = document.querySelector('.modal-body');
   if (!body) return;
-  body.innerHTML = _buildTabsHTML(s, id, tab) + _buildTabContent(s, id, tab);
+  var tabsHTML = _buildTabsHTML(s, id, tab);
   _applyDetailDensity(tab);
+  if (tab === 'logs' || tab === 'image') {
+    body.innerHTML = tabsHTML + _buildTabSkeleton(tab); // 骨架先行
+    setTimeout(function() {
+      if (!_detailSample || _detailTab !== tab) return; // 期间已切走，丢弃过期渲染
+      var b = document.querySelector('.modal-body');
+      if (!b) return;
+      b.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
+      if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步历史照片（T14）调用时机保持
+    }, 0);
+    return;
+  }
+  body.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
   if (tab === 'card') applyDetailCardValues(s); // 显式回显下拉值（selected 属性在 FAST 下不生效）
-  if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步加载历史照片区（T14）
+}
+
+// D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）
+function _buildTabSkeleton(tab) {
+  if (tab === 'logs') {
+    var row = '<div style="display:flex;gap:10px;margin-bottom:14px"><div class="sk" style="width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px"></div><div style="flex:1"><div class="sk" style="height:13px;width:36%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:64%"></div></div></div>';
+    return '<div style="padding:14px 16px">' + row.repeat(5) + '</div>';
+  }
+  return '<div style="padding:16px"><div class="sk" style="height:240px;max-width:420px;margin:0 auto 12px"></div><div class="sk" style="height:14px;width:44%;margin:0 auto"></div></div>';
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -128,14 +149,37 @@ function _cardLogs(s, id) {
   return h + '</div>';
 }
 
-// ═══ 日志 Tab ═══
+// ═══ 日志 Tab（D2.1 时间线：最新在上；API 按 id DESC 返回，无需 reverse） ═══
+// 流向映射：action → '从状态 ➜ 到状态'；自环类（EDIT_CARD/EDIT_STORAGE/INSPECT*）标注自环
+var _LOG_FLOW = {
+  CREATE: '—',
+  PRODUCE: 'NEW ➜ 制作完成',
+  RELEASE: '制作完成 ➜ 已发行',
+  CUSTODY: '已发行 ➜ 保管中',
+  INSPECT: '已发行（自环）', INSPECT_EARLY: '已发行（自环）', INSPECT_CUSTODY: '保管中（自环）',
+  EDIT_CARD: '修正标示卡（自环）', EDIT_STORAGE: '修改储位（自环）',
+  RETURN_REQUEST: '保管中 ➜ 退回审核',
+  RE_RELEASE: '退回审核 ➜ 已发行',
+  RETIRE_RECREATE: '退回审核 ➜ 已作废',
+  RETURN_REJECT: '退回审核 ➜ 保管中',
+  RETIRE_ONLY: '➜ 已作废', RECREATE: '➜ 已作废', FORCE_RETIRE: '➜ 已作废',
+  FORCE_REASSIGN: '退回审核（改派）'
+};
+
 function _buildLogsTab(s, id) {
-  var h = '<div style="padding:12px 14px"><div style="margin-bottom:8px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div>' +
-    '<div class="detail-logs-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>角色/部门</th><th>储位</th><th>备注</th></tr></thead><tbody>';
-  (s.logs || []).forEach(function(l) {
-    h += '<tr><td class="muted">' + fmt(l.created_at) + '</td><td>' + (ACTION_CN[l.action] || l.action) + '</td><td class="muted">' + e(l.role || '') + '/' + e(l.dept || '') + '</td><td class="muted">' + e(l.location || '—') + '</td><td class="muted">' + e(l.note || '—') + '</td></tr>';
+  var logs = s.logs || [];
+  var h = '<div style="padding:12px 14px"><div style="margin-bottom:8px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div><div class="tl">';
+  logs.forEach(function(l) {
+    var note = (l.note || '').trim();
+    var fold = note.length > 40; // 长备注默认折叠 1 行，点击切换展开/收起
+    h += '<div class="tl-item">' +
+      '<div><span class="tl-act">' + (ACTION_CN[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
+      '<div class="tl-meta">' + fmt(l.created_at) + ' · ' + e(l.role || '—') + (l.dept ? '/' + e(l.dept) : '') + (l.location ? ' · ' + e(l.location) : '') + '</div>' +
+      (note ? '<div class="tl-note' + (fold ? ' folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
+      '</div>';
   });
-  return h + '</tbody></table></div></div>';
+  if (!logs.length) h += '<div class="muted">暂无日志</div>';
+  return h + '</div></div>';
 }
 
 // ═══ 大图 Tab（弹窗内展示，点击可全屏） ═══

@@ -23,3 +23,32 @@
 .nf-actions fluent-button{min-width:180px}
 .new-grid>.new-col{min-width:0}
 @media(max-width:767px){.nf-grid{grid-template-columns:1fr}}
+/* ═══ D2 详情弹窗：骨架屏 / 置顶Tab / 头部操作组 / 密度宽度 / 日志时间线（计划 2026-09-01 D2.3） ═══ */
+.sk{background:#e8eaed;border-radius:6px;animation:sk-pulse 1.2s ease-in-out infinite}
+@keyframes sk-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* 置顶 Tab 栏（复用共享 .detail-tab 基样式，方向反过来：顶部 + border-bottom 分隔线） */
+.detail-tabs-top{display:flex;border-bottom:2px solid var(--line);background:#fff;padding:0 14px}
+
+/* 头部操作组小图标按钮 */
+.pv-actions{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+.pv-icon-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 7px;font-size:14px;line-height:1;cursor:pointer}
+.pv-icon-btn:hover{background:#f3f4f6}
+
+/* 密度自适应宽度 */
+#fluent-modal{transition:width .25s ease;max-width:96vw}
+#fluent-modal.d-low{width:560px}
+#fluent-modal.d-mid{width:800px}
+#fluent-modal.d-high{width:960px}
+@media(max-width:767px){#fluent-modal.d-low,#fluent-modal.d-mid,#fluent-modal.d-high{width:94vw}}
+
+/* 日志时间线 */
+.tl{margin:4px 0 0 12px;padding-left:20px;border-left:2px solid #e5e7eb}
+.tl-item{position:relative;padding:7px 0 9px}
+.tl-item::before{content:'';position:absolute;left:-23px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px #fff}
+.tl-act{font-weight:600}
+.tl-flow{font-size:12px;color:var(--muted);margin-left:8px}
+.tl-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.tl-note{font-size:13px;margin-top:4px;word-break:break-all}
+.tl-note.folded{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.tl-note.folded::after{content:' ▸ 展开';color:var(--brand);font-size:12px;white-space:nowrap}
