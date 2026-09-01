@@ -2,6 +2,9 @@
 const D = require('../../../db');
 const { asyncHandler } = require('./async-handler');
 const A = require('./scan-actions');
+const { createStateMachine } = require('../../../shared/state-machine');
+const manifest = require('../manifest.json');
+const SM = createStateMachine(manifest.stateMachine);
 
 // 保管中复检开放窗口口径：距下次复检日 ≤ 7 天（含已逾期）时，QA 扫 IN_CUSTODY 样品出现 INSPECT_CUSTODY 动作
 var INSPECT_EARLY_DAYS = 7;
@@ -11,36 +14,15 @@ const STATUS_LABEL = {
   IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废'
 };
 
+// manifest 为转移/角色的唯一真相源（§17 协议，T16）；此处仅叠加两项 manifest 无法表达的动态业务门：
+// INSPECT_CUSTODY 临期窗口（距复检日 ≤ INSPECT_EARLY_DAYS 天）、RECREATE 指派到人（retire_assigned_rd 比对）
 function allowedActions(role, status, next_inspect_at, retire_assigned_rd, currentUserId) {
-  const actions = [];
-
-  if (role === 'RD' && status === 'NEW') actions.push('PRODUCE');
-  if (role === 'QA' && status === 'PRODUCED') actions.push('RELEASE');
-  // 保管单位（CUSTODY + ME）扫已发行样品 → 接收保管
-  if ((role === 'CUSTODY' || role === 'ME') && status === 'RELEASED') actions.push('CUSTODY');
-
-  // QA 扫 RELEASED：复检（不限到期）+ 修正标示卡
-  if (role === 'QA' && status === 'RELEASED') { actions.push('INSPECT'); actions.push('EDIT_CARD'); }
-
-  // QA 扫 IN_CUSTODY 且临期/逾期（距复检日 ≤ INSPECT_EARLY_DAYS 天）：保管中复检（自环，样品不脱离保管）
-  if (role === 'QA' && status === 'IN_CUSTODY' && next_inspect_at &&
-      new Date(next_inspect_at).getTime() - Date.now() <= INSPECT_EARLY_DAYS * 86400000) {
-    actions.push('INSPECT_CUSTODY');
-  }
-
-  // 保管单位扫 IN_CUSTODY：修改储位 + 申请退回
-  if ((role === 'CUSTODY' || role === 'ME') && status === 'IN_CUSTODY') { actions.push('EDIT_STORAGE'); actions.push('RETURN_REQUEST'); }
-
-  // 品保审核退回（4 分支）
-  if (role === 'QA' && status === 'RETURNING') { actions.push('RE_RELEASE'); actions.push('RETIRE_RECREATE'); actions.push('RETIRE_ONLY'); actions.push('RETURN_REJECT'); }
-
-  // T12.3 ADMIN 兜底转移：退回审核卡死（QA 缺位/指派人不可用）时强制改派 / 强制作废
-  if (role === 'ADMIN' && status === 'RETURNING') { actions.push('FORCE_REASSIGN'); actions.push('FORCE_RETIRE'); }
-
-  // RD 重做替代品（retire_assigned_rd 存用户 ID，用字符串比较兼容 int/string）
-  if (role === 'RD' && status === 'RETURNING' && String(retire_assigned_rd) === String(currentUserId)) actions.push('RECREATE');
-
-  return actions;
+  return SM.getAllowedActions(role, status).map(function (t) { return t.action; }).filter(function (a) {
+    if (a === 'INSPECT_CUSTODY')
+      return next_inspect_at && new Date(next_inspect_at).getTime() - Date.now() <= INSPECT_EARLY_DAYS * 86400000;
+    if (a === 'RECREATE') return String(retire_assigned_rd) === String(currentUserId);
+    return true;
+  });
 }
 
 function register(app) {
