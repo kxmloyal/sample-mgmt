@@ -1,8 +1,8 @@
-/** BUNDLE vbmt31afb0 — 24 files */
+/** BUNDLE vbmti75ydc — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
-var DEPTS = ["系统","研发部","品保文管中心","制造部","FQC","生技部","项目部"];
+var DEPTS = ["系统","研发部","品保文管中心","制造部","资材部","FQC","生技部","项目部"];
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -244,6 +244,51 @@ function overdue(s){return s.status==='IN_CUSTODY'&&s.next_inspect_at&&new Date(
 // 覆盖 shared/api-base.js 的 statusBadge：样品逾期检测
 function statusBadge(s){var cls='b-'+(s.status==='IN_CUSTODY'&&overdue(s)?'overdue':s.status);return '<fluent-badge class="badge '+cls+'" appearance="filled">'+(STATUS[s.status]||s.status)+'</fluent-badge>';}
 function goScan(code){location.hash='#/scan';setTimeout(()=>{if(code)$('#scan-code').value=code;},50);}
+
+// ---- T6: 统一防重提交 / 409 / 401 / 请求序号 helpers ----
+// 防重提交锁：执行期禁用按钮并加加载态，fn 结束（含异常）后自动释放；btn 为空时仅执行 fn
+function withSubmitLock(btn, fn){
+  if(!btn) return Promise.resolve().then(fn);
+  if(btn.disabled) return Promise.resolve();
+  var orig=btn.textContent;
+  btn.disabled=true;btn.classList.add('btn-loading');btn.textContent='处理中\u2026';
+  function release(){btn.disabled=false;btn.classList.remove('btn-loading');btn.textContent=orig;}
+  return Promise.resolve().then(fn).then(function(v){release();return v;},function(err){release();throw err;});
+}
+
+// 409 冲突刷新回调注册表：各视图注册自己的数据刷新函数
+var _conflictRefreshFns=[];
+function onConflictRefresh(fn){if(typeof fn==='function')_conflictRefreshFns.push(fn);}
+function _notifyConflict(){_conflictRefreshFns.forEach(function(fn){try{fn();}catch(_){}});}
+
+// 401 统一跳登录：沿用 boot() 既有惯例——隐藏 app、显示同页登录层（登录层缺失时刷新页面兜底）
+function _gotoLogin(){
+  var lg=document.getElementById('login'),app=document.getElementById('app');
+  if(lg){if(app)app.style.display='none';lg.style.display='flex';}
+  else location.reload();
+}
+
+// 状态码感知的请求封装（行为与 shared/api-base.js 的 api() 一致，额外携带 err.status 供统一错误处理）
+async function _apiFetch(method,url,body){
+  var opt={method:method,credentials:'include',headers:{}};
+  if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
+  var r=await fetch(url,opt);
+  var text=await r.text();
+  var data={};
+  try{data=JSON.parse(text);}catch(e){data={};}
+  if(!r.ok){var err=new Error(data.error||('错误 '+r.status));err.status=r.status;throw err;}
+  return data;
+}
+// 包装 shared/api-base.js 的 api()（不动共享层，仅本子系统 bundle 生效）：
+// 409 → toast 后端冲突文案 + 触发各视图注册的刷新回调；401 → 统一跳登录；其余错误原样抛出，不破坏现有处理路径
+api=async function(method,url,body){
+  try{return await _apiFetch(method,url,body);}
+  catch(err){
+    if(err&&err.status===409){showToast(err.message||'数据已被他人修改，请刷新后重试','err');_notifyConflict();}
+    else if(err&&err.status===401){_gotoLogin();}
+    throw err;
+  }
+};
 
 
 /* --- subsystems/samples/frontend/js/views/list-inspect.js --- */
@@ -563,7 +608,9 @@ function _schedulePreview(){
   clearTimeout(_previewTimer);
   _previewTimer=setTimeout(_refreshPreview,300);
 }
+var _previewReqSeq=0;
 async function _refreshPreview(){
+  const seq=++_previewReqSeq;
   const box=$('#n-preview');
   if(!box) return;
   const src=$('#n-source').value, model=$('#n-model').value, station=$('#n-station').value;
@@ -571,18 +618,15 @@ async function _refreshPreview(){
   if(model.length>0&&model.length<6){ box.textContent='机型编码至少 6 位'; return; }
   try{
     const r=await api('GET','/api/samples/code-preview?source_type='+encodeURIComponent(src)+'&model='+encodeURIComponent(model)+'&station='+encodeURIComponent(station));
+    if(seq!==_previewReqSeq)return; // 已有更新的预览请求，丢弃过期响应（防竞态）
     box.textContent='编号预览：'+r.sample_no;
-  }catch(e){ box.textContent=''; }
+  }catch(e){ if(seq===_previewReqSeq)box.textContent=''; }
 }
-// 防重复提交：连续点击确认只会创建一次（提交中禁用按钮 + 标志位拦截）
-let _nSubmitting=false;
+// 防重复提交：withSubmitLock 统一实现（提交中禁用按钮 + 加载态，见 api.js）
 async function submitNew(){
-  if(_nSubmitting) return;
-  _nSubmitting=true;
-  const btn=$('#n-submit');
-  if(btn) btn.disabled=true;
-  $('#n-msg').textContent='';
-  try{
+  await withSubmitLock($('#n-submit'),async function(){
+    $('#n-msg').textContent='';
+    try{
     const payload={
       name:$('#n-name').value,
       model:$('#n-model').value,
@@ -598,11 +642,8 @@ async function submitNew(){
     const s=await api('POST','/api/samples',payload);
     openPrintLabel(s);
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
-  }catch(e){$('#n-msg').textContent=e.message;}
-  finally{
-    _nSubmitting=false;
-    if(btn) btn.disabled=false;
-  }
+    }catch(e){const m=$('#n-msg');if(m)m.textContent=e.message;}
+  });
 }
 function openPrintLabel(s){
   window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');
@@ -641,7 +682,7 @@ async function viewSamples() {
     (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
   } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
-  var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
+  var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
@@ -742,11 +783,11 @@ function renderChips() {
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + (stLabels[st] || st) + ' ✕</span>';
-  if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + dept + ' ✕</span>';
-  if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + sampleTypeLabel(tp) + ' ✕</span>';
-  if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + liLabel + ' ✕</span>'; }
-  if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + srcLabel + ' ✕</span>'; }
+  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || st) + ' ✕</span>';
+  if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
+  if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
+  if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
+  if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + e(srcLabel) + ' ✕</span>'; }
   if (mo) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-model\').value=\'\';loadSamples()">机型 ' + e(mo) + ' ✕</span>';
   if (sort) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
   if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
@@ -863,10 +904,15 @@ function _renderSampleList(list, isOverdue, pager) {
 // detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
 var _detailSample = null;
+var _detailTab = 'info';
+var _detailReqSeq = 0;
 
 async function viewDetail(id) {
+  var seq = ++_detailReqSeq;
   var s = await api('GET', '/api/samples/' + id);
+  if (seq !== _detailReqSeq) return; // 已有更新的详情请求，丢弃过期响应（防竞态）
   _detailSample = s;
+  _detailTab = 'info';
   var head = '<b>' + e(s.sample_no) + '</b>' + statusBadge(s);
   var foot = '<a class="link" style="margin-right:14px;cursor:pointer" onclick="downloadQR(' + id + ')">下载二维码</a>' +
     '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
@@ -877,6 +923,7 @@ async function viewDetail(id) {
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
+  _detailTab = tab;
   var body = document.querySelector('.modal-body');
   if (!body) return;
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
@@ -1028,18 +1075,41 @@ function _buildCardTab(s, id) {
 }
 
 async function saveCard(id) {
-  var msg = document.getElementById('cd-msg');
-  var btn = document.getElementById('cd-save-btn');
-  if (msg) msg.textContent = '保存中...';
-  if (btn) btn.disabled = true;
-  try {
-    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
-    await api('PUT', '/api/samples/' + id, p);
-    toast('标示卡已保存', 'ok');
-    if (msg) msg.textContent = '保存成功';
-  } catch (e) { if (msg) msg.textContent = e.message; }
-  if (btn) btn.disabled = false;
+  await withSubmitLock(document.getElementById('cd-save-btn'), async function() {
+    var msg = document.getElementById('cd-msg');
+    if (msg) msg.textContent = '保存中...';
+    try {
+      var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value,
+        // T6: 携带 CAS 版本号（T5 后端已支持）；undefined 时 JSON 序列化自动省略，行为同旧客户端
+        version: (_detailSample && typeof _detailSample.version === 'number') ? _detailSample.version : undefined };
+      await api('PUT', '/api/samples/' + id, p);
+      // 保存成功后刷新缓存的样品对象（修复 _detailSample 缓存不刷新问题，同时更新 version）
+      try { _detailSample = await api('GET', '/api/samples/' + id); } catch (_) {}
+      toast('标示卡已保存', 'ok');
+      if (msg && msg.isConnected) msg.textContent = '保存成功';
+    } catch (e) {
+      // 409 冲突：api 层已统一 toast 并触发 reloadDetail 重新加载详情，此处不再重复提示
+      if (e && e.status === 409) return;
+      if (msg && msg.isConnected) msg.textContent = e.message;
+    }
+  });
 }
+
+// T6: 原地刷新详情弹窗内容（409 冲突回调用，不重开弹窗避免遮罩层堆叠）
+async function reloadDetail(id) {
+  try {
+    var s = await api('GET', '/api/samples/' + id);
+    _detailSample = s;
+    var body = document.querySelector('.modal-body');
+    if (!body) return;
+    body.innerHTML = _buildTabContent(s, id, _detailTab) + _buildTabsHTML(s, id, _detailTab);
+    if (_detailTab === 'card') applyDetailCardValues(s);
+  } catch (_) {}
+}
+// T6: 409 冲突时自动刷新详情（注册到 api.js 的统一冲突回调）
+onConflictRefresh(function() {
+  if (_detailSample && document.querySelector('.modal-mask')) reloadDetail(_detailSample.id);
+});
 
 function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
 
@@ -1268,9 +1338,25 @@ function buildCardFieldTable(s,editable,suggestedVersion){
 function nextCardVersion(c){var m=String(c||'').match(/\d+/);var n=m?parseInt(m[0],10):0;return String(Math.min(n+1,99)).padStart(2,'0');}
 var wizardSample=null; // 当前向导的样品数据
 
+// 向导进行期间锁定编号输入框（防正待确认时被扫码枪误改导致张冠李戴）
+function lockScanCode(no){
+  var sc=$('#scan-code');if(!sc)return;
+  sc.value=no;sc.readOnly=true;
+  // 钩住「取消/继续扫码」复位入口，向导退出时解锁（afterScanReset 定义在 scan-camera.js）
+  if(!window._wizResetHooked&&typeof window.afterScanReset==='function'){
+    window._wizResetHooked=true;
+    var _origAfterScanReset=window.afterScanReset;
+    window.afterScanReset=function(){unlockScanCode();_origAfterScanReset();};
+  }
+}
+function unlockScanCode(){
+  var sc=$('#scan-code');if(sc)sc.readOnly=false;
+}
+
 function buildReleaseWizard(s,isReRelease){
   wizardSample=s;
   wizardSample._isReRelease=isReRelease||false;
+  lockScanCode(s.sample_no);
   return renderWizardStep1(s);
 }
 
@@ -1342,7 +1428,7 @@ function renderWizardStep3(s){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
       '<fluent-button appearance="neutral" size="small" onclick="goWizardStep(2)">← 返回修改</fluent-button>'+
-      '<fluent-button appearance="accent" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\')"'+
+      '<fluent-button appearance="accent" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\',this)"'+
         (!ok?' disabled':'')+'>'+confirmLabel+'</fluent-button>'+
     '</div>'
   ;
@@ -1394,10 +1480,10 @@ function goWizardStep(step){
 function renderReturnActions(action,s){
   if(action==='RETIRE_ONLY'){
     return '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述作废原因"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'RETIRE_ONLY\')">确认作废</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'RETIRE_ONLY\',this)">确认作废</fluent-button></div>';
   }else if(action==='RETURN_REJECT'){
     return '<label>拒绝理由 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请填写拒绝退回的理由"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\')">拒绝退回</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\',this)">拒绝退回</fluent-button></div>';
   }else if(action==='RELEASE'){
     // 修复：RELEASE 漏接分步向导（原仅 RE_RELEASE 接入，导致 QA 发行表单空白）
     return buildReleaseWizard(s,false);
@@ -1407,11 +1493,11 @@ function renderReturnActions(action,s){
     var rdOptions=(window._scanRdUsers||[]).map(function(u){return '<fluent-option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</fluent-option>';}).join('');
     return '<label>指派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+rdOptions+'</fluent-select>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：需重新制作"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\')">确认作废并指派重做</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\',this)">确认作废并指派重做</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RECREATE\')">确认创建替代品</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RECREATE\',this)">确认创建替代品</fluent-button></div>';
   }
   return '';
 }
@@ -1419,6 +1505,8 @@ function renderReturnActions(action,s){
 
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
+// T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -1449,15 +1537,18 @@ function viewScan(){
   var m = (location.hash || '').match(/[?&]no=([^&]+)/);
   if (m) { $('#scan-code').value = decodeURIComponent(m[1]); doScan(); }
 }
+var _scanReqSeq=0;
 async function doScan(){
+  var seq=++_scanReqSeq;
   var code=$('#scan-code').value.trim();
   if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
   try{
     var data=await api('GET','/api/resolve?code='+encodeURIComponent(code));
+    if(seq!==_scanReqSeq)return; // 已有更新的扫码请求，丢弃过期响应（防竞态）
     window._scanRdUsers=data.rdUsers||[];
     renderScanAction(data.sample,data.allowedActions);
-  }catch(err){box.innerHTML='<div class="card sample-card" style="border-color:#fecaca"><p style="color:var(--bad)">'+e(err.message)+'</p></div>';}
+  }catch(err){if(seq!==_scanReqSeq)return;box.innerHTML='<div class="card sample-card" style="border-color:#fecaca"><p style="color:var(--bad)">'+e(err.message)+'</p></div>';}
 }
 function renderScanAction(s,actions){
   var box=$('#scan-result');
@@ -1468,7 +1559,8 @@ function renderScanAction(s,actions){
   }
   window._scanSample=s;
   var buttonRow=actions.length>1?actions.map(function(a){
-    var label=CONFIRM_ACTIONS.has(a)?'确认'+ACTION_CN[a]:(ACTION_CN[a]||a);
+    var cn=ACTION_CN[a]||SCAN_ACTION_CN_EXT[a]||a;
+    var label=CONFIRM_ACTIONS.has(a)?'确认'+cn:cn;
     return '<fluent-button appearance="accent" size="small" onclick="showScanActionForm(\''+a+'\')">'+label+'</fluent-button>';
   }).join(' '):'';
   box.innerHTML='<div class="card sample-card">'+
@@ -1493,7 +1585,7 @@ function showScanActionForm(action){
     html='<label>制作照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：制作完成"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\')">确认制作完成</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\',this)">确认制作完成</fluent-button></div>';
   }else if(action==='INSPECT'){
     html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div><label>备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
@@ -1502,20 +1594,28 @@ function showScanActionForm(action){
       '<table style="width:100%;font-size:12px"><tr><td style="padding:4px 0;color:#6b7280">版次</td><td><fluent-text-field id="scan-card-ver" value="'+e(s.card_version||'')+'" style="width:100%"></fluent-text-field></td></tr>'+
       '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td><td><textarea id="scan-card-data" rows="2" style="resize:vertical;width:100%">'+e(s.test_data||'')+'</textarea></td></tr></table>'+
       '</details>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\')">确认复检完成</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\',this)">确认复检完成</fluent-button></div>';
+  }else if(action==='INSPECT_CUSTODY'){
+    // T8 保管中到期复检：复用 INSPECT 表单结构 + 周期输入框（留空=沿用原周期，后端兜底 400）
+    var curCyc=(s&&s.release_cycle_days)?String(s.release_cycle_days):'';
+    html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
+      '<div id="scan-img-prev" style="margin-top:8px"></div>'+
+      '<label>复检周期（天）</label><fluent-text-field id="scan-cycle" type="number" min="1" max="3650" placeholder="'+(curCyc?('留空沿用当前 '+e(curCyc)+' 天'):'如 365')+'" style="width:190px"></fluent-text-field>'+
+      '<label>复检结论 / 备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\')">确认接收保管</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\')">保存修正 + 打印标示卡</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
       '<label>新储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\')">确认修改储位</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\')">提交退回申请</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\',this)">提交退回申请</fluent-button></div>';
   }else{
     html=renderReturnActions(action,s);
     if(!html){formEl.innerHTML='';return;}
@@ -1523,6 +1623,16 @@ function showScanActionForm(action){
   formEl.innerHTML=html;
   // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
   if(action==='EDIT_CARD')applyCardFieldValues(s);
+}
+// T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
+// 返回 false 表示校验失败（已 toast），调用方中止提交
+function collectCustodyCycle(body){
+  var el=document.getElementById('scan-cycle');
+  var v=el&&el.value?el.value.trim():'';
+  if(!v)return true;
+  var n=Number(v);
+  if(!Number.isInteger(n)||n<1||n>3650){toast('复检周期须为 1~3650 天的整数（留空则沿用原周期）','err');return false;}
+  body.cycleDays=n;return true;
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
@@ -1534,10 +1644,18 @@ function collectWizardPayload(body){
   if(wizardSample&&wizardSample._wizCardData)body.test_data=wizardSample._wizCardData;
   if(wizardSample&&wizardSample._wizCardStandard)body.test_standard=wizardSample._wizCardStandard;
 }
-async function confirmScan(action){
+async function confirmScan(action,btn){
+  await withSubmitLock(btn||null,async function(){
   var code=document.getElementById('scan-code').value.trim();
+  // 向导流程（RELEASE/RE_RELEASE）：编号以向导样品为准，不再信任实时输入框；
+  // 兜底比对：输入框值与向导样品编号不一致（如 Step3 待确认时被扫码枪误改）则中止提交
+  var isWizard=(action==='RELEASE'||action==='RE_RELEASE')&&wizardSample;
+  if(isWizard){
+    if(code!==wizardSample.sample_no){toast('编号与向导样品不一致（向导样品：'+wizardSample.sample_no+'），已中止提交，请重新扫码确认','err');return;}
+    code=wizardSample.sample_no;
+  }
   var body={code:code,action:action};
-  if(action==='PRODUCE'||action==='INSPECT'){
+  if(action==='PRODUCE'||action==='INSPECT'||action==='INSPECT_CUSTODY'){
     var f=document.getElementById('scan-img').files[0];
     if(!f){toast('请上传照片','err');return;}
     body.image=await new Promise(function(res,rej){
@@ -1549,6 +1667,7 @@ async function confirmScan(action){
     var verEl=document.getElementById('scan-card-ver');if(verEl&&verEl.value.trim())body.card_version=verEl.value.trim();
     var dataEl=document.getElementById('scan-card-data');if(dataEl&&dataEl.value.trim())body.test_data=dataEl.value.trim();
   }
+  if(action==='INSPECT_CUSTODY'&&!collectCustodyCycle(body))return;
   if(action==='RELEASE'||action==='RE_RELEASE'){collectWizardPayload(body);}
   if(action==='CUSTODY'||action==='EDIT_STORAGE'){body.location=document.getElementById('scan-loc').value;}
   if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'){
@@ -1566,8 +1685,34 @@ async function confirmScan(action){
     var dataEl2=document.getElementById('scan-card-data');if(dataEl2&&dataEl2.value!==undefined)body.test_data=dataEl2.value.trim();
     var stdEl2=document.getElementById('scan-card-standard');if(stdEl2&&stdEl2.value!==undefined)body.test_standard=stdEl2.value.trim();
   }
-  try{var r=await api('POST','/api/scan',body);handleScanSuccess(r);}catch(e){toast(e.message,'err');}
+  try{
+    var r=await api('POST','/api/scan',body);
+    handleScanSuccess(r);
+    if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
+    if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
+  }catch(e){toast(e.message,'err');}
+  });
 }
+
+// T8.2: 成功提示条常驻「重新打印标示卡」按钮——setTimeout 自动弹窗被浏览器拦截时的手动兜底
+// （用户手势 onclick 内触发 window.open，新窗口；打印触发根治在批次 2）
+function appendReprintBtn(sampleId){
+  var box=document.getElementById('scan-result');
+  var card=box?box.querySelector('.sample-card'):null;
+  if(!card)return;
+  var btn=document.createElement('fluent-button');
+  btn.setAttribute('appearance','neutral');btn.setAttribute('size','small');
+  btn.style.marginLeft='8px';
+  btn.textContent='🖨 重新打印标示卡';
+  btn.onclick=function(){window.open('/api/samples/'+sampleId+'/card/print'+(typeof getPrintSizeQuery==='function'?getPrintSizeQuery():''),'_blank');};
+  card.appendChild(btn);
+}
+
+// T6: 409 冲突时自动刷新当前扫码结果（注册到 api.js 的统一冲突回调）
+onConflictRefresh(function(){
+  var codeEl=document.getElementById('scan-code');
+  if(codeEl&&codeEl.value.trim()&&document.getElementById('scan-result'))doScan();
+});
 
 
 /* --- subsystems/samples/frontend/js/views/logs.js --- */
@@ -1599,7 +1744,7 @@ async function loadModels() {
     '<tr><th>机型短码</th><th>机型全称</th><th>创建时间</th><th style="width:80px">操作</th></tr>' +
     (list.length ? list.map(function (m) {
       return '<tr><td><b>' + e(m.code) + '</b></td><td>' + e(m.full_name) + '</td><td class="muted">' + e((m.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
-        '<td><a class="link" onclick="deleteModel(' + m.id + ',\'' + m.code + '\')">删除</a></td></tr>';
+        '<td><a class="link" data-code="' + e(m.code) + '" onclick="deleteModel(' + m.id + ',this.dataset.code)">删除</a></td></tr>';
     }).join('') : '<tr><td colspan="4" class="empty">暂无机型，请先新增</td></tr>') +
     '</table></div>';
 }
