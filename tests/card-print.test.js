@@ -2,7 +2,7 @@
 // 纯函数，无 DB 依赖；覆盖评审修复的 8 个问题中可单测部分
 const { buildLabelHtml, buildCardPrintHtml, parseSize } = require('../subsystems/samples/backend/card-html');
 const { PRESET_MM } = require('../subsystems/samples/backend/card-constants');
-const { buildCardPrintHtml: buildCardDirect, fmtDateYYMMDD } = require('../subsystems/samples/backend/card-print-html');
+const { buildCardPrintHtml: buildCardDirect, fmtDateUTC } = require('../subsystems/samples/backend/card-print-html');
 
 const s = {
   sample_no: 'G-BD7620-S-001-01', name: '扇叶样品', station: '扇叶组', model: 'BD7620',
@@ -47,7 +47,7 @@ describe('buildCardPrintHtml 去 scale 参数 + 超长文本换行（Issue #3/#7
   it('新签名 (s, sizeKey, cw, ch) 可调用且内容完整', () => {
     const html = buildCardPrintHtml(s, 'large');
     expect(html).toContain('G-BD7620-S-001-01');
-    expect(html).toContain('26/12/31');
+    expect(html).toContain('2026-12-31'); // UTC YYYY-MM-DD 统一口径（2026-09-01）
   });
   it('full 行 CSS 支持换行（min-width:0 + word-break）', () => {
     const html = buildCardPrintHtml(s, 'large');
@@ -55,8 +55,8 @@ describe('buildCardPrintHtml 去 scale 参数 + 超长文本换行（Issue #3/#7
     expect(html).toContain('.crd .full .val{min-width:0;flex:1;white-space:normal;word-break:break-word}');
   });
   it('自定义尺寸跟随（Issue #5 延伸：纸张=空白卡区自动换算）', () => {
-    // 80×40 标签纸 → 空白卡区 42×33mm；不再输出整张标签纸尺寸
-    expect(buildCardPrintHtml(s, 'custom', 80, 40)).toContain('42×33mm');
+    // 80×40 标签纸 → 空白卡区 43×33mm（2026-09-01 mm 直出精确值，旧 42 为 px 往返漂移）；不再输出整张标签纸尺寸
+    expect(buildCardPrintHtml(s, 'custom', 80, 40)).toContain('43×33mm');
     expect(buildCardPrintHtml(s, 'custom', 80, 40)).not.toContain('80×40mm');
   });
   it('card-html.js 重导出接口兼容', () => {
@@ -83,12 +83,14 @@ describe('标示卡来源显示（窄小空白卡区用代码+简称，避免全
   });
 });
 
-describe('fmtDateYYMMDD（Issue #3 迁移后仍可用）', () => {
-  it('输出 yy/mm/dd 格式', () => {
-    expect(fmtDateYYMMDD('2026-12-31')).toBe('26/12/31');
+describe('fmtDateUTC（2026-09-01 起统一 UTC YYYY-MM-DD 口径，替代 fmtDateYYMMDD）', () => {
+  it('输出 UTC YYYY-MM-DD 格式', () => {
+    expect(fmtDateUTC('2026-12-31')).toBe('2026-12-31');
+    // 带时分秒的 UTC 时间戳：取 UTC 日期部分，不受服务器时区影响
+    expect(fmtDateUTC('2027-08-31T16:34:48Z')).toBe('2027-08-31');
   });
   it('空值返回占位符', () => {
-    expect(fmtDateYYMMDD(null)).toBe('______');
+    expect(fmtDateUTC(null)).toBe('______');
   });
 });
 
@@ -105,10 +107,10 @@ describe('@page 纸张尺寸按档位写死', () => {
     expect(buildCardPrintHtml(s, 'small')).toContain('@page{margin:0;size:20mm 15mm}');
   });
   it('标示卡页顶部显示档位名+空白卡区尺寸+选纸引导', () => {
-    expect(buildCardPrintHtml(s, 'medium')).toContain('中标 28×20mm');
-    expect(buildCardPrintHtml(s, 'medium')).toContain('请在打印对话框选择 28×20mm 纸张');
+    expect(buildCardPrintHtml(s, 'medium')).toContain('中标 27×20mm');
+    expect(buildCardPrintHtml(s, 'medium')).toContain('请在打印对话框选择 27×20mm 纸张');
     // 自定义档自动换算空白卡区：80×40 标签纸 → 42×33mm
-    expect(buildCardPrintHtml(s, 'custom', 80, 40)).toContain('自定义 42×33mm');
+    expect(buildCardPrintHtml(s, 'custom', 80, 40)).toContain('自定义 43×33mm');
   });
   it('标示卡页自定义 60×40 标签纸 → 空白卡区 32×35mm', () => {
     const html = buildCardPrintHtml(s, 'custom', 60, 40);
