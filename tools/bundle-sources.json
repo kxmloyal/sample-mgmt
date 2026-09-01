@@ -13,6 +13,7 @@
     "subsystems/samples/frontend/js/views/list-filter.js",
     "subsystems/samples/frontend/js/views/list-render.js",
     "subsystems/samples/frontend/js/views/detail.js",
+    "subsystems/samples/frontend/js/views/detail-card.js",
     "subsystems/samples/frontend/js/views/scan-camera.js",
     "subsystems/samples/frontend/js/views/print-queue.js",
     "subsystems/samples/frontend/js/views/card-fields.js",
