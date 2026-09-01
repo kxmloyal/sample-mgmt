@@ -1,10 +1,11 @@
 # 制造品质管理系统
 
-含**样品管理**、**治具管理**、**全局工作台**与**项目追踪**四大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
+含**管制流程管理**、**样品管理**、**治具管理**、**全局工作台**与**项目追踪**五大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。
 
 **子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
 
 <!-- AUTO-SUBSYSTEMS:START -->
+- **管制流程管理**(`control`)：覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程
 - **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
 - **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
 - **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
@@ -37,6 +38,8 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 周期到点派生 **待复检 / 逾期**（看板高亮预警）。
 
+> 注：IN_CUSTODY 临期（距复检日 ≤7 天，含逾期）支持 QA「到期复检」自环（INSPECT_CUSTODY）——样品不脱离保管，复检通过后顺延复检日、标示卡版次自动 +1 并触发重打（2026-09-01 批次 1）。
+
 ### 扫码台 — 三方扫码驱动状态机
 
 | 当前状态 | 操作角色 | 扫码后动作 | 要求 |
@@ -45,6 +48,7 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 | PRODUCED(制作完成) | 品保(QA) | → RELEASED | 填写复检周期 + 标示卡信息（三步向导）|
 | RELEASED(已发行) | 保管(CUSTODY) | → IN_CUSTODY | 填写储位 |
 | IN_CUSTODY 到期 | 品保(QA) | 复检 | 上传复检照片 |
+| IN_CUSTODY 临期(≤7天) | 品保(QA) | → IN_CUSTODY 到期复检 | 复检照片+周期(可沿用)+版次自动+1+触发重打 |
 | IN_CUSTODY | 保管(CUSTODY) | → RETURNING | 填写退回原因 |
 | RETURNING | 品保(QA) | 多分支：重新发行/退回研发/直接作废/拒绝退回 | — |
 | RETURNING(被指派) | 研发(RD) | 创建替代品 | 自动复制原样品信息 |
@@ -172,6 +176,34 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
 
 ---
 
+## 管制流程管理
+
+管制/不良品管制子系统（入口 `/subsystems/control/frontend/index.html`）：管制申请 → 闸口①会签 → 贴标入管制仓 → 开不良品委托单(NCR) → 处理方式会签(闸口②) → 重工 → 入库出货全流程，双闸口会签拦截，全量留痕。
+
+### 状态机
+
+```
+DRAFT → SIGNING(闸口①会签) → LABELED(已贴标) → CONTROL_STORED(管制仓)
+      → NCR_DONE(已开委托单) → DISPOSAL_SIGNING(闸口②会签) → REWORK_OPENED
+      → REWORKING(重工中) → REWORK_REPORTED(已报工) → REIN_STOCK(已入库) → SHIPPED(已出货)
+```
+
+- 两闸口均可退回上一环节（SIGNING→DRAFT / DISPOSAL_SIGNING→NCR_DONE）
+- 任意状态可由 ADMIN 作废（→ RETIRED）
+
+### 功能
+
+- **管制看板**：统计卡片 + 我的待办
+- **管制单列表**：多维筛选/搜索 + 导出 CSV + 单据详情弹窗
+- **双闸口会签**：闸口①（QA 会签通过贴标）/ 闸口②（QA/RD 处理方式会签），支持退回
+- **不良品委托单（NCR）**：列表 + 导出 CSV
+- **管制标签打印**：标签查看/打印/下载
+- **附件管理**：管制单附件上传/下载/删除
+- **操作日志**：全量留痕可查
+- **设置**：管制参数配置（`/api/control/settings`）
+
+---
+
 ## 门户卡片个性化排列
 
 门户首页（portal.html）支持用户级卡片个性化排列，偏好按登录用户独立保存。
@@ -223,6 +255,8 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | qa01 | qa123 | 品保(QA) | 品保文管中心 |
 | mfg01 | mfg123 | 保管(CUSTODY) | 制造部 |
 | fqc01 | fqc123 | 保管(CUSTODY) | FQC |
+| pmc01 | pmc123 | 保管(CUSTODY) | 生管部 |
+| wh01 | wh123 | 保管(CUSTODY) | 资材部 |
 | me01 | me123 | 保管(ME) | 生技部 |
 
 ## API 一览
@@ -237,7 +271,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
-| `/api/samples/:id` | PUT | 是 | 更新样品 |
+| `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
 | `/api/samples/:id` | DELETE | 是 | 删除样品（仅 NEW/PRODUCED，仅创建者或管理员）|
 | `/api/samples/:id/qrcode` | GET | 是 | 样品二维码 |
 | `/api/samples/:id/qrcode/download` | GET | 是 | 下载高清二维码 |
@@ -258,8 +292,25 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/fixtures/:id/files` | GET/POST | 是 | 治具附件列表/上传 |
 | `/api/fixtures/:id/files/:fileId` | DELETE | 是 | 删除治具附件 |
 | `/api/fixtures/:id/files/:fileId/preview` / `download` | GET | 是 | 附件预览/下载 |
+| `/api/control/orders` | GET/POST | 是 | 管制单列表/新建管制申请 |
+| `/api/control/orders/stats` | GET | 是 | 管制看板统计 |
+| `/api/control/orders/export` | GET | 是 | 管制单导出 CSV（复用筛选，忽略分页）|
+| `/api/control/orders/:id` | GET/PUT | 是 | 管制单详情/更新 |
+| `/api/control/orders/:id/transition` | POST | 是 | 管制状态机流转 |
+| `/api/control/orders/:id/sign` | POST | 是 | 会签（闸口①/②通过/退回）|
+| `/api/control/orders/:id/rework-log` | POST | 是 | 重工报工记录 |
+| `/api/control/orders/:id/void` | POST | 是(ADMIN) | 管制单作废 |
+| `/api/control/orders/:id/ncr` | POST | 是(QA) | 开不良品委托单(NCR) |
+| `/api/control/ncrs` | GET | 是 | 不良品委托单列表 |
+| `/api/control/ncrs/export` | GET | 是 | 委托单导出 CSV |
+| `/api/control/orders/:id/files` | GET/POST | 是 | 管制单附件列表/上传 |
+| `/api/control/orders/:id/files/:fileId` | DELETE | 是 | 删除管制单附件 |
+| `/api/control/orders/:id/files/:fileId/download` | GET | 是 | 管制单附件下载 |
+| `/api/control/orders/:id/label` / `label/print` / `label/download` | GET | 是 | 管制标签查看/打印/下载 |
+| `/api/control/logs` | GET | 是 | 管制操作日志 |
+| `/api/control/settings` | GET/PUT | 是 | 管制子系统参数设置 |
 | `/api/resolve` | GET | 是 | 解析扫码内容 |
-| `/api/scan` | POST | 是 | 执行扫码操作（状态机）|
+| `/api/scan` | POST | 是 | 执行扫码操作（状态机；全链路乐观锁 CAS，版本冲突返回 409，请刷新后重试）|
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
 | `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats/applyDepts |
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
@@ -300,6 +351,7 @@ routes/
   ├── misc.js               杂项路由（看板/日志/用户/健康检查）
   └── subsystems.js         子系统发现 + CRUD API
 subsystems/                 所有子系统（插件协议，每目录自包含）
+  ├── control/              管制流程管理（manifest + backend/db/frontend/seed）
   ├── samples/              样品管理（manifest + backend/db/frontend/seed）
   ├── fixtures/             治具管理（同构）
   ├── workbench/            全局工作台（同构）

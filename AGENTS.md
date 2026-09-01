@@ -5,10 +5,11 @@
 
 ## 1. 项目概述
 
-**制造品质管理系统**:含样品管理、治具管理与全局工作台三大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。**架构基础：子系统插件协议（见第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架，无需修改框架核心代码。
+**制造品质管理系统**:含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统，统一门户入口（portal.html），三方扫码驱动状态机，全量留痕。**架构基础：子系统插件协议（见第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架，无需修改框架核心代码。
 
 **子系统**(清单由 `node tools/sync-subsystem-docs.js` 自动维护，勿手改):
 <!-- AUTO-SUBSYSTEMS:START -->
+- **管制流程管理**(`control`)：覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程
 - **治具管理**(`fixtures`)：覆盖治具申请→制作→验证移交→领用→维修→报废全流程
 - **项目追踪**(`projects`)：多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出
 - **样品管理**(`samples`)：覆盖样品发行→确认→生命周期管理→分发全流程
@@ -63,6 +64,7 @@
 │   └── frontend/          # 共享前端模块(api-base.js / modal.js / shared/utils.js)
 <!-- AUTO-SUBSYSTEMS-TREE:START -->
 ├── subsystems/            # ★ 所有子系统(插件协议,见 AGENTS.md 第 17 节)
+│   ├── control/          # 管制流程管理(backend/ db/ frontend/ seed/ manifest.json)
 │   ├── fixtures/          # 治具管理(backend/ db/ frontend/ seed/ manifest.json)
 │   ├── projects/          # 项目追踪(backend/ db/ frontend/ seed/ manifest.json)
 │   ├── samples/          # 样品管理(backend/ db/ frontend/ seed/ manifest.json)
@@ -330,6 +332,8 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
 - `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），后续项目追踪迭代需关注拆分（如 info 主卡渲染拆独立 helper）
+- `subsystems/samples/backend/routes-scan.js` 批次 1 后达 308 行 / 18923 字符（2026-09-01 记录），字符余量仅 1077，后续批次改动前需先拆分（如 applyInspect 与各 action 分支抽独立 helper）
+- `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
 
 ## 15. 禁止行为黑名单
 
