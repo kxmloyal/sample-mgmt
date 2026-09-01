@@ -1,5 +1,6 @@
 // routes/auth.js — 鉴权守卫 + 登录/登出 + 自助修改密码
-const bcrypt = require('bcryptjs');
+// 登录/改密校验为高频热点：使用原生 bcrypt（libuv 线程池），对比 bcryptjs 纯 JS 实现大幅降低延迟
+const bcrypt = require('bcrypt');
 const D = require('../db');
 const { mount: mountAuth } = require('../shared/middleware/auth');
 
