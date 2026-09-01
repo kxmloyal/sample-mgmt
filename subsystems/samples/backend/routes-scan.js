@@ -2,6 +2,9 @@
 const D = require('../../../db');
 const { asyncHandler } = require('./async-handler');
 
+// 保管中复检开放窗口口径：距下次复检日 ≤ 7 天（含已逾期）时，QA 扫 IN_CUSTODY 样品出现 INSPECT_CUSTODY 动作
+var INSPECT_EARLY_DAYS = 7;
+
 const STATUS_LABEL = {
   NEW: '新建(待制作确认)', PRODUCED: '制作完成', RELEASED: '已发行',
   IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废'
@@ -17,6 +20,12 @@ function allowedActions(role, status, next_inspect_at, retire_assigned_rd, curre
 
   // QA 扫 RELEASED：复检（不限到期）+ 修正标示卡
   if (role === 'QA' && status === 'RELEASED') { actions.push('INSPECT'); actions.push('EDIT_CARD'); }
+
+  // QA 扫 IN_CUSTODY 且临期/逾期（距复检日 ≤ INSPECT_EARLY_DAYS 天）：保管中复检（自环，样品不脱离保管）
+  if (role === 'QA' && status === 'IN_CUSTODY' && next_inspect_at &&
+      new Date(next_inspect_at).getTime() - Date.now() <= INSPECT_EARLY_DAYS * 86400000) {
+    actions.push('INSPECT_CUSTODY');
+  }
 
   // 保管单位扫 IN_CUSTODY：修改储位 + 申请退回
   if ((role === 'CUSTODY' || role === 'ME') && status === 'IN_CUSTODY') { actions.push('EDIT_STORAGE'); actions.push('RETURN_REQUEST'); }
@@ -38,6 +47,48 @@ function nextCardVersion(current) {
   const m = String(current||'').match(/\d+/);
   const n = m ? parseInt(m[0], 10) : 0;
   return String(Math.min(n + 1, 99)).padStart(2, '0');
+}
+
+// 生成 YYYYMMDD-HHmmss 时间戳（本地时区），用于复检照片文件名时间戳化、避免多次复检互相覆盖
+function tsStamp(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+// 解析复检周期：显式传入时须为 1~3650 的整数；未传沿用样品原周期；原周期也为空则提示必填
+// （T3 起禁止 || 90 之类的静默兜底，避免错误周期悄悄入库）
+function resolveCycleDays(cycleDays, fallback) {
+  if (cycleDays !== undefined && cycleDays !== null && String(cycleDays).trim() !== '') {
+    const n = Number(cycleDays);
+    if (!Number.isInteger(n) || n < 1 || n > 3650) return { error: '复检周期须为 1~3650 天的整数' };
+    return { cyc: n };
+  }
+  const f = Number(fallback);
+  if (Number.isInteger(f) && f >= 1 && f <= 3650) return { cyc: f };
+  return { error: '请填写复检周期（天）' };
+}
+
+// INSPECT / INSPECT_CUSTODY 共用复检逻辑（§15 禁止复制粘贴，差异点由 opts 注入）：
+// 校验并保存复检照片 → 解析周期 → 顺延 next_inspect_at/valid_until → 可选版次自动 +1 → 可选状态自环
+// opts: { photoName 照片文件名基名, bumpVersion 版次自动 +1, keepStatus 状态自环, saveImage 图片保存函数 }
+// 返回 { status, error }（路由直接回 HTTP）或 { cyc }（成功，updated 已被就地改写）
+async function applyInspect(req, s, updated, ts, opts) {
+  const img = req.body.image;
+  if (!img || typeof img !== 'string') return { status: 400, error: '请上传复检照片' };
+  const inspImgUrl = await opts.saveImage(img, opts.photoName);
+  if (!inspImgUrl) return { status: 500, error: '复检照片保存失败，请重试' };
+  const r = resolveCycleDays(req.body.cycleDays, s.release_cycle_days);
+  if (r.error) return { status: 400, error: r.error };
+  const d = new Date(ts); d.setUTCDate(d.getUTCDate() + r.cyc);
+  updated.inspect_image = inspImgUrl;
+  updated.next_inspect_at = d.toISOString();
+  updated.valid_until = updated.next_inspect_at;
+  if (opts.keepStatus) updated.status = opts.keepStatus;
+  const { card_version, test_data } = req.body || {};
+  if (opts.bumpVersion) updated.card_version = nextCardVersion(s.card_version);
+  else if (card_version) updated.card_version = card_version;
+  if (test_data) updated.test_data = test_data;
+  return { cyc: r.cyc };
 }
 
 function register(app) {
@@ -115,21 +166,23 @@ function register(app) {
       updated.signed_by_qa = u.display_name || u.username;
       logData = { sample_id: s.id, action: 'RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: `正式发行，复检周期${cyc}天，标示卡已签署` };
     } else if (chosenAction === 'INSPECT') {
-      const img = req.body.image;
-      if (!img || typeof img !== 'string') return res.status(400).json({ error: '请上传复检照片' });
-      const inspImgUrl = await saveSampleImage(img, s.sample_no + '_insp');
-      if (!inspImgUrl) return res.status(500).json({ error: '复检照片保存失败，请重试' });
-      const cyc = Number(cycleDays) || s.release_cycle_days || 90;
-      const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
-      updated.inspect_image = inspImgUrl;
-      updated.next_inspect_at = d.toISOString();
-      updated.valid_until = updated.next_inspect_at;
+      // 已发行样品复检：沿用旧文件名（_insp 固定名），版次不自动递增（由标示卡修正流程管理）
+      const r = await applyInspect(req, s, updated, ts, { photoName: s.sample_no + '_insp', saveImage: saveSampleImage });
+      if (r.error) return res.status(r.status).json({ error: r.error });
       const { card_version, test_data } = req.body || {};
-      if (card_version) updated.card_version = card_version;
-      if (test_data) updated.test_data = test_data;
       const cardUpdated = (card_version||test_data)?'、「标示卡已更新」':'';
       const isEarly = s.next_inspect_at && new Date(s.next_inspect_at).getTime() > Date.now();
-      logData = { sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role: u.role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + cyc + '天' + cardUpdated) };
+      logData = { sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role: u.role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + r.cyc + '天' + cardUpdated) };
+    } else if (chosenAction === 'INSPECT_CUSTODY') {
+      // 保管中复检：IN_CUSTODY 自环（样品不脱离保管）；照片文件名时间戳化防覆盖；标示卡版次自动 +1
+      const r = await applyInspect(req, s, updated, ts, {
+        photoName: s.sample_no + '_insp_' + tsStamp(new Date()),
+        bumpVersion: true, keepStatus: 'IN_CUSTODY', saveImage: saveSampleImage
+      });
+      if (r.error) return res.status(r.status).json({ error: r.error });
+      const oldVer = s.card_version || '01';
+      logData = { sample_id: s.id, action: 'INSPECT_CUSTODY', role: u.role, user_id: u.id, dept: u.dept,
+        note: note || ('保管中复检通过，标示卡版次 ' + oldVer + '→' + updated.card_version + '，周期' + r.cyc + '天') };
     } else if (chosenAction === 'CUSTODY') {
       if (!location || !location.trim()) return res.status(400).json({ error: '请填写保管储位' });
       updated.status = 'IN_CUSTODY';
@@ -177,6 +230,9 @@ function register(app) {
       updated.signed_by_qa = u.display_name || u.username;
       updated.retire_assigned_rd = null;
       updated.retired_reason = null;
+      // 重新发行即脱离保管链路：清空保管部门与储位，等待保管单位重新接收
+      updated.custody_dept = null;
+      updated.storage_location = null;
       logData = { sample_id: s.id, action: 'RE_RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: '品保确认重新发行，周期' + cyc + '天' };
     } else if (chosenAction === 'RETIRE_RECREATE') {
       const assignedRd = (req.body.retire_assigned_rd || '').trim();
@@ -191,12 +247,26 @@ function register(app) {
       if (!note || !note.trim()) return res.status(400).json({ error: '请填写作废原因' });
       updated.status = 'RETIRED';
       updated.retired_reason = note.trim();
+      updated.retire_assigned_rd = null;
       logData = { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
     } else if (chosenAction === 'RETURN_REJECT') {
       if (!note || !note.trim()) return res.status(400).json({ error: '请填写拒绝理由' });
       updated.status = 'IN_CUSTODY';
       updated.retire_assigned_rd = null;
       updated.retired_reason = null;
+      // 顺延复检时间：退回审核消耗的天数（最近一次 RETURN_REQUEST 日志至今的整天数）补回 next_inspect_at
+      if (s.next_inspect_at) {
+        const logs = await D.listLogsBySample(s.id);
+        const rr = (logs || []).find(l => l.action === 'RETURN_REQUEST');
+        if (rr && rr.created_at) {
+          const days = Math.floor((Date.now() - new Date(rr.created_at).getTime()) / 86400000);
+          if (days > 0) {
+            const ni = new Date(s.next_inspect_at); ni.setUTCDate(ni.getUTCDate() + days);
+            updated.next_inspect_at = ni.toISOString();
+            updated.valid_until = updated.next_inspect_at;
+          }
+        }
+      }
       logData = { sample_id: s.id, action: 'RETURN_REJECT', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
     } else if (chosenAction === 'RECREATE') {
       // 4 步写事务：createSample(新) + updateSample(旧→RETIRED) + 2 addLog
@@ -209,7 +279,7 @@ function register(app) {
           notes: '替代已作废样品 ' + s.sample_no, created_by: u.id, replaces: s.sample_no
         }, conn);
         const oldUpdated = { ...s, status: 'RETIRED', replaced_by: ns.sample_no, updated_at: ts };
-        await D.updateSample(oldUpdated, conn);
+        await D.updateSample(oldUpdated, conn, s.version);
         await D.addLog({ sample_id: s.id, action: 'RECREATE_REPLACED', role: u.role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' }, conn);
         await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '替代 ' + s.sample_no }, conn);
         return ns;
@@ -218,15 +288,18 @@ function register(app) {
       return;
     }
 
-    // updateSample + addLog 原子提交，防止状态变更与审计断链
+    // updateSample(CAS 乐观锁) + addLog 原子提交，防止状态变更与审计断链
+    // 版本冲突（他人已抢先操作）时 updateSample 抛 code='CONFLICT'，由 catch 统一转 409
     const result = await D.withTransaction(async conn => {
-      const r = await D.updateSample(updated, conn);
+      const r = await D.updateSample(updated, conn, s.version);
       if (logData) await D.addLog(logData, conn);
       return r;
     });
-    const printCard = (chosenAction === 'RELEASE' || chosenAction === 'RE_RELEASE' || chosenAction === 'EDIT_CARD');
+    const printCard = ['RELEASE', 'RE_RELEASE', 'EDIT_CARD', 'INSPECT', 'INSPECT_CUSTODY'].includes(chosenAction);
     res.json({ sample: result, action: chosenAction, message: `操作成功：${chosenAction}`, printCard });
     } catch (err) {
+      if (err && err.code === 'CONFLICT')
+        return res.status(409).json({ error: '该样品刚被他人操作，请刷新后重试' });
       res.status(500).json({ error: '扫码操作失败：' + (err.message || '服务器内部错误') });
     }
   });
