@@ -33,6 +33,19 @@ function resolveCycleDays(cycleDays, fallback) {
   return { error: '请填写复检周期（天）' };
 }
 
+// 校验 EDIT_CARD 人工修改的版次：须为 01~99 的数字，且不得低于当前版次（防降级/置空/篡改，label-card-standard §2.5）
+// 合法返回 null，非法返回错误文案
+function validateCardVersion(input, current) {
+  const v = String(input).trim();
+  if (!/^\d{1,2}$/.test(v)) return '版次须为 01~99 的数字';
+  const n = parseInt(v, 10);
+  const m = String(current || '').match(/\d+/);
+  const cur = m ? parseInt(m[0], 10) : 0;
+  if (n < 1 || n > 99) return '版次须为 01~99 的数字';
+  if (n < cur) return '版次不得低于当前版次（当前：' + (current || '01') + '）';
+  return null;
+}
+
 // INSPECT / INSPECT_CUSTODY 共用复检逻辑（§15 禁止复制粘贴，差异点由 opts 注入）：
 // 校验并保存复检照片 → 解析周期 → 顺延 next_inspect_at/valid_until → 可选版次自动 +1 → 可选状态自环
 // opts: { photoName 照片文件名基名, bumpVersion 版次自动 +1, keepStatus 状态自环, saveImage 图片保存函数 }
@@ -135,11 +148,18 @@ async function applyAction(chosenAction, ctx) {
     if (sample_type) updated.sample_type = sample_type.trim();
     if (limit_item) updated.limit_item = limit_item.trim();
     if (source_type) updated.source_type = source_type.trim();
-    if (card_version !== undefined) updated.card_version = card_version.trim();
+    if (card_version !== undefined) {
+      // 版次人工修正须单调不减（T15）：低于当前/置空/非数字一律 400
+      const verr = validateCardVersion(card_version, s.card_version);
+      if (verr) return { status: 400, error: verr };
+      updated.card_version = card_version.trim();
+    }
     if (test_data !== undefined) updated.test_data = test_data.trim();
     if (test_standard !== undefined) updated.test_standard = test_standard.trim();
     updated.signed_by_qa = u.display_name || u.username;
-    logData = { sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: note || '修正标示卡' };
+    const oldCardVer = s.card_version || '01';
+    const verNote = (updated.card_version && updated.card_version !== oldCardVer) ? '，版次 ' + oldCardVer + '→' + updated.card_version : '';
+    logData = { sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: (note || '修正标示卡') + verNote };
   } else if (chosenAction === 'EDIT_STORAGE') {
     if (!location || !location.trim()) return { status: 400, error: '请填写新储位' };
     updated.storage_location = location.trim();

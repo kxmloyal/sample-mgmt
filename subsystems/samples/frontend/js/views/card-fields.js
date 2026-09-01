@@ -51,7 +51,7 @@ function buildCardFieldTable(s,editable,suggestedVersion){
       '<td style="padding:4px 0"><fluent-select id="scan-card-source" '+ro+'><fluent-option value="">未指定</fluent-option><fluent-option value="C"'+(src==='C'?' selected':'')+'>客供(C)</fluent-option><fluent-option value="T"'+(src==='T'?' selected':'')+'>元山(T)</fluent-option><fluent-option value="G"'+(src==='G'?' selected':'')+'>元将五金塔岗分厂(G)</fluent-option></fluent-select></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('source_type',srcSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">版次</td>'+
-      '<td style="padding:4px 0"><fluent-text-field id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"></fluent-text-field></td>'+
+      '<td style="padding:4px 0"><fluent-text-field id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"></fluent-text-field>'+(editable?'<div style="font-size:11px;color:#6b7280;margin-top:2px">复检/再发行自动 +1；人工修正只能改为 ≥ 当前版次的数字（01~99）</div>':'')+'</td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('card_version',verSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td>'+
       '<td style="padding:4px 0"><textarea id="scan-card-data" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(data)+'</textarea></td>'+
