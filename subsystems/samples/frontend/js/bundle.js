@@ -1,4 +1,4 @@
-/** BUNDLE vbmtimogtf — 24 files */
+/** BUNDLE vbmtir1gy4 — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -910,33 +910,76 @@ function _renderSampleList(list, isOverdue, pager) {
 /* --- subsystems/samples/frontend/js/views/detail.js --- */
 // detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
+// D1: 骨架屏/Tab置顶(detail-tabs-top)/头部操作组/锁定引导/dirty拦截/密度类
 var _detailSample = null;
 var _detailTab = 'info';
 var _detailReqSeq = 0;
 
 async function viewDetail(id) {
   var seq = ++_detailReqSeq;
-  var s = await api('GET', '/api/samples/' + id);
-  if (seq !== _detailReqSeq) return; // 已有更新的详情请求，丢弃过期响应（防竞态）
+  _detailTab = 'info'; _detailDirty = false;
+  // D1.1 先开骨架屏（标题条 + 4 卡片占位），数据到达后替换；失败 toast + 关窗
+  var foot = '<fluent-button appearance="neutral" size="small" onclick="tryCloseDetail(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
+  var sk = '<div class="sk" style="height:20px;width:42%"></div><div class="overview-cards">' + '<div class="overview-card sk" style="height:130px"></div>'.repeat(4) + '</div>';
+  var mask = openModal('', sk, { head: '<b>加载中…</b>', foot: foot });
+  _applyDetailDensity('info');
+  var s;
+  try { s = await api('GET', '/api/samples/' + id); }
+  catch (err) { if (seq === _detailReqSeq) { toast('详情加载失败', 'err'); closeModal(mask); } return; }
+  if (seq !== _detailReqSeq) { closeModal(mask); return; } // 防竞态：回收过期骨架弹窗
   _detailSample = s;
-  _detailTab = 'info';
-  var head = '<b>' + e(s.sample_no) + '</b>' + statusBadge(s);
-  var foot = '<a class="link" style="margin-right:14px;cursor:pointer" onclick="downloadQR(' + id + ')">下载二维码</a>' +
-    '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
-  // 内容 + Tab 栏都是 body 的一部分
-  openModal('', _buildTabContent(s, id, 'info') + _buildTabsHTML(s, id, 'info'), { head: head, foot: foot });
+  mask.querySelector('.modal-head').innerHTML = _buildHeadHTML(s, id);
+  mask.querySelector('.modal-body').innerHTML = _buildTabsHTML(s, id, 'info') + _buildTabContent(s, id, 'info');
 }
 
+// D1.3 头部：编号 + 徽章 + 操作组
+function _buildHeadHTML(s, id) {
+  var acts = [['🖨', '打印标示卡', 'printCard(' + id + ')'],
+    ['🏷', '打印标签', 'window.open(\'/api/samples/' + id + '/label/print\'+getPrintSizeQuery(),\'_blank\')'],
+    ['⬇', '下载二维码', 'downloadQR(' + id + ')']];
+  return '<b>' + e(s.sample_no) + '</b>' + statusBadge(s) + '<span class="pv-actions">' +
+    acts.map(function(a) { return '<button class="pv-icon-btn" title="' + a[1] + '" onclick="' + a[2] + '">' + a[0] + '</button>'; }).join('') + '</span>';
+}
+
+// D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式 D2 进 module.css）
+function _applyDetailDensity(tab) {
+  var d = document.querySelector('.modal-mask fluent-dialog');
+  if (d) { d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
+}
+
+// D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
+  if (_detailTab === 'card' && _detailDirty && !confirm('标示卡有未保存的修改，切换将丢失，继续？')) return; // D1.5 切Tab拦截
+  _detailDirty = false; // 离开/重渲标示卡后重置
   _detailTab = tab;
   var body = document.querySelector('.modal-body');
   if (!body) return;
-  body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
-  // innerHTML 注入的 selected 属性在 FAST 下不生效，需显式回显下拉值
-  if (tab === 'card') applyDetailCardValues(s);
-  if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步加载历史照片区（T14）
+  var tabsHTML = _buildTabsHTML(s, id, tab);
+  _applyDetailDensity(tab);
+  if (tab === 'logs' || tab === 'image') {
+    body.innerHTML = tabsHTML + _buildTabSkeleton(tab); // 骨架先行
+    setTimeout(function() {
+      if (!_detailSample || _detailTab !== tab) return; // 期间已切走，丢弃过期渲染
+      var b = document.querySelector('.modal-body');
+      if (!b) return;
+      b.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
+      if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步历史照片（T14）调用时机保持
+    }, 0);
+    return;
+  }
+  body.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
+  if (tab === 'card') applyDetailCardValues(s); // 显式回显下拉值（selected 属性在 FAST 下不生效）
+}
+
+// D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）
+function _buildTabSkeleton(tab) {
+  if (tab === 'logs') {
+    var row = '<div style="display:flex;gap:10px;margin-bottom:14px"><div class="sk" style="width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px"></div><div style="flex:1"><div class="sk" style="height:13px;width:36%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:64%"></div></div></div>';
+    return '<div style="padding:14px 16px">' + row.repeat(5) + '</div>';
+  }
+  return '<div style="padding:16px"><div class="sk" style="height:240px;max-width:420px;margin:0 auto 12px"></div><div class="sk" style="height:14px;width:44%;margin:0 auto"></div></div>';
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -956,7 +999,7 @@ function _buildTabsHTML(s, id, activeTab) {
   if (!hasImg && !hasLog && !hasCrd) return '';
 
   var on = 'renderTab(\'';
-  var h = '<div class="detail-tabs">';
+  var h = '<div class="detail-tabs-top">';
   h += '<div class="detail-tab' + (activeTab === 'info' ? ' active' : '') + '" onclick="' + on + 'info\',' + id + ')">信息</div>';
   if (hasCrd) h += '<div class="detail-tab' + (activeTab === 'card' ? ' active' : '') + '" onclick="' + on + 'card\',' + id + ')">标示卡</div>';
   if (hasLog) h += '<div class="detail-tab' + (activeTab === 'logs' ? ' active' : '') + '" onclick="' + on + 'logs\',' + id + ')">全量日志 (' + s.logs.length + ')</div>';
@@ -968,7 +1011,7 @@ function _buildTabsHTML(s, id, activeTab) {
 // ═══ 辅助：label/value ═══
 function kv(label, val) { return '<span class="label">' + label + '</span><span>' + (val || '—') + '</span>'; }
 
-// ═══ 概览 Tab（CSS Grid 卡片布局，与治具详情统一） ═══
+// ═══ 概览 Tab（CSS Grid 卡片布局） ═══
 function _buildOverview(s, id) {
   return '<div class="overview-cards">' +
     _cardInfo(s) + _cardProgress(s) + _cardImages(s, id) + _cardLogs(s, id) +
@@ -1016,14 +1059,37 @@ function _cardLogs(s, id) {
   return h + '</div>';
 }
 
-// ═══ 日志 Tab ═══
+// ═══ 日志 Tab（D2.1 时间线：最新在上；API 按 id DESC 返回，无需 reverse） ═══
+// 流向映射：action → '从状态 ➜ 到状态'；自环类（EDIT_CARD/EDIT_STORAGE/INSPECT*）标注自环
+var _LOG_FLOW = {
+  CREATE: '—',
+  PRODUCE: 'NEW ➜ 制作完成',
+  RELEASE: '制作完成 ➜ 已发行',
+  CUSTODY: '已发行 ➜ 保管中',
+  INSPECT: '已发行（自环）', INSPECT_EARLY: '已发行（自环）', INSPECT_CUSTODY: '保管中（自环）',
+  EDIT_CARD: '修正标示卡（自环）', EDIT_STORAGE: '修改储位（自环）',
+  RETURN_REQUEST: '保管中 ➜ 退回审核',
+  RE_RELEASE: '退回审核 ➜ 已发行',
+  RETIRE_RECREATE: '退回审核 ➜ 已作废',
+  RETURN_REJECT: '退回审核 ➜ 保管中',
+  RETIRE_ONLY: '➜ 已作废', RECREATE: '➜ 已作废', FORCE_RETIRE: '➜ 已作废',
+  FORCE_REASSIGN: '退回审核（改派）'
+};
+
 function _buildLogsTab(s, id) {
-  var h = '<div style="padding:12px 14px"><div style="margin-bottom:8px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div>' +
-    '<div class="detail-logs-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>角色/部门</th><th>储位</th><th>备注</th></tr></thead><tbody>';
-  (s.logs || []).forEach(function(l) {
-    h += '<tr><td class="muted">' + fmt(l.created_at) + '</td><td>' + (ACTION_CN[l.action] || l.action) + '</td><td class="muted">' + e(l.role || '') + '/' + e(l.dept || '') + '</td><td class="muted">' + e(l.location || '—') + '</td><td class="muted">' + e(l.note || '—') + '</td></tr>';
+  var logs = s.logs || [];
+  var h = '<div style="padding:12px 14px"><div style="margin-bottom:8px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div><div class="tl">';
+  logs.forEach(function(l) {
+    var note = (l.note || '').trim();
+    var fold = note.length > 40; // 长备注默认折叠 1 行，点击切换展开/收起
+    h += '<div class="tl-item">' +
+      '<div><span class="tl-act">' + (ACTION_CN[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
+      '<div class="tl-meta">' + fmt(l.created_at) + ' · ' + e(l.role || '—') + (l.dept ? '/' + e(l.dept) : '') + (l.location ? ' · ' + e(l.location) : '') + '</div>' +
+      (note ? '<div class="tl-note' + (fold ? ' folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
+      '</div>';
   });
-  return h + '</tbody></table></div></div>';
+  if (!logs.length) h += '<div class="muted">暂无日志</div>';
+  return h + '</div></div>';
 }
 
 // ═══ 大图 Tab（弹窗内展示，点击可全屏） ═══
@@ -1037,8 +1103,7 @@ function _buildImageTab(s, id) {
   return h + '<div style="margin-top:12px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div></div>';
 }
 
-// 历史照片区（T14 全量留痕）：进入大图 Tab 后异步拉取该样品全部制作/复检照片缩略图；
-// 点击缩略图切换主图（点主图可全屏）；无历史时该区保持隐藏
+// 历史照片区（T14）：大图 Tab 异步拉取缩略图；点击切主图，无历史则隐藏
 async function loadImageHistory(id) {
   var box = document.getElementById('detail-img-history');
   if (!box) return;
@@ -1059,7 +1124,7 @@ async function loadImageHistory(id) {
   box.style.display = '';
 }
 
-// 历史缩略图点击：有主图则切换主图，无主图（样品无当前图）则直接全屏查看
+// 历史缩略图点击：有主图则切换，无主图则直接全屏查看
 function switchMainImage(url) {
   var m = document.getElementById('detail-main-img');
   if (m) m.src = url;
@@ -1074,7 +1139,22 @@ function showImageView(src) {
   document.body.appendChild(o);
 }
 
-// 标示卡 Tab 下拉回显（innerHTML 注入 selected 属性在 FAST upgrade 时序下失效，须显式设置 value）
+function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
+
+
+/* --- subsystems/samples/frontend/js/views/detail-card.js --- */
+// detail-card.js — 样品详情弹窗·标示卡 Tab（编辑表单/保存CAS/409刷新/dirty 拦截）
+// 由 detail.js 拆出（D1 红线拆分，方案A）；bundle 拼接顺序：detail.js → detail-card.js
+var _detailDirty = false; // 标示卡未保存修改标记
+
+// D1.5 关闭拦截（foot 按钮；遮罩点击见底部 capture 监听）
+function tryCloseDetail(mask) {
+  if (_detailDirty && !confirm('标示卡有未保存的修改，确定离开？')) return;
+  _detailDirty = false;
+  if (mask) closeModal(mask);
+}
+
+// 标示卡 Tab 下拉回显（selected 属性在 FAST upgrade 时序下失效，须显式设 value）
 function applyDetailCardValues(s){
   var el;
   el=document.getElementById('cd-type');if(el)el.value=s.sample_type||'';
@@ -1089,11 +1169,13 @@ function _buildCardTab(s, id) {
   var to = '<fluent-option value="">不适用</fluent-option><fluent-option value="OK"' + (s.sample_type === 'OK' ? ' selected' : '') + '>OK样品</fluent-option><fluent-option value="NG"' + (s.sample_type === 'NG' ? ' selected' : '') + '>NG样品</fluent-option>';
   var lo = '<fluent-option value="">不适用</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '"' + (s.limit_item === x.code ? ' selected' : '') + '>' + x.label + '</fluent-option>'; }).join('');
   var so = '<fluent-option value="">不适用</fluent-option><fluent-option value="C"' + (s.source_type === 'C' ? ' selected' : '') + '>客供(C)</fluent-option><fluent-option value="T"' + (s.source_type === 'T' ? ' selected' : '') + '>元山(T)</fluent-option><fluent-option value="G"' + (s.source_type === 'G' ? ' selected' : '') + '>塔岗(G)</fluent-option>';
-  // 【口径】有效期/复检日一律按 UTC 日期（YYYY-MM-DD）显示，前后端三处一致（card-print-html.js / card-page.js / 本文件，toISOString 即 UTC）
+  // 【口径】有效期/复检日按 UTC 日期显示（toISOString 即 UTC，前后端三处一致）
   var exp = s.next_inspect_at ? new Date(s.next_inspect_at).toISOString().slice(0, 10) : '—';
 
-  var h = '<div class="card" style="max-width:720px;margin:0 auto;overflow:hidden;padding:14px">';
-  if (locked) h += '<div class="card-lock-banner">标示卡已锁定（样品已发行），仅可查看和打印</div>';
+  // D1.5 可编辑控件变更 → 置 dirty（容器级冒泡监听，FAST composed 事件可达）
+  var h = '<div class="card" style="max-width:720px;margin:0 auto;overflow:hidden;padding:14px" oninput="_detailDirty=true" onchange="_detailDirty=true">';
+  if (locked) h += '<div class="card-lock-banner">标示卡已锁定（样品已发行），仅可查看和打印' +
+    '<a class="link" style="margin-left:10px" onclick="closeModal(this.closest(\'.modal-mask\'));location.hash=\'#/scan?no=' + encodeURIComponent(s.sample_no) + '\'">需要修正？前往扫码台 →</a></div>'; // D1.4 锁定引导
   h += '<div class="card-grid">' +
     '<div><label>样品类型</label><fluent-select id="cd-type"' + dis + '>' + to + '</fluent-select></div>' +
     '<div><label>限度项目</label><fluent-select id="cd-limit-item"' + dis + '>' + lo + '</fluent-select></div>' +
@@ -1119,38 +1201,46 @@ async function saveCard(id) {
     if (msg) msg.textContent = '保存中...';
     try {
       var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value,
-        // T6: 携带 CAS 版本号（T5 后端已支持）；undefined 时 JSON 序列化自动省略，行为同旧客户端
+        // T6: 携带 CAS 版本号；undefined 时 JSON 序列化自动省略
         version: (_detailSample && typeof _detailSample.version === 'number') ? _detailSample.version : undefined };
       await api('PUT', '/api/samples/' + id, p);
-      // 保存成功后刷新缓存的样品对象（修复 _detailSample 缓存不刷新问题，同时更新 version）
+      // 保存成功后刷新缓存的样品对象（同时更新 version）
       try { _detailSample = await api('GET', '/api/samples/' + id); } catch (_) {}
+      _detailDirty = false; // D1.5 保存成功清除标记
       toast('标示卡已保存', 'ok');
       if (msg && msg.isConnected) msg.textContent = '保存成功';
     } catch (e) {
-      // 409 冲突：api 层已统一 toast 并触发 reloadDetail 重新加载详情，此处不再重复提示
+      // 409：api 层已统一处理（toast + reloadDetail），不重复提示
       if (e && e.status === 409) return;
       if (msg && msg.isConnected) msg.textContent = e.message;
     }
   });
 }
 
-// T6: 原地刷新详情弹窗内容（409 冲突回调用，不重开弹窗避免遮罩层堆叠）
+// T6: 原地刷新详情弹窗（409 回调用，不重开弹窗避免遮罩堆叠）
 async function reloadDetail(id) {
   try {
     var s = await api('GET', '/api/samples/' + id);
     _detailSample = s;
+    _detailDirty = false; // 内容被重渲，旧编辑已失效
     var body = document.querySelector('.modal-body');
     if (!body) return;
-    body.innerHTML = _buildTabContent(s, id, _detailTab) + _buildTabsHTML(s, id, _detailTab);
+    body.innerHTML = _buildTabsHTML(s, id, _detailTab) + _buildTabContent(s, id, _detailTab);
     if (_detailTab === 'card') applyDetailCardValues(s);
   } catch (_) {}
 }
-// T6: 409 冲突时自动刷新详情（注册到 api.js 的统一冲突回调）
+// T6: 409 冲突时自动刷新详情
 onConflictRefresh(function() {
   if (_detailSample && document.querySelector('.modal-mask')) reloadDetail(_detailSample.id);
 });
 
-function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
+// D1.5 遮罩点击拦截：document capture 抢先于 modal.js 关闭监听（mask 自身 capture 因注册顺序无法抢先）；命中遮罩且 dirty 时 stopPropagation + confirm
+document.addEventListener('click', function(ev) {
+  var t = ev.target;
+  if (!_detailDirty || !t || !t.classList || !t.classList.contains('modal-mask')) return;
+  ev.stopPropagation();
+  if (confirm('标示卡有未保存的修改，确定离开？')) { _detailDirty = false; closeModal(t); }
+}, true);
 
 
 /* --- subsystems/samples/frontend/js/views/scan-camera.js --- */
