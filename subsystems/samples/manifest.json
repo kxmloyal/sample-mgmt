@@ -253,6 +253,15 @@
           "RD"
         ],
         "label": "创建替代品"
+      },
+      {
+        "from": "IN_CUSTODY",
+        "to": "IN_CUSTODY",
+        "action": "INSPECT_CUSTODY",
+        "role": [
+          "QA"
+        ],
+        "label": "到期复检"
       }
     ]
   }
