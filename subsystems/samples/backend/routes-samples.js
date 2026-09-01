@@ -6,6 +6,11 @@ const { STATION_GROUPS, generateSampleCode, previewSampleCode } = require('../db
 const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
 const { toCsv, sendCsv } = require('../../../shared/csv');
+const cache = require('../../../shared/cache');
+
+// 机型主数据为共享表(sample_models)：写入后须失效样品侧机型/下拉缓存
+const MODEL_CACHE_KEYS = ['sl_sample_models', 'sl_sample_model_options'];
+function invalidateModelCaches() { MODEL_CACHE_KEYS.forEach(function (k) { cache.del(k); }); }
 
 const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
 const UPLOAD_MAX_SIZE = parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10);
@@ -119,18 +124,29 @@ function register(app) {
   });
 
   // 机型列表：GET 所有登录角色可读（新建下拉/筛选数据源）；POST/DELETE 仅 RD/ADMIN（须注册在 /:id 之前）
+  // 字典缓存：机型为低变数据，TTL 60s；写操作走 invalidateModelCaches 即时失效（见 AGENTS.md 性能优化）
   app.get('/api/samples/models', requireAuth, asyncHandler(async (req, res) => {
-    res.json(await D.listModels());
+    let cached = cache.get('sl_sample_models');
+    if (cached === undefined) {
+      cached = await D.listModels();
+      cache.set('sl_sample_models', cached);
+    }
+    res.json(cached);
   }));
 
   // 下拉数据源：机型列表全称 + 存量样品 model 补集（历史值不丢，避免漏筛）
   app.get('/api/samples/model-options', requireAuth, asyncHandler(async (req, res) => {
-    const models = await D.listModels();
-    const legacy = await D.listLegacyModels();
-    const seen = {};
-    const out = models.map(function (m) { seen[m.code] = 1; return { value: m.code, label: m.full_name }; });
-    legacy.forEach(function (code) { if (!seen[code]) out.push({ value: code, label: code }); });
-    res.json(out);
+    let cached = cache.get('sl_sample_model_options');
+    if (cached === undefined) {
+      const models = await D.listModels();
+      const legacy = await D.listLegacyModels();
+      const seen = {};
+      const out = models.map(function (m) { seen[m.code] = 1; return { value: m.code, label: m.full_name }; });
+      legacy.forEach(function (code) { if (!seen[code]) out.push({ value: code, label: code }); });
+      cached = out;
+      cache.set('sl_sample_model_options', cached);
+    }
+    res.json(cached);
   }));
 
   app.post('/api/samples/models', requireAuth, async (req, res) => {
@@ -144,7 +160,9 @@ function register(app) {
       if (code.length > 20) return res.status(400).json({ error: '机型短码最长 20 位' });
       if (!/^[A-Za-z0-9]+$/.test(code)) return res.status(400).json({ error: '机型短码仅允许字母和数字' });
       if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
-      res.json(await D.createModel({ code: code, full_name: full_name, created_by: u.id }));
+      const created = await D.createModel({ code: code, full_name: full_name, created_by: u.id });
+      invalidateModelCaches();
+      res.json(created);
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
       logger.error('新增机型失败: ' + (err.message || String(err)));
@@ -160,6 +178,7 @@ function register(app) {
     const used = await D.countSamplesByModel(m.code);
     if (used > 0) return res.status(409).json({ error: '该机型已被 ' + used + ' 个样品使用，禁止删除' });
     await D.deleteModel(m.id);
+    invalidateModelCaches();
     res.json({ ok: true });
   }));
 
@@ -235,7 +254,13 @@ function register(app) {
       return res.status(409).json({ error: '标示卡已锁定：样品已发行，不可修改。如需修改请联系管理员' });
 
     const { sample_type, limit_item, source_type, card_version,
-      test_standard, test_data } = req.body || {};
+      test_standard, test_data, version } = req.body || {};
+
+    // 乐观锁 CAS（T5）：version 可选——旧客户端不传则行为完全不变（§11 出入参兼容）；
+    // 传入时必须是非负整数，否则 400
+    if (version !== undefined && version !== null &&
+        (typeof version !== 'number' || !Number.isInteger(version) || version < 0))
+      return res.status(400).json({ error: 'version 必须是非负整数' });
 
     const updated = { ...s,
       sample_type: sample_type !== undefined ? sample_type : s.sample_type,
@@ -249,13 +274,20 @@ function register(app) {
       signed_by_qa: u.role === 'QA' ? (u.display_name || u.username) : s.signed_by_qa
     };
 
-    // 更新 + 审计日志原子提交
-    const result = await D.withTransaction(async conn => {
-      const r = await D.updateSample(updated, conn);
-      await D.addLog({ sample_id: s.id, action: 'UPDATE_CARD', role: u.role, user_id: u.id, dept: u.dept, note: '更新标示卡信息' }, conn);
-      return r;
-    });
-    res.json({ ...result, logs: await D.listLogsBySample(s.id) });
+    // 更新 + 审计日志原子提交；携带 version 时走 CAS 乐观锁，
+    // 版本冲突（他人已抢先修改）时 updateSample 抛 code='CONFLICT'，此处转 409
+    try {
+      const result = await D.withTransaction(async conn => {
+        const r = await D.updateSample(updated, conn, version);
+        await D.addLog({ sample_id: s.id, action: 'UPDATE_CARD', role: u.role, user_id: u.id, dept: u.dept, note: '更新标示卡信息' }, conn);
+        return r;
+      });
+      res.json({ ...result, logs: await D.listLogsBySample(s.id) });
+    } catch (err) {
+      if (err && err.code === 'CONFLICT')
+        return res.status(409).json({ error: '该样品刚被他人修改，请刷新后重试' });
+      throw err;
+    }
   }));
 
   // 导出 saveSampleImage 供 scan 路由复用
