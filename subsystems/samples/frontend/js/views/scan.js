@@ -1,4 +1,6 @@
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
+// T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -51,7 +53,8 @@ function renderScanAction(s,actions){
   }
   window._scanSample=s;
   var buttonRow=actions.length>1?actions.map(function(a){
-    var label=CONFIRM_ACTIONS.has(a)?'确认'+ACTION_CN[a]:(ACTION_CN[a]||a);
+    var cn=ACTION_CN[a]||SCAN_ACTION_CN_EXT[a]||a;
+    var label=CONFIRM_ACTIONS.has(a)?'确认'+cn:cn;
     return '<fluent-button appearance="accent" size="small" onclick="showScanActionForm(\''+a+'\')">'+label+'</fluent-button>';
   }).join(' '):'';
   box.innerHTML='<div class="card sample-card">'+
@@ -86,6 +89,14 @@ function showScanActionForm(action){
       '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td><td><textarea id="scan-card-data" rows="2" style="resize:vertical;width:100%">'+e(s.test_data||'')+'</textarea></td></tr></table>'+
       '</details>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\',this)">确认复检完成</fluent-button></div>';
+  }else if(action==='INSPECT_CUSTODY'){
+    // T8 保管中到期复检：复用 INSPECT 表单结构 + 周期输入框（留空=沿用原周期，后端兜底 400）
+    var curCyc=(s&&s.release_cycle_days)?String(s.release_cycle_days):'';
+    html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
+      '<div id="scan-img-prev" style="margin-top:8px"></div>'+
+      '<label>复检周期（天）</label><fluent-text-field id="scan-cycle" type="number" min="1" max="3650" placeholder="'+(curCyc?('留空沿用当前 '+e(curCyc)+' 天'):'如 365')+'" style="width:190px"></fluent-text-field>'+
+      '<label>复检结论 / 备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
@@ -106,6 +117,16 @@ function showScanActionForm(action){
   formEl.innerHTML=html;
   // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
   if(action==='EDIT_CARD')applyCardFieldValues(s);
+}
+// T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
+// 返回 false 表示校验失败（已 toast），调用方中止提交
+function collectCustodyCycle(body){
+  var el=document.getElementById('scan-cycle');
+  var v=el&&el.value?el.value.trim():'';
+  if(!v)return true;
+  var n=Number(v);
+  if(!Number.isInteger(n)||n<1||n>3650){toast('复检周期须为 1~3650 天的整数（留空则沿用原周期）','err');return false;}
+  body.cycleDays=n;return true;
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
@@ -128,7 +149,7 @@ async function confirmScan(action,btn){
     code=wizardSample.sample_no;
   }
   var body={code:code,action:action};
-  if(action==='PRODUCE'||action==='INSPECT'){
+  if(action==='PRODUCE'||action==='INSPECT'||action==='INSPECT_CUSTODY'){
     var f=document.getElementById('scan-img').files[0];
     if(!f){toast('请上传照片','err');return;}
     body.image=await new Promise(function(res,rej){
@@ -140,6 +161,7 @@ async function confirmScan(action,btn){
     var verEl=document.getElementById('scan-card-ver');if(verEl&&verEl.value.trim())body.card_version=verEl.value.trim();
     var dataEl=document.getElementById('scan-card-data');if(dataEl&&dataEl.value.trim())body.test_data=dataEl.value.trim();
   }
+  if(action==='INSPECT_CUSTODY'&&!collectCustodyCycle(body))return;
   if(action==='RELEASE'||action==='RE_RELEASE'){collectWizardPayload(body);}
   if(action==='CUSTODY'||action==='EDIT_STORAGE'){body.location=document.getElementById('scan-loc').value;}
   if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'){
@@ -160,9 +182,24 @@ async function confirmScan(action,btn){
   try{
     var r=await api('POST','/api/scan',body);
     handleScanSuccess(r);
+    if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
     if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
   }catch(e){toast(e.message,'err');}
   });
+}
+
+// T8.2: 成功提示条常驻「重新打印标示卡」按钮——setTimeout 自动弹窗被浏览器拦截时的手动兜底
+// （用户手势 onclick 内触发 window.open，新窗口；打印触发根治在批次 2）
+function appendReprintBtn(sampleId){
+  var box=document.getElementById('scan-result');
+  var card=box?box.querySelector('.sample-card'):null;
+  if(!card)return;
+  var btn=document.createElement('fluent-button');
+  btn.setAttribute('appearance','neutral');btn.setAttribute('size','small');
+  btn.style.marginLeft='8px';
+  btn.textContent='🖨 重新打印标示卡';
+  btn.onclick=function(){window.open('/api/samples/'+sampleId+'/card/print'+(typeof getPrintSizeQuery==='function'?getPrintSizeQuery():''),'_blank');};
+  card.appendChild(btn);
 }
 
 // T6: 409 冲突时自动刷新当前扫码结果（注册到 api.js 的统一冲突回调）
