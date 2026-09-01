@@ -1,10 +1,15 @@
 // detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
 var _detailSample = null;
+var _detailTab = 'info';
+var _detailReqSeq = 0;
 
 async function viewDetail(id) {
+  var seq = ++_detailReqSeq;
   var s = await api('GET', '/api/samples/' + id);
+  if (seq !== _detailReqSeq) return; // 已有更新的详情请求，丢弃过期响应（防竞态）
   _detailSample = s;
+  _detailTab = 'info';
   var head = '<b>' + e(s.sample_no) + '</b>' + statusBadge(s);
   var foot = '<a class="link" style="margin-right:14px;cursor:pointer" onclick="downloadQR(' + id + ')">下载二维码</a>' +
     '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
@@ -15,6 +20,7 @@ async function viewDetail(id) {
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
+  _detailTab = tab;
   var body = document.querySelector('.modal-body');
   if (!body) return;
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
@@ -166,17 +172,40 @@ function _buildCardTab(s, id) {
 }
 
 async function saveCard(id) {
-  var msg = document.getElementById('cd-msg');
-  var btn = document.getElementById('cd-save-btn');
-  if (msg) msg.textContent = '保存中...';
-  if (btn) btn.disabled = true;
-  try {
-    var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value };
-    await api('PUT', '/api/samples/' + id, p);
-    toast('标示卡已保存', 'ok');
-    if (msg) msg.textContent = '保存成功';
-  } catch (e) { if (msg) msg.textContent = e.message; }
-  if (btn) btn.disabled = false;
+  await withSubmitLock(document.getElementById('cd-save-btn'), async function() {
+    var msg = document.getElementById('cd-msg');
+    if (msg) msg.textContent = '保存中...';
+    try {
+      var p = { sample_type: $('#cd-type').value, limit_item: $('#cd-limit-item').value, source_type: $('#cd-source').value, card_version: $('#cd-card-version').value, test_data: $('#cd-test-data').value, test_standard: $('#cd-test-standard').value, signed_by_rd: $('#cd-signed-rnd').value, signed_by_qa: $('#cd-signed-qa').value,
+        // T6: 携带 CAS 版本号（T5 后端已支持）；undefined 时 JSON 序列化自动省略，行为同旧客户端
+        version: (_detailSample && typeof _detailSample.version === 'number') ? _detailSample.version : undefined };
+      await api('PUT', '/api/samples/' + id, p);
+      // 保存成功后刷新缓存的样品对象（修复 _detailSample 缓存不刷新问题，同时更新 version）
+      try { _detailSample = await api('GET', '/api/samples/' + id); } catch (_) {}
+      toast('标示卡已保存', 'ok');
+      if (msg && msg.isConnected) msg.textContent = '保存成功';
+    } catch (e) {
+      // 409 冲突：api 层已统一 toast 并触发 reloadDetail 重新加载详情，此处不再重复提示
+      if (e && e.status === 409) return;
+      if (msg && msg.isConnected) msg.textContent = e.message;
+    }
+  });
 }
+
+// T6: 原地刷新详情弹窗内容（409 冲突回调用，不重开弹窗避免遮罩层堆叠）
+async function reloadDetail(id) {
+  try {
+    var s = await api('GET', '/api/samples/' + id);
+    _detailSample = s;
+    var body = document.querySelector('.modal-body');
+    if (!body) return;
+    body.innerHTML = _buildTabContent(s, id, _detailTab) + _buildTabsHTML(s, id, _detailTab);
+    if (_detailTab === 'card') applyDetailCardValues(s);
+  } catch (_) {}
+}
+// T6: 409 冲突时自动刷新详情（注册到 api.js 的统一冲突回调）
+onConflictRefresh(function() {
+  if (_detailSample && document.querySelector('.modal-mask')) reloadDetail(_detailSample.id);
+});
 
 function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }

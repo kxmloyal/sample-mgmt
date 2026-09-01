@@ -65,7 +65,9 @@ function _schedulePreview(){
   clearTimeout(_previewTimer);
   _previewTimer=setTimeout(_refreshPreview,300);
 }
+var _previewReqSeq=0;
 async function _refreshPreview(){
+  const seq=++_previewReqSeq;
   const box=$('#n-preview');
   if(!box) return;
   const src=$('#n-source').value, model=$('#n-model').value, station=$('#n-station').value;
@@ -73,18 +75,15 @@ async function _refreshPreview(){
   if(model.length>0&&model.length<6){ box.textContent='机型编码至少 6 位'; return; }
   try{
     const r=await api('GET','/api/samples/code-preview?source_type='+encodeURIComponent(src)+'&model='+encodeURIComponent(model)+'&station='+encodeURIComponent(station));
+    if(seq!==_previewReqSeq)return; // 已有更新的预览请求，丢弃过期响应（防竞态）
     box.textContent='编号预览：'+r.sample_no;
-  }catch(e){ box.textContent=''; }
+  }catch(e){ if(seq===_previewReqSeq)box.textContent=''; }
 }
-// 防重复提交：连续点击确认只会创建一次（提交中禁用按钮 + 标志位拦截）
-let _nSubmitting=false;
+// 防重复提交：withSubmitLock 统一实现（提交中禁用按钮 + 加载态，见 api.js）
 async function submitNew(){
-  if(_nSubmitting) return;
-  _nSubmitting=true;
-  const btn=$('#n-submit');
-  if(btn) btn.disabled=true;
-  $('#n-msg').textContent='';
-  try{
+  await withSubmitLock($('#n-submit'),async function(){
+    $('#n-msg').textContent='';
+    try{
     const payload={
       name:$('#n-name').value,
       model:$('#n-model').value,
@@ -100,11 +99,8 @@ async function submitNew(){
     const s=await api('POST','/api/samples',payload);
     openPrintLabel(s);
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
-  }catch(e){$('#n-msg').textContent=e.message;}
-  finally{
-    _nSubmitting=false;
-    if(btn) btn.disabled=false;
-  }
+    }catch(e){const m=$('#n-msg');if(m)m.textContent=e.message;}
+  });
 }
 function openPrintLabel(s){
   window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');

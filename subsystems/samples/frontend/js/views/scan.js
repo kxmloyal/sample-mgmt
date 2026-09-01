@@ -29,15 +29,18 @@ function viewScan(){
   var m = (location.hash || '').match(/[?&]no=([^&]+)/);
   if (m) { $('#scan-code').value = decodeURIComponent(m[1]); doScan(); }
 }
+var _scanReqSeq=0;
 async function doScan(){
+  var seq=++_scanReqSeq;
   var code=$('#scan-code').value.trim();
   if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
   try{
     var data=await api('GET','/api/resolve?code='+encodeURIComponent(code));
+    if(seq!==_scanReqSeq)return; // 已有更新的扫码请求，丢弃过期响应（防竞态）
     window._scanRdUsers=data.rdUsers||[];
     renderScanAction(data.sample,data.allowedActions);
-  }catch(err){box.innerHTML='<div class="card sample-card" style="border-color:#fecaca"><p style="color:var(--bad)">'+e(err.message)+'</p></div>';}
+  }catch(err){if(seq!==_scanReqSeq)return;box.innerHTML='<div class="card sample-card" style="border-color:#fecaca"><p style="color:var(--bad)">'+e(err.message)+'</p></div>';}
 }
 function renderScanAction(s,actions){
   var box=$('#scan-result');
@@ -73,7 +76,7 @@ function showScanActionForm(action){
     html='<label>制作照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：制作完成"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\')">确认制作完成</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'PRODUCE\',this)">确认制作完成</fluent-button></div>';
   }else if(action==='INSPECT'){
     html='<label>复检照片 *</label><input id="scan-img" type="file" accept="image/*" onchange="previewScanImg(event)"/>'+
       '<div id="scan-img-prev" style="margin-top:8px"></div><label>备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
@@ -82,20 +85,20 @@ function showScanActionForm(action){
       '<table style="width:100%;font-size:12px"><tr><td style="padding:4px 0;color:#6b7280">版次</td><td><fluent-text-field id="scan-card-ver" value="'+e(s.card_version||'')+'" style="width:100%"></fluent-text-field></td></tr>'+
       '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td><td><textarea id="scan-card-data" rows="2" style="resize:vertical;width:100%">'+e(s.test_data||'')+'</textarea></td></tr></table>'+
       '</details>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\')">确认复检完成</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT\',this)">确认复检完成</fluent-button></div>';
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\')">确认接收保管</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\')">保存修正 + 打印标示卡</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
       '<label>新储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\')">确认修改储位</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\')">提交退回申请</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETURN_REQUEST\',this)">提交退回申请</fluent-button></div>';
   }else{
     html=renderReturnActions(action,s);
     if(!html){formEl.innerHTML='';return;}
@@ -114,7 +117,8 @@ function collectWizardPayload(body){
   if(wizardSample&&wizardSample._wizCardData)body.test_data=wizardSample._wizCardData;
   if(wizardSample&&wizardSample._wizCardStandard)body.test_standard=wizardSample._wizCardStandard;
 }
-async function confirmScan(action){
+async function confirmScan(action,btn){
+  await withSubmitLock(btn||null,async function(){
   var code=document.getElementById('scan-code').value.trim();
   var body={code:code,action:action};
   if(action==='PRODUCE'||action==='INSPECT'){
@@ -147,4 +151,11 @@ async function confirmScan(action){
     var stdEl2=document.getElementById('scan-card-standard');if(stdEl2&&stdEl2.value!==undefined)body.test_standard=stdEl2.value.trim();
   }
   try{var r=await api('POST','/api/scan',body);handleScanSuccess(r);}catch(e){toast(e.message,'err');}
+  });
 }
+
+// T6: 409 冲突时自动刷新当前扫码结果（注册到 api.js 的统一冲突回调）
+onConflictRefresh(function(){
+  var codeEl=document.getElementById('scan-code');
+  if(codeEl&&codeEl.value.trim()&&document.getElementById('scan-result'))doScan();
+});
