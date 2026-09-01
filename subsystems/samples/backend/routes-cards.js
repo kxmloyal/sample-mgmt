@@ -3,6 +3,7 @@ const D = require('../../../db');
 const { logger } = require('../../../logger');
 const QRCode = require('qrcode');
 const { buildLabelHtml, buildCardPrintHtml, parseSize } = require('./card-html');
+const { buildBatchCardPrintHtml } = require('./card-print-html');
 const { cardPageHtml } = require('./card-page');
 const { escapeHtml } = require('./html-utils');
 const { asyncHandler } = require('./async-handler');
@@ -70,6 +71,34 @@ function register(app) {
     }
 
     const html = await cardPageHtml(s);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  }));
+
+  // 批量打印标示卡（T17：单页多卡 + @page 分页，一次 window.print；替代前端循环 window.open 被浏览器拦截的方案）
+  // 注意：必须注册在 /api/samples/:id/... 路由之前，避免被 :id 捕获
+  app.get('/api/samples/cards/print', requireAuth, asyncHandler(async (req, res) => {
+    // ids 解析：逗号分隔、去空白、剔除非数字、去重；空 → 400，超 50 → 400
+    var raw = String(req.query.ids || '');
+    var seen = {};
+    var ids = [];
+    raw.split(',').forEach(function (p) {
+      var t = p.trim();
+      if (!/^\d+$/.test(t)) return;
+      if (!seen[t]) { seen[t] = true; ids.push(Number(t)); }
+    });
+    if (ids.length === 0) return res.status(400).json({ error: '请提供有效的样品ID列表' });
+    if (ids.length > 50) return res.status(400).json({ error: '一次最多打印 50 张' });
+    // 逐 id 实时查库（getSampleById 已过滤 deleted_at 软删），不存在/已删除 → 跳过并计数
+    var samples = [];
+    var skipped = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var s = await D.getSampleById(ids[i]);
+      if (s) samples.push(s); else skipped++;
+    }
+    if (samples.length === 0) return res.status(404).json({ error: '样品不存在或已删除' });
+    const { sizeKey, cw, ch } = parseSize(req);
+    const html = buildBatchCardPrintHtml(samples, sizeKey, cw, ch, skipped);
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   }));
