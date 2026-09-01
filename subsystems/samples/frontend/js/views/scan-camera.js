@@ -85,11 +85,13 @@ function handleScanSuccess(r){
   var contChecked=contEl&&contEl.checked;
   if(r.printCard){
     if(contChecked){
-      printQueue.push({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
-      renderPrintQueue();
-    }else{
-      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print'+getPrintSizeQuery(),'_blank');},600);
+      // T18.3 入队去重 + localStorage 持久化（print-queue.js）
+      enqueuePrintCard({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
     }
+    // T18.1 判定：confirmScan（scan.js）的 POST 为异步，执行到此处时按钮点击手势已失效；
+    // 相机扫码路径则全程无用户手势——原 setTimeout 600ms 自动弹窗必被浏览器拦截且无提示，故删除。
+    // 占位页模式需在手势点（scan.js confirmScan，本任务范围外）开窗，无法在本文件实施；
+    // 兜底为 scan.js T8.2 常驻「重新打印标示卡」按钮（真实点击手势内 window.open）。
   }
   if(contChecked){
     $('#scan-code').value='';
@@ -103,7 +105,7 @@ function handleScanSuccess(r){
       (r.sample.next_inspect_at?('<p class="muted">下次复检：'+fmt(r.sample.next_inspect_at)+'</p>'):'')+
       (r.sample.storage_location?('<p class="muted">储位：'+e(r.sample.storage_location)+'（'+e(r.sample.custody_dept)+'）</p>'):'')+
       '<fluent-button appearance="accent" size="small" onclick="afterScanReset()">继续扫码</fluent-button></div>';
-    toast('操作成功','ok');
+    toast(r.printCard?'操作成功，请点击「重新打印标示卡」打印':'操作成功','ok');
   }
 }
 

@@ -83,6 +83,10 @@ async function _refreshPreview(){
 async function submitNew(){
   await withSubmitLock($('#n-submit'),async function(){
     $('#n-msg').textContent='';
+    // T18.1 占位页模式：点击提交的手势内（transient activation 窗口内）同步开占位页，
+    // POST 完成后填打印地址，规避慢网超手势窗口期被拦截
+    var printWin=openPrintPlaceholder();
+    if(!printWin)toast('浏览器拦截了打印窗口，请允许弹出窗口；创建后可到样品列表补打条码','err');
     try{
     const payload={
       name:$('#n-name').value,
@@ -97,11 +101,14 @@ async function submitNew(){
       test_standard:$('#n-test-standard').value
     };
     const s=await api('POST','/api/samples',payload);
-    openPrintLabel(s);
+    if(printWin)printWin.location.href='/api/samples/'+s.id+'/label/print'+getPrintSizeQuery();
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
-    }catch(e){const m=$('#n-msg');if(m)m.textContent=e.message;}
+    }catch(e){
+      if(printWin)try{printWin.close();}catch(_){}
+      const m=$('#n-msg');if(m)m.textContent=e.message;}
   });
 }
+// 列表/详情补打标签：真实点击手势内直接 window.open，无需占位页
 function openPrintLabel(s){
   window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');
 }
