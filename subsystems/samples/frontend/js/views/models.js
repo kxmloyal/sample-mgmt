@@ -15,7 +15,7 @@ async function loadModels() {
     '<tr><th>机型短码</th><th>机型全称</th><th>创建时间</th><th style="width:80px">操作</th></tr>' +
     (list.length ? list.map(function (m) {
       return '<tr><td><b>' + e(m.code) + '</b></td><td>' + e(m.full_name) + '</td><td class="muted">' + e((m.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
-        '<td><a class="link" onclick="deleteModel(' + m.id + ',\'' + m.code + '\')">删除</a></td></tr>';
+        '<td><a class="link" data-code="' + e(m.code) + '" onclick="deleteModel(' + m.id + ',this.dataset.code)">删除</a></td></tr>';
     }).join('') : '<tr><td colspan="4" class="empty">暂无机型，请先新增</td></tr>') +
     '</table></div>';
 }

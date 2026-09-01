@@ -4,10 +4,10 @@
 function renderReturnActions(action,s){
   if(action==='RETIRE_ONLY'){
     return '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述作废原因"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'RETIRE_ONLY\')">确认作废</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'RETIRE_ONLY\',this)">确认作废</fluent-button></div>';
   }else if(action==='RETURN_REJECT'){
     return '<label>拒绝理由 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请填写拒绝退回的理由"></textarea>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\')">拒绝退回</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_REJECT\',this)">拒绝退回</fluent-button></div>';
   }else if(action==='RELEASE'){
     // 修复：RELEASE 漏接分步向导（原仅 RE_RELEASE 接入，导致 QA 发行表单空白）
     return buildReleaseWizard(s,false);
@@ -17,11 +17,11 @@ function renderReturnActions(action,s){
     var rdOptions=(window._scanRdUsers||[]).map(function(u){return '<fluent-option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</fluent-option>';}).join('');
     return '<label>指派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+rdOptions+'</fluent-select>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：需重新制作"></fluent-text-field>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\')">确认作废并指派重做</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\',this)">确认作废并指派重做</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+
-      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RECREATE\')">确认创建替代品</fluent-button></div>';
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RECREATE\',this)">确认创建替代品</fluent-button></div>';
   }
   return '';
 }

@@ -120,6 +120,13 @@ function collectWizardPayload(body){
 async function confirmScan(action,btn){
   await withSubmitLock(btn||null,async function(){
   var code=document.getElementById('scan-code').value.trim();
+  // 向导流程（RELEASE/RE_RELEASE）：编号以向导样品为准，不再信任实时输入框；
+  // 兜底比对：输入框值与向导样品编号不一致（如 Step3 待确认时被扫码枪误改）则中止提交
+  var isWizard=(action==='RELEASE'||action==='RE_RELEASE')&&wizardSample;
+  if(isWizard){
+    if(code!==wizardSample.sample_no){toast('编号与向导样品不一致（向导样品：'+wizardSample.sample_no+'），已中止提交，请重新扫码确认','err');return;}
+    code=wizardSample.sample_no;
+  }
   var body={code:code,action:action};
   if(action==='PRODUCE'||action==='INSPECT'){
     var f=document.getElementById('scan-img').files[0];
@@ -150,7 +157,11 @@ async function confirmScan(action,btn){
     var dataEl2=document.getElementById('scan-card-data');if(dataEl2&&dataEl2.value!==undefined)body.test_data=dataEl2.value.trim();
     var stdEl2=document.getElementById('scan-card-standard');if(stdEl2&&stdEl2.value!==undefined)body.test_standard=stdEl2.value.trim();
   }
-  try{var r=await api('POST','/api/scan',body);handleScanSuccess(r);}catch(e){toast(e.message,'err');}
+  try{
+    var r=await api('POST','/api/scan',body);
+    handleScanSuccess(r);
+    if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
+  }catch(e){toast(e.message,'err');}
   });
 }
 

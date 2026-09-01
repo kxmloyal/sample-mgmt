@@ -3,9 +3,25 @@
 function nextCardVersion(c){var m=String(c||'').match(/\d+/);var n=m?parseInt(m[0],10):0;return String(Math.min(n+1,99)).padStart(2,'0');}
 var wizardSample=null; // 当前向导的样品数据
 
+// 向导进行期间锁定编号输入框（防正待确认时被扫码枪误改导致张冠李戴）
+function lockScanCode(no){
+  var sc=$('#scan-code');if(!sc)return;
+  sc.value=no;sc.readOnly=true;
+  // 钩住「取消/继续扫码」复位入口，向导退出时解锁（afterScanReset 定义在 scan-camera.js）
+  if(!window._wizResetHooked&&typeof window.afterScanReset==='function'){
+    window._wizResetHooked=true;
+    var _origAfterScanReset=window.afterScanReset;
+    window.afterScanReset=function(){unlockScanCode();_origAfterScanReset();};
+  }
+}
+function unlockScanCode(){
+  var sc=$('#scan-code');if(sc)sc.readOnly=false;
+}
+
 function buildReleaseWizard(s,isReRelease){
   wizardSample=s;
   wizardSample._isReRelease=isReRelease||false;
+  lockScanCode(s.sample_no);
   return renderWizardStep1(s);
 }
 
@@ -77,7 +93,7 @@ function renderWizardStep3(s){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;margin-top:14px">'+
       '<fluent-button appearance="neutral" size="small" onclick="goWizardStep(2)">← 返回修改</fluent-button>'+
-      '<fluent-button appearance="accent" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\')"'+
+      '<fluent-button appearance="accent" id="scan-confirm" onclick="confirmScan(\''+confirmAction+'\',this)"'+
         (!ok?' disabled':'')+'>'+confirmLabel+'</fluent-button>'+
     '</div>'
   ;
