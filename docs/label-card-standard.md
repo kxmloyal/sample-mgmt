@@ -33,7 +33,7 @@
 | 大号 `large` | 60 × 40 | 默认档 |
 | 自定义 `custom` | 宽 30~150 / 高 10~150 | 宽或高非法/缺失时回退大号 |
 
-> 换算：**1mm ≈ 3.7795px @96dpi**。`@page` 纸张尺寸与 `.lab`/`.sheet` 尺寸 MUST **同源取 mm**，避免 px/mm 舍入差导致打印分页溢出。
+> 换算：**1mm ≈ 3.7795px @96dpi**。`@page` 纸张尺寸与 `.lab`/`.sheet` 尺寸 MUST **同源取 mm**，避免 px/mm 舍入差导致打印分页溢出。批次 2 起（T19）布局公式**全程以 mm 浮点直出、最终一次性取整**，消除 mm→px→mm 往返漂移（≤1mm）；自定义尺寸宽合法而高缺失/非法时按大号 60:40 等比补高。
 
 #### 2.1.1 自定义尺寸的比例兼容（contain 缩放）
 
@@ -59,9 +59,9 @@
 
 ### 2.3 标示卡字段（打印版 8 字段 + 备注）
 
-类型 `sample_type` / 来源 `source_type`（代码+简称，如 `G·塔岗`） / 版次 `card_version` / 项目 `limit_item` / 有效期 `valid_until`（`yy/mm/dd`，过期标红） / 样品数值 `test_data` / 制作 `signed_by_rd` / 确认 `signed_by_qa` / 备注 `notes`。
+类型 `sample_type` / 来源 `source_type`（代码+简称，如 `G·塔岗`） / 版次 `card_version` / 项目 `limit_item` / 有效期 `valid_until`（**UTC `YYYY-MM-DD` 口径**，过期标红；打印卡 / 匿名卡 / 详情页三处一致，2026-09-01 批次 2 统一） / 样品数值 `test_data` / 制作 `signed_by_rd` / 确认 `signed_by_qa` / 备注 `notes`。
 
-> 数字标示卡（`card-page.js`）在打印版基础上额外展示：样品名称、机型/站别/规格、最近 2 条操作日志。
+> 数字标示卡（`card-page.js`）在打印版基础上额外展示：样品名称、机型/站别/规格、最近 2 条操作日志。**匿名脱敏**（2026-09-01 批次 2）：日志仅显示「动作中文名 + 时间」，不输出 role/dept；签署人姓名脱敏为「已签署」。
 
 ### 2.4 尺寸联动
 
@@ -87,6 +87,7 @@
 | 新建样品 | 自动弹出标签打印 | `GET /api/samples/:id/label/print` | 登录 |
 | 下载标签 | 列表/详情「下载标签」 | `GET /api/samples/:id/label/download` | ADMIN/QA/RD |
 | 打印标示卡 | 发行后自动 / 详情页手动 / 打印队列批量 | `GET /api/samples/:id/card/print` | 登录 |
+| 批量打印标示卡 | 打印队列「批量打印」（一次 ≤50 张） | `GET /api/samples/cards/print`（**单页多卡 + @page 分页**，一次 window.print，已删除/不存在样品自动跳过并计数） | 登录 |
 | 下载二维码 | 条码打印软件导入 | `GET /api/samples/:id/qrcode/download` | ADMIN/QA/RD |
 | 扫码查看数字标示卡 | 现场扫码（匿名，无需登录） | `GET /card/:sample_no` | 公开 |
 

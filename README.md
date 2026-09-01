@@ -40,6 +40,8 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 > 注：IN_CUSTODY 临期（距复检日 ≤7 天，含逾期）支持 QA「到期复检」自环（INSPECT_CUSTODY）——样品不脱离保管，复检通过后顺延复检日、标示卡版次自动 +1 并触发重打（2026-09-01 批次 1）。
 
+> 注：删除样品为**软删除**（`deleted_at` 置位，2026-09-01 批次 2 / T13）——样品行与操作日志全量保留（审计不断链），所有查询自动过滤已删样品；编号**不复用**（软删样品序号仍视为占用，防止旧实物 QR 扫码指向新样品）。
+
 ### 扫码台 — 三方扫码驱动状态机
 
 | 当前状态 | 操作角色 | 扫码后动作 | 要求 |
@@ -51,6 +53,7 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 | IN_CUSTODY 临期(≤7天) | 品保(QA) | → IN_CUSTODY 到期复检 | 复检照片+周期(可沿用)+版次自动+1+触发重打 |
 | IN_CUSTODY | 保管(CUSTODY) | → RETURNING | 填写退回原因 |
 | RETURNING | 品保(QA) | 多分支：重新发行/退回研发/直接作废/拒绝退回 | — |
+| RETURNING(退回审核中) | 管理员(ADMIN) | 兜底：强制改派 FORCE_REASSIGN / 强制作废 FORCE_RETIRE | 卡死兜底：改派须选启用状态 RD；作废须填原因（2026-09-01 批次 2）|
 | RETURNING(被指派) | 研发(RD) | 创建替代品 | 自动复制原样品信息 |
 
 ### 样品列表
@@ -272,11 +275,13 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
-| `/api/samples/:id` | DELETE | 是 | 删除样品（仅 NEW/PRODUCED，仅创建者或管理员）|
+| `/api/samples/:id` | DELETE | 是 | 删除样品=**软删除**（deleted_at 置位；仅 NEW/PRODUCED，仅创建者或管理员；操作日志保留、编号不复用）|
 | `/api/samples/:id/qrcode` | GET | 是 | 样品二维码 |
 | `/api/samples/:id/qrcode/download` | GET | 是 | 下载高清二维码 |
 | `/api/samples/:id/label/download` | GET | 是 | 下载标签 HTML |
 | `/api/samples/:id/card/print` | GET | 是 | 打印标示卡 |
+| `/api/samples/cards/print` | GET | 是 | 批量打印标示卡（ids 逗号分隔、一次 ≤50，单页多卡 + @page 分页）|
+| `/api/samples/:id/images` | GET | 是 | 样品历史照片列表（制作/复检全量留痕，时间倒序）|
 | `/api/samples/export` | GET | 是 | 样品列表导出 CSV（复用筛选参数，忽略分页）|
 | `/api/fixtures` | GET | 是 | 治具列表（筛选/排序/分页）|
 | `/api/fixtures/export` | GET | 是 | 治具清单导出 CSV（复用筛选/排序参数，忽略分页）|
