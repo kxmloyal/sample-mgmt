@@ -1,4 +1,4 @@
-/** BUNDLE vbmti75ydc — 24 files */
+/** BUNDLE vbmtimogtf — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -212,7 +212,7 @@ function closeModal(mask){mask.remove();var all=document.querySelectorAll('.moda
 const CONFIRM_ACTIONS=new Set(['RELEASE','INSPECT','CUSTODY']);
 const STATIONS=['马达组','扇叶组','成品组','品保部','SMT','供应商'];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
-// 读取用户首选打印尺寸，默认中标(70mm)
+// 读取用户首选打印尺寸，默认中标（52×25mm；尺寸唯一来源：后端 card-constants.js PRESET_MM）
 function getPrintSize(){
   try{return localStorage.getItem('printSize')||'medium';}catch(e){return 'medium';}
 }
@@ -626,6 +626,10 @@ async function _refreshPreview(){
 async function submitNew(){
   await withSubmitLock($('#n-submit'),async function(){
     $('#n-msg').textContent='';
+    // T18.1 占位页模式：点击提交的手势内（transient activation 窗口内）同步开占位页，
+    // POST 完成后填打印地址，规避慢网超手势窗口期被拦截
+    var printWin=openPrintPlaceholder();
+    if(!printWin)toast('浏览器拦截了打印窗口，请允许弹出窗口；创建后可到样品列表补打条码','err');
     try{
     const payload={
       name:$('#n-name').value,
@@ -640,11 +644,14 @@ async function submitNew(){
       test_standard:$('#n-test-standard').value
     };
     const s=await api('POST','/api/samples',payload);
-    openPrintLabel(s);
+    if(printWin)printWin.location.href='/api/samples/'+s.id+'/label/print'+getPrintSizeQuery();
     toast('已创建 '+s.sample_no+'，可到样品列表补打条码','ok');
-    }catch(e){const m=$('#n-msg');if(m)m.textContent=e.message;}
+    }catch(e){
+      if(printWin)try{printWin.close();}catch(_){}
+      const m=$('#n-msg');if(m)m.textContent=e.message;}
   });
 }
+// 列表/详情补打标签：真实点击手势内直接 window.open，无需占位页
 function openPrintLabel(s){
   window.open('/api/samples/'+s.id+'/label/print'+getPrintSizeQuery(),'_blank');
 }
@@ -929,6 +936,7 @@ function renderTab(tab, id) {
   body.innerHTML = _buildTabContent(s, id, tab) + _buildTabsHTML(s, id, tab);
   // innerHTML 注入的 selected 属性在 FAST 下不生效，需显式回显下拉值
   if (tab === 'card') applyDetailCardValues(s);
+  if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步加载历史照片区（T14）
 }
 
 /** 构建 Tab 页面内容（不含 tab 栏） */
@@ -1022,10 +1030,40 @@ function _buildLogsTab(s, id) {
 function _buildImageTab(s, id) {
   var mainImg = s.produced_image || s.image;
   var h = '<div style="text-align:center;padding:16px">';
-  if (mainImg) h += '<div style="margin-bottom:12px"><img src="' + e(mainImg) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(\'' + e(mainImg) + '\')" alt="样品图片"/></div>';
+  if (mainImg) h += '<div style="margin-bottom:12px"><img id="detail-main-img" src="' + e(mainImg) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(this.src)" alt="样品图片"/></div>';
   if (s.inspect_image) h += '<div style="margin-bottom:12px"><div class="label">复检照片</div><img src="' + e(s.inspect_image) + '" style="max-width:100%;max-height:40vh;border-radius:8px;cursor:pointer" onclick="showImageView(\'' + e(s.inspect_image) + '\')" alt="复检照片"/></div>';
   if (!mainImg && !s.inspect_image) h += '<div class="muted">暂无图片</div>';
+  h += '<div id="detail-img-history" style="display:none;margin-top:12px"></div>';
   return h + '<div style="margin-top:12px"><a class="link" onclick="renderTab(\'info\',' + id + ')">← 返回详情</a></div></div>';
+}
+
+// 历史照片区（T14 全量留痕）：进入大图 Tab 后异步拉取该样品全部制作/复检照片缩略图；
+// 点击缩略图切换主图（点主图可全屏）；无历史时该区保持隐藏
+async function loadImageHistory(id) {
+  var box = document.getElementById('detail-img-history');
+  if (!box) return;
+  var list = [];
+  try { list = await api('GET', '/api/samples/' + id + '/images'); } catch (err) { return; }
+  box = document.getElementById('detail-img-history');
+  if (!box) return; // 响应到达时 Tab 已切换，丢弃过期渲染
+  if (!list || !list.length) return;
+  var KIND_CN = { produce: '制作', inspect: '复检' };
+  var h = '<div class="label" style="margin-bottom:6px">历史照片</div><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+  list.forEach(function (it) {
+    var tip = (KIND_CN[it.kind] || it.kind) + (it.ts ? ' ' + it.ts : '');
+    h += '<img src="' + e(it.url) + '" title="' + e(tip) + '" alt="' + e(tip) + '"' +
+      ' style="width:72px;height:72px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid #ddd"' +
+      ' onclick="switchMainImage(\'' + e(it.url) + '\')"/>';
+  });
+  box.innerHTML = h + '</div>';
+  box.style.display = '';
+}
+
+// 历史缩略图点击：有主图则切换主图，无主图（样品无当前图）则直接全屏查看
+function switchMainImage(url) {
+  var m = document.getElementById('detail-main-img');
+  if (m) m.src = url;
+  else showImageView(url);
 }
 
 function showImageView(src) {
@@ -1051,6 +1089,7 @@ function _buildCardTab(s, id) {
   var to = '<fluent-option value="">不适用</fluent-option><fluent-option value="OK"' + (s.sample_type === 'OK' ? ' selected' : '') + '>OK样品</fluent-option><fluent-option value="NG"' + (s.sample_type === 'NG' ? ' selected' : '') + '>NG样品</fluent-option>';
   var lo = '<fluent-option value="">不适用</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '"' + (s.limit_item === x.code ? ' selected' : '') + '>' + x.label + '</fluent-option>'; }).join('');
   var so = '<fluent-option value="">不适用</fluent-option><fluent-option value="C"' + (s.source_type === 'C' ? ' selected' : '') + '>客供(C)</fluent-option><fluent-option value="T"' + (s.source_type === 'T' ? ' selected' : '') + '>元山(T)</fluent-option><fluent-option value="G"' + (s.source_type === 'G' ? ' selected' : '') + '>塔岗(G)</fluent-option>';
+  // 【口径】有效期/复检日一律按 UTC 日期（YYYY-MM-DD）显示，前后端三处一致（card-print-html.js / card-page.js / 本文件，toISOString 即 UTC）
   var exp = s.next_inspect_at ? new Date(s.next_inspect_at).toISOString().slice(0, 10) : '—';
 
   var h = '<div class="card" style="max-width:720px;margin:0 auto;overflow:hidden;padding:14px">';
@@ -1202,11 +1241,13 @@ function handleScanSuccess(r){
   var contChecked=contEl&&contEl.checked;
   if(r.printCard){
     if(contChecked){
-      printQueue.push({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
-      renderPrintQueue();
-    }else{
-      setTimeout(function(){window.open('/api/samples/'+r.sample.id+'/card/print'+getPrintSizeQuery(),'_blank');},600);
+      // T18.3 入队去重 + localStorage 持久化（print-queue.js）
+      enqueuePrintCard({id:r.sample.id,sample_no:r.sample.sample_no,name:r.sample.name});
     }
+    // T18.1 判定：confirmScan（scan.js）的 POST 为异步，执行到此处时按钮点击手势已失效；
+    // 相机扫码路径则全程无用户手势——原 setTimeout 600ms 自动弹窗必被浏览器拦截且无提示，故删除。
+    // 占位页模式需在手势点（scan.js confirmScan，本任务范围外）开窗，无法在本文件实施；
+    // 兜底为 scan.js T8.2 常驻「重新打印标示卡」按钮（真实点击手势内 window.open）。
   }
   if(contChecked){
     $('#scan-code').value='';
@@ -1220,7 +1261,7 @@ function handleScanSuccess(r){
       (r.sample.next_inspect_at?('<p class="muted">下次复检：'+fmt(r.sample.next_inspect_at)+'</p>'):'')+
       (r.sample.storage_location?('<p class="muted">储位：'+e(r.sample.storage_location)+'（'+e(r.sample.custody_dept)+'）</p>'):'')+
       '<fluent-button appearance="accent" size="small" onclick="afterScanReset()">继续扫码</fluent-button></div>';
-    toast('操作成功','ok');
+    toast(r.printCard?'操作成功，请点击「重新打印标示卡」打印':'操作成功','ok');
   }
 }
 
@@ -1239,31 +1280,86 @@ function injectWizardCSS(){
 
 
 /* --- subsystems/samples/frontend/js/views/print-queue.js --- */
-// print-queue.js — 连续扫码模式下积累标示卡，批量打印
+// print-queue.js — 连续扫码模式下积累标示卡，批量打印（T18：占位页模式 + 批量单页 + 队列治理）
 var printQueue=[]; // {id,sample_no,name}
+var PRINT_QUEUE_LS_KEY='sample_print_queue';
+
+// T18.1 占位页模式：在用户手势调用点同步 window.open('about:blank') 拿窗口句柄，
+// 异步完成后由调用方 win.location.href=url 填地址；被拦截返回 null，由调用方 toast 提示
+function openPrintPlaceholder(){
+  var win=null;
+  try{win=window.open('about:blank','_blank');}catch(e){}
+  return win||null;
+}
+
+// T18.3 队列 localStorage 持久化，页面刷新后恢复
+function savePrintQueue(){
+  try{localStorage.setItem(PRINT_QUEUE_LS_KEY,JSON.stringify(printQueue));}catch(e){}
+}
+function loadPrintQueue(){
+  try{
+    var arr=JSON.parse(localStorage.getItem(PRINT_QUEUE_LS_KEY)||'[]');
+    if(Array.isArray(arr))printQueue=arr.filter(function(c){return c&&c.id;});
+  }catch(e){printQueue=[];}
+}
+
+// T18.3 入队按样品 id 去重；上限 50（后端批量打印接口上限）
+function enqueuePrintCard(card){
+  if(printQueue.some(function(c){return c.id===card.id;})){toast('该样品已在打印队列','err');return false;}
+  if(printQueue.length>=50){toast('打印队列已满（50 张），请先打印或清空','err');return false;}
+  printQueue.push(card);savePrintQueue();renderPrintQueue();
+  return true;
+}
+function removePrintCard(id){
+  printQueue=printQueue.filter(function(c){return c.id!==id;});
+  savePrintQueue();renderPrintQueue();
+}
+function clearPrintQueue(){printQueue=[];savePrintQueue();renderPrintQueue();}
+
 function renderPrintQueue(){
   var pq=document.getElementById('scan-print-queue');
   if(!pq)return;
   if(printQueue.length===0){pq.innerHTML='';return;}
-  pq.innerHTML='<div style="padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;color:#1e40af;display:flex;align-items:center;gap:8px">'+
-    '📋 已积累 <b>'+printQueue.length+'</b> 张标示卡'+
-    '<fluent-button appearance="neutral" size="small" onclick="printAllCards()" style="margin-left:auto;font-size:10px">打印全部</fluent-button>'+
-    '<fluent-button appearance="neutral" size="small" onclick="printQueue=[];renderPrintQueue()" style="font-size:10px">清空</fluent-button>'+
+  var chips=printQueue.map(function(c){
+    return '<span style="display:inline-flex;align-items:center;gap:2px;background:#fff;border:1px solid #bfdbfe;border-radius:4px;padding:1px 4px">'+
+      e(c.sample_no)+
+      '<a href="javascript:void(0)" onclick="removePrintCard('+c.id+')" style="color:#dc2626;text-decoration:none" title="移除">✕</a>'+
+    '</span>';
+  }).join(' ');
+  pq.innerHTML='<div style="padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;color:#1e40af">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+      '📋 已积累 <b>'+printQueue.length+'</b> 张标示卡'+
+      '<fluent-button appearance="neutral" size="small" onclick="printAllCards()" style="margin-left:auto;font-size:10px">打印全部</fluent-button>'+
+      '<fluent-button appearance="neutral" size="small" onclick="clearPrintQueue()" style="font-size:10px">清空</fluent-button>'+
+    '</div>'+
+    '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">'+chips+'</div>'+
   '</div>';
 }
+
+// T18.2 批量单页：一次 window.open 调后端多卡打印接口（点击手势内，可靠）；
+// 打开成功才清队列；被拦截保留队列并提示
 function printAllCards(){
-  var qs=getPrintSizeQuery();
-  printQueue.forEach(function(c){window.open('/api/samples/'+c.id+'/card/print'+qs,'_blank');});
-  printQueue=[];renderPrintQueue();
+  if(printQueue.length===0)return;
+  var ids=printQueue.map(function(c){return c.id;});
+  var url='/api/samples/cards/print?ids='+ids.join(',')+getPrintSizeQuery().replace(/^\?/,'&');
+  var win=null;
+  try{win=window.open(url,'_blank');}catch(e){}
+  if(!win){toast('浏览器拦截了打印窗口，请允许弹出窗口或使用重打按钮，队列已保留','err');return;}
+  clearPrintQueue();
 }
-// 离开页面前提醒未打印队列
-window.addEventListener('beforeunload',function(e){
-  if(printQueue.length>0){
-    e.preventDefault();
-    e.returnValue='有 '+printQueue.length+' 张标示卡未打印，离开将丢失';
-    return e.returnValue;
-  }
-});
+
+// T18.3 启动时恢复队列；SPA 路由切换后扫码台重挂载时补渲染（队列已持久化，不再随页面离开丢失，
+// 故移除原 beforeunload「离开将丢失」提醒）
+loadPrintQueue();
+function _watchPrintQueueView(){
+  var view=document.getElementById('view');
+  if(!view)return;
+  new MutationObserver(function(){
+    if(printQueue.length&&document.getElementById('scan-print-queue'))renderPrintQueue();
+  }).observe(view,{childList:true});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_watchPrintQueueView);
+else _watchPrintQueueView();
 
 
 /* --- subsystems/samples/frontend/js/views/card-fields.js --- */
@@ -1320,7 +1416,7 @@ function buildCardFieldTable(s,editable,suggestedVersion){
       '<td style="padding:4px 0"><fluent-select id="scan-card-source" '+ro+'><fluent-option value="">未指定</fluent-option><fluent-option value="C"'+(src==='C'?' selected':'')+'>客供(C)</fluent-option><fluent-option value="T"'+(src==='T'?' selected':'')+'>元山(T)</fluent-option><fluent-option value="G"'+(src==='G'?' selected':'')+'>元将五金塔岗分厂(G)</fluent-option></fluent-select></td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('source_type',srcSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">版次</td>'+
-      '<td style="padding:4px 0"><fluent-text-field id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"></fluent-text-field></td>'+
+      '<td style="padding:4px 0"><fluent-text-field id="scan-card-ver" value="'+e(ver)+'" '+ro+' style="font-size:12px;width:100%"></fluent-text-field>'+(editable?'<div style="font-size:11px;color:#6b7280;margin-top:2px">复检/再发行自动 +1；人工修正只能改为 ≥ 当前版次的数字（01~99）</div>':'')+'</td>'+
       '<td style="padding:4px 0;text-align:right">'+mark('card_version',verSt)+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:#6b7280">测试数据</td>'+
       '<td style="padding:4px 0"><textarea id="scan-card-data" rows="2" style="resize:vertical;font-size:12px;width:100%" '+ro+'>'+e(data)+'</textarea></td>'+
@@ -1494,6 +1590,17 @@ function renderReturnActions(action,s){
     return '<label>指派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+rdOptions+'</fluent-select>'+
       '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：需重新制作"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#f59e0b" onclick="confirmScan(\'RETIRE_RECREATE\',this)">确认作废并指派重做</fluent-button></div>';
+  }else if(action==='FORCE_REASSIGN'){
+    // T12.3 ADMIN 兜底：强制改派（下拉数据源同 RETIRE_RECREATE，/api/resolve 在 RETURNING 下对全角色返回 rdUsers）
+    var frdOptions=(window._scanRdUsers||[]).map(function(u){return '<fluent-option value="'+u.id+'">'+e(u.display_name)+' ('+e(u.dept||'')+')</fluent-option>';}).join('');
+    return '<p style="font-size:12px;color:#b45309">管理员兜底：退回审核流程卡死时，强制改派重做研发人员（提交前将二次确认）</p>'+
+      '<label>改派研发人员 *</label><fluent-select id="scan-rd-select"><fluent-option value="">请选择RD</fluent-option>'+frdOptions+'</fluent-select>'+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：原指派人不可用，改派"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#b45309" onclick="confirmScan(\'FORCE_REASSIGN\',this)">强制改派</fluent-button></div>';
+  }else if(action==='FORCE_RETIRE'){
+    return '<p style="font-size:12px;color:#dc2626">管理员兜底：退回审核流程卡死时，强制作废该样品（不可撤销，提交前将二次确认）</p>'+
+      '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述强制作废原因"></textarea>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'FORCE_RETIRE\',this)">强制作废</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+
@@ -1506,7 +1613,7 @@ function renderReturnActions(action,s){
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
-var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检'};
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -1655,6 +1762,10 @@ async function confirmScan(action,btn){
     code=wizardSample.sample_no;
   }
   var body={code:code,action:action};
+  // T12.3: ADMIN 兜底转移二次确认（高危操作，先拦截确认再提交）
+  if(action==='FORCE_REASSIGN'||action==='FORCE_RETIRE'){
+    if(!confirm(action==='FORCE_REASSIGN'?'确认强制改派该样品的重做研发人员？':'确认强制作废该样品？此操作不可撤销！'))return;
+  }
   if(action==='PRODUCE'||action==='INSPECT'||action==='INSPECT_CUSTODY'){
     var f=document.getElementById('scan-img').files[0];
     if(!f){toast('请上传照片','err');return;}
@@ -1676,6 +1787,13 @@ async function confirmScan(action,btn){
   if(action==='RETIRE_RECREATE'){
     var rdEl=document.getElementById('scan-rd-select');if(rdEl&&rdEl.value)body.retire_assigned_rd=rdEl.value;
     var noteEl3=document.getElementById('scan-note');if(noteEl3&&noteEl3.value.trim())body.note=noteEl3.value.trim();
+  }
+  if(action==='FORCE_REASSIGN'){
+    var frdEl=document.getElementById('scan-rd-select');if(frdEl&&frdEl.value)body.retire_assigned_rd=frdEl.value;
+    var fnoteEl=document.getElementById('scan-note');if(fnoteEl&&fnoteEl.value.trim())body.note=fnoteEl.value.trim();
+  }
+  if(action==='FORCE_RETIRE'){
+    var fnoteEl2=document.getElementById('scan-note');if(fnoteEl2&&fnoteEl2.value.trim())body.note=fnoteEl2.value.trim();
   }
   if(action==='EDIT_CARD'){
     var tEl=$('#scan-card-type');if(tEl&&tEl.value)body.sample_type=tEl.value;
@@ -1815,7 +1933,7 @@ var HELP_DATA=[
     items:[
       {h:'标签打印',body:'新建样品后自动弹出\n左半：QR码（含样品编号+状态）+ 基本信息\n右半：空白标示卡填写区\n顶部可选尺寸：小号/中标/大号/自定义'},
       {h:'标示卡打印',body:'品保发行后自动弹出 / 样品详情页手动打印\n尺寸自动跟随标签设置\n点击打印按钮调起浏览器打印对话框'},
-      {h:'尺寸选择',body:'标签3档预设：小37×18mm / 中52×25mm / 大60×40mm\n自定义：30~150mm自由输入\n标示卡自动等比缩放跟随标签尺寸'}
+      {h:'尺寸选择',body:'标签3档预设：小37×18mm / 中52×25mm / 大60×40mm\n自定义：30~150mm自由输入\n标示卡自动等比缩放跟随标签尺寸\n注：以系统尺寸预设为准（小37×18/中52×25/大60×40mm，自定义30~150mm；唯一数据源为后端 card-constants.js PRESET_MM）'}
     ]
   },
   {
