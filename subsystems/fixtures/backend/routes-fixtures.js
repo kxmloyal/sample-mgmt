@@ -312,7 +312,7 @@ function register(app) {
         if (u.role !== 'ME') return res.status(403).json({ error: '仅限生技部(ME)操作' });
         if (!['TRANSFERRED', 'IN_USE'].includes(f.status)) return res.status(400).json({ error: '当前状态不允许保养操作' });
         var maintResult = await doMaintenance(updated, req.body, u);
-        return res.json({ success: true, result: maintResult });
+        return res.json({ fixture: maintResult, action: chosenAction, message: '操作成功：' + chosenAction });
       }
       else if (chosenAction === 'REPAIR_ME')    updated = await AR.doRepairME(updated, u, ts, f, note);
       else if (chosenAction === 'REPAIR_RD_REQ') updated = await AR.doRepairRDReq(updated, u, ts, f, note);
@@ -325,6 +325,11 @@ function register(app) {
           return await D.updateFixture(u2, f, conn, f.version);
         });
         return res.json({ fixture: confirmResult, action: chosenAction, message: '操作成功：' + chosenAction });
+      }
+      else if (chosenAction === 'FORCE_TRANSFER') {
+        // 旧双人验证状态兜底（F5）：ADMIN 强制移交
+        updated.status = 'TRANSFERRED'; updated.transferred_at = ts;
+        await D.addFixtureLog({ fixture_id: f.id, action: 'FORCE_TRANSFER', role: u.role, user_id: u.id, dept: u.dept, note: note || '管理员强制移交（旧双人验证状态兜底）' });
       }
       else if (chosenAction === 'IMPROVE')      updated = await AS.doImprove(updated, u, ts, f, note);
       else if (chosenAction === 'IMPROVE_DONE') updated = await AS.doImproveDone(updated, u, ts, f, note);

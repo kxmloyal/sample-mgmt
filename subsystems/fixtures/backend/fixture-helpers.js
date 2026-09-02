@@ -34,6 +34,8 @@ async function allowedActions(role, status, fixture, userId, userDept) {
   if (role === 'RD' && status === 'REPAIRING_RD') actions.push('REPAIR_RD_DONE');
   if (isMECustodyQA(role) && status === 'REPAIR_DONE') actions.push('REPAIR_CONFIRM');
   if (role === 'ADMIN' && ['IN_USE','TRANSFERRED','IMPROVING','ACCEPTED','VERIFY_PENDING'].indexOf(status) !== -1) actions.push('RETIRE');
+  // F5 死锁状态兜底：旧双人验证状态（VERIFY_RD_OK/VERIFY_ORG_OK）ADMIN 可强制移交或报废
+  if (role === 'ADMIN' && ['VERIFY_RD_OK', 'VERIFY_ORG_OK'].indexOf(status) !== -1) { actions.push('FORCE_TRANSFER'); actions.push('RETIRE'); }
   return actions;
 }
 

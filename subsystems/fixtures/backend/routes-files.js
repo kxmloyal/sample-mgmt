@@ -20,6 +20,19 @@ var storage = multer.diskStorage({
 
 var FILE_CATEGORY_CN = { design_drawing: '设计图纸', purchase_order: '请购单', fixture_photo: '实物照片', maintenance_photo: '保养照片', site_photo: '现场照片', other: '其他' };
 
+// F4 上传安全：危险扩展名黑名单（防存储型 XSS/可执行文件）
+var DANGEROUS_EXT = /\.(html?|js|mjs|svg|xml|sh|bat|cmd|exe|dll|php|jsp|asp|aspx|vbs|ps1)$/i;
+// 图片魔数校验（F4）：不信任客户端声明的 mimetype
+function checkImageMagic(filePath, mimeType) {
+  var buf = fs.readFileSync(filePath);
+  if (buf.length < 4) return false;
+  if (mimeType === 'image/jpeg') return buf[0] === 0xFF && buf[1] === 0xD8;
+  if (mimeType === 'image/png') return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
+  if (mimeType === 'image/webp') return buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP';
+  if (mimeType === 'image/gif') return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46;
+  return true; // 非图片类型由扩展名白名单约束
+}
+
 var upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -44,6 +57,7 @@ var upload = multer({
         'application/zip','model/stl','application/octet-stream']
     };
     var ext = (file.originalname || '').toLowerCase();
+    if (DANGEROUS_EXT.test(ext)) { cb(new Error('不允许上传该文件类型')); return; }
     if (cat === 'design_drawing') {
       var isStepLike = /\.(stp|step|stl|igs|iges|dwg|dxf|dwf|zip)$/i.test(ext);
       if (isStepLike) { cb(null, true); return; }
@@ -84,11 +98,16 @@ function register(app) {
       if (['design_drawing','purchase_order','fixture_photo','maintenance_photo','site_photo','other'].indexOf(category) === -1)
         return res.status(400).json({ error: '无效的文件分类' });
 
-      // 照片类别仅允许图片格式
+      // 照片类别仅允许图片格式 + 魔数校验（F4）
       var photoCategories = ['fixture_photo', 'maintenance_photo', 'site_photo'];
       if (photoCategories.includes(category)) {
         if (!req.file.mimetype.startsWith('image/')) {
           return res.status(400).json({ error: '照片类别仅支持图片格式 (jpg/png/webp)' });
+        }
+        var fp = path.join(D.getUploadDir(), req.file.filename);
+        if (!checkImageMagic(fp, req.file.mimetype)) {
+          try { fs.unlinkSync(fp); } catch (e) {}
+          return res.status(400).json({ error: '图片内容与声明类型不符' });
         }
       }
 
