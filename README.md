@@ -429,7 +429,12 @@ GET /health → { "status":"ok","uptime":123,"timestamp":"...","memory":...,"db"
 
 - Helmet（XSS/MIME sniff/clickjack/HSTS）
 - Session Cookie：httpOnly + sameSite strict
-- 文件上传：jpg/png/gif/webp ≤5MB
+- 文件上传：jpg/png/gif/webp ≤5MB（含魔数校验）
+- **静态服务收敛**：仅暴露各子系统 `frontend/` 目录，后端源码/schema/seed/manifest 不可下载
+- **匿名接口限流**：`/card/:sample_no` 60 次/分钟/IP（防编号枚举）
+- **会话版本失效**：修改密码后该用户所有已登录会话（含其他设备）立即失效；存量会话自动采纳版本号
+- **CSV 公式注入中和**：导出值以 `= + - @` 等开头时前置单引号
+- 错误响应统一 generic，内部错误仅写日志
 
 ## 代码检查
 

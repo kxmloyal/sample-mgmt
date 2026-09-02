@@ -331,6 +331,8 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
+- `routes-samples.js` 已达 92% 字符红线（2026-09-01 记录），禁止追加新功能，须先拆分（建议拆 models/export 相关）
+- `db/migrations.js` 顶层函数 11 个超 §7.2 ≤10 上限（2026-09-01 记录），建议拆为 `db/migrations/` 目录按子系统分文件
 - `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），后续项目追踪迭代需关注拆分（如 info 主卡渲染拆独立 helper）
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
 - `db/migrations.js` 顶层函数 11 个（批次 2 新增 deleted_at 迁移后突破 §7.2 ≤10 上限，2026-09-01 记录），建议下批次拆分为 `db/migrations/` 目录按域分文件
