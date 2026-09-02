@@ -3,6 +3,7 @@ var D = require('../../../db');
 
 async function doRepairME(updated, u, ts, f, note) {
   updated.repair_type = 'ME'; updated.repair_requested_by = u.id; updated.repair_requested_at = ts; updated.repair_note = note.trim();
+  updated.expected_finish_at = null; // F12: 清空制作期限，工作台按报修日兜底判逾期
   updated.status = 'REPAIRING_ME';
   await D.addFixtureLog({ fixture_id: f.id, action: 'REPAIR_ME', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
   return updated;
@@ -10,6 +11,7 @@ async function doRepairME(updated, u, ts, f, note) {
 
 async function doRepairRDReq(updated, u, ts, f, note) {
   updated.repair_type = 'RD'; updated.repair_requested_by = u.id; updated.repair_requested_at = ts; updated.repair_note = note.trim();
+  updated.expected_finish_at = null; // F12
   updated.status = 'REPAIRING_RD';
   await D.addFixtureLog({ fixture_id: f.id, action: 'REPAIR_RD_REQ', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
   return updated;

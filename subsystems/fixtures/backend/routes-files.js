@@ -135,6 +135,7 @@ function register(app) {
   app.get('/api/fixtures/:id/files/:fileId/download', requireAuth, async function(req, res) {
     var file = await D.getFileById(Number(req.params.fileId));
     if (!file) return res.status(404).json({ error: '文件不存在' });
+    if (file.fixture_id !== Number(req.params.id)) return res.status(404).json({ error: '文件不存在' }); // F13 IDOR
     var filePath = path.join(D.getUploadDir(), file.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件已从磁盘删除' });
     res.set('Content-Disposition', 'inline; filename="' + encodeURIComponent(file.original_name) + '"');
@@ -147,6 +148,7 @@ function register(app) {
     var u = await currentUser(req);
     var file = await D.getFileById(Number(req.params.fileId));
     if (!file) return res.status(404).json({ error: '文件不存在' });
+    if (file.fixture_id !== Number(req.params.id)) return res.status(404).json({ error: '文件不存在' }); // F13 IDOR
 
     if (u.role !== 'ADMIN' && !(u.role === 'RD' && file.uploaded_by === u.id))
       return res.status(403).json({ error: '无权限删除此文件' });

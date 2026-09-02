@@ -29,6 +29,7 @@ function register(app) {
   app.get('/api/fixtures/:id/files/:fileId/preview', requireAuth, async function(req, res) {
     var file = await D.getFileById(Number(req.params.fileId));
     if (!file) return res.status(404).json({ error: '文件不存在' });
+    if (file.fixture_id !== Number(req.params.id)) return res.status(404).json({ error: '文件不存在' }); // F13 IDOR
     var filePath = path.join(D.getUploadDir(), file.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件已从磁盘删除' });
 

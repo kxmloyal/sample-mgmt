@@ -25,11 +25,13 @@ module.exports = function createDao(deps) {
   // 新建治具申请：data 含基础字段 + maintenance_cycle_days（保养周期，透传落库）；conn 存在时走事务连接（批量/事务场景），否则走全局连接
   async function createFixture(data, conn) {
     var { name, spec, model, station, category, requested_by, requested_dept, request_note, request_image, notes, maintenance_cycle_days } = data;
-    var sql = 'INSERT INTO fixtures (fixture_no,name,spec,model,station,category,status,requested_by,requested_dept,request_note,request_image,notes,maintenance_cycle_days) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+    // F11 保养首次排程：设了保养周期则初始化 next_maintenance_at = 创建时间 + 周期（否则永不进保养预警）
+    var nextMaint = (maintenance_cycle_days > 0) ? new Date(Date.now() + maintenance_cycle_days * 86400000) : null;
+    var sql = 'INSERT INTO fixtures (fixture_no,name,spec,model,station,category,status,requested_by,requested_dept,request_note,request_image,notes,maintenance_cycle_days,next_maintenance_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     var lastErr;
     for (var i = 0; i < 3; i++) {
       var ns = await nextFixtureNo(conn);
-      var params = [ns, name||null, spec||null, model||null, station||null, category||null, 'REQUESTED', requested_by||null, requested_dept||null, request_note||null, request_image||null, notes||null, maintenance_cycle_days != null ? maintenance_cycle_days : null];
+      var params = [ns, name||null, spec||null, model||null, station||null, category||null, 'REQUESTED', requested_by||null, requested_dept||null, request_note||null, request_image||null, notes||null, maintenance_cycle_days != null ? maintenance_cycle_days : null, nextMaint];
       try {
         if (conn) await conn.execute(sql, params);
         else await run(sql, params);
@@ -57,14 +59,14 @@ module.exports = function createDao(deps) {
     // 呆滞筛选：状态停滞 + 在库无人领用（最近状态变更时间 ≥ 阈值，见 fixtures_settings.dormant_days）
     if (opts.dormant === '1') {
       var dormantDays = Number(await DORM.getFixtureSetting('dormant_days', 60)) || 60;
-      where.push("COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = fixtures.id), fixtures.created_at) <= DATE_SUB(NOW(), INTERVAL ? DAY)");
+      where.push("fixtures.updated_at <= DATE_SUB(NOW(), INTERVAL ? DAY)"); // F16 呆滞基准=updated_at
       params.push(dormantDays);
       where.push("fixtures.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')");
     }
     // 呆滞筛选返回呆滞天数/原因（列表行标红 + 徽章用）
     var selectCols = 'fixtures.*';
     if (opts.dormant === '1') {
-      selectCols = "fixtures.*, DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = fixtures.id), fixtures.created_at)) AS dormant_days, CASE WHEN fixtures.status='TRANSFERRED' THEN '在库无人领用' ELSE '状态长期停滞' END AS dormant_reason";
+      selectCols = "fixtures.*, DATEDIFF(NOW(), fixtures.updated_at) AS dormant_days, CASE WHEN fixtures.status='TRANSFERRED' THEN '在库无人领用' ELSE '状态长期停滞' END AS dormant_reason"; // F16
     }
     var sql = 'SELECT ' + selectCols + ' FROM fixtures' + (where.length ? ' WHERE ' + where.join(' AND ') : '');
     var ALLOWED_SORT = { fixture_no: 'fixture_no', name: 'name', updated_at: 'updated_at' };
@@ -86,7 +88,7 @@ module.exports = function createDao(deps) {
     if (opts.overdue === '1') { where.push('expected_return_at < NOW() AND status = ?'); params.push('IN_USE'); }
     if (opts.dormant === '1') {
       var dormantDays = Number(await DORM.getFixtureSetting('dormant_days', 60)) || 60;
-      where.push("COALESCE((SELECT MAX(created_at) FROM fixture_logs fl WHERE fl.fixture_id = fixtures.id), fixtures.created_at) <= DATE_SUB(NOW(), INTERVAL ? DAY)");
+      where.push("fixtures.updated_at <= DATE_SUB(NOW(), INTERVAL ? DAY)"); // F16 呆滞基准=updated_at
       params.push(dormantDays);
       where.push("fixtures.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE','TRANSFERRED')");
     }

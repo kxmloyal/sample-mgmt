@@ -3,7 +3,8 @@ var D = require('../../../db');
 
 async function doImprove(updated, u, ts, f, note) {
   if (!note || !note.trim()) throw { status: 400, message: '请填写改善说明' };
-  updated.improve_note = note.trim(); updated.status = 'IMPROVING';
+  updated.improve_note = note.trim(); updated.expected_finish_at = null; // F12: 清空制作期限
+  updated.status = 'IMPROVING';
   await D.addFixtureLog({ fixture_id: f.id, action: 'IMPROVE', role: u.role, user_id: u.id, dept: u.dept,
     note: note.trim() });
   return updated;

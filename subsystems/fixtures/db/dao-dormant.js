@@ -17,16 +17,15 @@ module.exports = function createDormantDao(deps) {
     await run('INSERT INTO fixtures_settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, String(v)]);
   }
 
-  // 呆滞治具列表：状态停滞 + 在库无人领用（按最近状态变更时间判定），返回 dormant_days/dormant_reason
+  // 呆滞治具列表：状态停滞 + 在库无人领用（F16 以 updated_at 为基准——状态变更即更新，避免文件上传/保养等非流转活动重置计时）
   function listDormantFixtures(threshold) {
     var days = Number(threshold) || 60;
     return q(
-      "SELECT f.*, DATEDIFF(NOW(), COALESCE(l.last_at, f.created_at)) AS dormant_days, " +
+      "SELECT f.*, DATEDIFF(NOW(), f.updated_at) AS dormant_days, " +
       "CASE WHEN f.status='TRANSFERRED' THEN '在库无人领用' ELSE '状态长期停滞' END AS dormant_reason " +
       "FROM fixtures f " +
-      "LEFT JOIN (SELECT fixture_id, MAX(created_at) AS last_at FROM fixture_logs GROUP BY fixture_id) l ON l.fixture_id = f.id " +
       "WHERE f.status IN " + DORMANT_STATUS + " " +
-      "AND DATEDIFF(NOW(), COALESCE(l.last_at, f.created_at)) >= ? " +
+      "AND f.updated_at <= DATE_SUB(NOW(), INTERVAL ? DAY) " +
       "ORDER BY dormant_days DESC",
       [days]
     );
