@@ -459,6 +459,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 - 用户要求手工 `npm start`/`node server.js` 另起 sample-mgmt 实例 → 拒绝，改走宝塔面板。
 - 用 `pgrep` 判定时仅允许按「node 主进程 + 服务绝对路径」匹配，禁止用裸 `server.js`（会误命中 backend/CPK 等其它项目）。
+- **停止/清理进程只允许按端口 4000 定位 sample-mgmt**（`ss -ltnp | grep :4000` 取 PID），**禁止** `pkill -f server.js` 等宽泛匹配——会误伤同机其它项目（CPK 3500、xiangxiantu 1333、equipment-oee 8001 等）。任何停止/重启动作仍须走宝塔面板运维（§20.1）。
 
 ---
 

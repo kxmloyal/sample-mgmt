@@ -1046,6 +1046,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 **AI 拦截逻辑**：
 - 用户要求手工 `npm start`/`node server.js` 另起 sample-mgmt 实例 → 拒绝，要求改走宝塔面板。
 - 用 `pgrep` 匹配时仅允许按「node 主进程 + 服务绝对路径」判定，禁止用裸 `server.js`（会误命中 backend/CPK 等其它项目）。
+- **停止/清理进程只允许按端口 4000 定位 sample-mgmt**（`ss -ltnp | grep :4000` 取 PID），**禁止** `pkill -f server.js`、`pkill -f sample-mgmt` 等宽泛匹配——会误伤同机其它项目（CPK 3500、xiangxiantu 1333、equipment-oee 8001 等）。任何停止/重启动作仍须走宝塔面板运维（§23.2）。
 
 ---
 
