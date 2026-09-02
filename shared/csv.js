@@ -4,6 +4,8 @@
 /** 值转义：含逗号/引号/换行时双引号包裹，内部引号 "" 转义；null/undefined → 空串 */
 function esc(v) {
   var s = String(v == null ? '' : v);
+  // 公式注入中和（2026-09-01 安全专项）：以 = + - @ 或制表/回车开头时前置单引号，Excel 打开不执行公式
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
