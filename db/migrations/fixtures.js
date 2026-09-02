@@ -63,13 +63,21 @@ async function migratePerfIndexes(pool) {
 
 
 // F1/F2 治具修复（2026-09-02）：fixtures 加 version 乐观锁列；fixture_files 补 file_size/uploaded_at/外键（幂等）
+// 2026-09-03 修复：DDL 在并发 init 下可能死锁（ER_LOCK_DEADLOCK），每个 ALTER 加重试
 async function migrateFixtureSchemaAlign(pool) {
-  try { await pool.execute('ALTER TABLE fixtures ADD COLUMN version INT NOT NULL DEFAULT 1'); }
-  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
-  try { await pool.execute('ALTER TABLE fixture_files ADD COLUMN file_size INT DEFAULT 0'); }
-  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
-  try { await pool.execute('ALTER TABLE fixture_files ADD COLUMN uploaded_at DATETIME'); }
-  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+  var retry = async function (fn) {
+    for (var i = 0; i < 3; i++) {
+      try { return await fn(); }
+      catch (e) {
+        if (e.code === 'ER_LOCK_DEADLOCK' || e.code === 'ER_LOCK_WAIT_TIMEOUT') { await new Promise(r => setTimeout(r, 200 * (i + 1))); continue; }
+        if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+        return; // 列已存在，幂等通过
+      }
+    }
+  };
+  await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN version INT NOT NULL DEFAULT 1'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixture_files ADD COLUMN file_size INT DEFAULT 0'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixture_files ADD COLUMN uploaded_at DATETIME'); });
   try {
     var [fk] = await pool.execute("SELECT COUNT(*) AS c FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='fixture_files' AND CONSTRAINT_TYPE='FOREIGN KEY'");
     if (!fk[0].c) await pool.execute('ALTER TABLE fixture_files ADD CONSTRAINT fk_ffiles_fixture FOREIGN KEY (fixture_id) REFERENCES fixtures(id) ON DELETE CASCADE');
