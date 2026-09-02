@@ -1,4 +1,4 @@
-/** BUNDLE vbmtbkaco2 — 17 files */
+/** BUNDLE vbmtjyp3qo — 17 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1327,7 +1327,9 @@ function execFixAction(fixtureNo, action) {
   document.getElementById('fix-action-form').innerHTML = formHtml;
 }
 
+var _fxSubmitting = false;
 async function submitFixAction(fixtureNo, action) {
+  if (_fxSubmitting) return; _fxSubmitting = true; // F17 防重
   var body = { code: fixtureNo, action: action };
   var locEl = document.getElementById('fx-location');
   var daysEl = document.getElementById('fx-days');
@@ -1340,6 +1342,8 @@ async function submitFixAction(fixtureNo, action) {
     if (md && md.value) body.maintenance_date = md.value;
     var nd = document.getElementById('act-next-date');
     if (nd && nd.value) body.next_maintenance_at = nd.value;
+    var an = document.getElementById('act-note'); // F15 保养内容
+    if (an && an.value) body.note = an.value;
   }
   if (action === 'MAKE') {
     var fixtureId = _fixScanResult ? (_fixScanResult.id || (_fixScanResult.fixture && _fixScanResult.fixture.id)) : null;
@@ -1353,6 +1357,7 @@ async function submitFixAction(fixtureNo, action) {
     var el = document.getElementById('scan-code'); el.value = '';
     if (_fxContinuous) el.focus(); else el.focus();
   } catch (e) { showToast(e.message); }
+  _fxSubmitting = false;
 }
 
 

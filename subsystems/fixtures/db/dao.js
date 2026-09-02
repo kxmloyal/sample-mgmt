@@ -12,6 +12,7 @@ module.exports = function createDao(deps) {
   }
 
   async function fetchOne(conn, sql, params) {
+    // conn.execute 未解构时返回 [rowArray, fields]，rows[0] 才是行数组（2026-09-02 曾误改，已回退）
     if (conn) { var rows = await conn.execute(sql, params || []); return rows[0].length ? Object.assign({}, rows[0][0]) : undefined; }
     return one(sql, params);
   }
@@ -128,7 +129,7 @@ module.exports = function createDao(deps) {
     if (expectedVersion !== undefined && expectedVersion !== null) {
       cols.push('version=version+1');
       where = 'id=? AND version=?';
-      vals.push(updated.id, expectedVersion);
+      vals.push(expectedVersion); // 注意：WHERE id 的 updated.id 已在上面 push，此处只补 version
     }
     if (cols.length > 1) {
       var sql = 'UPDATE fixtures SET ' + cols.join(',') + ' WHERE ' + where;

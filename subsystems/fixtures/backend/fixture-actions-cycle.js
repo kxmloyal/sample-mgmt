@@ -55,12 +55,8 @@ async function doMaintenance(fixture, body, user) {
     updated.next_maintenance_at = null;
   }
 
-  // 更新数据库: updateFixture 签名为 (updated对象含.id, original对象)
-  await D.updateFixture({
-    id: fixture.id,
-    last_maintenance_at: updated.last_maintenance_at,
-    next_maintenance_at: updated.next_maintenance_at
-  }, fixture, null, fixture.version);
+  // 更新数据库: 传完整 updated（部分对象会把未含字段置 NULL，2026-09-02 修复）
+  await D.updateFixture(updated, fixture, null, fixture.version);
 
   // 写日志: addFixtureLog 签名为 ({ fixture_id, action, role, user_id, dept, note })
   await D.addFixtureLog({ fixture_id: fixture.id, action: 'MAINTENANCE', role: user.role, user_id: user.id, dept: user.dept, note: body.note || '' });

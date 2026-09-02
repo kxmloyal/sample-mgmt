@@ -297,7 +297,7 @@ function register(app) {
           var u1 = await AM.doMake(updated, u, ts, f, note, req, conn);
           return await D.updateFixture(u1, f, conn, f.version);
         });
-        return res.json({ fixture: makeResult, action: chosenAction, message: '操作成功：' + chosenAction });
+        return res.json({ fixture: makeResult, action: chosenAction, message: "操作成功：" + chosenAction });
       }
       else if (chosenAction === 'VERIFY')  {
         if (!location || !location.trim()) return res.status(400).json({ error: '请填写存放位置' });
@@ -345,6 +345,8 @@ function register(app) {
     var result = await D.updateFixture(updated, f, null, f.version);
     res.json({ fixture: result, action: chosenAction, message: '操作成功：' + chosenAction });
     } catch (err) {
+      if (err && err.code === 'CONFLICT')
+        return res.status(409).json({ error: '该治具刚被他人操作，请刷新后重试' });
       res.status(500).json({ error: '治具扫码操作失败：' + (err.message || '服务器内部错误') });
     }
   });
