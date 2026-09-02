@@ -1,4 +1,4 @@
-// routes/samples.js — 样品 CRUD（列表/详情/新建/删除/更新 + saveSampleImage）
+// routes/samples.js — 样品 CRUD（列表/详情/新建/删除/更新 + 历史照片；机型路由与图片保存已拆至独立模块，B3-T1）
 const path = require('path');
 const fs = require('fs');
 const D = require('../../../db');
@@ -6,44 +6,7 @@ const { STATION_GROUPS, generateSampleCode, previewSampleCode } = require('../db
 const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
 const { toCsv, sendCsv } = require('../../../shared/csv');
-const cache = require('../../../shared/cache');
-
-// 机型主数据为共享表(sample_models)：写入后须失效样品侧机型/下拉缓存
-const MODEL_CACHE_KEYS = ['sl_sample_models', 'sl_sample_model_options'];
-function invalidateModelCaches() { MODEL_CACHE_KEYS.forEach(function (k) { cache.del(k); }); }
-
-const UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'uploads');
-const UPLOAD_MAX_SIZE = parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10);
-
-// 图片魔数（文件头）校验（T14）：不信任 data URL 声明的 MIME，声明类型与实际内容不符时拒绝落盘
-function matchImageMagic(buf, ext) {
-  if (!buf || buf.length < 4) return false;
-  if (ext === 'jpg') return buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
-  if (ext === 'png') return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
-  if (ext === 'gif') return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38;
-  if (ext === 'webp') return buf.length >= 12 && buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP';
-  return false;
-}
-
-// 保存样品图片（同步落盘后再返回 URL，避免 DB 入库但文件未写入的脏数据）
-async function saveSampleImage(dataUrl, sampleNo) {
-  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return null;
-  const m = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!m) return null;
-  let ext = m[1] === 'jpeg' ? 'jpg' : m[1];
-  if (!['jpg', 'png', 'gif', 'webp'].includes(ext)) return null;
-  const size = Buffer.byteLength(m[2], 'base64');
-  if (size > UPLOAD_MAX_SIZE) { logger.warn('图片过大:' + size); return null; }
-  const buf = Buffer.from(m[2], 'base64');
-  if (!matchImageMagic(buf, ext)) { logger.warn('图片内容与声明类型不符(魔数校验失败): ' + sampleNo + '.' + ext); return null; }
-  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  const fname = sampleNo + '.' + ext;
-  const filePath = path.join(UPLOAD_DIR, fname);
-  try {
-    await fs.promises.writeFile(filePath, buf);
-    return '/uploads/' + fname;
-  } catch (e) { logger.error('保存图片失败: ' + e.message); return null; }
-}
+const { saveSampleImage, UPLOAD_DIR } = require('./sample-images');
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -135,64 +98,8 @@ function register(app) {
     }
   });
 
-  // 机型列表：GET 所有登录角色可读（新建下拉/筛选数据源）；POST/DELETE 仅 RD/ADMIN（须注册在 /:id 之前）
-  // 字典缓存：机型为低变数据，TTL 60s；写操作走 invalidateModelCaches 即时失效（见 AGENTS.md 性能优化）
-  app.get('/api/samples/models', requireAuth, asyncHandler(async (req, res) => {
-    let cached = cache.get('sl_sample_models');
-    if (cached === undefined) {
-      cached = await D.listModels();
-      cache.set('sl_sample_models', cached);
-    }
-    res.json(cached);
-  }));
-
-  // 下拉数据源：机型列表全称 + 存量样品 model 补集（历史值不丢，避免漏筛）
-  app.get('/api/samples/model-options', requireAuth, asyncHandler(async (req, res) => {
-    let cached = cache.get('sl_sample_model_options');
-    if (cached === undefined) {
-      const models = await D.listModels();
-      const legacy = await D.listLegacyModels();
-      const seen = {};
-      const out = models.map(function (m) { seen[m.code] = 1; return { value: m.code, label: m.full_name }; });
-      legacy.forEach(function (code) { if (!seen[code]) out.push({ value: code, label: code }); });
-      cached = out;
-      cache.set('sl_sample_model_options', cached);
-    }
-    res.json(cached);
-  }));
-
-  app.post('/api/samples/models', requireAuth, async (req, res) => {
-    try {
-      const u = await currentUser(req);
-      if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
-      const code = ((req.body || {}).code || '').trim().toUpperCase();
-      const full_name = ((req.body || {}).full_name || '').trim();
-      if (!code) return res.status(400).json({ error: '请填写机型短码' });
-      if (code.length < 6) return res.status(400).json({ error: '机型短码至少 6 位' });
-      if (code.length > 20) return res.status(400).json({ error: '机型短码最长 20 位' });
-      if (!/^[A-Za-z0-9]+$/.test(code)) return res.status(400).json({ error: '机型短码仅允许字母和数字' });
-      if (!full_name) return res.status(400).json({ error: '请填写机型全称' });
-      const created = await D.createModel({ code: code, full_name: full_name, created_by: u.id });
-      invalidateModelCaches();
-      res.json(created);
-    } catch (err) {
-      if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
-      logger.error('新增机型失败: ' + (err.message || String(err)));
-      res.status(500).json({ error: '新增机型失败：' + (err.message || '服务器内部错误') });
-    }
-  });
-
-  app.delete('/api/samples/models/:id', requireAuth, asyncHandler(async (req, res) => {
-    const u = await currentUser(req);
-    if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
-    const m = await D.getModelById(Number(req.params.id));
-    if (!m) return res.status(404).json({ error: '机型不存在' });
-    const used = await D.countSamplesByModel(m.code);
-    if (used > 0) return res.status(409).json({ error: '该机型已被 ' + used + ' 个样品使用，禁止删除' });
-    await D.deleteModel(m.id);
-    invalidateModelCaches();
-    res.json({ ok: true });
-  }));
+  // 机型主数据路由（B3-T1 拆分）：须注册在 /:id 之前，避免 /models 被 :id 捕获
+  require('./routes-samples-models').register(app);
 
   // 历史照片列表（T14 全量留痕，只读）：列出 uploads 中该样品编号前缀的制作/复检图片
   // 安全：文件名仅来自 readdir 结果拼 URL（不接受用户输入路径段），sample_no 由 DB 取出做前缀匹配，无路径穿越面
