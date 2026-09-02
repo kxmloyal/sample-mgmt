@@ -9,6 +9,7 @@ const morgan = require('morgan');
 const { logger, morganStream } = require('./logger');
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const MySQLStoreFactory = require('express-mysql-session');
@@ -100,18 +101,23 @@ app.use('/shared/frontend', express.static(path.join(__dirname, 'shared', 'front
     }
   }
 }));
-// 子系统前端静态服务（每个子系统独立 SPA 入口）
-app.use('/subsystems', express.static(path.join(__dirname, 'subsystems'), {
-  maxAge: '7d',
-  etag: true,
-  setHeaders: function(res, filePath) {
-    if (/\.(js|css)$/.test(filePath)) {
-      res.set('Cache-Control', 'public, max-age=604800, immutable');
-    } else if (/\.html?$/.test(filePath)) {
-      res.set('Cache-Control', 'no-cache');
-    }
+// 子系统前端静态服务（安全：仅暴露各子系统 frontend 目录，后端源码/schema/seed/manifest 不可下载）
+fs.readdirSync(path.join(__dirname, 'subsystems')).forEach(function (id) {
+  var fe = path.join(__dirname, 'subsystems', id, 'frontend');
+  if (fs.existsSync(fe)) {
+    app.use('/subsystems/' + id + '/frontend', express.static(fe, {
+      maxAge: '7d',
+      etag: true,
+      setHeaders: function(res, filePath) {
+        if (/\.(js|css)$/.test(filePath)) {
+          res.set('Cache-Control', 'public, max-age=604800, immutable');
+        } else if (/\.html?$/.test(filePath)) {
+          res.set('Cache-Control', 'no-cache');
+        }
+      }
+    }));
   }
-}));
+});
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : '0',
   etag: true,
@@ -155,9 +161,7 @@ require('./routes/misc').register(app);
 // ---------------- 全局错误处理 ----------------
 app.use((err, req, res, next) => {
   logger.error('未捕获错误', { message: err.message, stack: err.stack, url: req.url });
-  res.status(500).json({
-    error: process.env.NODE_ENV === 'production' ? '服务器内部错误' : err.message
-  });
+  res.status(500).json({ error: '服务器内部错误' }); // 安全：不向客户端回显内部错误（err.message 已写日志）
 });
 
 // 测试模式下不自动 listen（由 supertest 接管端口），生产/开发模式正常启动
