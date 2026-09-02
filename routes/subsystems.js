@@ -64,7 +64,7 @@ function register(app) {
   });
 
   // 获取单个子系统 manifest
-  app.get('/api/subsystems/:id', function (req, res) {
+  app.get('/api/subsystems/:id', requireAuth, function (req, res) {
     var m = registry[req.params.id];
     if (!m) return res.status(404).json({ error: '子系统不存在' });
     res.json(m);
