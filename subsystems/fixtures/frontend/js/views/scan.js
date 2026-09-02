@@ -172,7 +172,9 @@ function execFixAction(fixtureNo, action) {
   document.getElementById('fix-action-form').innerHTML = formHtml;
 }
 
+var _fxSubmitting = false;
 async function submitFixAction(fixtureNo, action) {
+  if (_fxSubmitting) return; _fxSubmitting = true; // F17 防重
   var body = { code: fixtureNo, action: action };
   var locEl = document.getElementById('fx-location');
   var daysEl = document.getElementById('fx-days');
@@ -185,6 +187,8 @@ async function submitFixAction(fixtureNo, action) {
     if (md && md.value) body.maintenance_date = md.value;
     var nd = document.getElementById('act-next-date');
     if (nd && nd.value) body.next_maintenance_at = nd.value;
+    var an = document.getElementById('act-note'); // F15 保养内容
+    if (an && an.value) body.note = an.value;
   }
   if (action === 'MAKE') {
     var fixtureId = _fixScanResult ? (_fixScanResult.id || (_fixScanResult.fixture && _fixScanResult.fixture.id)) : null;
@@ -198,5 +202,6 @@ async function submitFixAction(fixtureNo, action) {
     var el = document.getElementById('scan-code'); el.value = '';
     if (_fxContinuous) el.focus(); else el.focus();
   } catch (e) { showToast(e.message); }
+  _fxSubmitting = false;
 }
 

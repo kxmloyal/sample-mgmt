@@ -18,7 +18,19 @@ var storage = multer.diskStorage({
   }
 });
 
-var FILE_CATEGORY_CN = { design_drawing: '设计图纸', purchase_order: '请购单', fixture_photo: '实物照片', maintenance_photo: '保养照片', site_photo: '现场照片', other: '其他' };
+var FILE_CATEGORY_CN = { design_drawing: '设计图纸', purchase_order: '请购单', fixture_photo: '实物照片', verify_photo: '验证照片', repair_photo: '维修照片', maintenance_photo: '保养照片', site_photo: '现场照片', other: '其他' };
+
+// F14 附件生命周期：分类 → 允许上传的状态 + 角色（与 manifest files.categories 对齐）
+var CATEGORY_STATUS_ROLE = {
+  design_drawing:  { status: ['ACCEPTED'],            role: ['RD'] },
+  purchase_order:  { status: ['ACCEPTED'],            role: ['RD'] },
+  fixture_photo:   { status: ['ACCEPTED'],            role: ['RD'] },
+  verify_photo:    { status: ['VERIFY_PENDING'],     role: ['ME','QA','CUSTODY'] },
+  repair_photo:    { status: ['REPAIRING_ME','REPAIRING_RD'], role: ['ME','RD'] },
+  maintenance_photo:{ status: ['TRANSFERRED','IN_USE'], role: ['ME'] },
+  site_photo:      { status: ['IN_USE'],              role: ['ME','QA','CUSTODY'] },
+  other:           { status: ['ACCEPTED'],            role: ['RD'] }
+};
 
 // F4 上传安全：危险扩展名黑名单（防存储型 XSS/可执行文件）
 var DANGEROUS_EXT = /\.(html?|js|mjs|svg|xml|sh|bat|cmd|exe|dll|php|jsp|asp|aspx|vbs|ps1)$/i;
@@ -48,6 +60,8 @@ var upload = multer({
         'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'image/jpeg','image/png','image/webp'],
       'fixture_photo': ['image/jpeg','image/png','image/webp'],
+      'verify_photo': ['image/jpeg','image/png','image/webp'],
+      'repair_photo': ['image/jpeg','image/png','image/webp'],
       'maintenance_photo': ['image/jpeg','image/png','image/webp'],
       'site_photo': ['image/jpeg','image/png','image/webp'],
       'other': ['application/pdf','application/msword',
@@ -84,11 +98,15 @@ function register(app) {
   app.post('/api/fixtures/:id/files', requireAuth, async function(req, res) {
     var fixtureId = Number(req.params.id);
     var u = await currentUser(req);
-    if (u.role !== 'RD') return res.status(403).json({ error: '仅 RD 可上传文件' });
 
     var f = await D.getFixtureById(fixtureId);
     if (!f) return res.status(404).json({ error: '治具不存在' });
-    if (f.status !== 'ACCEPTED') return res.status(400).json({ error: '仅「已接收」状态可上传文件' });
+    // F14 附件生命周期：按分类校验状态与角色（替代原仅 ACCEPTED+RD）
+    var cat = req.body.category || 'other';
+    var rule = CATEGORY_STATUS_ROLE[cat];
+    if (!rule) return res.status(400).json({ error: '无效的文件分类' });
+    if (rule.status.indexOf(f.status) === -1) return res.status(400).json({ error: '当前状态不允许上传该分类文件' });
+    if (rule.role.indexOf(u.role) === -1) return res.status(403).json({ error: '无权限上传该分类文件' });
 
     upload.single('file')(req, res, async function(err) {
       if (err) return res.status(400).json({ error: '上传失败：' + err.message });
