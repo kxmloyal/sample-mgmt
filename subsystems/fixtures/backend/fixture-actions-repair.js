@@ -17,8 +17,8 @@ async function doRepairRDReq(updated, u, ts, f, note) {
 
 async function doRepairDone(updated, u, ts, f, note) {
   updated.repaired_by = u.id; updated.repaired_at = ts;
-  updated.status = 'TRANSFERRED';
-  await D.addFixtureLog({ fixture_id: f.id, action: 'REPAIR_DONE', role: u.role, user_id: u.id, dept: u.dept, note: note || 'ME维修完成，已交回' });
+  updated.status = 'REPAIR_DONE'; // F9: ME 维修也走 REPAIR_DONE 待确认（与 RD 路径对称）
+  await D.addFixtureLog({ fixture_id: f.id, action: 'REPAIR_DONE', role: u.role, user_id: u.id, dept: u.dept, note: note || 'ME维修完成，待确认' });
   return updated;
 }
 

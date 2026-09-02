@@ -26,14 +26,14 @@ async function allowedActions(role, status, fixture, userId, userDept) {
   }
   if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && status === 'VERIFY_PENDING') actions.push('VERIFY');
   if (isMECustodyQA(role) && status === 'TRANSFERRED') actions.push('USE');
-  if (status === 'TRANSFERRED') actions.push('IMPROVE');
+  if (isMECustodyQA(role) && status === 'IN_USE') actions.push('IMPROVE');
   if (isMECustodyQA(role) && status === 'IN_USE') { actions.push('RETURN'); actions.push('REPAIR_ME'); actions.push('REPAIR_RD_REQ'); }
   if (role === 'ME' && (status === 'TRANSFERRED' || status === 'IN_USE')) actions.push('MAINTENANCE');
   if ((role === 'RD' || isMECustodyQA(role)) && status === 'IMPROVING') actions.push('IMPROVE_DONE');
-  if (isMECustodyQA(role) && status === 'REPAIRING_ME') actions.push('REPAIR_DONE');
+  if (role === 'ME' && status === 'REPAIRING_ME') actions.push('REPAIR_DONE');
   if (role === 'RD' && status === 'REPAIRING_RD') actions.push('REPAIR_RD_DONE');
-  if (isMECustodyQA(role) && status === 'REPAIR_DONE') actions.push('REPAIR_CONFIRM');
-  if (role === 'ADMIN' && ['IN_USE','TRANSFERRED','IMPROVING','ACCEPTED','VERIFY_PENDING'].indexOf(status) !== -1) actions.push('RETIRE');
+  if (role === 'ME' && status === 'REPAIR_DONE') actions.push('REPAIR_CONFIRM');
+  if (role === 'ADMIN' && ['REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE'].indexOf(status) !== -1) actions.push('RETIRE');
   // F5 死锁状态兜底：旧双人验证状态（VERIFY_RD_OK/VERIFY_ORG_OK）ADMIN 可强制移交或报废
   if (role === 'ADMIN' && ['VERIFY_RD_OK', 'VERIFY_ORG_OK'].indexOf(status) !== -1) { actions.push('FORCE_TRANSFER'); actions.push('RETIRE'); }
   return actions;

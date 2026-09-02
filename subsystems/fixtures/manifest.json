@@ -56,8 +56,22 @@
       { "from": "REPAIRING_RD",   "to": "REPAIR_DONE",    "action": "REPAIR_RD_DONE", "role": ["RD"],                    "label": "RD维修完成" },
       { "from": "REPAIR_DONE",    "to": "TRANSFERRED",    "action": "REPAIR_CONFIRM", "role": ["ME"],                    "label": "ME确认维修" },
       { "from": "IN_USE",         "to": "IMPROVING",      "action": "IMPROVE",        "role": ["ME","QA","CUSTODY"],     "label": "申请改善" },
-      { "from": "IMPROVING",      "to": "RETIRED",        "action": "IMPROVE_DONE",   "role": ["ME","QA","CUSTODY"],     "label": "改善完成" },
-      { "from": "TRANSFERRED",    "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废" }
+      { "from": "IMPROVING",      "to": "VERIFY_PENDING", "action": "IMPROVE_DONE",   "role": ["ME","QA","CUSTODY"],     "label": "改善完成(待复验)" },
+      { "from": "TRANSFERRED",    "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废" },
+      { "from": "REQUESTED",      "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "ACCEPTED",       "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "VERIFY_PENDING", "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "VERIFY_RD_OK",   "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "VERIFY_ORG_OK",  "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "IN_USE",         "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "IMPROVING",      "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "REPAIRING_ME",   "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "REPAIRING_RD",   "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "REPAIR_DONE",    "to": "RETIRED",        "action": "RETIRE",         "role": ["ADMIN"],                 "label": "报废(兜底)" },
+      { "from": "TRANSFERRED",    "to": "TRANSFERRED",    "action": "MAINTENANCE",    "role": ["ME"],                    "label": "保养" },
+      { "from": "IN_USE",         "to": "IN_USE",         "action": "MAINTENANCE",    "role": ["ME"],                    "label": "保养" },
+      { "from": "VERIFY_RD_OK",   "to": "TRANSFERRED",    "action": "FORCE_TRANSFER", "role": ["ADMIN"],                 "label": "强制移交" },
+      { "from": "VERIFY_ORG_OK",  "to": "TRANSFERRED",    "action": "FORCE_TRANSFER", "role": ["ADMIN"],                 "label": "强制移交" }
     ]
   },
   "files": {
