@@ -61,4 +61,19 @@ async function migratePerfIndexes(pool) {
   }
 }
 
-module.exports = { migrateFixtureLifecycle, migrateFixtureFiles, migrateFixtureMaintenance, migratePerfIndexes };
+
+// F1/F2 治具修复（2026-09-02）：fixtures 加 version 乐观锁列；fixture_files 补 file_size/uploaded_at/外键（幂等）
+async function migrateFixtureSchemaAlign(pool) {
+  try { await pool.execute('ALTER TABLE fixtures ADD COLUMN version INT NOT NULL DEFAULT 1'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+  try { await pool.execute('ALTER TABLE fixture_files ADD COLUMN file_size INT DEFAULT 0'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+  try { await pool.execute('ALTER TABLE fixture_files ADD COLUMN uploaded_at DATETIME'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+  try {
+    var [fk] = await pool.execute("SELECT COUNT(*) AS c FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='fixture_files' AND CONSTRAINT_TYPE='FOREIGN KEY'");
+    if (!fk[0].c) await pool.execute('ALTER TABLE fixture_files ADD CONSTRAINT fk_ffiles_fixture FOREIGN KEY (fixture_id) REFERENCES fixtures(id) ON DELETE CASCADE');
+  } catch (e) { /* 外键添加失败不阻断（如已存在/引擎限制） */ }
+}
+
+module.exports = { migrateFixtureLifecycle, migrateFixtureFiles, migrateFixtureMaintenance, migratePerfIndexes, migrateFixtureSchemaAlign };

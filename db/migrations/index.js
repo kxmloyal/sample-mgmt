@@ -1,6 +1,6 @@
 // db/migrations/index.js — 迁移聚合入口（B3-T2 拆分，行为零变化）
 // 各子系统迁移按原顺序执行；db/migrations.js 为薄转发，db.js 的 require 接口不变
-const { migrateFixtureLifecycle, migrateFixtureFiles, migrateFixtureMaintenance, migratePerfIndexes } = require('./fixtures');
+const { migrateFixtureLifecycle, migrateFixtureFiles, migrateFixtureMaintenance, migratePerfIndexes, migrateFixtureSchemaAlign } = require('./fixtures');
 const { migrateControlNcrDetail, migrateControlNcrForm } = require('./control');
 const { migrateProjectTaskIndexes } = require('./projects');
 const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete } = require('./samples');
@@ -11,6 +11,7 @@ async function runMigrations(pool) {
   await migrateFixtureFiles(pool);
   await migrateFixtureMaintenance(pool);
   await migratePerfIndexes(pool);
+  await migrateFixtureSchemaAlign(pool);
   await migrateUserEnabled(pool);
   await migrateControlNcrDetail(pool);
   await migrateControlNcrForm(pool);

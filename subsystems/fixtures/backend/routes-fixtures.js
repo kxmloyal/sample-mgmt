@@ -295,7 +295,7 @@ function register(app) {
         // 事务：doMake(2 addFixtureLog) + updateFixture，保证制作日志与状态变更原子性
         var makeResult = await D.withTransaction(async conn => {
           var u1 = await AM.doMake(updated, u, ts, f, note, req, conn);
-          return await D.updateFixture(u1, f, conn);
+          return await D.updateFixture(u1, f, conn, f.version);
         });
         return res.json({ fixture: makeResult, action: chosenAction, message: '操作成功：' + chosenAction });
       }
@@ -322,7 +322,7 @@ function register(app) {
         // 事务：doRepairConfirm(addFixtureLog) + updateFixture，保证维修确认日志与状态变更原子性
         var confirmResult = await D.withTransaction(async conn => {
           var u2 = await AR.doRepairConfirm(updated, u, ts, f, note, conn);
-          return await D.updateFixture(u2, f, conn);
+          return await D.updateFixture(u2, f, conn, f.version);
         });
         return res.json({ fixture: confirmResult, action: chosenAction, message: '操作成功：' + chosenAction });
       }
@@ -330,12 +330,14 @@ function register(app) {
       else if (chosenAction === 'IMPROVE_DONE') updated = await AS.doImproveDone(updated, u, ts, f, note);
       else if (chosenAction === 'RETIRE')       updated = await AS.doRetire(updated, u, ts, f, note);
     } catch (err) {
+      if (err && err.code === 'CONFLICT')
+        return res.status(409).json({ error: '该治具刚被他人操作，请刷新后重试' });
       var code = err.status || 500;
       var msg = err.message || String(err);
       return res.status(code).json({ error: msg });
     }
 
-    var result = await D.updateFixture(updated, f);
+    var result = await D.updateFixture(updated, f, null, f.version);
     res.json({ fixture: result, action: chosenAction, message: '操作成功：' + chosenAction });
     } catch (err) {
       res.status(500).json({ error: '治具扫码操作失败：' + (err.message || '服务器内部错误') });

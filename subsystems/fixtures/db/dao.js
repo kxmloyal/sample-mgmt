@@ -1,6 +1,6 @@
 // subsystems/fixtures/db/dao.js — 治具数据访问层（工厂模式）
 module.exports = function createDao(deps) {
-  var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
+  var q = deps.q, one = deps.one, run = deps.run, runAffected = deps.runAffected, nowISO = deps.nowISO;
 
   // 呆滞/配置子模块（2026-08-13 拆分，规避 dao.js 容量红线；db.js 无需改动）
   var DORM = require('./dao-dormant')(deps);
@@ -95,7 +95,7 @@ module.exports = function createDao(deps) {
     return q(sql, params).then(function(rows) { return rows[0].total; });
   }
 
-  async function updateFixture(updated, original, conn) {
+  async function updateFixture(updated, original, conn, expectedVersion) {
     var cols = [], vals = [];
     var fields = ['name','spec','model','station','category','status','requested_by','requested_dept',
       'request_note','request_image','made_by','made_at','made_note','made_image',
@@ -121,10 +121,21 @@ module.exports = function createDao(deps) {
     }
     cols.push('updated_at=NOW()');
     vals.push(updated.id);
+    // 乐观锁 CAS（F2）：传 expectedVersion 时 WHERE 加 version 条件，冲突抛 CONFLICT
+    var where = 'id=?';
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      cols.push('version=version+1');
+      where = 'id=? AND version=?';
+      vals.push(updated.id, expectedVersion);
+    }
     if (cols.length > 1) {
-      var sql = 'UPDATE fixtures SET ' + cols.join(',') + ' WHERE id=?';
-      if (conn) await conn.execute(sql, vals);
-      else await run(sql, vals);
+      var sql = 'UPDATE fixtures SET ' + cols.join(',') + ' WHERE ' + where;
+      var affected;
+      if (conn) { var [r] = await conn.execute(sql, vals); affected = r.affectedRows; }
+      else affected = await runAffected(sql, vals);
+      if (expectedVersion !== undefined && expectedVersion !== null && affected === 0) {
+        var e = new Error('VERSION_CONFLICT'); e.code = 'CONFLICT'; throw e;
+      }
     }
     return await fetchOne(conn, 'SELECT * FROM fixtures WHERE id = ?', [updated.id]);
   }

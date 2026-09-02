@@ -103,6 +103,12 @@ const dbRef = {
   run: async function(sql, params) {
     const pool = getPool();
     await pool.execute(sql, params || []);
+  },
+  // 返回受影响行数（乐观锁 CAS 用，2026-09-02 治具修复）
+  runAffected: async function(sql, params) {
+    const pool = getPool();
+    const [r] = await pool.execute(sql, params || []);
+    return r.affectedRows;
   }
 };
 const users = require('./db/users')({ q, one, dbRef });
@@ -123,7 +129,7 @@ const allDaoExports = {};
     if (!fs.existsSync(daoPath)) continue;
     try {
       const createDao = require(daoPath);
-      const deps = { q, one, run: dbRef.run, nowISO };
+      const deps = { q, one, run: dbRef.run, runAffected: dbRef.runAffected, nowISO };
       const dao = createDao(deps);
       // 展平：同名函数冲突时加子系统前缀
       for (const key of Object.keys(dao)) {

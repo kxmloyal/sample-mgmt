@@ -1,5 +1,6 @@
 -- subsystems/fixtures/db/schema.sql
 -- 治具子系统数据库表定义（幂等：CREATE TABLE IF NOT EXISTS）
+-- 2026-09-02 F1 对齐：fixture_files 补 file_size/uploaded_at/外键（与 db/migrations/fixtures.js 一致）；fixtures 加 version 乐观锁列
 
 CREATE TABLE IF NOT EXISTS fixtures (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -10,6 +11,7 @@ CREATE TABLE IF NOT EXISTS fixtures (
   station VARCHAR(50),
   category VARCHAR(50),
   status VARCHAR(30) NOT NULL DEFAULT 'REQUESTED',
+  version INT NOT NULL DEFAULT 1,
   requested_by INT,
   requested_dept VARCHAR(100),
   request_note TEXT,
@@ -76,11 +78,13 @@ CREATE TABLE IF NOT EXISTS fixture_files (
   category VARCHAR(40) NOT NULL,
   original_name VARCHAR(300),
   filename VARCHAR(300) NOT NULL,
-  size INT,
+  file_size INT DEFAULT 0,
   mime_type VARCHAR(100),
   uploaded_by INT,
+  uploaded_at DATETIME,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_fixture_files_fixture (fixture_id)
+  INDEX idx_fixture_files_fixture (fixture_id),
+  FOREIGN KEY (fixture_id) REFERENCES fixtures(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 治具子系统配置表（呆滞阈值等），幂等 + 默认值

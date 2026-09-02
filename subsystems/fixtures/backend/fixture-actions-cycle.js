@@ -60,7 +60,7 @@ async function doMaintenance(fixture, body, user) {
     id: fixture.id,
     last_maintenance_at: updated.last_maintenance_at,
     next_maintenance_at: updated.next_maintenance_at
-  }, fixture);
+  }, fixture, null, fixture.version);
 
   // 写日志: addFixtureLog 签名为 ({ fixture_id, action, role, user_id, dept, note })
   await D.addFixtureLog({ fixture_id: fixture.id, action: 'MAINTENANCE', role: user.role, user_id: user.id, dept: user.dept, note: body.note || '' });
