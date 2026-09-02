@@ -1,5 +1,8 @@
 // routes/cards.js — 标示卡：匿名查看 / 标签下载 / 二维码 / 打印
 const D = require('../../../db');
+const rateLimit = require('express-rate-limit');
+// 匿名数字标示卡限流：防编号枚举爬取（60 次/分钟/IP）
+var cardLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false, message: { error: '请求过于频繁，请稍后再试' } });
 const { logger } = require('../../../logger');
 const QRCode = require('qrcode');
 const { buildLabelHtml, buildCardPrintHtml, parseSize } = require('./card-html');
@@ -62,7 +65,7 @@ function register(app) {
   const requireAuth = app.locals.requireAuth;
 
   // 匿名数字标示卡（无需登录，QR码扫码查看）
-  app.get('/card/:sample_no', asyncHandler(async (req, res) => {
+  app.get('/card/:sample_no', cardLimiter, asyncHandler(async (req, res) => {
     const sampleNo = (req.params.sample_no || '').trim();
     if (!sampleNo) return res.status(400).send('无效样品编号');
     const s = await D.getSampleByNo(sampleNo);
