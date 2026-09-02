@@ -103,10 +103,13 @@ REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE
                                  REPAIRING_ME/REPAIRING_RD
                                        ↓
                                  REPAIR_DONE → TRANSFERRED
-                                       ↓→ IMPROVING → RETIRED
+                                       ↓→ IMPROVING → VERIFY_PENDING(改善完成待复验)
 ```
 
-> 验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为旧双人验证的历史状态（存量数据兼容）。
+> 验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为旧双人验证的历史状态（存量数据兼容，ADMIN 可强制移交/报废兜底）。
+> 维修：ME/RD 维修完成均经 `REPAIR_DONE` 待 ME 确认后移交；改善完成回到 `VERIFY_PENDING` 复验。
+> 兜底：ADMIN 可对任意卡死状态（REQUESTED/维修中/待确认等）报废；保养仅 ME 可操作（TRANSFERRED/IN_USE）。
+> 附件生命周期：设计图纸/请购单/实物照片（ACCEPTED+RD）、验证照片（VERIFY_PENDING）、维修照片（REPAIRING_*）、保养照片（TRANSFERRED/IN_USE+ME）、现场照片（IN_USE）。
 
 ### 治具看板
 
