@@ -8,7 +8,7 @@ module.exports = function({ q, one, dbRef }) {
     return await getUserById(row.id);
   }
   // 安全字段查询（不含 password_hash）
-  function safeCols() { return 'id,username,role,dept,display_name,enabled,created_at'; }
+  function safeCols() { return 'id,username,role,dept,display_name,enabled,created_at,session_version'; }
   function getUserById(id) { return one('SELECT ' + safeCols() + ' FROM users WHERE id = ?', [id]); }
   // 登录查询：必须含 password_hash（供 bcrypt 校验），仅内部鉴权使用，不直接返回给前端
   function getUserByUsername(username) { return one('SELECT * FROM users WHERE username = ?', [username]); }
@@ -59,6 +59,11 @@ module.exports = function({ q, one, dbRef }) {
     await exec('UPDATE users SET password_hash=? WHERE id IN (' + placeholders(ids) + ')', [passwordHash].concat(ids), conn);
     return ids.length;
   }
+
+  // 会话版本 +1：使该用户所有已登录会话失效（改密时调用，2026-09-01 安全专项）
+  function bumpSessionVersion(userId, conn) {
+    return exec('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [userId], conn);
+  }
   return { createUser, getUserById, getUserByUsername, listUsers, listRdUsers, listActiveRdUsers, updateUser,
-    deleteUsers, setUsersEnabled, updateUsers, resetPasswords };
+    deleteUsers, setUsersEnabled, updateUsers, resetPasswords, bumpSessionVersion };
 };

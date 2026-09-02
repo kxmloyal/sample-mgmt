@@ -33,6 +33,7 @@ function register(app) {
     req.session.regenerate(function(err) {
       if (err) return res.status(500).json({ error: '会话创建失败' });
       req.session.userId = u.id;
+      req.session.sessionVersion = u.session_version; // 会话版本（2026-09-01 安全专项）
       res.json({ id: u.id, username: u.username, role: u.role, dept: u.dept, display_name: u.display_name });
     });
   });
@@ -63,7 +64,9 @@ function register(app) {
         return res.status(401).json({ error: '原密码错误' });
       // 更新密码（updateUser 仅返回安全字段，不泄露 hash）
       await D.updateUser(full.id, { password_hash: bcrypt.hashSync(new_password, 10) });
-      // 销毁会话：旧会话立即失效，前端提示重新登录
+      // 会话版本 +1：该用户所有已登录会话（含其他设备）全部失效（2026-09-01 安全专项）
+      await D.bumpSessionVersion(full.id);
+      // 销毁当前会话：立即失效，前端提示重新登录
       req.session.destroy(function (err) {
         if (err) return res.status(500).json({ error: '会话销毁失败，请重新登录' });
         res.json({ ok: true });

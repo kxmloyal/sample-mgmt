@@ -132,6 +132,12 @@ async function migrateSamplesSoftDelete(pool) {
   catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
 }
 
+// 会话版本失效底座：users.session_version 列（2026-09-01 安全专项，幂等）
+async function migrateUsersSessionVersion(pool) {
+  try { await pool.execute('ALTER TABLE users ADD COLUMN session_version INT NOT NULL DEFAULT 0'); }
+  catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+}
+
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
   await migrateFixtureFiles(pool);
@@ -143,6 +149,7 @@ async function runMigrations(pool) {
   await migrateProjectTaskIndexes(pool);
   await migrateSamplesOptimisticLock(pool);
   await migrateSamplesSoftDelete(pool);
+  await migrateUsersSessionVersion(pool);
 }
 
 module.exports = { runMigrations };
