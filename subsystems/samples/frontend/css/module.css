@@ -35,13 +35,14 @@
 .pv-icon-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;font-size:12px;line-height:1.4;cursor:pointer;white-space:nowrap}
 .pv-icon-btn:hover{background:#f3f4f6}
 
-/* 密度自适应宽度（max-width 必须挂在密度类上：app.css 的 fluent-dialog#fluent-modal 有 max-width:900px，
-   特异性 101 高于裸 #fluent-modal 的 100，不带类名覆盖会使 960px 档被截为 900px） */
-#fluent-modal{transition:width .25s ease}
-#fluent-modal.d-low{width:640px;max-width:96vw}  /* 640px：减少日志换行，尽量避免纵向滚动条 */
-#fluent-modal.d-mid{width:800px;max-width:96vw}
-#fluent-modal.d-high{width:960px;max-width:96vw}
-@media(max-width:767px){#fluent-modal.d-low,#fluent-modal.d-mid,#fluent-modal.d-high{width:94vw}}
+/* 密度自适应尺寸：必须作用于 shadow DOM 的 ::part(control)——厂商默认 .control 为固定 640×480，
+   写在外层元素上无效且固定高度会把内容挤压出滚动条（2026-09-01 无头浏览器实测）。
+   height:auto 让弹窗高度随内容自适应，仅超过 94vh 才出现滚动条 */
+#fluent-modal::part(control){transition:width .25s ease}
+#fluent-modal.d-low::part(control){width:640px;max-width:96vw;height:auto;max-height:94vh}
+#fluent-modal.d-mid::part(control){width:800px;max-width:96vw;height:auto;max-height:94vh}
+#fluent-modal.d-high::part(control){width:960px;max-width:96vw;height:auto;max-height:94vh}
+@media(max-width:767px){#fluent-modal.d-low::part(control),#fluent-modal.d-mid::part(control),#fluent-modal.d-high::part(control){width:94vw}}
 
 /* 详情弹窗观感对齐预览稿（dm-modal 作用域，仅详情弹窗，不影响其他弹窗） */
 #fluent-modal.dm-modal{box-shadow:0 20px 50px rgba(15,23,42,.25);max-height:94vh}
