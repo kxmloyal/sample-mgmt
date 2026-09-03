@@ -183,11 +183,17 @@ function register(app) {
     const updated = Object.assign({}, order);
     ['part_no', 'part_name', 'sales_no', 'model', 'qty', 'bad_type', 'reason', 'apply_dept', 'spray_date', 'customer', 'bad_appearance', 'bad_function', 'bad_size', 'bad_change', 'bad_other', 'pack_sop'].forEach(k => { if (body[k] !== undefined) updated[k] = body[k]; });
     if (body.qty !== undefined && (Number(updated.qty) <= 0)) return res.status(400).json({ error: '数量必须为正数' });
-    const result = await D.withTransaction(async conn => {
-      const r = await D.updateOrder(updated, conn);
-      await D.addControlLog({ order_id: order.id, action: 'EDIT', role: u.role, user_id: u.id, dept: u.dept, comment: '编辑草稿' }, conn);
-      return r;
-    });
+    let result;
+    try {
+      result = await D.withTransaction(async conn => {
+        const r = await D.updateOrder(updated, conn, order.version);
+        await D.addControlLog({ order_id: order.id, action: 'EDIT', role: u.role, user_id: u.id, dept: u.dept, comment: '编辑草稿' }, conn);
+        return r;
+      });
+    } catch (err) {
+      if (err && err.code === 'CONFLICT') return res.status(409).json({ error: '该管制单刚被他人操作，请刷新后重试' });
+      throw err;
+    }
     res.json(result);
   }));
 
@@ -217,7 +223,7 @@ function register(app) {
       result = await D.withTransaction(async conn => {
         const updated = applyActionFields(order, action, req.body || {});
         updated.status = t.to;
-        const r = await D.updateOrder(updated, conn);
+        const r = await D.updateOrder(updated, conn, order.version);
         if (action === 'DISPATCH') { // 初始化闸口② 会签模板
           for (const s of buildSignTemplate(order.id, 'DISPOSAL_SIGN')) await D.addSign(s, conn);
         }
@@ -225,6 +231,7 @@ function register(app) {
         return r;
       });
     } catch (err) {
+      if (err && err.code === 'CONFLICT') return res.status(409).json({ error: '该管制单刚被他人操作，请刷新后重试' });
       logger.error('管制单流转失败: ' + (err.message || String(err)));
       return res.status(500).json({ error: '流转失败：' + (err.message || '服务器内部错误') });
     }
@@ -253,13 +260,14 @@ function register(app) {
         let updated = Object.assign({}, order);
         if (decision === 'REJECT') { // 回退到会签前一业务节点
           const rb = rejectTargetOf(node_key);
-          if (rb) { updated.status = rb.to; await D.updateOrder(updated, conn); }
+          if (rb) { updated.status = rb.to; await D.updateOrder(updated, conn, order.version); }
         }
         await D.addControlLog({ order_id: order.id, action: 'SIGN_' + decision, role: u.role, user_id: u.id, dept: u.dept, comment: node.node_name + '·' + (body.comment || decision) }, conn);
         // 返回内存中的目标 order；事务未提交时 getOrderById(连接池) 读不到刚写入的状态，改用 updated
         return updated;
       });
     } catch (err) {
+      if (err && err.code === 'CONFLICT') return res.status(409).json({ error: '该管制单刚被他人操作，请刷新后重试' });
       if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(400).json({ error: '该节点已签字' });
       logger.error('会签失败: ' + (err.message || String(err)));
       return res.status(500).json({ error: '会签失败：' + (err.message || '服务器内部错误') });
@@ -285,11 +293,12 @@ function register(app) {
         updated.scrap_qty = (Number(order.scrap_qty) || 0) + s;
         if ((body.scrap_reason || '').trim()) updated.scrap_note = body.scrap_reason.trim();
         await D.addReworkLog({ order_id: order.id, work_date: body.work_date || D.nowISO(), good_qty: g, ng_qty: n, scrap_qty: s, scrap_reason: body.scrap_reason || null, operator_id: u.id, operator_name: u.display_name || u.username, batch_no: body.batch_no || null, pack_record: body.pack_record || null, confirm_by: body.confirm_by || null, qty_consistent: body.qty_consistent != null ? (body.qty_consistent === 1 || body.qty_consistent === '1' || body.qty_consistent === true ? 1 : 0) : 0 }, conn);
-        const r = await D.updateOrder(updated, conn); // remain_qty = qty - good - ng - scrap 自动重算
+        const r = await D.updateOrder(updated, conn, order.version); // remain_qty = qty - good - ng - scrap 自动重算
         await D.addControlLog({ order_id: order.id, action: 'REWORK_LOG', role: u.role, user_id: u.id, dept: u.dept, comment: '报工 良品' + g + ' 不良' + n + ' 报废' + s }, conn);
         return r;
       });
     } catch (err) {
+      if (err && err.code === 'CONFLICT') return res.status(409).json({ error: '该管制单刚被他人操作，请刷新后重试' });
       logger.error('报工失败: ' + (err.message || String(err)));
       return res.status(500).json({ error: '报工失败：' + (err.message || '服务器内部错误') });
     }
@@ -309,11 +318,12 @@ function register(app) {
       result = await D.withTransaction(async conn => {
         const updated = Object.assign({}, order);
         updated.status = 'RETIRED';
-        const r = await D.updateOrder(updated, conn);
+        const r = await D.updateOrder(updated, conn, order.version);
         await D.addControlLog({ order_id: order.id, action: 'VOID', role: u.role, user_id: u.id, dept: u.dept, comment: (req.body || {}).comment || '作废' }, conn);
         return r;
       });
     } catch (err) {
+      if (err && err.code === 'CONFLICT') return res.status(409).json({ error: '该管制单刚被他人操作，请刷新后重试' });
       logger.error('作废失败: ' + (err.message || String(err)));
       return res.status(500).json({ error: '作废失败：' + (err.message || '服务器内部错误') });
     }
