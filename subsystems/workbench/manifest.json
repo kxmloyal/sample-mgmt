@@ -37,6 +37,19 @@
         "CUSTODY",
         "ME"
       ]
+    },
+    {
+      "key": "todos",
+      "label": "我的待办",
+      "icon": "todo",
+      "view": "renderMyTodos",
+      "roles": [
+        "ADMIN",
+        "RD",
+        "QA",
+        "CUSTODY",
+        "ME"
+      ]
     }
   ],
   "deployed": false

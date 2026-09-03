@@ -55,6 +55,7 @@
     "subsystems/workbench/frontend/js/views/wb-filter.js",
     "subsystems/workbench/frontend/js/views/dashboard.js",
     "subsystems/workbench/frontend/js/views/wb-detail.js",
+    "subsystems/workbench/frontend/js/views/my-todos.js",
     "subsystems/workbench/frontend/js/views/threshold.js",
     "subsystems/workbench/frontend/js/router.js"
   ],

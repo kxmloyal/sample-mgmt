@@ -4,7 +4,8 @@
 function buildNav() {
   var nav = document.getElementById('nav');
   nav.innerHTML =
-    '<button data-k="dashboard" class="active" onclick="location.hash=\'#/dashboard\'">工作台</button>';
+    '<button data-k="dashboard" class="active" onclick="location.hash=\'#/dashboard\'">工作台</button>' +
+    '<button data-k="todos" onclick="location.hash=\'#/todos\'">我的待办</button>';
 }
 
 function setActive(k) {
@@ -15,6 +16,13 @@ function setActive(k) {
 
 function route() {
   var h = location.hash.replace('#/', '') || 'dashboard';
+  if (h.indexOf('todos') === 0) {
+    setActive('todos');
+    document.getElementById('page-title').textContent = '我的待办';
+    document.getElementById('page-actions').innerHTML = '';
+    renderMyTodos();
+    return;
+  }
   if (h.indexOf('dashboard') === 0) {
     setActive('dashboard');
     document.getElementById('page-title').textContent = '全局工作台';

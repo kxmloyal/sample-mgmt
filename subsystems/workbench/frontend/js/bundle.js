@@ -1,4 +1,4 @@
-/** BUNDLE vbmtldqewd — 9 files */
+/** BUNDLE vbmtltlpfl — 10 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -848,6 +848,98 @@ function _openWbScanJs(item) {
 }
 
 
+/* --- subsystems/workbench/frontend/js/views/my-todos.js --- */
+// subsystems/workbench/frontend/js/views/my-todos.js — 我的待办（跨子系统聚合视图）
+// 数据：GET /api/workbench/my-todos（后端按 角色/部门/个人 三维实时聚合，口径见后端 db/my-todos.js）
+// 下钻：样品/治具/管制 复用 openWbDetail 弹窗（wb-detail.js）；项目任务新标签页跳 projects 子系统深链 #/tasks/:id
+// 依赖：api()/e()/fmt()（api-base.js/utils.js）、openWbDetail（wb-detail.js，bundle 顺序须在其后）
+
+// 待办项注册表：groupKey → items（点击时按索引取原始对象，避免把数据拼进 onclick 引号地狱/XSS）
+var _wbTodoItems = {};
+
+// 入口：渲染我的待办页（汇总卡 + 按子系统分组列表）
+async function renderMyTodos() {
+  var v = document.getElementById('view');
+  v.innerHTML = '<div class="muted" style="text-align:center;padding:40px">加载中…</div>';
+  document.getElementById('page-actions').innerHTML =
+    '<fluent-button appearance="lightweight" size="small" onclick="renderMyTodos()">刷新</fluent-button>';
+  var d;
+  try {
+    d = await api('GET', '/api/workbench/my-todos');
+  } catch (err) {
+    v.innerHTML = '<div class="empty">加载失败：' + e(err.message) + '</div>';
+    return;
+  }
+  var groups = d.groups || [];
+  var total = d.total || 0;
+  var overdueTotal = 0;
+  _wbTodoItems = {};
+  groups.forEach(function (g) {
+    _wbTodoItems[g.key] = g.items;
+    g.items.forEach(function (it) { if (it.overdue) overdueTotal++; });
+  });
+
+  // 汇总条：总数 + 各子系统计数徽章（点击滚动定位）+ 口径说明
+  var html = '<div class="filters" style="align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<span style="font-size:14px">我的待办共 <b>' + total + '</b> 项' +
+    (overdueTotal ? ' · <span style="color:var(--bad);font-weight:600">逾期/紧急 ' + overdueTotal + '</span>' : '') + '</span>' +
+    groups.map(function (g) {
+      return '<span class="badge" style="cursor:pointer" onclick="wbTodoJump(\'' + g.key + '\')">' + g.name + ' ' + g.items.length + '</span>';
+    }).join('') +
+    '<span class="muted" style="font-size:12px">口径：我角色/部门可处理 + 指派给我 · ' + e(d.display_name || '') + '（' + e(d.dept || '未设部门') + '）</span></div>';
+
+  if (!total) {
+    html += '<div class="card"><div class="empty" style="padding:40px">🎉 暂无待办事项</div></div>';
+    v.innerHTML = html;
+    return;
+  }
+
+  // 分组卡片
+  groups.forEach(function (g) {
+    html += '<div class="card" style="padding:0;margin-bottom:14px" id="wb-todo-' + g.key + '">' +
+      '<div style="padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px">' +
+      g.name + ' <span class="badge">' + g.items.length + '</span></div>';
+    if (!g.items.length) {
+      html += '<div class="empty" style="padding:16px">暂无待办</div></div>';
+      return;
+    }
+    html += g.items.map(function (it, i) { return _wbTodoRow(g.key, it, i); }).join('') + '</div>';
+  });
+  v.innerHTML = html;
+}
+
+// 单行待办：待办类型徽章 + 编号 + 名称 + 状态 + 提示 + 更新时间；逾期红左边框
+function _wbTodoRow(groupKey, it, idx) {
+  return '<div class="wb-todo-row" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;' +
+    (idx > 0 ? 'border-top:1px solid var(--line);' : '') +
+    (it.overdue ? 'border-left:3px solid var(--bad);' : 'border-left:3px solid transparent;') +
+    '" onclick="wbTodoOpen(\'' + groupKey + '\',' + idx + ')">' +
+    '<span class="badge" style="flex:none;' + (it.overdue ? 'border:1px solid var(--bad);color:var(--bad)' : '') + '">' + e(it.todo) + '</span>' +
+    '<b style="flex:none">' + e(it.item_no || '—') + '</b>' +
+    '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + e(it.name || '—') + '</span>' +
+    '<span class="muted" style="flex:none;font-size:12px">' + e(it.status_cn || it.status || '') + '</span>' +
+    (it.hint ? '<span class="muted" style="flex:none;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + e(it.hint) + '</span>' : '') +
+    '<span class="muted" style="flex:none;font-size:12px">' + fmt(it.updated_at) + '</span></div>';
+}
+
+// 行点击：project 新标签页跳子系统深链；其余复用 openWbDetail 弹窗
+function wbTodoOpen(groupKey, idx) {
+  var it = (_wbTodoItems[groupKey] || [])[idx];
+  if (!it) return;
+  if (it.item_type === 'project') {
+    window.open(it.link || '/subsystems/projects/frontend/index.html', '_blank');
+    return;
+  }
+  openWbDetail({ id: it.id, item_type: it.item_type, item_no: it.item_no, name: it.name });
+}
+
+// 汇总徽章点击 → 滚动定位到对应分组
+function wbTodoJump(key) {
+  var el = document.getElementById('wb-todo-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 /* --- subsystems/workbench/frontend/js/views/threshold.js --- */
 // subsystems/workbench/frontend/js/views/threshold.js
 // 阈值设置弹窗（仅 ADMIN 可见入口）：天数输入 + 快捷预设 + 实时分布预览
@@ -974,7 +1066,8 @@ async function saveThreshold() {
 function buildNav() {
   var nav = document.getElementById('nav');
   nav.innerHTML =
-    '<button data-k="dashboard" class="active" onclick="location.hash=\'#/dashboard\'">工作台</button>';
+    '<button data-k="dashboard" class="active" onclick="location.hash=\'#/dashboard\'">工作台</button>' +
+    '<button data-k="todos" onclick="location.hash=\'#/todos\'">我的待办</button>';
 }
 
 function setActive(k) {
@@ -985,6 +1078,13 @@ function setActive(k) {
 
 function route() {
   var h = location.hash.replace('#/', '') || 'dashboard';
+  if (h.indexOf('todos') === 0) {
+    setActive('todos');
+    document.getElementById('page-title').textContent = '我的待办';
+    document.getElementById('page-actions').innerHTML = '';
+    renderMyTodos();
+    return;
+  }
   if (h.indexOf('dashboard') === 0) {
     setActive('dashboard');
     document.getElementById('page-title').textContent = '全局工作台';

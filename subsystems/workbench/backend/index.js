@@ -6,6 +6,7 @@ var { unifiedWorkbenchSQL, unifiedWorkbenchCountSQL } = require('../db/workbench
 var pool = D.pool();
 var { buildWorkbenchSQL } = require('../db/workbench-queries');
 var { calcOverdue } = require('../db/workbench-overdue');
+var { collectMyTodos } = require('../db/my-todos');
 
 // 默认阈值（小时）：3天边界 warn=72h，7天边界 bad=168h
 var DEFAULT_SETTINGS = { warn: 72, bad: 168 };
@@ -89,6 +90,19 @@ function register(app) {
     } catch (err) {
       console.error('[workbench] 查询失败:', err.message);
       res.status(500).json({ error: '获取工作台数据失败：' + err.message });
+    }
+  });
+
+  // GET /api/workbench/my-todos — 我的待办（跨子系统聚合：样品/治具/管制/项目）
+  // 口径=角色/部门可处理 + 个人指派合并（详见 db/my-todos.js 头注），全部实时派生零落库
+  app.get('/api/workbench/my-todos', requireAuth, async function(req, res) {
+    try {
+      var u = await currentUser(req);
+      var data = await collectMyTodos(u);
+      res.json({ role: u.role, dept: u.dept || '', display_name: u.display_name || u.username, groups: data.groups, total: data.total });
+    } catch (err) {
+      console.error('[workbench] 我的待办查询失败:', err.message);
+      res.status(500).json({ error: '获取我的待办失败：' + err.message });
     }
   });
 
