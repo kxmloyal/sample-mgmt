@@ -39,4 +39,17 @@ async function migrateControlNcrForm(pool) {
   }
 }
 
-module.exports = { migrateControlNcrDetail, migrateControlNcrForm };
+
+// C1 乐观锁：control_orders.version 列（2026-09-03，幂等；带死锁重试——参照治具修复 d8ee80c 教训）
+async function migrateControlOptimisticLock(pool) {
+  for (var i = 0; i < 3; i++) {
+    try { await pool.execute('ALTER TABLE control_orders ADD COLUMN version INT NOT NULL DEFAULT 1'); return; }
+    catch (e) {
+      if (e.code === 'ER_LOCK_DEADLOCK' || e.code === 'ER_LOCK_WAIT_TIMEOUT') { await new Promise(r => setTimeout(r, 200 * (i + 1))); continue; }
+      if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+      return; // 列已存在，幂等通过
+    }
+  }
+}
+
+module.exports = { migrateControlNcrDetail, migrateControlNcrForm, migrateControlOptimisticLock };

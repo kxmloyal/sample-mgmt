@@ -8,7 +8,7 @@ const CONTROL_UPLOAD_DIR = path.join(__dirname, '..', '..', '..', 'public', 'upl
 if (!fs.existsSync(CONTROL_UPLOAD_DIR)) fs.mkdirSync(CONTROL_UPLOAD_DIR, { recursive: true });
 
 module.exports = function createDao(deps) {
-  var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
+  var q = deps.q, one = deps.one, run = deps.run, runAffected = deps.runAffected, nowISO = deps.nowISO;
 
   // 事务内单行查询：传 conn 用当前连接（可见未提交数据），否则用连接池
   async function fetchOne(conn, sql, params) {
@@ -100,12 +100,24 @@ module.exports = function createDao(deps) {
   }
 
   // 全字段更新主单（结余自动重算）；调用方须传入完整对象，conn 存在走事务连接
-  async function updateOrder(o, conn) {
+  async function updateOrder(o, conn, expectedVersion) {
     o = o || {};
     var sql = 'UPDATE control_orders SET part_no=?, part_name=?, sales_no=?, model=?, qty=?, bad_type=?, reason=?, applicant_id=?, applicant_name=?, apply_dept=?, apply_at=?, label_no=?, storage_location=?, stored_at=?, ncr_no=?, disposal_opinion=?, rework_no=?, rework_sop=?, spray_date=?, rework_guide=?, rework_other=?, customer=?, bad_appearance=?, bad_function=?, bad_size=?, bad_change=?, bad_other=?, pack_sop=?, good_qty=?, ng_qty=?, scrap_qty=?, remain_qty=?, scrap_note=?, in_stock_at=?, status=? WHERE id=?';
     var params = [o.part_no ?? null, o.part_name ?? null, o.sales_no ?? null, o.model ?? null, o.qty != null ? o.qty : null, o.bad_type ?? null, o.reason ?? null, o.applicant_id ?? null, o.applicant_name ?? null, o.apply_dept ?? null, o.apply_at ?? null, o.label_no ?? null, o.storage_location ?? null, o.stored_at ?? null, o.ncr_no ?? null, o.disposal_opinion ?? null, o.rework_no ?? null, o.rework_sop ?? null, o.spray_date ?? null, o.rework_guide ?? null, o.rework_other ?? null, o.customer ?? null, o.bad_appearance ?? null, o.bad_function ?? null, o.bad_size ?? null, o.bad_change ?? null, o.bad_other ?? null, o.pack_sop ?? null, o.good_qty ?? 0, o.ng_qty ?? 0, o.scrap_qty ?? 0, remainOf(o), o.scrap_note ?? null, o.in_stock_at ?? null, o.status ?? null, o.id];
-    if (conn) await conn.execute(sql, params);
-    else await run(sql, params);
+    // C1 乐观锁：传 expectedVersion 时 SET 加 version=version+1、WHERE 加 version 条件，冲突抛 CONFLICT
+    var where = 'id=?';
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      where = 'id=? AND version=?';
+      sql = sql.replace('UPDATE control_orders SET ', 'UPDATE control_orders SET version=version+1, ');
+      params.push(expectedVersion);
+    }
+    sql = sql.replace('WHERE id=?', 'WHERE ' + where);
+    var affected;
+    if (conn) { var [r] = await conn.execute(sql, params); affected = r.affectedRows; }
+    else affected = await runAffected(sql, params);
+    if (expectedVersion !== undefined && expectedVersion !== null && affected === 0) {
+      var e = new Error('VERSION_CONFLICT'); e.code = 'CONFLICT'; throw e;
+    }
     return await fetchOne(conn, 'SELECT * FROM control_orders WHERE id = ?', [o.id]);
   }
 
