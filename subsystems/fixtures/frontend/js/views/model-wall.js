@@ -19,7 +19,9 @@ async function renderFixtureModelWall() {
 
   var html = '<div class="filters" style="justify-content:space-between">' +
     '<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
-    '<fluent-button appearance="accent" size="small" onclick="renderFixtureList()">列表视图</fluent-button>' +
+    // 「列表视图」走 hash 路由（勿直调 renderFixtureList）：直调不改 hash，URL 停留 #/models，
+    // 再点清单侧「机型视图」(location.hash='#/models') 时 hash 无变化、不触发 hashchange，导致切换失效
+    '<fluent-button appearance="accent" size="small" onclick="location.hash=\'#/list\'">列表视图</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="openFixtureModelsModal()" title="机型管理">机型管理</fluent-button>' +
     '<span class="muted">共 <b>' + models.length + '</b> 个机型 · <b>' + totalFixtures + '</b> 台治具' +
     (dormantTotal > 0 ? ' · <span style="color:var(--warn,#b45309)">呆滞 ' + dormantTotal + '</span>' : '') + '</span></span>' +
