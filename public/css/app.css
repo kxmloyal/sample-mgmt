@@ -116,6 +116,38 @@ fluent-dialog::part(control){display:flex;flex-direction:column;max-height:90vh;
 .detail-tabs{display:flex;border-top:2px solid var(--line);background:#fff;padding:4px 14px 0}
 .detail-tab{padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
 .detail-tab.active{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+
+/* ═══ 详情弹窗设计系统（2026-09-03 下沉共享，供所有子系统详情弹窗复用；原 samples module.css 迁移） ═══ */
+.sk{background:#e8eaed;border-radius:6px;animation:sk-pulse 1.2s ease-in-out infinite}
+@keyframes sk-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+/* 置顶 Tab 栏（复用共享 .detail-tab 基样式，顶部 + border-bottom 分隔线） */
+.detail-tabs-top{display:flex;border-bottom:2px solid var(--line);background:#fff;padding:0 14px}
+/* 头部操作组小图标按钮 */
+.pv-actions{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+.pv-icon-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;font-size:12px;line-height:1.4;cursor:pointer;white-space:nowrap}
+.pv-icon-btn:hover{background:#f3f4f6}
+/* 密度自适应尺寸：作用于 shadow DOM ::part(control)——厂商 .control 默认固定 640×480，外层元素无效 */
+#fluent-modal::part(control){transition:width .25s ease}
+#fluent-modal.d-low::part(control){width:640px;max-width:96vw;height:auto;max-height:94vh}
+#fluent-modal.d-mid::part(control){width:800px;max-width:96vw;height:auto;max-height:94vh}
+#fluent-modal.d-high::part(control){width:960px;max-width:96vw;height:auto;max-height:94vh}
+@media(max-width:767px){#fluent-modal.d-low::part(control),#fluent-modal.d-mid::part(control),#fluent-modal.d-high::part(control){width:94vw}}
+/* 详情弹窗观感（dm-modal 作用域，仅详情弹窗） */
+#fluent-modal.dm-modal{box-shadow:0 20px 50px rgba(15,23,42,.25);max-height:94vh}
+#fluent-modal.dm-modal .modal-foot{background:#fff}
+.dm-pad{padding:6px 18px 14px}
+/* 日志时间线（整条竖线 + 白心蓝圈节点） */
+.tl{position:relative;margin:4px 0 0 6px;padding-left:26px}
+.tl::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:#e2e8f0}
+.tl-item{position:relative;padding:5px 0 6px}
+.tl-item::before{content:'';position:absolute;left:-25px;top:11px;width:8px;height:8px;border-radius:50%;background:#fff;border:3px solid var(--brand)}
+.tl-act{font-weight:600}
+.tl-flow{font-size:12px;color:var(--brand);margin-left:8px}
+.tl-meta{font-size:12px;color:var(--muted);margin-top:1px}
+.tl-note{font-size:13px;margin-top:2px;word-break:break-all}
+.tl-note.folded{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.tl-note.folded::after{content:' ⌄ 展开';color:var(--brand);font-size:12px;white-space:nowrap}
+.tl-note.can-fold:not(.folded)::after{content:' ⌃ 折叠';color:var(--brand);font-size:12px;cursor:pointer}
 .overview-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;padding-top:8px}
 .overview-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
 .overview-card .title{font-weight:600;font-size:12px;color:var(--muted);margin-bottom:6px}
