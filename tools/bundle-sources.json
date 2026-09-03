@@ -30,6 +30,7 @@
     "shared/frontend/shared/utils.js",
     "shared/frontend/api-base.js",
     "shared/frontend/modal.js",
+    "shared/frontend/detail-modal.js",
     "subsystems/fixtures/frontend/js/api.js",
     "subsystems/fixtures/frontend/js/views/fixture-inspect.js",
     "subsystems/fixtures/frontend/js/file-api.js",

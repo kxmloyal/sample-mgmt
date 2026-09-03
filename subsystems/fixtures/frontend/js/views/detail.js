@@ -1,55 +1,43 @@
-// fixture-detail.js — 治具详情弹窗（Tab 切换：概览/日志/附件）
-var _fixDetail = null, _fixLogs = null, _fixFiles = null, _fixModalOpen = false, _fixId = null;
-var _fixDormant = null; // 当前治具呆滞信息 {days, reason}，非呆滞为 null
+// fixture-detail.js — 治具详情弹窗（Tab：概览/日志/附件；交互骨架由共享 detail-modal 组件提供，DM-2/DM-4）
+var _fixDetail = null, _fixLogs = null, _fixFiles = null, _fixId = null, _fixDormant = null;
 
-async function showFixtureDetail(id) {
-  _fixId = id; _fixModalOpen = false;
-  try {
-    var _a = await Promise.all([
+var _fixDm = openDetailModal({
+  id: 'fixture',
+  fetchData: async function() {
+    var id = _fixId;
+    var a = await Promise.all([
       api('GET', '/api/fixtures/' + id),
       api('GET', '/api/fixtures/' + id + '/logs').catch(function(){ return []; }),
       fetchFixtureFiles(id).catch(function(){ return []; }),
       api('GET', '/api/fixtures/dashboard').catch(function(){ return { dormant: [] }; })
     ]);
-    _fixDetail = _a[0]; _fixLogs = _a[1]; _fixFiles = _a[2];
-    _fixDormant = null;
-    var dormant = _a[3].dormant || [];
-    for (var i = 0; i < dormant.length; i++) {
-      if (dormant[i].id === id) { _fixDormant = { days: dormant[i].dormant_days, reason: dormant[i].dormant_reason }; break; }
-    }
-    renderFixTab('overview');
-  } catch (e) { showToast(e.message); }
-}
+    var dormant = (a[3].dormant || []).filter(function(x){ return x.id === id; })[0] || null;
+    return { f: a[0], logs: a[1], files: a[2], dormant: dormant };
+  },
+  buildHead: function(d) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;width:100%"><b style="font-size:16px">' + fixtureNoVersion(d.f) + '</b> ' + statusBadge(d.f) + '</div>';
+  },
+  tabs: function(d) {
+    return [
+      { key: 'overview', label: '概览' },
+      { key: 'logs', label: '操作日志' + (d.logs.length ? ' (' + d.logs.length + ')' : '') },
+      { key: 'files', label: '附件' + (d.files.length ? ' (' + d.files.length + ')' : '') }
+    ];
+  },
+  buildTabContent: function(d, key) {
+    _fixDetail = d.f; _fixLogs = d.logs; _fixFiles = d.files; _fixDormant = d.dormant;
+    if (key === 'overview') return buildOverview(d.f);
+    if (key === 'logs') return buildLogsTab();
+    return buildFilesTab();
+  },
+  density: function(key) { return key === 'overview' ? 'dm-high' : 'dm-low'; },
+  footer: function(d) {
+    return _buildActions(d.f) + '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
+  },
+  toast: function(m, t) { showToast(m, t); }
+});
 
-function renderFixTab(tab) {
-  var f = _fixDetail; if (!f) return;
-  var tabs = [
-    { key: 'overview', label: '概览' },
-    { key: 'logs', label: '操作日志' + (_fixLogs.length ? ' (' + _fixLogs.length + ')' : '') },
-    { key: 'files', label: '附件' + (_fixFiles.length ? ' (' + _fixFiles.length + ')' : '') }
-  ];
-
-  var tbar = '<div class="detail-tabs">' +
-    tabs.map(function(t) {
-      return '<span class="detail-tab' + (tab === t.key ? ' active' : '') + '" onclick="renderFixTab(\'' + t.key + '\')">' + t.label + '</span>';
-    }).join('') + '</div>';
-
-  var content;
-  if (tab === 'overview') content = buildOverview(f);
-  else if (tab === 'logs') content = buildLogsTab();
-  else content = buildFilesTab();
-
-  if (!_fixModalOpen) {
-    var head = '<div style="display:flex;justify-content:space-between;align-items:center;width:100%"><b style="font-size:16px">' + fixtureNoVersion(f) + '</b> ' + statusBadge(f) + '</div>';
-    var foot = _buildActions(f) + '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
-    openModal('', tbar + content, { head: head, foot: foot });
-    _fixModalOpen = true;
-  } else {
-    var mb = document.querySelector('.modal-mask .modal-body');
-    if (!mb) { _fixModalOpen = false; renderFixTab(tab); return; }
-    mb.innerHTML = tbar + content;
-  }
-}
+function showFixtureDetail(id) { _fixId = id; _fixDm.open(id); }
 
 // ═══ 概览 Tab（Card Grid 布局 — CSS Grid auto-fill 自适应 1~3 列） ═══
 function buildOverview(f) {
