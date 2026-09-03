@@ -327,6 +327,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 ## 14. 当前已知技术债
 
 - `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 4 个 action helper 拆分后仍偏大），后续治具迭代需关注拆分
+- 管制子系统（2026-09-03 全链路修复）：control_orders 加乐观锁 CAS、会签并行化（闸口① 不再强制串行）、出货前结余校验、会签超时 DAO 已落地；`subsystems/control/backend/routes-orders.js` 324 行接近 400 行红线，后续迭代关注拆分
 - `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
