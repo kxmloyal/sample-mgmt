@@ -72,6 +72,10 @@ module.exports = function createDao(deps) {
       where.push("status NOT IN ('SHIPPED','RETIRED') AND apply_at IS NOT NULL AND apply_at < ?");
       params.push(new Date(Date.now() - oh * 3600000).toISOString());
     }
+    // 标签清单：已贴标（label_no 已生成）且未作废
+    if (opts.label_ready) {
+      where.push("label_no IS NOT NULL AND label_no <> '' AND status <> 'RETIRED'");
+    }
     return { where: where, params: params };
   }
 

@@ -50,13 +50,14 @@ function applyActionFields(order, action, body) {
 
 // 列表筛选条件（与导出共用）；active/today/overdue 为看板统计卡联动快速筛选
 function buildListOpts(req) {
-  const { status, apply_dept, bad_type, model, q, sort, limit, offset, active, today, overdue } = req.query;
+  const { status, apply_dept, bad_type, model, q, sort, limit, offset, active, today, overdue, label_ready } = req.query;
   const yes = v => v === '1' || v === 'true' ? true : undefined;
   return {
     status: status || undefined, apply_dept: apply_dept || undefined,
     bad_type: bad_type || undefined, model: model || undefined, search: q || undefined,
     sort: sort || undefined,
-    active: yes(active), today: yes(today), overdue: yes(overdue)
+    active: yes(active), today: yes(today), overdue: yes(overdue),
+    label_ready: yes(label_ready)
   };
 }
 

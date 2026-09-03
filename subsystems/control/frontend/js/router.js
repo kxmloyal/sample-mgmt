@@ -76,12 +76,14 @@ function route() {
   currentActiveFilter = q.active === '1' || q.active === 'true';
   currentTodayFilter = q.today === '1' || q.today === 'true';
   currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
-  // 详情/标签打印需先选中单据；无 id 时引导去列表，避免「缺少单据编号」生硬报错
-  if ((k === 'detail' || k === 'label') && !currentControlId) {
+  // 详情需先选中单据；无 id 时引导去列表
+  if (k === 'detail' && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');
     location.hash = '#/orders';
     return;
   }
-  if (k === 'detail' || k === 'label') { view(currentControlId); }
+  // 标签打印：无 id 时由 renderLabel 渲染可打印清单，有 id 时进入标签预览
+  if (k === 'label') { view(currentControlId); }
+  else if (k === 'detail') { view(currentControlId); }
   else { view(); }
 }

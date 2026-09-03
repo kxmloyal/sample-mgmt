@@ -1,4 +1,4 @@
-/** BUNDLE vbmtl4kro2 — 24 files */
+/** BUNDLE vbmtl5nnb0 — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1719,7 +1719,11 @@ async function ctlSubmit(kind) {
 function renderLabel(id) {
   var view = $('#view');
   var oid = Number(id) || Number(currentControlId);
-  if (!oid) { view.innerHTML = '<div class="empty"><p>请先从管制单列表选择一张单据</p><button class="btn primary" onclick="location.hash=\'#/orders\'">去管制单列表</button></div>'; return; }
+  if (!oid) {
+    view.innerHTML = '<div class="card"><h3 style="margin:0 0 10px">可打印管制标签</h3><div id="label-list"></div><div class="muted" style="margin-top:10px;font-size:12px">选择一张单据查看或打印管制标签</div></div>';
+    fetchLabelList();
+    return;
+  }
   var canDownload = ['ADMIN', 'QA', 'RD'].indexOf(me.role) > -1;
   var sizeOpts = ['<option value="">自动</option>'].concat(Object.keys(PRESET_MM).map(function (k) {
     return '<option value="' + PRESET_MM[k].key + '">' + PRESET_MM[k].label + '</option>';
@@ -1757,6 +1761,32 @@ function renderLabelPreview() {
     if (info) info.textContent = '自动（后端默认排版）';
     if (tag) tag.textContent = '预览';
   }
+}
+
+/** 加载可打印标签清单（有 label_no 且未作废的管制单） */
+function fetchLabelList() {
+  var view = document.getElementById('label-list');
+  if (!view) return;
+  api('GET', '/api/control/orders?label_ready=1&limit=100').then(function (r) {
+    var list = r.orders || [];
+    if (!list.length) {
+      view.innerHTML = '<div class="empty"><p>暂无可打印的管制标签</p><p class="muted">仅有已贴标（label_no 已生成）的管制单可打印标签</p></div>';
+      return;
+    }
+    var h = '<table class="data-table"><thead><tr><th>管制单号</th><th>标签号</th><th>品名</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    list.forEach(function (o) {
+      var lb = o.label_no || o.order_no;
+      var st = o.status || '';
+      var stLabel = CONTROL_STATUS_CN ? (CONTROL_STATUS_CN[st] || st) : st;
+      h += '<tr><td class="mono">' + e(o.order_no || '') + '</td><td class="mono">' + e(lb) + '</td><td>' + e(o.part_name || '') + '</td><td>' + e(stLabel) + '</td>'
+        + '<td><button class="btn primary small" onclick="location.hash=\'#/label?id=' + o.id + '\'">打印</button> '
+        + '<button class="btn small" onclick="window.open(\'/api/control/orders/' + o.id + '/label\')">预览</button></td></tr>';
+    });
+    h += '</tbody></table>';
+    view.innerHTML = h;
+  }).catch(function (e) {
+    view.innerHTML = '<div class="empty"><p>加载失败：' + e.message + '</p></div>';
+  });
 }
 
 
@@ -1906,13 +1936,15 @@ function route() {
   currentActiveFilter = q.active === '1' || q.active === 'true';
   currentTodayFilter = q.today === '1' || q.today === 'true';
   currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
-  // 详情/标签打印需先选中单据；无 id 时引导去列表，避免「缺少单据编号」生硬报错
-  if ((k === 'detail' || k === 'label') && !currentControlId) {
+  // 详情需先选中单据；无 id 时引导去列表
+  if (k === 'detail' && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');
     location.hash = '#/orders';
     return;
   }
-  if (k === 'detail' || k === 'label') { view(currentControlId); }
+  // 标签打印：无 id 时由 renderLabel 渲染可打印清单，有 id 时进入标签预览
+  if (k === 'label') { view(currentControlId); }
+  else if (k === 'detail') { view(currentControlId); }
   else { view(); }
 }
 
