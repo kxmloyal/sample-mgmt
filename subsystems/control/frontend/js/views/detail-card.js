@@ -75,7 +75,8 @@ function ctlCardHtml(agg) {
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
     + '<div class="ctl-sec">流程进度</div>' + controlRenderProgress(agg)
     + '<div class="ctl-sec">阶段</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>'
-    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(o) + '</div></div>';
+    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(o) + '</div>'
+    + ctlLabelBtn(o) + '</div>';
 }
 
 /** 可执行流转按钮（含作废，仅 ADMIN），点击统一走 ctlOpen('trans'/'void') */
@@ -88,4 +89,10 @@ function ctlActionButtons(o) {
     btns += '<button class="btn danger" onclick="ctlOpen(\'void\')">作废</button>';
   }
   return btns || '<span class="muted">当前状态/角色无可执行操作</span>';
+}
+
+/** 已贴标签（label_no 已生成）时显示「查看管制标签」按钮，跳标签打印视图 */
+function ctlLabelBtn(o) {
+  if (!o.label_no) return '';
+  return '<div style="margin-top:8px"><button class="btn" onclick="location.hash=\'#/label?id=' + o.id + '\'">🖨 查看管制标签</button></div>';
 }
