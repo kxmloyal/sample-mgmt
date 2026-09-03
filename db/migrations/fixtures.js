@@ -76,6 +76,10 @@ async function migrateFixtureSchemaAlign(pool) {
     }
   };
   await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN version INT NOT NULL DEFAULT 1'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN verify_reject_by INT'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN verify_reject_at DATETIME'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN verify_reject_note TEXT'); });
+  await retry(function () { return pool.execute('ALTER TABLE fixtures ADD COLUMN verify_reject_count INT DEFAULT 0'); });
   await retry(function () { return pool.execute('ALTER TABLE fixture_files ADD COLUMN file_size INT DEFAULT 0'); });
   await retry(function () { return pool.execute('ALTER TABLE fixture_files ADD COLUMN uploaded_at DATETIME'); });
   try {

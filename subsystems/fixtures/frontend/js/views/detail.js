@@ -82,6 +82,7 @@ function _cardPeople(f) {
   if (f.made_by) pf += kv('制作', (e(f.made_by_name||'') || 'ID:' + f.made_by) + ' · ' + fmt(f.made_at));
   if (f.verified_rd) pf += kv('RD验证', (e(f.verified_rd_name||'') || 'ID:' + f.verified_rd) + ' · ' + fmt(f.verified_rd_at));
   if (f.verified_me) pf += kv('申请单位验证', (e(f.verified_me_name||'') || 'ID:' + f.verified_me) + ' · ' + fmt(f.verified_me_at));
+  if (f.verify_reject_count > 0) pf += '<span class="label" style="color:var(--bad)">验证不合格</span><span style="color:var(--bad)">' + (e(f.verify_reject_by_name||'') || 'ID:' + f.verify_reject_by) + ' · ' + fmt(f.verify_reject_at) + ' · 退回' + f.verify_reject_count + '次</span>';
   if (f.used_by) pf += kv('领用', (e(f.used_by_name||'') || 'ID:' + f.used_by) + ' · ' + fmt(f.used_at) + ' · ' + e(f.use_location||''));
   if (f.expected_return_days) pf += kv('使用天数', f.expected_return_days + '天 · 预计' + fmt(f.expected_return_at));
   if (f.improved_by) pf += kv('改善', (e(f.improved_by_name||'') || 'ID:' + f.improved_by) + ' · 版次V' + f.improvement_count);
@@ -92,9 +93,10 @@ function _cardPeople(f) {
 }
 
 function _cardNote(f) {
-  if (!f.improve_note && !f.repair_note) return '';
+  if (!f.improve_note && !f.repair_note && !f.verify_reject_note) return '';
   var rp = '';
   if (f.improve_note) rp += kv('改善说明', e(f.improve_note));
+  if (f.verify_reject_note) rp += '<span class="label" style="color:var(--bad)">验证不合格原因</span><span style="color:var(--bad)">' + e(f.verify_reject_note) + '</span>';
   if (f.repair_type) rp += kv('维修类型', f.repair_type === 'RD' ? '退回RD维修' : 'ME自行维修');
   if (f.repair_note) rp += kv('维修说明', e(f.repair_note));
   return '<div class="overview-card"><div class="title">' + _icon('repair') + ' 改善/维修</div><div class="field-grid">' + rp + '</div></div>';
@@ -201,6 +203,7 @@ function buildTimeline(f) {
   if (f.made_at) s.push(['制作完成', true]);
   if (f.verified_rd_at) s.push(['RD验证', true]);
   if (f.verified_me_at) s.push(['申请单位验证', true]);
+  if (f.verify_reject_count > 0) s.push(['验证不合格退回 ×' + f.verify_reject_count, false]);
   if (f.used_at) s.push(['领用中', f.status === 'IN_USE']);
   if (f.improved_at) s.push(['改善·V' + f.improvement_count, true]);
   if (f.status === 'IMPROVING') s.push(['改善中', true]);

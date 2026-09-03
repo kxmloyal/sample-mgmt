@@ -23,7 +23,7 @@ var ACTION_CN = {
   RETURN_REJECT: '拒绝退回', RECREATE: '创建替代品', RECREATE_REPLACED: '被替代', UPDATE_CARD: '更新标示卡信息',
   // 治具操作
   ACCEPT: 'RD接收', MAKE: '制作完成', MAKE_DONE: '制作完成', CANCEL: '撤销申请',
-  VERIFY: '验证移交',
+  VERIFY: '验证移交', VERIFY_REJECT: '验证不合格退回',
   // 历史双人验证动作（存量数据兼容，当前流程已改为单人验证）
   VERIFY_RD: 'RD验证通过', VERIFY_ME: 'ME验证通过', VERIFY_ORG: '申请单位验证',
   TRANSFER: '移交',

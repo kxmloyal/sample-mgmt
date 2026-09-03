@@ -103,12 +103,14 @@ module.exports = function createDao(deps) {
     var fields = ['name','spec','model','station','category','status','requested_by','requested_dept',
       'request_note','request_image','made_by','made_at','made_note','made_image',
       'verified_rd','verified_rd_at','verified_me','verified_me_at','transferred_at','verify_note',
+      'verify_reject_by','verify_reject_at','verify_reject_note','verify_reject_count',
       'used_by','used_at','use_location','expected_return_days','expected_return_at','use_note',
       'repair_type','repair_requested_by','repair_requested_at','repair_note','repaired_by','repaired_at',
       'repair_done_image','repair_confirmed_by','repair_confirmed_at','retired_by','retired_at','retired_reason',
       'expected_finish_at','improve_note','improvement_count','improved_by','improved_at',
       'storage_location','maintenance_cycle_days','last_maintenance_at','next_maintenance_at','notes'];
     var dateFields = ['made_at','verified_rd_at','verified_me_at','transferred_at','used_at','expected_return_at',
+      'verify_reject_at',
       'repair_requested_at','repaired_at','repair_confirmed_at','retired_at','expected_finish_at','improved_at',
       'last_maintenance_at','next_maintenance_at'];
     for (var i = 0; i < fields.length; i++) {
@@ -162,7 +164,7 @@ module.exports = function createDao(deps) {
   }
 
   function getFixtureDetailById(id) {
-    return one('SELECT f.*, rd.display_name AS verified_rd_name, me.display_name AS verified_me_name, md.display_name AS made_by_name, ub.display_name AS used_by_name, rb.display_name AS repaired_by_name, rc.display_name AS repair_confirmed_by_name, ret.display_name AS retired_by_name, imp.display_name AS improved_by_name FROM fixtures f LEFT JOIN users rd ON rd.id = f.verified_rd LEFT JOIN users me ON me.id = f.verified_me LEFT JOIN users md ON md.id = f.made_by LEFT JOIN users ub ON ub.id = f.used_by LEFT JOIN users rb ON rb.id = f.repaired_by LEFT JOIN users rc ON rc.id = f.repair_confirmed_by LEFT JOIN users ret ON ret.id = f.retired_by LEFT JOIN users imp ON imp.id = f.improved_by WHERE f.id=?', [id]);
+    return one('SELECT f.*, rd.display_name AS verified_rd_name, me.display_name AS verified_me_name, md.display_name AS made_by_name, ub.display_name AS used_by_name, rb.display_name AS repaired_by_name, rc.display_name AS repair_confirmed_by_name, ret.display_name AS retired_by_name, imp.display_name AS improved_by_name, rej.display_name AS verify_reject_by_name FROM fixtures f LEFT JOIN users rd ON rd.id = f.verified_rd LEFT JOIN users me ON me.id = f.verified_me LEFT JOIN users md ON md.id = f.made_by LEFT JOIN users ub ON ub.id = f.used_by LEFT JOIN users rb ON rb.id = f.repaired_by LEFT JOIN users rc ON rc.id = f.repair_confirmed_by LEFT JOIN users ret ON ret.id = f.retired_by LEFT JOIN users imp ON imp.id = f.improved_by LEFT JOIN users rej ON rej.id = f.verify_reject_by WHERE f.id=?', [id]);
   }
 
   function listFixtureLogs() { return q('SELECT fl.*,u.username,u.display_name FROM fixture_logs fl LEFT JOIN users u ON u.id=fl.user_id ORDER BY fl.id DESC LIMIT 500'); }

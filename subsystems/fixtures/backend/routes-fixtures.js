@@ -283,8 +283,8 @@ function register(app) {
       if (!location || !location.trim()) return res.status(400).json({ error: '请填写使用位置' });
       var d = Number(days); if (!d || d <= 0) return res.status(400).json({ error: '请填写预计使用天数' });
     }
-    if (['REPAIR_ME', 'REPAIR_RD_REQ', 'REPAIR_CONFIRM', 'RETIRE'].indexOf(chosenAction) !== -1) {
-      if (!note || !note.trim()) return res.status(400).json({ error: '请填写说明' + (chosenAction === 'REPAIR_ME' ? '（维修说明）' : chosenAction === 'REPAIR_RD_REQ' ? '（故障说明）' : chosenAction === 'REPAIR_CONFIRM' ? '（确认说明）' : '（作废原因）') });
+    if (['REPAIR_ME', 'REPAIR_RD_REQ', 'REPAIR_CONFIRM', 'RETIRE', 'VERIFY_REJECT'].indexOf(chosenAction) !== -1) {
+      if (!note || !note.trim()) return res.status(400).json({ error: '请填写说明' + (chosenAction === 'REPAIR_ME' ? '（维修说明）' : chosenAction === 'REPAIR_RD_REQ' ? '（故障说明）' : chosenAction === 'REPAIR_CONFIRM' ? '（确认说明）' : chosenAction === 'RETIRE' ? '（作废原因）' : '（验证不合格原因）') });
     }
 
     // Action 分发
@@ -303,6 +303,10 @@ function register(app) {
         if (!location || !location.trim()) return res.status(400).json({ error: '请填写存放位置' });
         if (location && location.trim()) updated.storage_location = location.trim();
         updated = await AM.doVerify(updated, u, ts, f, note);
+      }
+      else if (chosenAction === 'VERIFY_REJECT')  {
+        // 验证不合格：退回重做/退回改善（目标状态由 doVerifyReject 按改善来源判定）
+        updated = await AM.doVerifyReject(updated, u, ts, f, note);
       }
       else if (chosenAction === 'ACCEPT')       updated = await doAccept(updated, u, ts, f, note, Number(expectedDays || 0));
       else if (chosenAction === 'CANCEL')       updated = await doCancel(updated, u, ts, f, note);

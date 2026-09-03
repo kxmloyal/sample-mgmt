@@ -1,4 +1,4 @@
-/** BUNDLE vbmtkuakrd — 18 files */
+/** BUNDLE vbmtldqewd — 18 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -107,7 +107,7 @@ var ACTION_CN = {
   RETURN_REJECT: '拒绝退回', RECREATE: '创建替代品', RECREATE_REPLACED: '被替代', UPDATE_CARD: '更新标示卡信息',
   // 治具操作
   ACCEPT: 'RD接收', MAKE: '制作完成', MAKE_DONE: '制作完成', CANCEL: '撤销申请',
-  VERIFY: '验证移交',
+  VERIFY: '验证移交', VERIFY_REJECT: '验证不合格退回',
   // 历史双人验证动作（存量数据兼容，当前流程已改为单人验证）
   VERIFY_RD: 'RD验证通过', VERIFY_ME: 'ME验证通过', VERIFY_ORG: '申请单位验证',
   TRANSFER: '移交',
@@ -203,7 +203,7 @@ var me = null;
 /* --- shared/frontend/modal.js --- */
 // modal.js — 通用弹窗组件（零依赖，治具/样品共用）
 function openModal(title,html,opts){opts=opts||{};document.body.style.overflow='hidden';var m=document.createElement('div');m.className='modal-mask';var headHTML=opts.head!=null?opts.head:'<h3>'+title+'</h3>';var footHTML=opts.foot!=null?opts.foot:'<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';m.innerHTML='<fluent-dialog id="fluent-modal" modal="true" trap-focus="true"><div class="modal-head">'+headHTML+'</div><div class="modal-body">'+html+'</div><div class="modal-foot">'+footHTML+'</div></fluent-dialog>';m.addEventListener('click',function(e){if(e.target===m){closeModal(m);}});document.body.appendChild(m);return m;}
-function closeModal(mask){mask.remove();var all=document.querySelectorAll('.modal-mask');if(all.length===0)document.body.style.overflow='';}
+function closeModal(mask){if(!mask)return;mask.remove();var all=document.querySelectorAll('.modal-mask');if(all.length===0)document.body.style.overflow='';}
 
 
 /* --- shared/frontend/detail-modal.js --- */
@@ -830,6 +830,7 @@ function _cardPeople(f) {
   if (f.made_by) pf += kv('制作', (e(f.made_by_name||'') || 'ID:' + f.made_by) + ' · ' + fmt(f.made_at));
   if (f.verified_rd) pf += kv('RD验证', (e(f.verified_rd_name||'') || 'ID:' + f.verified_rd) + ' · ' + fmt(f.verified_rd_at));
   if (f.verified_me) pf += kv('申请单位验证', (e(f.verified_me_name||'') || 'ID:' + f.verified_me) + ' · ' + fmt(f.verified_me_at));
+  if (f.verify_reject_count > 0) pf += '<span class="label" style="color:var(--bad)">验证不合格</span><span style="color:var(--bad)">' + (e(f.verify_reject_by_name||'') || 'ID:' + f.verify_reject_by) + ' · ' + fmt(f.verify_reject_at) + ' · 退回' + f.verify_reject_count + '次</span>';
   if (f.used_by) pf += kv('领用', (e(f.used_by_name||'') || 'ID:' + f.used_by) + ' · ' + fmt(f.used_at) + ' · ' + e(f.use_location||''));
   if (f.expected_return_days) pf += kv('使用天数', f.expected_return_days + '天 · 预计' + fmt(f.expected_return_at));
   if (f.improved_by) pf += kv('改善', (e(f.improved_by_name||'') || 'ID:' + f.improved_by) + ' · 版次V' + f.improvement_count);
@@ -840,9 +841,10 @@ function _cardPeople(f) {
 }
 
 function _cardNote(f) {
-  if (!f.improve_note && !f.repair_note) return '';
+  if (!f.improve_note && !f.repair_note && !f.verify_reject_note) return '';
   var rp = '';
   if (f.improve_note) rp += kv('改善说明', e(f.improve_note));
+  if (f.verify_reject_note) rp += '<span class="label" style="color:var(--bad)">验证不合格原因</span><span style="color:var(--bad)">' + e(f.verify_reject_note) + '</span>';
   if (f.repair_type) rp += kv('维修类型', f.repair_type === 'RD' ? '退回RD维修' : 'ME自行维修');
   if (f.repair_note) rp += kv('维修说明', e(f.repair_note));
   return '<div class="overview-card"><div class="title">' + _icon('repair') + ' 改善/维修</div><div class="field-grid">' + rp + '</div></div>';
@@ -949,6 +951,7 @@ function buildTimeline(f) {
   if (f.made_at) s.push(['制作完成', true]);
   if (f.verified_rd_at) s.push(['RD验证', true]);
   if (f.verified_me_at) s.push(['申请单位验证', true]);
+  if (f.verify_reject_count > 0) s.push(['验证不合格退回 ×' + f.verify_reject_count, false]);
   if (f.used_at) s.push(['领用中', f.status === 'IN_USE']);
   if (f.improved_at) s.push(['改善·V' + f.improvement_count, true]);
   if (f.status === 'IMPROVING') s.push(['改善中', true]);
@@ -1356,7 +1359,7 @@ function showFixActions(result) {
   if (actions.length === 0) { html += '<p style="margin-top:12px;color:var(--muted);text-align:center">当前角色无可执行操作</p>'; }
   else {
     html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
-    var labelMap = { ACCEPT: '接收治具', MAKE: '制作完成', CANCEL: '撤销申请', VERIFY: '验证移交', USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成', REPAIR_ME: '自行维修', REPAIR_RD_REQ: '退回RD维修', REPAIR_DONE: '维修完成', REPAIR_RD_DONE: 'RD维修完成', REPAIR_CONFIRM: '确认维修', RETIRE: '报废', MAINTENANCE: '保养' };
+    var labelMap = { ACCEPT: '接收治具', MAKE: '制作完成', CANCEL: '撤销申请', VERIFY: '验证移交', VERIFY_REJECT: '验证不合格退回', USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成', REPAIR_ME: '自行维修', REPAIR_RD_REQ: '退回RD维修', REPAIR_DONE: '维修完成', REPAIR_RD_DONE: 'RD维修完成', REPAIR_CONFIRM: '确认维修', RETIRE: '报废', MAINTENANCE: '保养' };
     actions.forEach(function (a) {
       html += '<fluent-button appearance="accent" onclick="execFixAction(\'' + f.fixture_no + '\',\'' + a + '\')">' + (labelMap[a] || a) + '</fluent-button>';
     });
@@ -1390,6 +1393,11 @@ function execFixAction(fixtureNo, action) {
   if (action === 'VERIFY') {
     formHtml += '<label>存放位置<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-location" placeholder="如：A-3-12 / 线边1号工位" value="' + e(f.storage_location || '') + '"></fluent-text-field>';
     formHtml += '<label>验证备注</label><textarea id="fx-note" rows="2" placeholder="选填"></textarea>';
+  }
+  if (action === 'VERIFY_REJECT') {
+    var rejectTarget = (f.improvement_count > 0) ? '退回改善继续整改' : '退回 RD 重做';
+    formHtml += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">将' + rejectTarget + '。请填写验证不合格的具体原因，便于整改。</div>';
+    formHtml += '<label>验证不合格原因<span style="color:var(--bad)">*</span></label><textarea id="fx-note" rows="3" placeholder="请描述不合格/不合适的原因"></textarea>';
   }
   if (action === 'ACCEPT') {
     formHtml += '<label>预计完成天数<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-days" type="number" min="1" value="7"></fluent-text-field>';

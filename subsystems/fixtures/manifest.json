@@ -48,6 +48,8 @@
       { "from": "REQUESTED",      "to": "RETIRED",        "action": "CANCEL",         "role": ["RD","ADMIN"],            "label": "撤销申请" },
       { "from": "ACCEPTED",       "to": "VERIFY_PENDING", "action": "MAKE",           "role": ["RD"],                    "label": "制作完成" },
       { "from": "VERIFY_PENDING", "to": "TRANSFERRED",    "action": "VERIFY",         "role": ["QA","CUSTODY","ME"],     "label": "验证移交" },
+      { "from": "VERIFY_PENDING", "to": "ACCEPTED",     "action": "VERIFY_REJECT", "role": ["QA","CUSTODY","ME"],     "label": "验证不合格退回重做" },
+      { "from": "VERIFY_PENDING", "to": "IMPROVING",    "action": "VERIFY_REJECT", "role": ["QA","CUSTODY","ME"],     "label": "验证不合格退回改善(复验)" },
       { "from": "TRANSFERRED",    "to": "IN_USE",         "action": "USE",            "role": ["ME","QA","CUSTODY"],     "label": "领用" },
       { "from": "IN_USE",         "to": "TRANSFERRED",    "action": "RETURN",         "role": ["ME","QA","CUSTODY"],     "label": "归还" },
       { "from": "IN_USE",         "to": "REPAIRING_ME",   "action": "REPAIR_ME",      "role": ["ME"],                    "label": "ME自行维修" },

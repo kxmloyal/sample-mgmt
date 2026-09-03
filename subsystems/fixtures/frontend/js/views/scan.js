@@ -105,7 +105,7 @@ function showFixActions(result) {
   if (actions.length === 0) { html += '<p style="margin-top:12px;color:var(--muted);text-align:center">当前角色无可执行操作</p>'; }
   else {
     html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
-    var labelMap = { ACCEPT: '接收治具', MAKE: '制作完成', CANCEL: '撤销申请', VERIFY: '验证移交', USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成', REPAIR_ME: '自行维修', REPAIR_RD_REQ: '退回RD维修', REPAIR_DONE: '维修完成', REPAIR_RD_DONE: 'RD维修完成', REPAIR_CONFIRM: '确认维修', RETIRE: '报废', MAINTENANCE: '保养' };
+    var labelMap = { ACCEPT: '接收治具', MAKE: '制作完成', CANCEL: '撤销申请', VERIFY: '验证移交', VERIFY_REJECT: '验证不合格退回', USE: '领用', RETURN: '归还', IMPROVE: '申请改善', IMPROVE_DONE: '改善完成', REPAIR_ME: '自行维修', REPAIR_RD_REQ: '退回RD维修', REPAIR_DONE: '维修完成', REPAIR_RD_DONE: 'RD维修完成', REPAIR_CONFIRM: '确认维修', RETIRE: '报废', MAINTENANCE: '保养' };
     actions.forEach(function (a) {
       html += '<fluent-button appearance="accent" onclick="execFixAction(\'' + f.fixture_no + '\',\'' + a + '\')">' + (labelMap[a] || a) + '</fluent-button>';
     });
@@ -139,6 +139,11 @@ function execFixAction(fixtureNo, action) {
   if (action === 'VERIFY') {
     formHtml += '<label>存放位置<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-location" placeholder="如：A-3-12 / 线边1号工位" value="' + e(f.storage_location || '') + '"></fluent-text-field>';
     formHtml += '<label>验证备注</label><textarea id="fx-note" rows="2" placeholder="选填"></textarea>';
+  }
+  if (action === 'VERIFY_REJECT') {
+    var rejectTarget = (f.improvement_count > 0) ? '退回改善继续整改' : '退回 RD 重做';
+    formHtml += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">将' + rejectTarget + '。请填写验证不合格的具体原因，便于整改。</div>';
+    formHtml += '<label>验证不合格原因<span style="color:var(--bad)">*</span></label><textarea id="fx-note" rows="3" placeholder="请描述不合格/不合适的原因"></textarea>';
   }
   if (action === 'ACCEPT') {
     formHtml += '<label>预计完成天数<span style="color:var(--bad)">*</span></label><fluent-text-field id="fx-days" type="number" min="1" value="7"></fluent-text-field>';
