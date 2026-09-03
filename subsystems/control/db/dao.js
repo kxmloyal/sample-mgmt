@@ -137,6 +137,11 @@ module.exports = function createDao(deps) {
 
   function listSignsByOrder(order_id) { return q('SELECT * FROM control_signs WHERE order_id = ? ORDER BY `seq` ASC', [order_id]); }
 
+  // C3 会签超时：创建后超过阈值未签的会签记录
+  function listOverdueSigns(hours) {
+    return q("SELECT cs.*, co.order_no, co.status AS order_status FROM control_signs cs JOIN control_orders co ON cs.order_id = co.id WHERE (cs.decision IS NULL OR cs.decision = '') AND cs.signed_at IS NULL AND cs.created_at < DATE_SUB(NOW(), INTERVAL ? HOUR) ORDER BY cs.created_at ASC", [hours || 48]);
+  }
+
   // 不良品委托单子表（可多次开单）
   async function addNcrLog(n, conn) {
     n = n || {};
@@ -256,5 +261,5 @@ module.exports = function createDao(deps) {
 
   function getControlUploadDir() { return CONTROL_UPLOAD_DIR; }
 
-  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting, ctlListOrderFiles, ctlGetOrderFile, ctlAddOrderFile, ctlDeleteOrderFile, getControlUploadDir };
+  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, listOverdueSigns, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting, ctlListOrderFiles, ctlGetOrderFile, ctlAddOrderFile, ctlDeleteOrderFile, getControlUploadDir };
 };

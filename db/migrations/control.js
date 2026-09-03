@@ -52,4 +52,17 @@ async function migrateControlOptimisticLock(pool) {
   }
 }
 
-module.exports = { migrateControlNcrDetail, migrateControlNcrForm, migrateControlOptimisticLock };
+
+// C3 会签超时：control_signs.created_at 列（2026-09-03，幂等，死锁重试）
+async function migrateControlSignsCreatedAt(pool) {
+  for (var i = 0; i < 3; i++) {
+    try { await pool.execute('ALTER TABLE control_signs ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'); return; }
+    catch (e) {
+      if (e.code === 'ER_LOCK_DEADLOCK' || e.code === 'ER_LOCK_WAIT_TIMEOUT') { await new Promise(r => setTimeout(r, 200 * (i + 1))); continue; }
+      if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+      return;
+    }
+  }
+}
+
+module.exports = { migrateControlNcrDetail, migrateControlNcrForm, migrateControlOptimisticLock, migrateControlSignsCreatedAt };

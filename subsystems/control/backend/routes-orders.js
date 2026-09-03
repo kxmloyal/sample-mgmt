@@ -210,6 +210,10 @@ function register(app) {
     if (gate && !isGatePassed(await D.listSignsByOrder(order.id), gate)) return res.status(400).json({ error: '该节点会签未完成' });
     const t = targetOf(action, order.status);
     if (!t) return res.status(400).json({ error: '该操作无对应流转' });
+    if (action === 'SHIP') { // C4 出货前校验结余
+      var remainQty = Number(order.qty) - (Number(order.good_qty) || 0) - (Number(order.ng_qty) || 0) - (Number(order.scrap_qty) || 0);
+      if (order.qty != null && remainQty !== 0) return res.status(400).json({ error: '结余未清零（余 ' + remainQty + '），无法出货' });
+    }
     if (action === 'DISPATCH') { // 处理方式会签发起：重工/全检标准必填（SOP 必填 + 指导/其他至少一项）
       const rb = req.body || {};
       const sop = (rb.rework_sop || '').trim();

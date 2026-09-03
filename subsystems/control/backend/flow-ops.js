@@ -70,14 +70,25 @@ function currentSignSeq(node, signs) {
  */
 function resolveSignTarget(node, signs, u, requestedSeq) {
   if (!node) return { code: 400, error: '会签节点不存在' };
-  const cur = currentSignSeq(node, signs);
-  if (cur == null) return { code: 400, error: '该节点会签已完成' };
-  if (requestedSeq != null && Number(requestedSeq) !== cur) return { code: 400, error: '非当前会签节点' };
-  const step = node.steps.find(function (s) { return s.seq === cur; });
-  if (!step) return { code: 400, error: '会签步骤定义缺失' };
-  // ADMIN 可强制签（含 SKIP）；否则必须角色匹配
-  if (u.role !== 'ADMIN' && step.role !== u.role) return { code: 403, error: '当前节点待 ' + step.role + ' 会签' };
-  return { seq: cur, step: step };
+  // C2 并行会签（2026-09-03）：任一未签步骤且角色匹配即可签，不再强制顺序
+  var signed = {}; (signs || []).forEach(function (s) { if (s.node_key === node.node_key && (s.decision === 'AGREE' || s.decision === 'SKIP')) signed[s.seq] = true; });
+  var allSigned = node.steps.every(function (s) { return signed[s.seq]; });
+  if (allSigned) return { code: 400, error: '该节点会签已完成' };
+  var available = node.steps.filter(function (s) {
+    if (signed[s.seq]) return false;
+    if (u.role === 'ADMIN') return true;
+    return s.role === u.role;
+  });
+  if (available.length === 0) {
+    var waitingRoles = node.steps.filter(function (s) { return !signed[s.seq]; }).map(function (s) { return s.role; });
+    return { code: 403, error: '当前节点待 ' + waitingRoles.join('/') + ' 会签' };
+  }
+  var target = available[0];
+  if (requestedSeq != null) {
+    var specific = available.find(function (s) { return s.seq === Number(requestedSeq); });
+    if (specific) target = specific;
+  }
+  return { seq: target.seq, step: target };
 }
 
 /** REJECT 回退目标：node_key → {from,to}；设计 §8：闸口①退回 SIGNING→DRAFT，闸口②退回 DISPOSAL_SIGNING→NCR_DONE */

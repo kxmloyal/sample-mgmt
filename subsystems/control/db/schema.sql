@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS control_signs (
   decision VARCHAR(10) DEFAULT '',             -- AGREE/REJECT/空(待签)
   comment TEXT,
   signed_at VARCHAR(24),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_sign (order_id, node_key, seq),
   INDEX idx_sign_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
