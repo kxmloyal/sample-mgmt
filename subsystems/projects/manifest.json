@@ -24,7 +24,7 @@
     ]
   },
   "roles": {
-    "use": ["ADMIN"],
+    "use": ["ADMIN", "PM", "RD", "QA", "CUSTODY", "ME"],
     "admin": ["ADMIN"]
   },
   "navigation": [

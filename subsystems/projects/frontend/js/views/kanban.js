@@ -22,7 +22,7 @@ async function kbCreate() {
     '<label>类别</label><fluent-select id="kc-category">' + CATEGORY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>优先级</label><fluent-select id="kc-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>责任人</label><fluent-select id="kc-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划完成日期</label><fluent-text-field id="kc-date" type="date"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="kc-desc"></fluent-text-area>' +
     '</div>',
@@ -69,7 +69,7 @@ async function renderTaskKanban() {
   const selA = $('#kb-assignee');
   for (const u of users) {
     const opt = document.createElement('fluent-option');
-    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    opt.value = String(u.id); opt.textContent = u.display_name || ('#' + u.id);
     selA.appendChild(opt);
   }
   // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）

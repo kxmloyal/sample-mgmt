@@ -314,6 +314,10 @@ function register(app) {
                 "WHERE d.task_id=? AND p.status<>'DONE'", [tid]);
               if (pending && pending.c > 0) { skipped.push({ id: tid, reason: '存在未完成前置任务' }); continue; }
             }
+            // P2-1 修复：与单任务流转一致 — 先执行 OVERDUE 自动延期（CAS 互斥），再手动流转
+            await conn.execute(
+              "UPDATE project_tasks SET status='OVERDUE', version=version+1 WHERE id=? AND status IN ('NOT_STARTED','IN_PROGRESS') AND planned_date < CURDATE()",
+              [tid]);
             const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
               [tr.to, tid, t.status]);
             if (r[0].affectedRows === 0) { skipped.push({ id: tid, reason: '状态已变更' }); continue; }

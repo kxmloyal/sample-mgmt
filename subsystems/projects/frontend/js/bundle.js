@@ -1,4 +1,4 @@
-/** BUNDLE vbmtldqewd — 15 files */
+/** BUNDLE vbmtlmu7pm — 15 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -307,7 +307,7 @@ async function kbCreate() {
     '<label>类别</label><fluent-select id="kc-category">' + CATEGORY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>优先级</label><fluent-select id="kc-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>责任人</label><fluent-select id="kc-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划完成日期</label><fluent-text-field id="kc-date" type="date"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="kc-desc"></fluent-text-area>' +
     '</div>',
@@ -354,7 +354,7 @@ async function renderTaskKanban() {
   const selA = $('#kb-assignee');
   for (const u of users) {
     const opt = document.createElement('fluent-option');
-    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    opt.value = String(u.id); opt.textContent = u.display_name || ('#' + u.id);
     selA.appendChild(opt);
   }
   // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）
@@ -545,7 +545,7 @@ async function renderTaskList() {
   const selA = $('#lk-assignee');
   for (const u of users) {
     const opt = document.createElement('fluent-option');
-    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    opt.value = String(u.id); opt.textContent = u.display_name || ('#' + u.id);
     selA.appendChild(opt);
   }
   // 搜索框防抖 300ms（触发 lkApplyFilters → URL 化 + 重新加载）
@@ -822,52 +822,58 @@ async function projDel(id) {
 
 // 成员管理弹窗（成员列表 + 搜索过滤添加下拉 + 转让 owner + 移除）
 // 用户列表走子系统接口 /api/projects/users（共享 /api/users 仅 ADMIN，PM 无权）
-async function projMembers(id) {
-  const [mem, users] = await Promise.all([
-    api('GET', PApi.projects(id) + '/members'),
-    api('GET', '/api/projects/users')
-  ]);
-  const lines = mem.map(m =>
+// P2-2 修复：增删/转让不再整窗重开，改为只刷新成员行（避免弹窗滚动/输入丢失、重复拉全量用户列表）
+var _pjMemId = 0;
+function projMembers(id) {
+  _pjMemId = id;
+  openModal('成员管理',
+    '<div id="pj-mem-rows"></div>' +
+    '<div class="pk-filters" style="margin-top:10px">' +
+    '<fluent-text-field id="mem-q" placeholder="搜索用户…" onchange="memRenderOpts()"></fluent-text-field>' +
+    '<fluent-select id="mem-user"></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="memAdd()">添加</fluent-button></div>');
+  memRefresh();
+  memRenderOpts();
+}
+// 刷新成员行（保持弹窗打开，仅更新列表区）
+async function memRefresh() {
+  const id = _pjMemId;
+  const mem = await api('GET', PApi.projects(id) + '/members');
+  $('#pj-mem-rows').innerHTML = mem.map(m =>
     '<div class="pk-row"><span class="pk-name">' + esc(m.display_name || m.username) + '</span>' +
     '<span>' + (m.is_owner ? '负责人' : '成员') + '</span>' +
     (m.is_owner
       ? ''
-      : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + id + ',' + m.user_id + ')">转让</fluent-button> ' +
-        '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + id + ',' + m.user_id + ')">移除</fluent-button>') +
+      : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + m.user_id + ')">转让</fluent-button> ' +
+        '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + m.user_id + ')">移除</fluent-button>') +
     '</div>').join('');
-  openModal('成员管理', lines +
-    '<div class="pk-filters" style="margin-top:10px">' +
-    '<fluent-text-field id="mem-q" placeholder="搜索用户…" onchange="memRenderOpts(' + id + ')"></fluent-text-field>' +
-    '<fluent-select id="mem-user"></fluent-select>' +
-    '<fluent-button appearance="accent" onclick="memAdd(' + id + ')">添加</fluent-button></div>');
-  memRenderOpts(id);
 }
 // v2：按关键字过滤可添加用户下拉
-async function memRenderOpts(id) {
+async function memRenderOpts() {
   const q = $('#mem-q').value || '';
   const [mem, users] = await Promise.all([
-    api('GET', PApi.projects(id) + '/members'),
+    api('GET', PApi.projects(_pjMemId) + '/members'),
     api('GET', '/api/projects/users')
   ]);
   const opts = users.filter(function (u) {
     return !mem.some(function (m) { return m.user_id === u.id; }) &&
-      (!q || (u.display_name || u.username).indexOf(q) >= 0);
-  }).map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('');
+      (!q || (u.display_name || ('#' + u.id)).indexOf(q) >= 0);
+  }).map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('');
   $('#mem-user').innerHTML = opts || '<fluent-option value="">无匹配用户</fluent-option>';
 }
-async function memAdd(id) {
+async function memAdd() {
   const uid = $('#mem-user').value;
   if (!uid) return showToast('请选择用户');
-  try { await api('POST', PApi.projects(id) + '/members', { user_id: Number(uid) }); showToast('已添加'); projMembers(id); }
+  try { await api('POST', PApi.projects(_pjMemId) + '/members', { user_id: Number(uid) }); showToast('已添加'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }
-async function memTransfer(id, uid) {
-  try { await api('PUT', PApi.projects(id) + '/members/' + uid, { is_owner: 1 }); showToast('已转让'); projMembers(id); }
+async function memTransfer(uid) {
+  try { await api('PUT', PApi.projects(_pjMemId) + '/members/' + uid, { is_owner: 1 }); showToast('已转让'); memRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
-async function memRemove(id, uid) {
+async function memRemove(uid) {
   if (!confirm('确认移除该成员？')) return;
-  try { await api('DELETE', PApi.projects(id) + '/members/' + uid); showToast('已移除'); projMembers(id); }
+  try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -876,7 +882,10 @@ async function memRemove(id, uid) {
 // task-detail.js — 任务详情：主信息卡 + 分区 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 let _tid = 0;
 // v2：详情页 = 主信息卡 + 下方 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
+// P1-1 修复：详情 payload 前端缓存（_tdCache），切 tab 复用缓存不再重复拉全量；tdRefresh/写操作后清缓存强制刷新。
 var _tdTab = 'subs';
+var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
+var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
 const TD_TABS = [
   { k: 'subs', t: '子任务' }, { k: 'comments', t: '评论' },
   { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
@@ -899,19 +908,29 @@ function tdSwitchTab(k) {
   }).join('');
   tdLoadSection(k);
 }
+// 取详情：命中缓存且未过期则复用（P1-1 减少切 tab 的重复全量请求）；否则拉取并缓存
+async function tdFetch() {
+  const now = Date.now();
+  if (_tdCache.tid === _tid && _tdCache.data && (now - _tdCache.ts) < _tdCache.ttl) return _tdCache.data;
+  const d = await api('GET', PApi.task(_tid));
+  _tdCache = { tid: _tid, data: d, ts: now, ttl: _tdCacheTtl };
+  return d;
+}
 // v2：分区加载（info 渲染主卡；其余按当前 tab 渲染对应区块，不再全量）
 async function tdLoadSection(kind) {
-  const d = await api('GET', PApi.task(_tid));
-  if (kind === 'info') { renderTdInfo(d); return; }
-  const body = $('#td-body');
-  if (kind === 'subs') body.innerHTML = renderTdSubs(d);
-  else if (kind === 'comments') body.innerHTML = renderTdComments(d);
-  else if (kind === 'files') body.innerHTML = renderTdFiles(d);
-  else if (kind === 'links') body.innerHTML = renderTdLinks(d);
-  else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+  try {
+    const d = await tdFetch();
+    if (kind === 'info') { renderTdInfo(d); return; }
+    const body = $('#td-body');
+    if (kind === 'subs') body.innerHTML = renderTdSubs(d);
+    else if (kind === 'comments') body.innerHTML = renderTdComments(d);
+    else if (kind === 'files') body.innerHTML = renderTdFiles(d);
+    else if (kind === 'links') body.innerHTML = renderTdLinks(d);
+    else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+  } catch (e) { showToast(e.message, 'err'); }
 }
-// v2：详情局部刷新（info 主卡 + 当前 tab，替代全量重渲染）
-function tdRefresh() { tdLoadSection('info'); tdSwitchTab(_tdTab); }
+// v2：详情局部刷新（清缓存 → info 主卡 + 当前 tab，替代全量重渲染）
+function tdRefresh() { _tdCache.tid = 0; _tdCache.ts = 0; tdLoadSection('info'); tdSwitchTab(_tdTab); }
 // v2：主信息卡（project_name/assignee_name 来自详情 JOIN，无前端补查；含进度条 + 编辑/子任务/依赖/关联/删除按钮区）
 function renderTdInfo(d) {
   const t = d.task;
@@ -995,7 +1014,7 @@ async function tdEdit() {
   const canPickUser = me.role === 'ADMIN' || me.role === 'PM';
   const assigneeField = canPickUser
     ? '<label>责任人</label><fluent-select id="te-assignee"><fluent-option value="">未指派</fluent-option>' +
-      users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>'
+      users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>'
     : '<label>责任人</label><div class="pk-name">' + esc(t.assignee_name || '未指派') + '</div>';
   openModal('编辑任务',
     '<div class="pk-form">' +
@@ -1032,7 +1051,7 @@ async function tdAddSub() {
     '<div class="pk-form">' +
     '<label>子任务名称 *</label><fluent-text-field id="ts-title"></fluent-text-field>' +
     '<label>责任人</label><fluent-select id="ts-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划日期</label><fluent-text-field id="ts-date" type="date"></fluent-text-field>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdAddSubSave()">创建</fluent-button>' +
@@ -1111,7 +1130,7 @@ async function tdSubEdit(sid) {
     '<div class="pk-form">' +
     '<label>子任务名称 *</label><fluent-text-field id="tse-title" value="' + esc(s.title) + '"></fluent-text-field>' +
     '<label>责任人</label><fluent-select id="tse-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === s.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === s.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划日期</label><fluent-text-field id="tse-date" type="date" value="' + (s.planned_date || '') + '"></fluent-text-field>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdSubEditSave(' + sid + ',' + (s.version || 0) + ')">保存</fluent-button>' +
@@ -1253,8 +1272,9 @@ function buildNav(){
   });
 }
 // api-base.js 的 boot()/doLogin() 均调用 showApp()（登录后初始化界面，填充侧边栏用户信息）
-// 2026-08-07 子系统未完成，仅 ADMIN 可进入（与 manifest.json roles.use 一致）；非 ADMIN 直连入口页时弹回门户
-const SUBSYSTEM_ROLES=['ADMIN'];
+// P0-1 修复：放开角色门禁，与 manifest.json roles.use / NAV 一致（ADMIN/PM/RD/QA/CUSTODY/ME 可进入）；
+// 后端每个操作仍按 isGlobalManager(ADMIN/PM) 或 项目成员/assignee 二次鉴权，角色放开不扩大越权。
+const SUBSYSTEM_ROLES=['ADMIN','PM','RD','QA','CUSTODY','ME'];
 function showApp(){
   if(!SUBSYSTEM_ROLES.includes(me.role)){location.replace('/portal.html');return;}
   document.getElementById('login').style.display='none';

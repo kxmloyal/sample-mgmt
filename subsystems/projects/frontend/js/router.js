@@ -39,8 +39,9 @@ function buildNav(){
   });
 }
 // api-base.js 的 boot()/doLogin() 均调用 showApp()（登录后初始化界面，填充侧边栏用户信息）
-// 2026-08-07 子系统未完成，仅 ADMIN 可进入（与 manifest.json roles.use 一致）；非 ADMIN 直连入口页时弹回门户
-const SUBSYSTEM_ROLES=['ADMIN'];
+// P0-1 修复：放开角色门禁，与 manifest.json roles.use / NAV 一致（ADMIN/PM/RD/QA/CUSTODY/ME 可进入）；
+// 后端每个操作仍按 isGlobalManager(ADMIN/PM) 或 项目成员/assignee 二次鉴权，角色放开不扩大越权。
+const SUBSYSTEM_ROLES=['ADMIN','PM','RD','QA','CUSTODY','ME'];
 function showApp(){
   if(!SUBSYSTEM_ROLES.includes(me.role)){location.replace('/portal.html');return;}
   document.getElementById('login').style.display='none';

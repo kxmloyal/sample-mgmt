@@ -45,7 +45,7 @@ async function renderTaskList() {
   const selA = $('#lk-assignee');
   for (const u of users) {
     const opt = document.createElement('fluent-option');
-    opt.value = String(u.id); opt.textContent = u.display_name || u.username;
+    opt.value = String(u.id); opt.textContent = u.display_name || ('#' + u.id);
     selA.appendChild(opt);
   }
   // 搜索框防抖 300ms（触发 lkApplyFilters → URL 化 + 重新加载）

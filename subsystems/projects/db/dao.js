@@ -24,12 +24,9 @@ module.exports = function createDao(deps) {
   async function createProject(data, conn) {
     const sql = 'INSERT INTO projects (name,description,status,created_by) VALUES (?,?,?,?)';
     const params = [data.name, data.description || '', 'ACTIVE', data.created_by];
-    if (conn) {
-      const r = await conn.execute(sql, params);
-      return { id: r[0].insertId };
-    }
-    await run(sql, params); // 无事务仅执行；调用方需 insertId 必须传 conn
-    return { id: 0 };
+    if (!conn) throw new Error('createProject 必须传事务连接 conn（需取 insertId）');
+    const r = await conn.execute(sql, params);
+    return { id: r[0].insertId };
   }
   async function listProjects(conn) {
     return fetchAll(conn,

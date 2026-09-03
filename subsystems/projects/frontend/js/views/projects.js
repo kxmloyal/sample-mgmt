@@ -65,51 +65,57 @@ async function projDel(id) {
 
 // 成员管理弹窗（成员列表 + 搜索过滤添加下拉 + 转让 owner + 移除）
 // 用户列表走子系统接口 /api/projects/users（共享 /api/users 仅 ADMIN，PM 无权）
-async function projMembers(id) {
-  const [mem, users] = await Promise.all([
-    api('GET', PApi.projects(id) + '/members'),
-    api('GET', '/api/projects/users')
-  ]);
-  const lines = mem.map(m =>
+// P2-2 修复：增删/转让不再整窗重开，改为只刷新成员行（避免弹窗滚动/输入丢失、重复拉全量用户列表）
+var _pjMemId = 0;
+function projMembers(id) {
+  _pjMemId = id;
+  openModal('成员管理',
+    '<div id="pj-mem-rows"></div>' +
+    '<div class="pk-filters" style="margin-top:10px">' +
+    '<fluent-text-field id="mem-q" placeholder="搜索用户…" onchange="memRenderOpts()"></fluent-text-field>' +
+    '<fluent-select id="mem-user"></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="memAdd()">添加</fluent-button></div>');
+  memRefresh();
+  memRenderOpts();
+}
+// 刷新成员行（保持弹窗打开，仅更新列表区）
+async function memRefresh() {
+  const id = _pjMemId;
+  const mem = await api('GET', PApi.projects(id) + '/members');
+  $('#pj-mem-rows').innerHTML = mem.map(m =>
     '<div class="pk-row"><span class="pk-name">' + esc(m.display_name || m.username) + '</span>' +
     '<span>' + (m.is_owner ? '负责人' : '成员') + '</span>' +
     (m.is_owner
       ? ''
-      : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + id + ',' + m.user_id + ')">转让</fluent-button> ' +
-        '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + id + ',' + m.user_id + ')">移除</fluent-button>') +
+      : '<fluent-button appearance="secondary" size="small" onclick="memTransfer(' + m.user_id + ')">转让</fluent-button> ' +
+        '<fluent-button appearance="secondary" size="small" onclick="memRemove(' + m.user_id + ')">移除</fluent-button>') +
     '</div>').join('');
-  openModal('成员管理', lines +
-    '<div class="pk-filters" style="margin-top:10px">' +
-    '<fluent-text-field id="mem-q" placeholder="搜索用户…" onchange="memRenderOpts(' + id + ')"></fluent-text-field>' +
-    '<fluent-select id="mem-user"></fluent-select>' +
-    '<fluent-button appearance="accent" onclick="memAdd(' + id + ')">添加</fluent-button></div>');
-  memRenderOpts(id);
 }
 // v2：按关键字过滤可添加用户下拉
-async function memRenderOpts(id) {
+async function memRenderOpts() {
   const q = $('#mem-q').value || '';
   const [mem, users] = await Promise.all([
-    api('GET', PApi.projects(id) + '/members'),
+    api('GET', PApi.projects(_pjMemId) + '/members'),
     api('GET', '/api/projects/users')
   ]);
   const opts = users.filter(function (u) {
     return !mem.some(function (m) { return m.user_id === u.id; }) &&
-      (!q || (u.display_name || u.username).indexOf(q) >= 0);
-  }).map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('');
+      (!q || (u.display_name || ('#' + u.id)).indexOf(q) >= 0);
+  }).map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('');
   $('#mem-user').innerHTML = opts || '<fluent-option value="">无匹配用户</fluent-option>';
 }
-async function memAdd(id) {
+async function memAdd() {
   const uid = $('#mem-user').value;
   if (!uid) return showToast('请选择用户');
-  try { await api('POST', PApi.projects(id) + '/members', { user_id: Number(uid) }); showToast('已添加'); projMembers(id); }
+  try { await api('POST', PApi.projects(_pjMemId) + '/members', { user_id: Number(uid) }); showToast('已添加'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }
-async function memTransfer(id, uid) {
-  try { await api('PUT', PApi.projects(id) + '/members/' + uid, { is_owner: 1 }); showToast('已转让'); projMembers(id); }
+async function memTransfer(uid) {
+  try { await api('PUT', PApi.projects(_pjMemId) + '/members/' + uid, { is_owner: 1 }); showToast('已转让'); memRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
 }
-async function memRemove(id, uid) {
+async function memRemove(uid) {
   if (!confirm('确认移除该成员？')) return;
-  try { await api('DELETE', PApi.projects(id) + '/members/' + uid); showToast('已移除'); projMembers(id); }
+  try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }

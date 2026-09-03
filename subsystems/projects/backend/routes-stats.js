@@ -23,10 +23,10 @@ function register(app) {
   });
 
   // 用户列表（所有登录用户；项目成员/新建任务指派/@提及/筛选下拉用；共享 /api/users 仅 ADMIN，故子系统提供）
-  // 缺陷#2 修复：原仅 ADMIN/PM，非管理者新建任务指派下拉静默为空 → 放宽为 requireAuth（仅暴露安全字段）
+  // P1-4 修复：收敛暴露字段为 id+display_name（去除 username 登录名，仅保留展示名）；原缺陷#2 保留 requireAuth 供非管理层指派
   app.get('/api/projects/users', requireAuth, async (req, res) => {
     try {
-      res.json(await D.fetchAll(null, 'SELECT id,username,display_name FROM users ORDER BY id'));
+      res.json(await D.fetchAll(null, 'SELECT id,display_name FROM users ORDER BY id'));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -89,6 +89,24 @@ function register(app) {
         return res.status(400).json({ error: '状态必须包含 NOT_STARTED/IN_PROGRESS/DONE/OVERDUE 四态' });
       if (!Array.isArray(body.transitions) || body.transitions.length === 0)
         return res.status(400).json({ error: 'transitions 必填' });
+      // P1-3 修复：保存前校验每个转边的 from/to/action 合法性 + action 唯一 + 角色非空
+      for (const s of KEYS) {
+        if (!body.states[s] || !String(body.states[s].label || '').trim())
+          return res.status(400).json({ error: '状态 ' + s + ' 缺少 label' });
+      }
+      const seenActions = new Set();
+      for (const tr of body.transitions) {
+        const from = String(tr.from || '').trim(), to = String(tr.to || '').trim(), act = String(tr.action || '').trim();
+        if (!from || !to || !act) return res.status(400).json({ error: '转边 from/to/action 均不能为空' });
+        if (KEYS.indexOf(from) < 0 || KEYS.indexOf(to) < 0)
+          return res.status(400).json({ error: '转边 from/to 必须为合法状态（' + KEYS.join('/') + '）' });
+        if (seenActions.has(act)) return res.status(400).json({ error: '转边 action 重复：' + act });
+        seenActions.add(act);
+        if (!Array.isArray(tr.role) || tr.role.length === 0)
+          return res.status(400).json({ error: '转边 ' + from + '→' + to + ' 必须指定至少一个角色' });
+        if (!String(tr.label || '').trim())
+          return res.status(400).json({ error: '转边 ' + from + '→' + to + ' 缺少 label' });
+      }
       const r2 = await D.withTransaction(async conn => {
         // 行锁（9.3）
         await conn.execute("SELECT id FROM project_workflow WHERE flow_key='task' FOR UPDATE");

@@ -1,7 +1,10 @@
 // task-detail.js — 任务详情：主信息卡 + 分区 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 let _tid = 0;
 // v2：详情页 = 主信息卡 + 下方 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
+// P1-1 修复：详情 payload 前端缓存（_tdCache），切 tab 复用缓存不再重复拉全量；tdRefresh/写操作后清缓存强制刷新。
 var _tdTab = 'subs';
+var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
+var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
 const TD_TABS = [
   { k: 'subs', t: '子任务' }, { k: 'comments', t: '评论' },
   { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
@@ -24,19 +27,29 @@ function tdSwitchTab(k) {
   }).join('');
   tdLoadSection(k);
 }
+// 取详情：命中缓存且未过期则复用（P1-1 减少切 tab 的重复全量请求）；否则拉取并缓存
+async function tdFetch() {
+  const now = Date.now();
+  if (_tdCache.tid === _tid && _tdCache.data && (now - _tdCache.ts) < _tdCache.ttl) return _tdCache.data;
+  const d = await api('GET', PApi.task(_tid));
+  _tdCache = { tid: _tid, data: d, ts: now, ttl: _tdCacheTtl };
+  return d;
+}
 // v2：分区加载（info 渲染主卡；其余按当前 tab 渲染对应区块，不再全量）
 async function tdLoadSection(kind) {
-  const d = await api('GET', PApi.task(_tid));
-  if (kind === 'info') { renderTdInfo(d); return; }
-  const body = $('#td-body');
-  if (kind === 'subs') body.innerHTML = renderTdSubs(d);
-  else if (kind === 'comments') body.innerHTML = renderTdComments(d);
-  else if (kind === 'files') body.innerHTML = renderTdFiles(d);
-  else if (kind === 'links') body.innerHTML = renderTdLinks(d);
-  else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+  try {
+    const d = await tdFetch();
+    if (kind === 'info') { renderTdInfo(d); return; }
+    const body = $('#td-body');
+    if (kind === 'subs') body.innerHTML = renderTdSubs(d);
+    else if (kind === 'comments') body.innerHTML = renderTdComments(d);
+    else if (kind === 'files') body.innerHTML = renderTdFiles(d);
+    else if (kind === 'links') body.innerHTML = renderTdLinks(d);
+    else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+  } catch (e) { showToast(e.message, 'err'); }
 }
-// v2：详情局部刷新（info 主卡 + 当前 tab，替代全量重渲染）
-function tdRefresh() { tdLoadSection('info'); tdSwitchTab(_tdTab); }
+// v2：详情局部刷新（清缓存 → info 主卡 + 当前 tab，替代全量重渲染）
+function tdRefresh() { _tdCache.tid = 0; _tdCache.ts = 0; tdLoadSection('info'); tdSwitchTab(_tdTab); }
 // v2：主信息卡（project_name/assignee_name 来自详情 JOIN，无前端补查；含进度条 + 编辑/子任务/依赖/关联/删除按钮区）
 function renderTdInfo(d) {
   const t = d.task;
@@ -120,7 +133,7 @@ async function tdEdit() {
   const canPickUser = me.role === 'ADMIN' || me.role === 'PM';
   const assigneeField = canPickUser
     ? '<label>责任人</label><fluent-select id="te-assignee"><fluent-option value="">未指派</fluent-option>' +
-      users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>'
+      users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>'
     : '<label>责任人</label><div class="pk-name">' + esc(t.assignee_name || '未指派') + '</div>';
   openModal('编辑任务',
     '<div class="pk-form">' +
@@ -157,7 +170,7 @@ async function tdAddSub() {
     '<div class="pk-form">' +
     '<label>子任务名称 *</label><fluent-text-field id="ts-title"></fluent-text-field>' +
     '<label>责任人</label><fluent-select id="ts-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划日期</label><fluent-text-field id="ts-date" type="date"></fluent-text-field>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdAddSubSave()">创建</fluent-button>' +
@@ -236,7 +249,7 @@ async function tdSubEdit(sid) {
     '<div class="pk-form">' +
     '<label>子任务名称 *</label><fluent-text-field id="tse-title" value="' + esc(s.title) + '"></fluent-text-field>' +
     '<label>责任人</label><fluent-select id="tse-assignee"><fluent-option value="">未指派</fluent-option>' +
-    users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === s.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || u.username) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    users.map(function (u) { return '<fluent-option value="' + u.id + '"' + (u.id === s.assignee_id ? ' selected' : '') + '>' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>计划日期</label><fluent-text-field id="tse-date" type="date" value="' + (s.planned_date || '') + '"></fluent-text-field>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdSubEditSave(' + sid + ',' + (s.version || 0) + ')">保存</fluent-button>' +
