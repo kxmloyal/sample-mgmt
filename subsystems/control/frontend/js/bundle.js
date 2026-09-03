@@ -1,4 +1,4 @@
-/** BUNDLE vbmtl5nnb0 — 24 files */
+/** BUNDLE vbmtl6l7ba — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1725,42 +1725,15 @@ function renderLabel(id) {
     return;
   }
   var canDownload = ['ADMIN', 'QA', 'RD'].indexOf(me.role) > -1;
-  var sizeOpts = ['<option value="">自动</option>'].concat(Object.keys(PRESET_MM).map(function (k) {
-    return '<option value="' + PRESET_MM[k].key + '">' + PRESET_MM[k].label + '</option>';
-  })).join('');
   view.innerHTML = '<div class="card"><div class="label-toolbar">'
-    + '<label class="muted">标签纸 <select id="label-size" class="input" onchange="renderLabelPreview()">' + sizeOpts + '</select></label>'
-    + '<span id="label-info" class="muted"></span>'
     + '<div class="label-tools">'
     + '<button class="btn primary" onclick="window.open(\'/api/control/orders/' + oid + '/label/print\')">打印</button>'
     + '<button class="btn" onclick="window.open(\'/api/control/orders/' + oid + '/label\')">新窗口预览</button>'
     + (canDownload ? '<button class="btn" onclick="window.open(\'/api/control/orders/' + oid + '/label/download\')">下载 HTML</button>' : '')
     + '</div></div>'
     + '<div class="label-stage">'
-    + '<div class="label-swatch"><div id="label-box"></div><div id="label-box-label" class="muted"></div></div>'
-    + '<iframe class="label-frame" id="label-frame" src="/api/control/orders/' + oid + '/label"></iframe>'
+    + '<iframe id="label-frame" src="/api/control/orders/' + oid + '/label"></iframe>'
     + '</div></div>';
-  renderLabelPreview();
-}
-
-/** 预览框随选中纸张尺寸 contain 缩放（1mm ≈ 3.78px，见 constants/label.js） */
-function renderLabelPreview() {
-  var key = $('#label-size').value;
-  var info = $('#label-info'), box = $('#label-box'), tag = $('#label-box-label');
-  if (!box) return;
-  var preset = PRESET_MM[key];
-  if (preset) {
-    var r = controlCalcLabelRatio(preset.w, preset.h);
-    box.style.width = r.width + 'px';
-    box.style.height = r.height + 'px';
-    if (info) info.textContent = preset.label;
-    if (tag) tag.textContent = preset.w + '×' + preset.h + 'mm';
-  } else {
-    box.style.width = CONTOL_LABEL_BOX.w + 'px';
-    box.style.height = CONTOL_LABEL_BOX.h + 'px';
-    if (info) info.textContent = '自动（后端默认排版）';
-    if (tag) tag.textContent = '预览';
-  }
 }
 
 /** 加载可打印标签清单（有 label_no 且未作废的管制单） */
