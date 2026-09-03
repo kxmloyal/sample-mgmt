@@ -31,6 +31,8 @@ async function fxmSaveName(id) {
     await api('PUT', '/api/fixtures/models/' + id, { full_name: full_name });
     showToast('机型全称已更新');
     openFixtureModelsModal();
-    if (typeof loadFixtureList === 'function') loadFixtureList();
-  } catch (e) { showToast(e.message); }
+    // 机型视图打开时刷新卡片墙，否则刷新清单（两视图数据均含机型全称）
+    if (typeof renderFixtureModelWall === 'function' && document.getElementById('fx-wall-grid')) renderFixtureModelWall();
+    else if (typeof loadFixtureList === 'function') loadFixtureList();
+  } catch (err) { showToast(err.message); }
 }

@@ -196,7 +196,14 @@ function register(app) {
   });
 
   // 机型列表（含治具计数）：登录可读
+  // ?view=wall → 机型卡片墙增强聚合（状态分布/呆滞数/封面图），呆滞阈值取 fixtures_settings.dormant_days
   app.get('/api/fixtures/models', requireAuth, async function(req, res) {
+    if ((req.query.view || '') === 'wall') {
+      var days = null;
+      try { days = await D.getFixtureSetting('dormant_days', 60); } catch (e) { /* 取不到用默认 60 */ }
+      res.json(await MD.listModelsForWall(days));
+      return;
+    }
     res.json(await MD.listModelsWithCount());
   });
 

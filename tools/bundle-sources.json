@@ -40,6 +40,7 @@
     "subsystems/fixtures/frontend/js/views/list-filter.js",
     "subsystems/fixtures/frontend/js/views/list.js",
     "subsystems/fixtures/frontend/js/views/models.js",
+    "subsystems/fixtures/frontend/js/views/model-wall.js",
     "subsystems/fixtures/frontend/js/views/fixture-photo-upload.js",
     "subsystems/fixtures/frontend/js/views/scan.js",
     "subsystems/fixtures/frontend/js/views/logs.js",

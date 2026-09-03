@@ -14,11 +14,14 @@ function isOverdue(f) {
 
 async function renderFixtureList() {
   try {
+    // A4 深链：#/list?model=X 由 router.js 解析到 _fxRouteQuery；带 model 进入时仅重置其余筛选，保留机型预选
+    var routeModel = (window._fxRouteQuery && window._fxRouteQuery.model) || '';
+    window._fxRouteQuery = null;
     fixtureListState.dept = '';
     fixtureListState.search = '';
     fixtureListState.status = '';
     fixtureListState.dormant = '';
-    fixtureListState.model = '';
+    fixtureListState.model = routeModel;
     fixtureListState.col = '';
     fixtureListState.dir = 'desc';
     fixtureListState.pageNo = 1;
@@ -76,7 +79,18 @@ async function loadFixtureList() {
 
     // 表格
     html += '<div class="card" style="padding:0">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px">全部治具 (<b>' + p.total + '</b>)</span></div>';
+    // 方案A：清单头部提供「机型视图」切换 + 当前机型上下文条（深链 #/list?model=X 进入时显示）
+    var modelCtx = '';
+    if (fixtureListState.model) {
+      var curM = (window._fxModels || []).filter(function (m) { return m.code === fixtureListState.model; })[0];
+      modelCtx = '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--bg-accent,#eef2ff);border-bottom:1px solid var(--line)">' +
+        '<span>机型 <b>' + e(fixtureListState.model) + '</b>' + (curM && curM.full_name ? ' · ' + e(curM.full_name) : '') + ' 下的全部治具</span>' +
+        '<span style="display:flex;gap:8px">' +
+        '<fluent-button appearance="lightweight" size="small" onclick="filterFixtureListModel(\'\')">查看全部机型</fluent-button>' +
+        '<fluent-button appearance="secondary" size="small" onclick="location.hash=\'#/models\'">← 机型视图</fluent-button></span></div>';
+    }
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px">全部治具 (<b>' + p.total + '</b>)</span>' +
+      '<fluent-button appearance="lightweight" size="small" onclick="location.hash=\'#/models\'">机型视图</fluent-button></div>' + modelCtx;
     if (fixtures.length === 0) {
       var hasFilter = fixtureListState.status || fixtureListState.dept || fixtureListState.search || fixtureListState.dormant || fixtureListState.model;
       html += '<div class="empty">' + (hasFilter ? '未找到匹配的治具，请调整筛选条件' : '暂无治具数据') + '</div>';

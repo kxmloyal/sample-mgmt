@@ -76,3 +76,19 @@
   .fn-row .fn-name, .fn-row .fn-cell, .fn-row .fn-cycle { max-width:none; width:100%; }
   .fn-row.fn-head { display:none; }
 }
+
+/* ===== 机型视图卡片墙（方案A，2026-09-03）：#/models 入口，点卡片跳 #/list?model=X ===== */
+.fx-wall-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
+.fx-wall-card { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; cursor:pointer; transition:box-shadow .15s, transform .15s; display:flex; flex-direction:column; }
+.fx-wall-card:hover { box-shadow:0 4px 16px rgba(15,23,42,.10); transform:translateY(-2px); }
+.fx-wall-card.has-dormant { border-color:var(--warn); }
+.fx-wall-cover { height:120px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.fx-wall-cover img { width:100%; height:100%; object-fit:cover; display:block; }
+.fx-wall-cover-empty { font-size:34px; color:#cbd5e1; }
+.fx-wall-body { padding:10px 12px; display:flex; flex-direction:column; gap:4px; }
+.fx-wall-code { display:flex; align-items:center; justify-content:space-between; font-size:15px; }
+.fx-wall-name { font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fx-wall-count { font-size:13px; }
+.fx-wall-badges { display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }
+.fx-wall-badges .badge { font-size:11px; padding:1px 8px; background:#f1f5f9; color:var(--text); }
+@media (max-width:576px) { .fx-wall-grid { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); } .fx-wall-cover { height:90px; } }

@@ -10,6 +10,11 @@ var VIEWS = {
     document.getElementById('page-actions').innerHTML = '';
     renderFixtureList();
   },
+  models: function () {
+    document.getElementById('page-title').textContent = '治具清单 · 机型视图';
+    document.getElementById('page-actions').innerHTML = '';
+    renderFixtureModelWall();
+  },
   'new': function () {
     document.getElementById('page-title').textContent = '新建申请';
     document.getElementById('page-actions').innerHTML = '';
@@ -28,7 +33,15 @@ var VIEWS = {
 };
 function routeFixture() {
   var h = location.hash || '#/dashboard';
-  var page = h.replace('#/', '').split('?')[0];
+  // A4 深链：#/list?model=X — 解析 hash query 到 _fxRouteQuery，视图函数自行消费（renderFixtureList 预选机型）
+  var body = h.replace('#/', '');
+  var qidx = body.indexOf('?');
+  window._fxRouteQuery = {};
+  if (qidx !== -1) {
+    new URLSearchParams(body.substring(qidx + 1)).forEach(function (v, k) { window._fxRouteQuery[k] = v; });
+    body = body.substring(0, qidx);
+  }
+  var page = body.split('?')[0];
   if (!VIEWS[page]) page = 'dashboard';
   var fn = VIEWS[page];
   if (fn) fn();

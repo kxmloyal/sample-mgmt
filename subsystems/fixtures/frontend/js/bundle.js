@@ -1,4 +1,4 @@
-/** BUNDLE vbmtldqewd — 18 files */
+/** BUNDLE vbmtlqsw6w — 19 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1063,11 +1063,14 @@ function isOverdue(f) {
 
 async function renderFixtureList() {
   try {
+    // A4 深链：#/list?model=X 由 router.js 解析到 _fxRouteQuery；带 model 进入时仅重置其余筛选，保留机型预选
+    var routeModel = (window._fxRouteQuery && window._fxRouteQuery.model) || '';
+    window._fxRouteQuery = null;
     fixtureListState.dept = '';
     fixtureListState.search = '';
     fixtureListState.status = '';
     fixtureListState.dormant = '';
-    fixtureListState.model = '';
+    fixtureListState.model = routeModel;
     fixtureListState.col = '';
     fixtureListState.dir = 'desc';
     fixtureListState.pageNo = 1;
@@ -1125,7 +1128,18 @@ async function loadFixtureList() {
 
     // 表格
     html += '<div class="card" style="padding:0">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px">全部治具 (<b>' + p.total + '</b>)</span></div>';
+    // 方案A：清单头部提供「机型视图」切换 + 当前机型上下文条（深链 #/list?model=X 进入时显示）
+    var modelCtx = '';
+    if (fixtureListState.model) {
+      var curM = (window._fxModels || []).filter(function (m) { return m.code === fixtureListState.model; })[0];
+      modelCtx = '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--bg-accent,#eef2ff);border-bottom:1px solid var(--line)">' +
+        '<span>机型 <b>' + e(fixtureListState.model) + '</b>' + (curM && curM.full_name ? ' · ' + e(curM.full_name) : '') + ' 下的全部治具</span>' +
+        '<span style="display:flex;gap:8px">' +
+        '<fluent-button appearance="lightweight" size="small" onclick="filterFixtureListModel(\'\')">查看全部机型</fluent-button>' +
+        '<fluent-button appearance="secondary" size="small" onclick="location.hash=\'#/models\'">← 机型视图</fluent-button></span></div>';
+    }
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><span style="font-weight:600;font-size:14px">全部治具 (<b>' + p.total + '</b>)</span>' +
+      '<fluent-button appearance="lightweight" size="small" onclick="location.hash=\'#/models\'">机型视图</fluent-button></div>' + modelCtx;
     if (fixtures.length === 0) {
       var hasFilter = fixtureListState.status || fixtureListState.dept || fixtureListState.search || fixtureListState.dormant || fixtureListState.model;
       html += '<div class="empty">' + (hasFilter ? '未找到匹配的治具，请调整筛选条件' : '暂无治具数据') + '</div>';
@@ -1209,8 +1223,76 @@ async function fxmSaveName(id) {
     await api('PUT', '/api/fixtures/models/' + id, { full_name: full_name });
     showToast('机型全称已更新');
     openFixtureModelsModal();
-    if (typeof loadFixtureList === 'function') loadFixtureList();
-  } catch (e) { showToast(e.message); }
+    // 机型视图打开时刷新卡片墙，否则刷新清单（两视图数据均含机型全称）
+    if (typeof renderFixtureModelWall === 'function' && document.getElementById('fx-wall-grid')) renderFixtureModelWall();
+    else if (typeof loadFixtureList === 'function') loadFixtureList();
+  } catch (err) { showToast(err.message); }
+}
+
+
+/* --- subsystems/fixtures/frontend/js/views/model-wall.js --- */
+// model-wall.js — 治具清单「机型视图」卡片墙（方案A：机型卡片 + 点击跳该机型治具列表）
+// 数据：GET /api/fixtures/models?view=wall（状态分布/呆滞数/封面图聚合）；跳转：#/list?model=<code>（router.js 深链）
+// 卡片点击 → 列表视图并预选机型；列表视图标题栏提供「返回机型视图」。呆滞口径与清单 dormant=1 一致（后端聚合）。
+async function renderFixtureModelWall() {
+  var v = document.getElementById('view');
+  v.innerHTML = '<div class="muted" style="text-align:center;padding:40px">加载中…</div>';
+  var models;
+  try {
+    models = await api('GET', '/api/fixtures/models?view=wall');
+  } catch (err) { v.innerHTML = '<div class="empty">加载失败：' + e(err.message) + '</div>'; return; }
+  window._fxModels = models; // 供清单筛选下拉复用（与 loadFixtureList 的赋值口径一致）
+
+  var totalFixtures = 0, dormantTotal = 0;
+  models.forEach(function (m) { totalFixtures += (m.fixture_count || 0); dormantTotal += (m.dormant_count || 0); });
+
+  // 卡片上展示的状态徽章：领用中/已移交/维修相关/待验证（其余状态不逐个罗列，保持信息密度）
+  var WALL_STATUSES = ['IN_USE', 'TRANSFERRED', 'VERIFY_PENDING', 'REPAIRING_ME', 'REPAIRING_RD', 'IMPROVING'];
+  var WALL_LABELS = { IN_USE: '领用中', TRANSFERRED: '在库', VERIFY_PENDING: '待验证', REPAIRING_ME: 'ME维修', REPAIRING_RD: 'RD维修', IMPROVING: '改善中' };
+
+  var html = '<div class="filters" style="justify-content:space-between">' +
+    '<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<fluent-button appearance="accent" size="small" onclick="renderFixtureList()">列表视图</fluent-button>' +
+    '<fluent-button appearance="neutral" size="small" onclick="openFixtureModelsModal()" title="机型管理">机型管理</fluent-button>' +
+    '<span class="muted">共 <b>' + models.length + '</b> 个机型 · <b>' + totalFixtures + '</b> 台治具' +
+    (dormantTotal > 0 ? ' · <span style="color:var(--warn,#b45309)">呆滞 ' + dormantTotal + '</span>' : '') + '</span></span>' +
+    '<fluent-text-field placeholder="搜索机型…" style="max-width:220px" oninput="fxwFilter(this.value)"></fluent-text-field></div>';
+  html += '<div id="fx-wall-grid" class="fx-wall-grid"></div>';
+
+  // 卡片模板（独立渲染函数便于搜索过滤局部重绘）
+  window._fxwData = models;
+  window._fxwKeyword = '';
+  window.fxwCard = function (m) {
+    var badges = WALL_STATUSES.filter(function (k) { return m.status_stats && m.status_stats[k]; })
+      .map(function (k) { return '<span class="badge">' + (WALL_LABELS[k] || k) + ' ' + m.status_stats[k] + '</span>'; }).join('');
+    var cover = m.cover_photo
+      ? '<img src="/uploads/fixtures/' + e(m.cover_photo) + '" loading="lazy" onerror="this.remove()"/>'
+      : '<div class="fx-wall-cover-empty">▦</div>';
+    return '<div class="fx-wall-card' + (m.dormant_count > 0 ? ' has-dormant' : '') + '" onclick="location.hash=\'#/list?model=' + encodeURIComponent(m.code) + '\'">' +
+      '<div class="fx-wall-cover">' + cover + '</div>' +
+      '<div class="fx-wall-body"><div class="fx-wall-code"><b>' + e(m.code) + '</b>' +
+      (m.dormant_count > 0 ? '<span class="badge-dormant">呆滞 ' + m.dormant_count + '</span>' : '') + '</div>' +
+      '<div class="fx-wall-name" title="' + e(m.full_name) + '">' + e(m.full_name || '—') + '</div>' +
+      '<div class="fx-wall-count">治具 <b>' + (m.fixture_count || 0) + '</b> 台</div>' +
+      (badges ? '<div class="fx-wall-badges">' + badges + '</div>' : '') +
+      '</div></div>';
+  };
+  window.fxwRender = function () {
+    var kw = (window._fxwKeyword || '').toLowerCase();
+    var list = window._fxwData.filter(function (m) {
+      return !kw || (m.code + ' ' + (m.full_name || '')).toLowerCase().indexOf(kw) !== -1;
+    });
+    document.getElementById('fx-wall-grid').innerHTML = list.length
+      ? list.map(window.fxwCard).join('')
+      : '<div class="empty" style="grid-column:1/-1">未找到匹配机型</div>';
+  };
+  window.fxwFilter = function (val) {
+    window._fxwKeyword = (val || '').trim();
+    window.fxwRender();
+  };
+
+  v.innerHTML = html;
+  window.fxwRender();
 }
 
 
@@ -1700,6 +1782,11 @@ var VIEWS = {
     document.getElementById('page-actions').innerHTML = '';
     renderFixtureList();
   },
+  models: function () {
+    document.getElementById('page-title').textContent = '治具清单 · 机型视图';
+    document.getElementById('page-actions').innerHTML = '';
+    renderFixtureModelWall();
+  },
   'new': function () {
     document.getElementById('page-title').textContent = '新建申请';
     document.getElementById('page-actions').innerHTML = '';
@@ -1718,7 +1805,15 @@ var VIEWS = {
 };
 function routeFixture() {
   var h = location.hash || '#/dashboard';
-  var page = h.replace('#/', '').split('?')[0];
+  // A4 深链：#/list?model=X — 解析 hash query 到 _fxRouteQuery，视图函数自行消费（renderFixtureList 预选机型）
+  var body = h.replace('#/', '');
+  var qidx = body.indexOf('?');
+  window._fxRouteQuery = {};
+  if (qidx !== -1) {
+    new URLSearchParams(body.substring(qidx + 1)).forEach(function (v, k) { window._fxRouteQuery[k] = v; });
+    body = body.substring(0, qidx);
+  }
+  var page = body.split('?')[0];
   if (!VIEWS[page]) page = 'dashboard';
   var fn = VIEWS[page];
   if (fn) fn();
