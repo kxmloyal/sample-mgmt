@@ -841,6 +841,12 @@ module.exports = { register, initDB, seed };
 - 在 app.css 添加子系统卡片样式 → 拒绝，要求写入 `module.css`
 - 修改 app.css 中 `.kb-stat` 共享定义 → 标记高危，需样品/治具/工作台三系统回归
 
+## 18.6 详情弹窗设计系统（强制）
+
+> 完整规范见 `docs/superpowers/specs/2026-09-03-detail-modal-design-system.md`。
+> 各子系统详情弹窗 MUST 复用 `shared/frontend/detail-modal.js` 的 `openDetailModal` 组件与 `public/css/app.css` 的共享样式（骨架屏/置顶Tab/密度自适应/未保存拦截/409刷新/日志时间线）。
+> 禁止各子系统重复实现弹窗交互骨架（违反 §15）；在 app.css 新增子系统专属详情弹窗样式同样禁止（应写子系统 module.css，但交互骨架样式应下沉共享）。
+
 ## 19. JS 合并构建规范（强制）
 
 > 2026-08-04 实施。每个子系统前端原先 7~25 个独立 `<script>` 标签，HTTP/1.1 下单域名并发仅 6 连接，首屏需排队多轮往返，

@@ -68,6 +68,8 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 四栏 Tab（置顶）：信息（CSS Grid 卡片布局 + 流转时间线）、全量日志（时间线：倒序 + 流向箭头 + 长备注折叠）、标示卡（编辑/打印）、大图（含历史照片）
 
+> 详情弹窗交互采用框架级**设计系统**（`shared/frontend/detail-modal.js` + `public/css/app.css` 共享样式）：骨架屏加载、Tab 置顶、密度自适应宽度、未保存拦截、409 自动刷新、日志时间线。各子系统详情弹窗复用同一组件（规范见 `docs/superpowers/specs/2026-09-03-detail-modal-design-system.md`）。
+
 - 点击列表行立即开弹窗 + 骨架屏加载，失败有提示
 - 弹窗宽度随 Tab 内容密度自适应（信息 960 / 标示卡 800 / 日志·大图 560px，移动端 94vw）
 - 头部操作组：打印标示卡 / 打印标签 / 下载二维码一站式入口
