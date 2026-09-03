@@ -6,6 +6,14 @@
 // 待办项注册表：groupKey → items（点击时按索引取原始对象，避免把数据拼进 onclick 引号地狱/XSS）
 var _wbTodoItems = {};
 
+// 分组 → 子系统入口（分组头部「前往」链接）
+var _WB_TODO_SUBSYS = {
+  sample: '/subsystems/samples/frontend/index.html',
+  fixture: '/subsystems/fixtures/frontend/index.html',
+  control: '/subsystems/control/frontend/index.html',
+  project: '/subsystems/projects/frontend/index.html'
+};
+
 // 入口：渲染我的待办页（汇总卡 + 按子系统分组列表）
 async function renderMyTodos() {
   var v = document.getElementById('view');
@@ -21,17 +29,17 @@ async function renderMyTodos() {
   }
   var groups = d.groups || [];
   var total = d.total || 0;
-  var overdueTotal = 0;
+  var urgentTotal = 0;
   _wbTodoItems = {};
   groups.forEach(function (g) {
     _wbTodoItems[g.key] = g.items;
-    g.items.forEach(function (it) { if (it.overdue) overdueTotal++; });
+    g.items.forEach(function (it) { if (it.urgent) urgentTotal++; });
   });
 
   // 汇总条：总数 + 各子系统计数徽章（点击滚动定位）+ 口径说明
   var html = '<div class="filters" style="align-items:center;gap:12px;flex-wrap:wrap">' +
     '<span style="font-size:14px">我的待办共 <b>' + total + '</b> 项' +
-    (overdueTotal ? ' · <span style="color:var(--bad);font-weight:600">逾期/紧急 ' + overdueTotal + '</span>' : '') + '</span>' +
+    (urgentTotal ? ' · <span style="color:var(--bad);font-weight:600">紧急/逾期 ' + urgentTotal + '</span>' : '') + '</span>' +
     groups.map(function (g) {
       return '<span class="badge" style="cursor:pointer" onclick="wbTodoJump(\'' + g.key + '\')">' + g.name + ' ' + g.items.length + '</span>';
     }).join('') +
@@ -46,8 +54,9 @@ async function renderMyTodos() {
   // 分组卡片
   groups.forEach(function (g) {
     html += '<div class="card" style="padding:0;margin-bottom:14px" id="wb-todo-' + g.key + '">' +
-      '<div style="padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px">' +
-      g.name + ' <span class="badge">' + g.items.length + '</span></div>';
+      '<div style="padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center">' +
+      '<span>' + g.name + ' <span class="badge">' + g.items.length + '</span></span>' +
+      '<a class="link" style="font-weight:400;font-size:12px" href="' + (_WB_TODO_SUBSYS[g.key] || '#') + '" target="_blank">前往' + g.name + '子系统 →</a></div>';
     if (!g.items.length) {
       html += '<div class="empty" style="padding:16px">暂无待办</div></div>';
       return;
@@ -57,13 +66,13 @@ async function renderMyTodos() {
   v.innerHTML = html;
 }
 
-// 单行待办：待办类型徽章 + 编号 + 名称 + 状态 + 提示 + 更新时间；逾期红左边框
+// 单行待办：待办类型徽章 + 编号 + 名称 + 状态 + 提示 + 更新时间；紧急/逾期红左边框
 function _wbTodoRow(groupKey, it, idx) {
   return '<div class="wb-todo-row" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;' +
     (idx > 0 ? 'border-top:1px solid var(--line);' : '') +
-    (it.overdue ? 'border-left:3px solid var(--bad);' : 'border-left:3px solid transparent;') +
+    (it.urgent ? 'border-left:3px solid var(--bad);' : 'border-left:3px solid transparent;') +
     '" onclick="wbTodoOpen(\'' + groupKey + '\',' + idx + ')">' +
-    '<span class="badge" style="flex:none;' + (it.overdue ? 'border:1px solid var(--bad);color:var(--bad)' : '') + '">' + e(it.todo) + '</span>' +
+    '<span class="badge" style="flex:none;' + (it.urgent ? 'border:1px solid var(--bad);color:var(--bad)' : '') + '">' + e(it.todo) + '</span>' +
     '<b style="flex:none">' + e(it.item_no || '—') + '</b>' +
     '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + e(it.name || '—') + '</span>' +
     '<span class="muted" style="flex:none;font-size:12px">' + e(it.status_cn || it.status || '') + '</span>' +

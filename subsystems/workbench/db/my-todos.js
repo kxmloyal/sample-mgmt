@@ -3,13 +3,17 @@
 //   样品 sample：RD=NEW(待制作确认)/RETURNING且retire_assigned_rd=本人(待重做)；QA=PRODUCED(待发行)/RETURNING(待审核退回)；
 //     CUSTODY|ME=RELEASED(待接收)；ADMIN=上述角色规则并集；其余角色(如 PM)=无样品待办。
 //     非 ADMIN 直接复用 D.listMyPendingSamples(role, userId)（与样品看板同一 DAO，数字互相印证）。
-//   治具 fixture：RD/ADMIN=REQUESTED(待接收)/ACCEPTED(制作中)/IMPROVING(改善中)/REPAIRING_RD(RD维修)；
-//     ME/ADMIN=REPAIRING_ME(ME维修)/REPAIR_DONE(待确认维修)；
-//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证，2026-09-03 起单人验证)/TRANSFERRED(可领用)；
-//     治具管理方(ME/QA/CUSTODY)=VERIFY_PENDING 同可见（canVerify 口径）；
-//     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)/我报修的待确认(repair_requested_by=本人)。
-//   管制 control：manifest.stateMachine.transitions 角色匹配(剔除 VOID)=待我流转；
-//     control_signs 待签行(decision 空) role 匹配=待我签核；ADMIN 对所有会签中单据可见（与 control 前端 todo.js 一致）。
+//   治具 fixture：镜像 fixture-helpers.js allowedActions 权威权限表（2026-09-04 评审对齐，勿另行发明口径）：
+//     RD=REQUESTED(待接收)/ACCEPTED(制作中)/IMPROVING(改善中)/REPAIRING_RD(RD维修)；
+//     ME=REPAIRING_ME(ME维修)/REPAIR_DONE(待确认维修)/IMPROVING(改善中)/保养到期(TRANSFERRED|IN_USE 且 next_maintenance_at 到期)；
+//     治具管理方(ME/QA/CUSTODY)=VERIFY_PENDING(待验证)/TRANSFERRED(可领用 USE)/IMPROVING/IN_USE 逾期归还提醒；
+//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证，单人验证 canVerify 口径)；
+//     ADMIN=VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER，其余治具状态 ADMIN 无处理权限，不列待办)；
+//     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)。
+//   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
+//     退回是会签的一部分，已由待我签核覆盖）；control_signs 待签行(decision 空) role 匹配=待我签核；
+//     ADMIN 对所有会签中单据可见。与 control 前端 todo.js 的差异：前端待我签核仅首步角色近似，本模块按任一待签行
+//     （会签已并行化，本口径更准）；前端 toFlow 含 REJECT 动作，本模块不含（评审 R6）。
 //   项目 project：project_tasks/project_subtasks assignee_id=本人且 status<>'DONE'（唯一按个人指派的子系统）。
 var D = require('../../../db');
 var CTL_MANIFEST = require('../../control/manifest.json');
@@ -17,24 +21,26 @@ var CTL_MANIFEST = require('../../control/manifest.json');
 // 状态中文映射（与各子系统权威来源对齐：workbench-queries.js CASE / control manifest.states / projects manifest.states）
 var SAMPLE_STATUS_CN = { NEW: '制样中', PRODUCED: '待发行', RELEASED: '保管中', IN_CUSTODY: '保管中', RETURNING: '退回审核中' };
 var FIXTURE_STATUS_CN = {
-  REQUESTED: '待接收', ACCEPTED: '制作中', VERIFY_PENDING: '待验证', TRANSFERRED: '可领用',
-  IN_USE: '领用中', IMPROVING: '改善中', REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '待确认维修'
+  REQUESTED: '待接收', ACCEPTED: '制作中', VERIFY_PENDING: '待验证', VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位确认',
+  TRANSFERRED: '可领用', IN_USE: '领用中', IMPROVING: '改善中', REPAIRING_ME: 'ME维修中', REPAIRING_RD: 'RD维修中', REPAIR_DONE: '待确认维修'
 };
 var CONTROL_STATUS_CN = {};
 Object.keys(CTL_MANIFEST.stateMachine.states).forEach(function (k) { CONTROL_STATUS_CN[k] = CTL_MANIFEST.stateMachine.states[k].label; });
 var PROJECT_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', OVERDUE: '已延期' };
 
+function _isManager(role) { return role === 'ME' || role === 'QA' || role === 'CUSTODY'; } // 对齐 isMECustodyQA
+
 /* ---------------- 样品 ---------------- */
 // 待办类型派生（对齐 samples 前端 dashboard-todo.js 的 _getTodoInfo）
 function sampleTodoOf(s, u) {
-  if (s.status === 'NEW') return { todo: '待制作确认', overdue: false };
-  if (s.status === 'PRODUCED') return { todo: '待发行', overdue: false };
-  if (s.status === 'RELEASED') return { todo: '待接收', overdue: false };
+  if (s.status === 'NEW') return { todo: '待制作确认', urgent: false };
+  if (s.status === 'PRODUCED') return { todo: '待发行', urgent: false };
+  if (s.status === 'RELEASED') return { todo: '待接收', urgent: false };
   if (s.status === 'RETURNING') {
-    if (String(s.retire_assigned_rd) === String(u.id)) return { todo: '待重做', overdue: true };
-    return { todo: '待审核退回', overdue: u.role === 'QA' || u.role === 'ADMIN' };
+    if (String(s.retire_assigned_rd) === String(u.id)) return { todo: '待重做', urgent: true };
+    return { todo: '待审核退回', urgent: u.role === 'QA' || u.role === 'ADMIN' };
   }
-  return { todo: '待处理', overdue: false };
+  return { todo: '待处理', urgent: false };
 }
 
 async function collectSampleTodos(u) {
@@ -54,46 +60,74 @@ async function collectSampleTodos(u) {
     return {
       id: s.id, item_type: 'sample', item_no: s.sample_no, name: s.name,
       todo: t.todo, status: s.status, status_cn: SAMPLE_STATUS_CN[s.status] || s.status,
-      overdue: t.overdue, hint: s.spec || '', updated_at: s.updated_at
+      urgent: t.urgent, hint: s.spec || '', updated_at: s.updated_at
     };
   });
 }
 
 /* ---------------- 治具 ---------------- */
+// 口径镜像 fixture-helpers.js allowedActions（权威）；RETURN/REPAIR_ME/REPAIR_RD_REQ/IMPROVE 为可选项不入待办，
+// RETIRE 为破坏性操作不入待办；MAKE 的图纸/照片文件门槛属执行时校验，待办仅按状态+角色提醒
 function fixtureTodoOf(f, u) {
   var reasons = [];
-  var overdue = false;
-  if (['REQUESTED', 'ACCEPTED', 'IMPROVING', 'REPAIRING_RD'].indexOf(f.status) !== -1 && ['RD', 'ADMIN'].indexOf(u.role) !== -1) {
-    reasons.push({ REQUESTED: '待接收', ACCEPTED: '制作中', IMPROVING: '改善中', REPAIRING_RD: 'RD维修中' }[f.status]);
+  var urgent = false;
+  var role = u.role;
+  switch (f.status) {
+    case 'REQUESTED':
+      if (role === 'RD') reasons.push('待接收');
+      break;
+    case 'ACCEPTED':
+      if (role === 'RD') reasons.push('制作中');
+      break;
+    case 'VERIFY_PENDING':
+      if (_isManager(role) || f.requested_dept === u.dept) reasons.push('待验证');
+      break;
+    case 'VERIFY_RD_OK':
+    case 'VERIFY_ORG_OK':
+      if (role === 'ADMIN') { reasons.push('死锁待强制移交'); urgent = true; } // F5 兜底态仅 ADMIN 可解锁
+      break;
+    case 'TRANSFERRED':
+      if (_isManager(role)) reasons.push('可领用');
+      break;
+    case 'IN_USE':
+      if (_isManager(role) && f.expected_return_at && new Date(f.expected_return_at) <= new Date()) {
+        reasons.push('归还逾期'); urgent = true;
+      }
+      break;
+    case 'IMPROVING':
+      if (role === 'RD' || _isManager(role)) reasons.push('改善中');
+      break;
+    case 'REPAIRING_ME':
+      if (role === 'ME') reasons.push('ME维修中');
+      break;
+    case 'REPAIRING_RD':
+      if (role === 'RD') reasons.push('RD维修中');
+      break;
+    case 'REPAIR_DONE':
+      if (role === 'ME') reasons.push('待确认维修');
+      break;
   }
-  if (['REPAIRING_ME', 'REPAIR_DONE'].indexOf(f.status) !== -1 && ['ME', 'ADMIN'].indexOf(u.role) !== -1) {
-    reasons.push(f.status === 'REPAIRING_ME' ? 'ME维修中' : '待确认维修');
+  // 保养到期：MAINTENANCE 动作权威=ME（TRANSFERRED/IN_USE）
+  if (role === 'ME' && ['TRANSFERRED', 'IN_USE'].indexOf(f.status) !== -1
+      && f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date()) {
+    reasons.push('保养到期'); urgent = true;
   }
-  if (f.status === 'VERIFY_PENDING' && (f.requested_dept === u.dept || ['ME', 'QA', 'CUSTODY', 'ADMIN'].indexOf(u.role) !== -1)) {
-    reasons.push('待验证');
-  }
-  if (f.status === 'TRANSFERRED' && f.requested_dept === u.dept) reasons.push('可领用');
-  // 个人维度
-  if (f.status === 'IN_USE' && String(f.used_by) === String(u.id) && f.expected_return_at && new Date(f.expected_return_at) <= new Date()) {
-    reasons.push('归还逾期'); overdue = true;
-  }
-  if (f.status === 'REPAIR_DONE' && String(f.repair_requested_by) === String(u.id) && reasons.indexOf('待确认维修') === -1) {
-    reasons.push('待确认维修');
-  }
-  if (['IN_USE', 'TRANSFERRED'].indexOf(f.status) !== -1 && f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date()
-      && (String(f.used_by) === String(u.id) || f.requested_dept === u.dept || ['ME', 'ADMIN'].indexOf(u.role) !== -1)) {
-    reasons.push('保养到期'); overdue = true;
+  // 个人维度：我领用的治具归还逾期提醒（无论角色）
+  if (f.status === 'IN_USE' && String(f.used_by) === String(u.id)
+      && f.expected_return_at && new Date(f.expected_return_at) <= new Date()
+      && reasons.indexOf('归还逾期') === -1) {
+    reasons.push('归还逾期'); urgent = true;
   }
   if (!reasons.length) return null;
-  return { todo: reasons.join('、'), overdue: overdue };
+  return { todo: reasons.join('、'), urgent: urgent };
 }
 
 async function collectFixtureTodos(u) {
-  // 一次取回全部进行中治具（量级小，17~数百条），JS 侧按口径派生，避免超长 OR-SQL
+  // 一次取回全部进行中治具（含死锁态），JS 侧按口径派生，避免超长 OR-SQL
   var [rows] = await D.pool().execute(
-    "SELECT id, fixture_no, name, status, requested_dept, used_by, repair_requested_by, expected_return_at, next_maintenance_at, updated_at " +
-    "FROM fixtures WHERE status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE') " +
-    "ORDER BY updated_at DESC LIMIT 500");
+    "SELECT id, fixture_no, name, status, requested_dept, used_by, expected_return_at, next_maintenance_at, updated_at " +
+    "FROM fixtures WHERE status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE') " +
+    "ORDER BY updated_at DESC LIMIT 1000");
   var out = [];
   rows.forEach(function (f) {
     var t = fixtureTodoOf(f, u);
@@ -101,7 +135,7 @@ async function collectFixtureTodos(u) {
     out.push({
       id: f.id, item_type: 'fixture', item_no: f.fixture_no, name: f.name,
       todo: t.todo, status: f.status, status_cn: FIXTURE_STATUS_CN[f.status] || f.status,
-      overdue: t.overdue, hint: f.requested_dept || '', updated_at: f.updated_at
+      urgent: t.urgent, hint: f.requested_dept || '', updated_at: f.updated_at
     });
   });
   return out;
@@ -112,10 +146,11 @@ async function collectControlTodos(u) {
   var pool = D.pool();
   var byId = {}; // id → item（合并 待我流转/待我签核 两个来源）
 
-  // 待我流转：transitions 角色匹配（剔除 VOID 作废——破坏性操作不算待办）
+  // 待我流转：transitions 角色匹配
+  // 剔除 VOID（作废，破坏性）与 *_REJECT（会签退回是会签动作的一部分，已由待我签核覆盖，避免重复+语义混乱）
   var flowMap = {}; // status → 动作 label
   (CTL_MANIFEST.stateMachine.transitions || []).forEach(function (t) {
-    if (t.action === 'VOID') return;
+    if (t.action === 'VOID' || t.action === 'SIGN_REJECT' || t.action === 'DISPOSAL_REJECT') return;
     if (t.role.indexOf(u.role) !== -1 && !flowMap[t.from]) flowMap[t.from] = t.label;
   });
   var statuses = Object.keys(flowMap);
@@ -128,12 +163,13 @@ async function collectControlTodos(u) {
       byId[o.id] = {
         id: o.id, item_type: 'control', item_no: o.order_no, name: o.part_name,
         todo: '待流转：' + flowMap[o.status], status: o.status, status_cn: CONTROL_STATUS_CN[o.status] || o.status,
-        overdue: false, hint: '', updated_at: o.updated_at
+        urgent: false, hint: '', updated_at: o.updated_at
       };
     });
   }
 
-  // 待我签核：control_signs 待签行 role 匹配；ADMIN 对所有会签中单据可见（对齐 control 前端 todo.js）
+  // 待我签核：control_signs 待签行 role 匹配（会签已并行化，任一待签步即可签）；
+  // ADMIN 对所有会签中单据可见（对齐 control 前端 todo.js 的 ADMIN 规则）
   var signRows;
   if (u.role === 'ADMIN') {
     var [r1] = await pool.execute(
@@ -158,7 +194,7 @@ async function collectControlTodos(u) {
       byId[o.id] = {
         id: o.id, item_type: 'control', item_no: o.order_no, name: o.part_name,
         todo: signLabel, status: o.status, status_cn: CONTROL_STATUS_CN[o.status] || o.status,
-        overdue: false, hint: '', updated_at: o.updated_at
+        urgent: false, hint: '', updated_at: o.updated_at
       };
     }
   });
@@ -179,7 +215,7 @@ async function collectProjectTodos(u) {
       id: t.id, item_type: 'project', item_no: 'TASK-' + t.id, name: t.title,
       todo: t.status === 'OVERDUE' ? '任务已延期' : (t.status === 'NOT_STARTED' ? '任务待开始' : '任务进行中'),
       status: t.status, status_cn: PROJECT_STATUS_CN[t.status] || t.status,
-      overdue: t.status === 'OVERDUE',
+      urgent: t.status === 'OVERDUE',
       hint: (t.project_name || '') + (t.planned_date ? ' · 计划 ' + String(t.planned_date).slice(0, 10) : ''),
       updated_at: t.updated_at,
       link: '/subsystems/projects/frontend/index.html#/tasks/' + t.id
@@ -195,7 +231,7 @@ async function collectProjectTodos(u) {
       id: s.task_id, item_type: 'project', item_no: 'SUB-' + s.id, name: s.title,
       todo: '子任务待处理',
       status: s.status, status_cn: PROJECT_STATUS_CN[s.status] || s.status,
-      overdue: false,
+      urgent: false,
       hint: '父任务：' + (s.task_title || ''),
       updated_at: s.updated_at,
       link: '/subsystems/projects/frontend/index.html#/tasks/' + s.task_id
@@ -205,7 +241,7 @@ async function collectProjectTodos(u) {
 }
 
 /* ---------------- 聚合入口 ---------------- */
-// 返回 { groups: [{key,name,items}], total }；单个子系统失败不拖垮整体（降级为空组 + 日志）
+// 并行聚合四组；单个子系统失败降级为空组 + 日志，不拖垮整体
 async function collectMyTodos(u) {
   var defs = [
     { key: 'sample', name: '样品', fn: collectSampleTodos },
@@ -213,18 +249,18 @@ async function collectMyTodos(u) {
     { key: 'control', name: '管制', fn: collectControlTodos },
     { key: 'project', name: '项目任务', fn: collectProjectTodos }
   ];
+  var settled = await Promise.all(defs.map(function (d) {
+    return d.fn(u).catch(function (e) {
+      console.error('[workbench] 我的待办[' + d.key + ']聚合失败:', e.message);
+      return [];
+    });
+  }));
   var groups = [];
   var total = 0;
-  for (var i = 0; i < defs.length; i++) {
-    var items = [];
-    try {
-      items = await defs[i].fn(u);
-    } catch (e) {
-      console.error('[workbench] 我的待办[' + defs[i].key + ']聚合失败:', e.message);
-    }
-    total += items.length;
-    groups.push({ key: defs[i].key, name: defs[i].name, items: items });
-  }
+  defs.forEach(function (d, i) {
+    total += settled[i].length;
+    groups.push({ key: d.key, name: d.name, items: settled[i] });
+  });
   return { groups: groups, total: total };
 }
 
