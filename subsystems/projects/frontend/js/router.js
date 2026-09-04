@@ -6,10 +6,11 @@ const NAV=[
   {k:'projects',t:'项目列表',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'milestones',t:'里程碑',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'risks',t:'风险管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'changes',t:'变更管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
-const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,workflow:renderWorkflow};
-const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',workflow:'状态机管理'};
+const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',workflow:'状态机管理'};
 function route(){
   // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');

@@ -18,5 +18,12 @@ const PApi = {
   risks: pid => '/api/projects/' + pid + '/risks',
   risk: rid => '/api/projects/risks/' + rid,
   riskResolve: rid => '/api/projects/risks/' + rid + '/resolve',
-  extras: pid => '/api/projects/' + pid + '/extras'
+  extras: pid => '/api/projects/' + pid + '/extras',
+  // OA 能力移植（二期批次1）：变更单 + 机型引用
+  changes: pid => '/api/projects/' + pid + '/changes',
+  change: cid => '/api/projects/changes/' + cid,
+  changeApprove: cid => '/api/projects/changes/' + cid + '/approve',
+  modelOptions: '/api/projects/model-options',
+  modelRefs: pid => '/api/projects/' + pid + '/models',
+  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid
 };

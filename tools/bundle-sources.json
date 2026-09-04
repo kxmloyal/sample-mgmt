@@ -74,6 +74,7 @@
     "subsystems/projects/frontend/js/views/projects.js",
     "subsystems/projects/frontend/js/views/milestones.js",
     "subsystems/projects/frontend/js/views/risks.js",
+    "subsystems/projects/frontend/js/views/changes.js",
     "subsystems/projects/frontend/js/views/task-detail.js",
     "subsystems/projects/frontend/js/views/workflow.js",
     "subsystems/projects/frontend/js/router.js"

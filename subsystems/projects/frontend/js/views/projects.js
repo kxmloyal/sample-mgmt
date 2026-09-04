@@ -11,6 +11,7 @@ async function renderProjects() {
     '<fluent-card class="kb-stat" data-k="' + p.id + '">' +
     '<span class="n" style="font-size:16px;color:var(--brand)">' + esc(p.name) + '</span>' +
     '<span class="l">任务 ' + p.task_count + ' · 完成 ' + p.done_count + '</span>' +
+    '<span class="kb-x" style="position:static"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projModels(' + p.id + ',\'' + esc(p.name).replace(/'/g, '') + '\')">机型</fluent-button></span>' +
     (canManage
       ? '<span class="kb-x"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projEdit(' + p.id + ')">编辑</fluent-button> ' +
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projMembers(' + p.id + ')">成员</fluent-button> ' +
@@ -118,4 +119,55 @@ async function memRemove(uid) {
   if (!confirm('确认移除该成员？')) return;
   try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
+}
+
+// ===== 机型引用管理（OA 移植二期：sample_models 只读引用，不写 fixtures 子系统） =====
+var _pjModelId = 0;
+var REF_ROLE_CN = { TARGET: '试产对象', VERIFY: '验证对象', REF: '参考机型' };
+async function projModels(id, name) {
+  _pjModelId = id;
+  const refs = await api('GET', PApi.modelRefs(id));
+  const models = await api('GET', PApi.modelOptions);
+  const canEdit = me.role === 'ADMIN' || me.role === 'PM'; // 后端对成员也放宽，前端按钮从宽渲染由后端兜底
+  openModal('引用机型 — ' + (name || ('项目#' + id)),
+    '<div class="pk-form">' +
+    '<div id="pm-ref-list">' + pmRefRows(refs, canEdit) + '</div>' +
+    (canEdit
+      ? '<div class="pk-row" style="margin-top:10px;gap:6px;display:flex">' +
+        '<fluent-select id="pm-model" style="flex:2">' + models.map(function (m) { return '<fluent-option value="' + m.id + '">' + esc(m.code) + '（' + esc(m.full_name) + '）</fluent-option>'; }).join('') + '</fluent-select>' +
+        '<fluent-select id="pm-role" style="flex:1">' + Object.keys(REF_ROLE_CN).map(function (k) { return '<fluent-option value="' + k + '">' + REF_ROLE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+        '<fluent-button appearance="accent" size="small" onclick="pmAdd()">添加</fluent-button></div>'
+      : '') +
+    '</div>',
+    { foot: '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">关闭</fluent-button>' });
+}
+function pmRefRows(refs, canEdit) {
+  if (!refs.length) return '<div class="muted" style="font-size:13px">暂无引用机型</div>';
+  return refs.map(function (r) {
+    return '<div class="pk-row" style="display:flex;justify-content:space-between;padding:4px 0">' +
+      '<span><b>' + esc(r.model_code || ('#' + r.model_id)) + '</b>' +
+      (r.model_name ? '<span class="muted"> ' + esc(r.model_name) + '</span>' : (r.model_id ? '<span class="muted" style="color:#b91c1c">（机型已不存在）</span>' : '')) +
+      ' · ' + (REF_ROLE_CN[r.role] || r.role) + '</span>' +
+      (canEdit ? '<fluent-button appearance="secondary" size="small" onclick="pmRemove(' + r.model_id + ')">移除</fluent-button>' : '') +
+      '</div>';
+  }).join('');
+}
+async function pmAdd() {
+  const mid = $('#pm-model').value;
+  if (!mid) return showToast('请选择机型', 'err');
+  try {
+    const r = await api('POST', PApi.modelRefs(_pjModelId), { model_id: Number(mid), role: $('#pm-role').value });
+    showToast(r.duplicate ? '该机型已在引用列表中' : '已添加');
+    const refs = await api('GET', PApi.modelRefs(_pjModelId));
+    $('#pm-ref-list').innerHTML = pmRefRows(refs, true);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function pmRemove(mid) {
+  if (!confirm('确认移除该机型引用？（不影响机型本身）')) return;
+  try {
+    await api('DELETE', PApi.modelRef(_pjModelId, mid));
+    showToast('已移除');
+    const refs = await api('GET', PApi.modelRefs(_pjModelId));
+    $('#pm-ref-list').innerHTML = pmRefRows(refs, true);
+  } catch (e) { showToast(e.message, 'err'); }
 }

@@ -1,5 +1,5 @@
-// subsystems/projects/db/dao-oa.js — OA 能力移植数据访问层（里程碑/风险/预算扩展）
-// 方案A一期纯增量：只新增函数，不改现有 dao*.js 任何函数；工厂模式由 db.js 自动扫描加载
+// subsystems/projects/db/dao-oa.js — OA 能力移植数据访问层（里程碑/风险/预算扩展/变更单/机型引用）
+// 方案A纯增量：只新增函数，不改现有 dao*.js 任何函数；工厂模式由 dao.js 聚合注入
 module.exports = function createDaoOa(deps) {
   var q = deps.q, one = deps.one, run = deps.run;
 
@@ -115,9 +115,95 @@ module.exports = function createDaoOa(deps) {
     return { changed: 1 };
   }
 
+  // ===== 变更单（二期批次1；审批人=ADMIN/PM/项目 owner，TIME 类仅记录不自动顺延） =====
+  // 列表（含申请人/审批人展示名）
+  async function listChanges(conn, projectId) {
+    return fetchAll(conn,
+      'SELECT c.*, u1.display_name AS applicant_name, u2.display_name AS approver_name ' +
+      'FROM project_changes c ' +
+      'LEFT JOIN users u1 ON u1.id=c.applicant_id ' +
+      'LEFT JOIN users u2 ON u2.id=c.approver_id ' +
+      'WHERE c.project_id=? ORDER BY c.id DESC', [projectId]);
+  }
+  async function getChange(conn, id) {
+    return fetchOne(conn, 'SELECT * FROM project_changes WHERE id=?', [id]);
+  }
+  async function createChange(data, conn) {
+    if (!conn) throw new Error('createChange 必须传事务连接 conn（需取 insertId）');
+    const r = await conn.execute(
+      'INSERT INTO project_changes (project_id,change_no,change_type,description,before_value,after_value,reason,applicant_id,created_by) VALUES (?,?,?,?,?,?,?,?,?)',
+      [data.project_id, data.change_no || null, data.change_type, data.description,
+       data.before_value || '', data.after_value || '', data.reason || '',
+       data.applicant_id, data.created_by]);
+    return { id: r[0].insertId };
+  }
+  // 编辑变更单（CAS：仅 PENDING 可改）
+  async function updateChange(conn, id, data, expectVersion) {
+    const r = await conn.execute(
+      'UPDATE project_changes SET change_type=?, description=?, before_value=?, after_value=?, reason=?, version=version+1 ' +
+      'WHERE id=? AND status=\'PENDING\' AND version=?',
+      [data.change_type, data.description, data.before_value || '', data.after_value || '',
+       data.reason || '', id, expectVersion]);
+    return { changed: r[0].affectedRows };
+  }
+  // 审批（CAS：仅 PENDING 可批；to=APPROVED/REJECTED；同事务写 approver/approved_at）
+  async function approveChange(conn, id, to, userId, expectVersion) {
+    const r = await conn.execute(
+      'UPDATE project_changes SET status=?, approver_id=?, approved_at=CURRENT_TIMESTAMP, version=version+1 ' +
+      'WHERE id=? AND status=\'PENDING\' AND version=?',
+      [to, userId, id, expectVersion]);
+    return { changed: r[0].affectedRows };
+  }
+  async function deleteChange(conn, id) {
+    const r = await conn.execute('DELETE FROM project_changes WHERE id=?', [id]);
+    return { changed: r[0].affectedRows };
+  }
+
+  // ===== 项目引用机型（二期批次1；sample_models 只读引用） =====
+  // 项目机型引用列表（JOIN sample_models 取 code/full_name；机型号不存在时字段为 NULL 仍返回行，便于发现脏数据）
+  async function listModelRefs(conn, projectId) {
+    return fetchAll(conn,
+      'SELECT r.*, m.code AS model_code, m.full_name AS model_name, u.display_name AS creator_name ' +
+      'FROM project_model_refs r ' +
+      'LEFT JOIN sample_models m ON m.id=r.model_id ' +
+      'LEFT JOIN users u ON u.id=r.created_by ' +
+      'WHERE r.project_id=? ORDER BY r.id', [projectId]);
+  }
+  async function addModelRef(conn, projectId, modelId, role, userId) {
+    const r = await conn.execute(
+      'INSERT IGNORE INTO project_model_refs (project_id,model_id,role,created_by) VALUES (?,?,?,?)',
+      [projectId, modelId, role || 'TARGET', userId]);
+    return { changed: r[0].affectedRows };
+  }
+  async function removeModelRef(conn, projectId, modelId) {
+    const r = await conn.execute('DELETE FROM project_model_refs WHERE project_id=? AND model_id=?', [projectId, modelId]);
+    return { changed: r[0].affectedRows };
+  }
+  // 校验机型存在（跨子系统只读查询 sample_models）
+  async function getModelExists(conn, modelId) {
+    return fetchOne(conn, 'SELECT id, code, full_name FROM sample_models WHERE id=?', [modelId]);
+  }
+  // 全部在册机型（项目引用下拉用；只读）
+  async function listAllModels(conn) {
+    return fetchAll(conn, 'SELECT id, code, full_name FROM sample_models ORDER BY code');
+  }
+  // 变更编号当日序列（DB 原子计数，防并发重号；按日前缀轮转，格式 PC+yyyyMMdd+N）
+  // 注：sample-mgmt 无 Redis 依赖（与 OA 源系统不同），序列走 MySQL 原子 UPDATE + LAST_INSERT_ID 技巧
+  async function nextChangeSeq(prefix) {
+    if (!run) throw new Error('nextChangeSeq 需要 run 依赖');
+    await run(
+      'INSERT INTO project_seq (seq_key, seq_val) VALUES (?, LAST_INSERT_ID(1)) ' +
+      'ON DUPLICATE KEY UPDATE seq_val = LAST_INSERT_ID(seq_val + 1)',
+      [prefix]);
+    const row = await one('SELECT LAST_INSERT_ID() AS n');
+    return row ? row.n : 1;
+  }
+
   return {
     listMilestones, getMilestone, createMilestone, updateMilestone, achieveMilestone, deleteMilestone,
     listRisks, getRisk, createRisk, updateRisk, resolveRisk, deleteRisk,
-    getProjectExtras, saveProjectExtras
+    getProjectExtras, saveProjectExtras,
+    listChanges, getChange, createChange, updateChange, approveChange, deleteChange,
+    listModelRefs, addModelRef, removeModelRef, getModelExists, listAllModels, nextChangeSeq
   };
 };

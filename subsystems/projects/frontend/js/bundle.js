@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmisidq — 17 files */
+/** BUNDLE vbmtml9qiy — 18 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -242,7 +242,14 @@ const PApi = {
   risks: pid => '/api/projects/' + pid + '/risks',
   risk: rid => '/api/projects/risks/' + rid,
   riskResolve: rid => '/api/projects/risks/' + rid + '/resolve',
-  extras: pid => '/api/projects/' + pid + '/extras'
+  extras: pid => '/api/projects/' + pid + '/extras',
+  // OA 能力移植（二期批次1）：变更单 + 机型引用
+  changes: pid => '/api/projects/' + pid + '/changes',
+  change: cid => '/api/projects/changes/' + cid,
+  changeApprove: cid => '/api/projects/changes/' + cid + '/approve',
+  modelOptions: '/api/projects/model-options',
+  modelRefs: pid => '/api/projects/' + pid + '/models',
+  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid
 };
 
 
@@ -776,6 +783,7 @@ async function renderProjects() {
     '<fluent-card class="kb-stat" data-k="' + p.id + '">' +
     '<span class="n" style="font-size:16px;color:var(--brand)">' + esc(p.name) + '</span>' +
     '<span class="l">任务 ' + p.task_count + ' · 完成 ' + p.done_count + '</span>' +
+    '<span class="kb-x" style="position:static"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projModels(' + p.id + ',\'' + esc(p.name).replace(/'/g, '') + '\')">机型</fluent-button></span>' +
     (canManage
       ? '<span class="kb-x"><fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projEdit(' + p.id + ')">编辑</fluent-button> ' +
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projMembers(' + p.id + ')">成员</fluent-button> ' +
@@ -883,6 +891,57 @@ async function memRemove(uid) {
   if (!confirm('确认移除该成员？')) return;
   try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
+}
+
+// ===== 机型引用管理（OA 移植二期：sample_models 只读引用，不写 fixtures 子系统） =====
+var _pjModelId = 0;
+var REF_ROLE_CN = { TARGET: '试产对象', VERIFY: '验证对象', REF: '参考机型' };
+async function projModels(id, name) {
+  _pjModelId = id;
+  const refs = await api('GET', PApi.modelRefs(id));
+  const models = await api('GET', PApi.modelOptions);
+  const canEdit = me.role === 'ADMIN' || me.role === 'PM'; // 后端对成员也放宽，前端按钮从宽渲染由后端兜底
+  openModal('引用机型 — ' + (name || ('项目#' + id)),
+    '<div class="pk-form">' +
+    '<div id="pm-ref-list">' + pmRefRows(refs, canEdit) + '</div>' +
+    (canEdit
+      ? '<div class="pk-row" style="margin-top:10px;gap:6px;display:flex">' +
+        '<fluent-select id="pm-model" style="flex:2">' + models.map(function (m) { return '<fluent-option value="' + m.id + '">' + esc(m.code) + '（' + esc(m.full_name) + '）</fluent-option>'; }).join('') + '</fluent-select>' +
+        '<fluent-select id="pm-role" style="flex:1">' + Object.keys(REF_ROLE_CN).map(function (k) { return '<fluent-option value="' + k + '">' + REF_ROLE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+        '<fluent-button appearance="accent" size="small" onclick="pmAdd()">添加</fluent-button></div>'
+      : '') +
+    '</div>',
+    { foot: '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">关闭</fluent-button>' });
+}
+function pmRefRows(refs, canEdit) {
+  if (!refs.length) return '<div class="muted" style="font-size:13px">暂无引用机型</div>';
+  return refs.map(function (r) {
+    return '<div class="pk-row" style="display:flex;justify-content:space-between;padding:4px 0">' +
+      '<span><b>' + esc(r.model_code || ('#' + r.model_id)) + '</b>' +
+      (r.model_name ? '<span class="muted"> ' + esc(r.model_name) + '</span>' : (r.model_id ? '<span class="muted" style="color:#b91c1c">（机型已不存在）</span>' : '')) +
+      ' · ' + (REF_ROLE_CN[r.role] || r.role) + '</span>' +
+      (canEdit ? '<fluent-button appearance="secondary" size="small" onclick="pmRemove(' + r.model_id + ')">移除</fluent-button>' : '') +
+      '</div>';
+  }).join('');
+}
+async function pmAdd() {
+  const mid = $('#pm-model').value;
+  if (!mid) return showToast('请选择机型', 'err');
+  try {
+    const r = await api('POST', PApi.modelRefs(_pjModelId), { model_id: Number(mid), role: $('#pm-role').value });
+    showToast(r.duplicate ? '该机型已在引用列表中' : '已添加');
+    const refs = await api('GET', PApi.modelRefs(_pjModelId));
+    $('#pm-ref-list').innerHTML = pmRefRows(refs, true);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function pmRemove(mid) {
+  if (!confirm('确认移除该机型引用？（不影响机型本身）')) return;
+  try {
+    await api('DELETE', PApi.modelRef(_pjModelId, mid));
+    showToast('已移除');
+    const refs = await api('GET', PApi.modelRefs(_pjModelId));
+    $('#pm-ref-list').innerHTML = pmRefRows(refs, true);
+  } catch (e) { showToast(e.message, 'err'); }
 }
 
 
@@ -1121,6 +1180,128 @@ async function rkResolve(id, version) {
 async function rkDel(id) {
   if (!confirm('确认删除该风险记录？')) return;
   try { await api('DELETE', PApi.risk(id)); showToast('已删除'); rkLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+
+/* --- subsystems/projects/frontend/js/views/changes.js --- */
+// changes.js — OA 能力移植二期：变更管理（项目下拉 + 变更单列表 + 新建/编辑/审批/删除）
+// 审批人：ADMIN/PM/项目 owner（后端校验）；申请人不能审批本人变更；BUDGET 批准后自动写入预算
+// TIME 类批准后仅记录，不自动顺延任务日期（用户确认保守方案）
+var CHG_TYPE_CN = { SCOPE: '范围', TIME: '时间', RESOURCE: '资源', BUDGET: '预算' };
+var CHG_STATUS_CN = { PENDING: '待审批', APPROVED: '已批准', REJECTED: '已驳回' };
+var CHG_STATUS_COLOR = { PENDING: '#92400e', APPROVED: '#065f46', REJECTED: '#b91c1c' };
+
+async function renderChanges() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-select id="cg-project" onchange="cgLoad()"><fluent-option value="">选择项目…</fluent-option></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="cgCreate()">发起变更</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="cgLoad()">刷新</fluent-button></div>' +
+    '<div id="cg-list"></div>';
+  const projects = await api('GET', PApi.projects());
+  $('#cg-project').innerHTML = '<fluent-option value="">选择项目…</fluent-option>' +
+    projects.map(function (p) { return '<fluent-option value="' + p.id + '">' + esc(p.name) + '</fluent-option>'; }).join('');
+}
+
+async function cgLoad() {
+  const pid = $('#cg-project').value;
+  const box = $('#cg-list');
+  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  const list = await api('GET', PApi.changes(pid));
+  const canApprove = me.role === 'ADMIN' || me.role === 'PM';
+  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无变更单</div>'; return; }
+  box.innerHTML = '<div class="pk-stats">' + list.map(function (c) {
+    const pending = c.status === 'PENDING';
+    return '<fluent-card class="kb-stat">' +
+      '<span class="n" style="font-size:15px">' + esc(c.change_no || ('#' + c.id)) + ' · ' + (CHG_TYPE_CN[c.change_type] || c.change_type) + '变更</span>' +
+      '<span class="l">' + esc(c.description) + '</span>' +
+      (c.before_value ? '<span class="l">变更前：' + esc(c.before_value) + ' → 变更后：' + esc(c.after_value || '—') + '</span>' : '') +
+      (c.reason ? '<span class="l">原因：' + esc(c.reason) + '</span>' : '') +
+      '<span class="l"><b style="color:' + CHG_STATUS_COLOR[c.status] + '">' + (CHG_STATUS_CN[c.status] || c.status) + '</b>' +
+      ' · 申请人 ' + esc(c.applicant_name || ('#' + c.applicant_id)) +
+      (pending ? '' : ' · 审批人 ' + esc(c.approver_name || ('#' + c.approver_id)) + ' ' + (c.approved_at || '').slice(0, 10)) + '</span>' +
+      '<span class="kb-x">' +
+      (pending && canApprove && c.applicant_id !== me.id
+        ? '<fluent-button appearance="accent" size="small" onclick="cgApprove(' + c.id + ',' + c.version + ',\'APPROVED\')">批准</fluent-button> ' +
+          '<fluent-button appearance="secondary" size="small" onclick="cgApprove(' + c.id + ',' + c.version + ',\'REJECTED\')">驳回</fluent-button> '
+        : '') +
+      (pending && (canApprove || c.applicant_id === me.id)
+        ? '<fluent-button appearance="secondary" size="small" onclick="cgEdit(' + c.id + ')">编辑</fluent-button> ' : '') +
+      (pending && (canApprove || c.applicant_id === me.id)
+        ? '<fluent-button appearance="secondary" size="small" onclick="cgDel(' + c.id + ')">删除</fluent-button>' : '') +
+      '</span></fluent-card>';
+  }).join('') + '</div>';
+}
+
+function cgCreate() {
+  const pid = $('#cg-project').value;
+  if (!pid) return showToast('请先选择项目', 'err');
+  cgForm('发起变更', { change_type: 'SCOPE' }, null, 0);
+}
+function cgEdit(id) {
+  const pid = $('#cg-project').value;
+  api('GET', PApi.changes(pid)).then(function (list) {
+    const c = list.find(function (x) { return x.id === id; });
+    if (!c) return showToast('变更单不存在', 'err');
+    cgForm('编辑变更单 ' + (c.change_no || ''), c, id, c.version);
+  });
+}
+// 变更单新建/编辑共用弹窗
+function cgForm(title, c, cid, version) {
+  const isBudget = c.change_type === 'BUDGET';
+  openModal(title,
+    '<div class="pk-form">' +
+    '<label>变更类型 *</label><fluent-select id="cg-type">' +
+    Object.keys(CHG_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '"' + (c.change_type === k ? ' selected' : '') + '>' + CHG_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>变更内容描述 *</label><fluent-text-area id="cg-desc">' + esc(c.description || '') + '</fluent-text-area>' +
+    '<label>变更前</label><fluent-text-field id="cg-before" value="' + esc(c.before_value || '') + '"></fluent-text-field>' +
+    '<label>变更后' + (isBudget ? '（数字，批准后写入项目预算）' : '') + '</label><fluent-text-field id="cg-after" value="' + esc(c.after_value || '') + '"></fluent-text-field>' +
+    '<label>变更原因</label><fluent-text-area id="cg-reason">' + esc(c.reason || '') + '</fluent-text-area>' +
+    '<div class="muted" style="font-size:12px;margin-top:6px">审批人：管理员/项目经理/项目负责人；申请人不能审批本人发起的变更；BUDGET 类批准后自动更新项目预算。</div></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="' + (cid ? 'cgEditSave(' + cid + ',' + version + ')' : 'cgCreateSave()') + '">提交</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+function cgReadForm() {
+  return {
+    change_type: $('#cg-type').value,
+    description: $('#cg-desc').value.trim(),
+    before_value: $('#cg-before').value,
+    after_value: $('#cg-after').value,
+    reason: $('#cg-reason').value
+  };
+}
+async function cgCreateSave() {
+  const pid = $('#cg-project').value;
+  const d = cgReadForm();
+  if (!d.description) return showToast('变更内容描述必填', 'err');
+  try {
+    const r = await api('POST', PApi.changes(pid), d);
+    showToast('已发起 ' + (r.change_no || ''));
+    pCloseModal(); cgLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function cgEditSave(cid, version) {
+  const d = cgReadForm();
+  if (!d.description) return showToast('变更内容描述必填', 'err');
+  try {
+    await api('PUT', PApi.change(cid), Object.assign({ version: version }, d));
+    showToast('已保存'); pCloseModal(); cgLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+// 审批（decision=APPROVED/REJECTED；CAS version 防并发双审）
+async function cgApprove(cid, version, decision) {
+  const word = decision === 'APPROVED' ? '批准' : '驳回';
+  if (!confirm('确认' + word + '该变更单？（BUDGET 类批准后自动更新项目预算）')) return;
+  try {
+    await api('POST', PApi.changeApprove(cid), { decision: decision, version: version });
+    showToast('已' + word); cgLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function cgDel(cid) {
+  if (!confirm('确认删除该变更单？（已审批单留档不可删）')) return;
+  try { await api('DELETE', PApi.change(cid)); showToast('已删除'); cgLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }
 
@@ -1486,10 +1667,11 @@ const NAV=[
   {k:'projects',t:'项目列表',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'milestones',t:'里程碑',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'risks',t:'风险管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'changes',t:'变更管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
-const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,workflow:renderWorkflow};
-const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',workflow:'状态机管理'};
+const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',workflow:'状态机管理'};
 function route(){
   // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');
