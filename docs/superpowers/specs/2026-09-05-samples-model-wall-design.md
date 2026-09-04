@@ -74,4 +74,7 @@
 - DAO 级：假依赖单测（q 桩按 SQL 区分两结果集）断言 sample_count/overdue/cover 解析/status_stats 合并 —— 部署脚本内联执行
 - 路由级：静态断言（view=wall 分支 / D.aggregateModelsWall 调用 / 聚合缓存键）+ `node --check`（模块 require 依赖运行时 DB 环境，接口行为留待重启后实测）
 - 静态链路：线上 bundle 含 smw-badge/has-overdue/checkout_overdue；css 含新段
-- 重启后待验：`GET /api/samples/models?view=wall`（登录态）返回 sample_count>0 且含 status_stats；机型墙显示徽章（回退消失）
+- **重启后实测（18:20 重启，pid 3561954）**：进程外真实验证全过 ——
+  - 真实 DB 直跑 DAO：BD7620D 60 件（IN_CUSTODY:3 + NEW:57，分布合计=总数 ✓）、聚合总数=全表 COUNT ✓、封面解析 ✓
+  - 路由分支驱动：view=wall 返回 18 机型聚合结构（主数据 18，仅 BD7620D 有样品）；无参调用保持旧结构（无 sample_count，兼容 ✓）；二次调用缓存命中一致 ✓
+  - 结论：**二期已激活**，浏览器硬刷新（bundle v=bmtmsy36n + css v=20260905b）后机型墙显示徽章/封面；当前仅 1 机型有样品，其余 17 张卡为 0 件空卡（符合主数据现状）
