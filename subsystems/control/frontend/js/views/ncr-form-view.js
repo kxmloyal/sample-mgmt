@@ -29,7 +29,10 @@ function renderNcrFormTab() {
 
   var html = '<div class="ctl-ncr-form">'
     + '<div class="ncr-toolbar"><button class="btn primary" onclick="window.print()">打印</button></div>'
-    + '<div class="ncr-head"><div class="ncr-title">不良品委托检验单</div><div class="ncr-no">表单编号：GYS-Q2-008_01 REV_1</div></div>'
+    + '<div class="ncr-head"><div class="ncr-title">不良品委托检验单</div>'
+    // 2026-09-04：无纸化流转要求委托单号上表单（取最新一条 NCR 记录的单号，回退主单摘要）
+    + '<div class="ncr-no">委托单号：<b>' + fv((nl && nl.ncr_no) || o.ncr_no) + '</b></div>'
+    + '<div class="ncr-no">表单编号：GYS-Q2-008_01 REV_1</div></div>'
     // 基本信息
     + '<div class="ncr-sec">基本信息</div>'
     + row4([cell('销货单号', fv(o.sales_no)), cell('料号', fv(o.part_no)), cell('品名', fv(o.part_name)), cell('机种', fv(o.model))])
