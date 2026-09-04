@@ -100,6 +100,20 @@ function showScanActionForm(action){
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
+  }else if(action==='CHECKOUT'){
+    // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
+    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="如 张三" value="'+e(me.display_name||me.username||'')+'"></fluent-text-field>'+
+      '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
+      '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
+      '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
+      '<label>领用备注</label><fluent-text-field id="scan-note" placeholder="如：产线对比测试用"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CHECKOUT\',this)">确认领出</fluent-button></div>';
+  }else if(action==='RETURN_OUT'){
+    // 归还表单：展示当前借出信息供核对，备注选填
+    html='<p style="font-size:13px">当前领用人：<b>'+e(s.checkout_user||'—')+'</b>（'+e(s.checkout_dept||'—')+'）</p>'+
+      '<p class="muted" style="font-size:12px">领出于 '+fmt(s.checkout_at)+' · 应还 '+fmt(s.expected_return_at)+(s.expected_return_at&&new Date(s.expected_return_at).getTime()<Date.now()?' <b style="color:var(--bad)">（已超时）</b>':'')+'</p>'+
+      '<label>归还备注</label><fluent-text-field id="scan-note" placeholder="如：外观无异常，已归还"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_OUT\',this)">确认归还入库</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
@@ -127,6 +141,31 @@ function collectCustodyCycle(body){
   var n=Number(v);
   if(!Number.isInteger(n)||n<1||n>3650){toast('复检周期须为 1~3650 天的整数（留空则沿用原周期）','err');return false;}
   body.cycleDays=n;return true;
+}
+// 领用（2026-09-05）：应还时间实时预览——时长输入变化时计算 now+时长 并回显
+function previewCheckoutDue(){
+  var el=document.getElementById('scan-co-hours');
+  var tip=document.getElementById('scan-co-due');
+  if(!el||!tip)return;
+  var n=Number(el.value);
+  if(!el.value||!Number.isInteger(n)||n<1||n>8760){tip.textContent='';return;}
+  var due=new Date(Date.now()+n*3600000);
+  tip.textContent='预计应还时间：'+fmt(due.toISOString())+'（'+n+' 小时后）';
+}
+// 收集 CHECKOUT 表单：领用人必填、时长前端软校验 1~8760 整数（后端仍兜底 400）
+// 返回 false 表示校验失败（已 toast），调用方中止提交
+function collectCheckoutPayload(body){
+  var uEl=document.getElementById('scan-co-user');
+  var dEl=document.getElementById('scan-co-dept');
+  var hEl=document.getElementById('scan-co-hours');
+  var user=uEl&&uEl.value?uEl.value.trim():'';
+  if(!user){toast('请填写领用人','err');return false;}
+  var hours=hEl&&hEl.value?Number(hEl.value.trim()):NaN;
+  if(!Number.isInteger(hours)||hours<1||hours>8760){toast('领用时长须为 1~8760 小时的整数','err');return false;}
+  body.checkout_user=user;
+  if(dEl&&dEl.value.trim())body.checkout_dept=dEl.value.trim();
+  body.durationHours=hours;
+  return true;
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
@@ -166,9 +205,10 @@ async function confirmScan(action,btn){
     var dataEl=document.getElementById('scan-card-data');if(dataEl&&dataEl.value.trim())body.test_data=dataEl.value.trim();
   }
   if(action==='INSPECT_CUSTODY'&&!collectCustodyCycle(body))return;
+  if(action==='CHECKOUT'&&!collectCheckoutPayload(body))return;
   if(action==='RELEASE'||action==='RE_RELEASE'){collectWizardPayload(body);}
   if(action==='CUSTODY'||action==='EDIT_STORAGE'){body.location=document.getElementById('scan-loc').value;}
-  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'){
+  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'){
     var noteEl2=document.getElementById('scan-note');if(noteEl2&&noteEl2.value.trim())body.note=noteEl2.value.trim();
   }
   if(action==='RETIRE_RECREATE'){

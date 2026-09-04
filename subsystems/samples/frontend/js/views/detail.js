@@ -112,6 +112,13 @@ function _cardInfo(s) {
   var h = '<div class="overview-card"><div class="title">基础信息</div><div class="field-grid">';
   h += kv('名称', e(s.name)) + kv('机型', e(s.model)) + kv('站别', e(s.station));
   h += kv('规格', e(s.spec)) + kv('保管', e(s.custody_dept)) + kv('储位', e(s.storage_location));
+  // 领用/归还（2026-09-05）：领用中展示领用人/部门/应还时间（超时红色高亮），非领用态展示最近归还时间
+  if (s.status === 'CHECKED_OUT') {
+    var coLate = s.expected_return_at && new Date(s.expected_return_at).getTime() < Date.now();
+    h += '<span class="label">领用</span><span class="' + (coLate ? 'b-overdue' : '') + '" style="font-weight:600">' + e(s.checkout_user || '—') + '（' + e(s.checkout_dept || '—') + '）· 应还 ' + fmt(s.expected_return_at) + (coLate ? '（已超时）' : '') + '</span>';
+  } else if (s.returned_at) {
+    h += kv('最近归还', fmt(s.returned_at));
+  }
   var ov = overdue(s);
   h += '<span class="label">复检</span><span class="' + (ov ? 'b-overdue' : '') + '" style="font-weight:600">' + (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at) + '</span>';
   h += kv('备注', e(s.notes));
@@ -122,6 +129,8 @@ function _cardInfo(s) {
 
 function _cardProgress(s) {
   var steps = [['制作完成', s.produced_at], ['正式发行', s.released_at], ['分发保管', s.status === 'IN_CUSTODY' ? '储位 ' + e(s.storage_location) : null]];
+  if (s.status === 'CHECKED_OUT') steps.push(['领用中（' + e(s.checkout_user || '—') + '）', s.expected_return_at]);
+  if (s.returned_at) steps.push(['最近归还', s.returned_at]);
   if (s.status === 'RETURNING' || s.status === 'RETIRED') steps.push(['退回审核', s.retired_reason || '']);
   if (s.status === 'RETIRED') steps.push(['已作废', s.retired_reason || '']);
   return '<div class="overview-card"><div class="title">流转进度</div><div class="progress-timeline">' +
@@ -156,6 +165,7 @@ var _LOG_FLOW = {
   PRODUCE: '⬆ NEW ➜ 制作完成',
   RELEASE: '⬆ 制作完成 ➜ 已发行',
   CUSTODY: '⬆ 已发行 ➜ 保管中',
+  CHECKOUT: '⬆ 保管中 ➜ 领用中', RETURN_OUT: '⬆ 领用中 ➜ 保管中',
   INSPECT: '⬆ 已发行（自环）', INSPECT_EARLY: '⬆ 已发行（自环）', INSPECT_CUSTODY: '⬆ 保管中（自环）',
   EDIT_CARD: '⬆ 修正标示卡（自环）', EDIT_STORAGE: '⬆ 修改储位（自环）',
   RETURN_REQUEST: '⬆ 保管中 ➜ 退回审核',

@@ -6,8 +6,12 @@
 .b-PRODUCED { background: #ecfeff; color: #155e75; }
 .b-RELEASED { background: #fef9c3; color: #854d0e; }
 .b-IN_CUSTODY { background: #dcfce7; color: #166534; }
+.b-CHECKED_OUT { background: #dbeafe; color: #1d4ed8; }
 .b-RETURNING { background: #fee2e2; color: #991b1b; }
 .b-RETIRED { background: #f0f0f0; color: #999; }
+/* 领用超时未归还预警区块（2026-09-05，蓝色系区分复检红/黄预警） */
+.dash-alert-checkout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px 16px; margin-top: 14px; }
+.dash-alert-checkout h3 { margin: 0 0 10px; color: #1d4ed8; font-size: 15px; }
 /* .b-overdue 在 app.css 中定义为共享样式 */
 
 /* 复检状态徽章（三态列，2026-08-04；逾期复用共享 .b-overdue） */

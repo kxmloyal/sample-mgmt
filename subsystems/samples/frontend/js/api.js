@@ -9,8 +9,10 @@ function showApp(){
 
 // ---- 样品专用 helpers ----
 function overdue(s){return s.status==='IN_CUSTODY'&&s.next_inspect_at&&new Date(s.next_inspect_at).getTime()<Date.now();}
-// 覆盖 shared/api-base.js 的 statusBadge：样品逾期检测
-function statusBadge(s){var cls='b-'+(s.status==='IN_CUSTODY'&&overdue(s)?'overdue':s.status);return '<fluent-badge class="badge '+cls+'" appearance="filled">'+(STATUS[s.status]||s.status)+'</fluent-badge>';}
+// 领用超时未归还（2026-09-05）：领用中且已过应还时间 → 与复检逾期同款 b-overdue 高亮
+function checkoutOverdue(s){return s.status==='CHECKED_OUT'&&s.expected_return_at&&new Date(s.expected_return_at).getTime()<Date.now();}
+// 覆盖 shared/api-base.js 的 statusBadge：样品逾期检测（复检逾期 + 领用超时）
+function statusBadge(s){var hot=(s.status==='IN_CUSTODY'&&overdue(s))||checkoutOverdue(s);var cls='b-'+(hot?'overdue':s.status);return '<fluent-badge class="badge '+cls+'" appearance="filled">'+(STATUS[s.status]||s.status)+'</fluent-badge>';}
 function goScan(code){location.hash='#/scan';setTimeout(()=>{if(code)$('#scan-code').value=code;},50);}
 
 // ---- T6: 统一防重提交 / 409 / 401 / 请求序号 helpers ----

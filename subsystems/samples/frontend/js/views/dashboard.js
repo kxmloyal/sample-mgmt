@@ -6,6 +6,8 @@ var _dashOverduePager = { limit: 5, offset: 0, total: 0 };
 var _dashDueSoonPager = { limit: 5, offset: 0, total: 0 };
 var _dashOverdueData = [];
 var _dashDueSoonData = [];
+var _dashCheckoutPager = { limit: 5, offset: 0, total: 0 };
+var _dashCheckoutData = [];
 
 // 统计卡配置（对齐治具 DASH_STATS 模式，配置驱动 + 角色排序）
 var DASH_STATS = [
@@ -14,6 +16,7 @@ var DASH_STATS = [
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
   { label: '已发行', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
   { label: '保管中', key: 'IN_CUSTODY', color: 'var(--brand)', countByStatus: true },
+  { label: '领用中', key: 'CHECKED_OUT', color: '#1d4ed8', countByStatus: true },
   { label: '退回审核中', key: 'RETURNING', color: 'var(--bad)', countByStatus: true },
   { label: '已废弃', key: 'RETIRED', color: 'var(--muted)', countByStatus: true }
 ];
@@ -22,15 +25,15 @@ var STAT_COLORS = {};
 DASH_STATS.forEach(function(c) { STAT_COLORS[c.key] = c.color; });
 // 角色优先级排序：高优先级状态前置（RD制作优先/QA发行优先/CUSTODY接收优先）
 var STAT_ORDER = {
-  ADMIN:   ['total','NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING','RETIRED'],
-  RD:      ['total','NEW','PRODUCED','RETURNING','RELEASED','IN_CUSTODY','RETIRED'],
-  QA:      ['total','PRODUCED','RETURNING','RELEASED','NEW','IN_CUSTODY','RETIRED'],
-  ME:      ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED'],
-  CUSTODY: ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED']
+  ADMIN:   ['total','NEW','PRODUCED','RELEASED','IN_CUSTODY','CHECKED_OUT','RETURNING','RETIRED'],
+  RD:      ['total','NEW','PRODUCED','RETURNING','RELEASED','IN_CUSTODY','CHECKED_OUT','RETIRED'],
+  QA:      ['total','PRODUCED','RETURNING','RELEASED','NEW','IN_CUSTODY','CHECKED_OUT','RETIRED'],
+  ME:      ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED'],
+  CUSTODY: ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED']
 };
 var STAT_LABELS = {
   NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行',
-  IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已废弃'
+  IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃'
 };
 
 // 主入口：拉取 /api/dashboard 并渲染全部区块，失败显示点击重试
@@ -43,6 +46,7 @@ async function viewDashboard() {
     h += _renderStats(d);
     h += _renderOverdue(d.overdue || []);
     h += _renderDueSoon(d.dueSoon || []);
+    h += _renderCheckoutOverdue(d.checkoutOverdue || []);
     h += '<div id="dash-todo"></div>';
     v.innerHTML = h;
     // 预警表格列宽拖拽
@@ -63,18 +67,15 @@ function _renderStats(d) {
   var sorted = DASH_STATS.slice().sort(function(a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
   // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]
   _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? total : (s[cfg.key] || 0), cfg.key]; });
-  // 统计卡：KbStats 共享组件等价迁移（原内联 HTML 行为协议逐项保留——
-  // 单击 filterKbStat toggle 筛选 + 双击跳列表 + title 提示；初始渲染无高亮，
-  // active 由 filterKbStat 自行 DOM 切换，故此处 activeIndex 恒为 null）
-  var cards = KbStats.render(sorted.map(function(cfg) {
+  var cards = sorted.map(function(cfg, idx) {
     var count = cfg.key === 'total' ? total : (s[cfg.key] || 0);
     var href = cfg.key === 'total' ? '#/samples' : '#/samples?status=' + cfg.key;
-    return { n: count, l: cfg.label, color: cfg.color, href: href, title: '单击筛选待办·双击查看列表' };
-  }), { click: 'filter', filterHandler: 'filterKbStat', activeIndex: null });
+    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
+  }).join('');
   // 比例条
   var barHtml = '';
   if (total > 0) {
-    var keys = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'RETURNING', 'RETIRED'];
+    var keys = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'CHECKED_OUT', 'RETURNING', 'RETIRED'];
     var segs = keys.map(function(k) {
       var pct = ((s[k] || 0) / total * 100);
       if (pct < 0.1) return '';
@@ -120,6 +121,32 @@ function goDueSoonPage(page) {
   _dashDueSoonPager.offset = (page - 1) * _dashDueSoonPager.limit;
   var box = $('#dash-soon');
   if (box) { box.outerHTML = _renderAlertBlock('soon', '⏰ 即将到期·7天内', _dashDueSoonData, _dashDueSoonPager, 'goDueSoonPage', false); setTimeout(function() { var t = document.querySelector('#dash-soon .dash-alert-table'); if (t && typeof _initColResize === 'function') _initColResize(t); }, 0); }
+}
+
+// 领用超时未归还预警（2026-09-05，蓝色区块区分复检预警，5 条/页；空列表不渲染与既有区块一致）
+function _renderCheckoutOverdue(list) {
+  _dashCheckoutPager.total = list.length;
+  _dashCheckoutPager.offset = 0;
+  return _renderCheckoutBlock(list, _dashCheckoutPager);
+}
+function goCheckoutPage(page) {
+  _dashCheckoutPager.offset = (page - 1) * _dashCheckoutPager.limit;
+  var box = $('#dash-checkout');
+  if (box) { box.outerHTML = _renderCheckoutBlock(_dashCheckoutData, _dashCheckoutPager); setTimeout(function() { var t = document.querySelector('#dash-checkout .dash-alert-table'); if (t && typeof _initColResize === 'function') _initColResize(t); }, 0); }
+}
+function _renderCheckoutBlock(list, pager) {
+  _dashCheckoutData = list;
+  if (!list.length) return '';
+  var pageList = list.slice(pager.offset, pager.offset + pager.limit);
+  var colgroup = '<colgroup><col style="width:100px"><col style="width:130px"><col style="width:52px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:70px"></colgroup>';
+  var thead = '<thead><tr><th>编号<span class="col-rsz"></span></th><th>名称<span class="col-rsz"></span></th><th>图片<span class="col-rsz"></span></th><th>领用人<span class="col-rsz"></span></th><th>领用部门<span class="col-rsz"></span></th><th>领出时间<span class="col-rsz"></span></th><th>应还时间<span class="col-rsz"></span></th><th>操作<span class="col-rsz"></span></th></tr></thead>';
+  var rows = pageList.map(function(s) {
+    var img = (s.produced_image || s.image) ? '<img src="' + e(s.produced_image || s.image) + '" width="40" height="40" style="border-radius:4px;object-fit:cover" loading="lazy"/>' : '—';
+    var lateDays = Math.ceil((Date.now() - new Date(s.expected_return_at).getTime()) / 86400000);
+    return '<tr class="dash-alert-row" onclick="viewDetail(\'' + s.id + '\')" style="cursor:pointer"><td data-label="编号">' + e(s.sample_no) + '</td><td data-label="名称">' + e(s.name || '—') + '</td><td data-label="图片">' + img + '</td><td data-label="领用人">' + e(s.checkout_user || '—') + '</td><td data-label="领用部门">' + e(s.checkout_dept || '—') + '</td><td data-label="领出时间" class="muted">' + fmt(s.checkout_at) + '</td><td data-label="应还时间" class="b-overdue" style="font-weight:700">' + fmt(s.expected_return_at) + '（超' + lateDays + '天）</td><td data-label="操作"><a class="link" onclick="event.stopPropagation();goScan(\'' + e(s.sample_no) + '\')">去催还</a></td></tr>';
+  }).join('');
+  var pagerHtml = _renderPager(pager, 'goCheckoutPage');
+  return '<div class="dash-alert-checkout" id="dash-checkout"><h3>📤 领用超时未归还（' + list.length + '）</h3><div style="overflow-x:auto"><table class="dash-alert-table">' + colgroup + thead + '<tbody>' + rows + '</tbody></table></div>' + pagerHtml + '</div>';
 }
 
 // 预警区块通用渲染（isOverdue 控制红色/黄色样式与缓存目标）

@@ -6,7 +6,7 @@ var $ = function (s, r) { return (r || document).querySelector(s); };
 var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
-  NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
+  NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中',
   // 治具状态
   REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
   VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位确认',
@@ -18,7 +18,7 @@ var STATUS = {
 var ACTION_CN = {
   // 样品操作
   CREATE: '新建样品', PRODUCE: '确认制作完成', RELEASE: '正式发行', INSPECT: '复检完成', INSPECT_EARLY: '提前复检',
-  CUSTODY: '接收保管', EDIT_CARD: '修正标示卡', EDIT_STORAGE: '修改储位',
+  CUSTODY: '接收保管', CHECKOUT: '领出', RETURN_OUT: '归还入库', EDIT_CARD: '修正标示卡', EDIT_STORAGE: '修改储位',
   RETURN_REQUEST: '申请退回', RE_RELEASE: '重新发行', RETIRE_RECREATE: '退回研发重做', RETIRE_ONLY: '直接作废',
   RETURN_REJECT: '拒绝退回', RECREATE: '创建替代品', RECREATE_REPLACED: '被替代', UPDATE_CARD: '更新标示卡信息',
   // 治具操作
