@@ -1,4 +1,4 @@
-// dashboard.js — 项目看板：统计卡（kb-stat 共享组件）+ 三维分布 + 近 8 周趋势
+// dashboard.js — 项目看板：统计卡（KbStats 共享组件，navigate 单击跳列表）+ 三维分布 + 近 8 周趋势
 async function renderProjectDashboard() {
   const v = $('#view');
   if (!v) return;
@@ -6,17 +6,17 @@ async function renderProjectDashboard() {
   const s = await api('GET', PApi.stats);
   // 竞态守卫：await 期间视图可能已被切换，节点脱离 document 后直接返回
   if (!v.isConnected) return;
+  // 统计卡：KbStats navigate 语义（单击跳任务列表并预选状态；项目卡跳项目列表）
+  // 跳转目标复用 list.js 既有 A4 深链（#/list?status= 由 lkRestoreFromHash 恢复），后端零改动
   const stats = [
-    { k: 'projects', n: s.project_count, l: '项目数', c: 'var(--brand)' },
-    { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)' },
-    { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)' },
-    { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8' },
-    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)' }
+    { k: 'projects', n: s.project_count, l: '项目数', c: 'var(--brand)', href: '#/projects', title: '查看项目列表' },
+    { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)', href: '#/list', title: '查看任务列表（全部）' },
+    { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)', href: '#/list?status=DONE', title: '查看已完成任务' },
+    { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8', href: '#/list?status=IN_PROGRESS', title: '查看进行中任务' },
+    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' }
   ];
-  // P1-1 修复：遵循共享 kb-stat 规范（fluent-card + .n/.l + --stat-color，数字 26px 粗体 + ::before 竖色条）
-  $('#pk-stats').innerHTML = stats.map(x =>
-    '<fluent-card class="kb-stat" style="--stat-color:' + x.c + '"><span class="n">' + x.n + '</span>' +
-    '<span class="l">' + x.l + '</span></fluent-card>').join('');
+  // KbStats 共享组件（kb-stat 规范：fluent-card + .n/.l + --stat-color 竖色条，样式见 /css/app.css）
+  $('#pk-stats').innerHTML = KbStats.render(stats, { click: 'navigate' });
   // 三维分布（类别/优先级）+ 完成率 + 趋势
   const dist = (arr, cn, base) => arr.map(x =>
     '<div class="pk-row"><span class="pk-name">' + (cn[x.category || x.priority] || x.category || x.priority) + '</span>' +

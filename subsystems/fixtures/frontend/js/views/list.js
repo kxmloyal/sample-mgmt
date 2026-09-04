@@ -14,12 +14,14 @@ function isOverdue(f) {
 
 async function renderFixtureList() {
   try {
-    // A4 深链：#/list?model=X 由 router.js 解析到 _fxRouteQuery；带 model 进入时仅重置其余筛选，保留机型预选
-    var routeModel = (window._fxRouteQuery && window._fxRouteQuery.model) || '';
+    // A4 深链：#/list?model=X&status=Y 由 router.js 解析到 _fxRouteQuery；带深链进入时仅重置其余筛选，保留预选
+    var routeQ = window._fxRouteQuery || {};
     window._fxRouteQuery = null;
+    var routeModel = routeQ.model || '';
+    var routeStatus = routeQ.status || '';
     fixtureListState.dept = '';
     fixtureListState.search = '';
-    fixtureListState.status = '';
+    fixtureListState.status = routeStatus;
     fixtureListState.dormant = '';
     fixtureListState.model = routeModel;
     fixtureListState.col = '';

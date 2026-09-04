@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmmwwmu — 19 files */
+/** BUNDLE vbmtmo3jqm — 20 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -204,6 +204,60 @@ var me = null;
 // modal.js — 通用弹窗组件（零依赖，治具/样品共用）
 function openModal(title,html,opts){opts=opts||{};document.body.style.overflow='hidden';var m=document.createElement('div');m.className='modal-mask';var headHTML=opts.head!=null?opts.head:'<h3>'+title+'</h3>';var footHTML=opts.foot!=null?opts.foot:'<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';m.innerHTML='<fluent-dialog id="fluent-modal" modal="true" trap-focus="true"><div class="modal-head">'+headHTML+'</div><div class="modal-body">'+html+'</div><div class="modal-foot">'+footHTML+'</div></fluent-dialog>';m.addEventListener('click',function(e){if(e.target===m){closeModal(m);}});document.body.appendChild(m);return m;}
 function closeModal(mask){if(!mask)return;mask.remove();var all=document.querySelectorAll('.modal-mask');if(all.length===0)document.body.style.overflow='';}
+
+
+/* --- shared/frontend/kb-stats.js --- */
+// kb-stats.js — 看板统计卡共享渲染组件（kb-stat 视觉协议见 public/css/app.css L228-235）
+// 单击/双击双语义协议（参数注入，各看板按需选用）：
+//   click:'filter'   单击 toggle 筛选（调用方提供全局筛选函数名，如 filterKbStat/filterDashStats）
+//                    可叠加 href → 双击跳列表（samples 双语义卡协议：单击筛选待办·双击查看列表）
+//   click:'navigate' 单击直接 location.hash 跳转（projects 统计卡跳列表）
+//   click:'none'     仅展示（纯统计卡）
+// 首用顺序：projects（试点）→ fixtures → samples（deployed 等价迁移）。样式统一走 /css/app.css，本文件不写样式。
+(function () {
+  /**
+   * 渲染统计卡组 innerHTML（不含 .kb-stats 网格外壳，配 wrap 使用）
+   * @param {Array} cards 卡片配置数组：{ n:数量, l:标签, color:CSS色值, href:跳转hash(可选), title:悬浮提示(可选) }
+   * @param {Object} opts { click:'filter'|'navigate'|'none', filterHandler:'全局函数名(filter模式必填)',
+   *                        activeIndex:number|null 高亮卡索引（null/0 视语义由调用方决定） }
+   * @returns {string} 卡组 HTML（调用方用 KbStats.wrap() 包裹或并入更大片段）
+   */
+  function render(cards, opts) {
+    opts = opts || {};
+    var click = opts.click || 'none';
+    return (cards || []).map(function (cfg, idx) {
+      var attrs = '';
+      if (cfg.title) attrs += ' title="' + cfg.title + '"';
+      if (click === 'filter' && opts.filterHandler)
+        attrs += ' onclick="' + opts.filterHandler + '(' + idx + ',this)"';
+      else if (click === 'navigate' && cfg.href)
+        attrs += ' onclick="location.hash=\'' + cfg.href + '\'"';
+      // 双击跳列表：仅 filter 模式且卡片配置 href 时叠加（与单击 toggle 自洽：双击前两次 click 恰好复位筛选）
+      if (click === 'filter' && cfg.href)
+        attrs += ' ondblclick="location.hash=\'' + cfg.href + '\'"';
+      var cls = 'kb-stat' + (opts.activeIndex === idx ? ' active' : '');
+      return '<fluent-card class="' + cls + '" style="--stat-color:' + (cfg.color || 'var(--brand)') + '"' + attrs +
+        '><div class="n">' + cfg.n + '</div><div class="l">' + cfg.l + '</div></fluent-card>';
+    }).join('');
+  }
+
+  /** 包裹 .kb-stats 网格外壳（grid 布局定义在 /css/app.css） */
+  function wrap(inner) { return '<div class="kb-stats">' + inner + '</div>'; }
+
+  /**
+   * active 高亮管理：容器内第 idx 张卡加 active、其余移除
+   * @param {Element|string} container 卡组容器（.kb-stats 元素或选择器）；null 安全
+   * @param {number|null} idx 高亮索引；null/负值清除全部高亮
+   */
+  function setActive(container, idx) {
+    var el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    var cards = el.querySelectorAll('.kb-stat');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.toggle('active', idx != null && idx >= 0 && i === idx);
+  }
+
+  window.KbStats = { render: render, wrap: wrap, setActive: setActive };
+})();
 
 
 /* --- shared/frontend/detail-modal.js --- */
@@ -652,7 +706,18 @@ function _renderDashContent() {
   var d = _dashData;
 
   // 统计卡片（计数统一使用用户 myPending，而非全局 byStatus，确保点击前后数量一致）
-  var html = '<div class="kb-stats">' + DASH_STATS.map(function(cfg, i) {
+  // KbStats 共享组件（filter 单击 toggle 筛选 + href 双击跳列表）；href 仅限列表页可直达的单一状态卡，
+  // 复合键卡（待验证=3状态并集/待保养=两数据源/呆滞=非状态字段）暂不配 href，无双击转跳
+  var cardCfg = {
+    '待处理':   { href: '#/list',                 title: '单击筛选待办·双击查看列表' },
+    '待验证':   { title: '单击筛选待办' },
+    '领用中':   { href: '#/list?status=IN_USE',   title: '单击筛选待办·双击查看列表' },
+    '已接收':   { href: '#/list?status=ACCEPTED', title: '单击筛选待办·双击查看列表' },
+    '改善中':   { href: '#/list?status=IMPROVING', title: '单击筛选待办·双击查看列表' },
+    '待保养':   { title: '单击筛选待办' },
+    '呆滞':     { title: '单击筛选待办' }
+  };
+  var cardsHtml = DASH_STATS.map(function(cfg, i) {
     var count;
     if (cfg.status === 'MAINTENANCE_DUE') {
       count = (d.maintenanceOverdueCount || 0) + (d.maintenanceUpcomingCount || 0);
@@ -665,10 +730,10 @@ function _renderDashContent() {
     } else {
       count = d.myPending.length;
     }
-    var isActive = (_dashFilter === i);
-    var cls = isActive ? ' active' : '';
-    return '<fluent-card class="kb-stat' + cls + '" style="--stat-color:' + cfg.color + '" onclick="filterDashStats(' + i + ')"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
-  }).join('') + '</div>';
+    var extra = cardCfg[cfg.label] || {};
+    return { n: count, l: cfg.label, color: cfg.color, href: extra.href, title: extra.title };
+  });
+  var html = KbStats.wrap(KbStats.render(cardsHtml, { click: 'filter', filterHandler: 'filterDashStats', activeIndex: _dashFilter }));
 
   // 逾期表
   if (d.overdue.length > 0) {
@@ -1063,12 +1128,14 @@ function isOverdue(f) {
 
 async function renderFixtureList() {
   try {
-    // A4 深链：#/list?model=X 由 router.js 解析到 _fxRouteQuery；带 model 进入时仅重置其余筛选，保留机型预选
-    var routeModel = (window._fxRouteQuery && window._fxRouteQuery.model) || '';
+    // A4 深链：#/list?model=X&status=Y 由 router.js 解析到 _fxRouteQuery；带深链进入时仅重置其余筛选，保留预选
+    var routeQ = window._fxRouteQuery || {};
     window._fxRouteQuery = null;
+    var routeModel = routeQ.model || '';
+    var routeStatus = routeQ.status || '';
     fixtureListState.dept = '';
     fixtureListState.search = '';
-    fixtureListState.status = '';
+    fixtureListState.status = routeStatus;
     fixtureListState.dormant = '';
     fixtureListState.model = routeModel;
     fixtureListState.col = '';

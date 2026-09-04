@@ -63,11 +63,14 @@ function _renderStats(d) {
   var sorted = DASH_STATS.slice().sort(function(a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
   // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]
   _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? total : (s[cfg.key] || 0), cfg.key]; });
-  var cards = sorted.map(function(cfg, idx) {
+  // 统计卡：KbStats 共享组件等价迁移（原内联 HTML 行为协议逐项保留——
+  // 单击 filterKbStat toggle 筛选 + 双击跳列表 + title 提示；初始渲染无高亮，
+  // active 由 filterKbStat 自行 DOM 切换，故此处 activeIndex 恒为 null）
+  var cards = KbStats.render(sorted.map(function(cfg) {
     var count = cfg.key === 'total' ? total : (s[cfg.key] || 0);
     var href = cfg.key === 'total' ? '#/samples' : '#/samples?status=' + cfg.key;
-    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
-  }).join('');
+    return { n: count, l: cfg.label, color: cfg.color, href: href, title: '单击筛选待办·双击查看列表' };
+  }), { click: 'filter', filterHandler: 'filterKbStat', activeIndex: null });
   // 比例条
   var barHtml = '';
   if (total > 0) {

@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmmwwmu — 21 files */
+/** BUNDLE vbmtmo3jqm — 22 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -206,6 +206,60 @@ function openModal(title,html,opts){opts=opts||{};document.body.style.overflow='
 function closeModal(mask){if(!mask)return;mask.remove();var all=document.querySelectorAll('.modal-mask');if(all.length===0)document.body.style.overflow='';}
 
 
+/* --- shared/frontend/kb-stats.js --- */
+// kb-stats.js — 看板统计卡共享渲染组件（kb-stat 视觉协议见 public/css/app.css L228-235）
+// 单击/双击双语义协议（参数注入，各看板按需选用）：
+//   click:'filter'   单击 toggle 筛选（调用方提供全局筛选函数名，如 filterKbStat/filterDashStats）
+//                    可叠加 href → 双击跳列表（samples 双语义卡协议：单击筛选待办·双击查看列表）
+//   click:'navigate' 单击直接 location.hash 跳转（projects 统计卡跳列表）
+//   click:'none'     仅展示（纯统计卡）
+// 首用顺序：projects（试点）→ fixtures → samples（deployed 等价迁移）。样式统一走 /css/app.css，本文件不写样式。
+(function () {
+  /**
+   * 渲染统计卡组 innerHTML（不含 .kb-stats 网格外壳，配 wrap 使用）
+   * @param {Array} cards 卡片配置数组：{ n:数量, l:标签, color:CSS色值, href:跳转hash(可选), title:悬浮提示(可选) }
+   * @param {Object} opts { click:'filter'|'navigate'|'none', filterHandler:'全局函数名(filter模式必填)',
+   *                        activeIndex:number|null 高亮卡索引（null/0 视语义由调用方决定） }
+   * @returns {string} 卡组 HTML（调用方用 KbStats.wrap() 包裹或并入更大片段）
+   */
+  function render(cards, opts) {
+    opts = opts || {};
+    var click = opts.click || 'none';
+    return (cards || []).map(function (cfg, idx) {
+      var attrs = '';
+      if (cfg.title) attrs += ' title="' + cfg.title + '"';
+      if (click === 'filter' && opts.filterHandler)
+        attrs += ' onclick="' + opts.filterHandler + '(' + idx + ',this)"';
+      else if (click === 'navigate' && cfg.href)
+        attrs += ' onclick="location.hash=\'' + cfg.href + '\'"';
+      // 双击跳列表：仅 filter 模式且卡片配置 href 时叠加（与单击 toggle 自洽：双击前两次 click 恰好复位筛选）
+      if (click === 'filter' && cfg.href)
+        attrs += ' ondblclick="location.hash=\'' + cfg.href + '\'"';
+      var cls = 'kb-stat' + (opts.activeIndex === idx ? ' active' : '');
+      return '<fluent-card class="' + cls + '" style="--stat-color:' + (cfg.color || 'var(--brand)') + '"' + attrs +
+        '><div class="n">' + cfg.n + '</div><div class="l">' + cfg.l + '</div></fluent-card>';
+    }).join('');
+  }
+
+  /** 包裹 .kb-stats 网格外壳（grid 布局定义在 /css/app.css） */
+  function wrap(inner) { return '<div class="kb-stats">' + inner + '</div>'; }
+
+  /**
+   * active 高亮管理：容器内第 idx 张卡加 active、其余移除
+   * @param {Element|string} container 卡组容器（.kb-stats 元素或选择器）；null 安全
+   * @param {number|null} idx 高亮索引；null/负值清除全部高亮
+   */
+  function setActive(container, idx) {
+    var el = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!el) return;
+    var cards = el.querySelectorAll('.kb-stat');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.toggle('active', idx != null && idx >= 0 && i === idx);
+  }
+
+  window.KbStats = { render: render, wrap: wrap, setActive: setActive };
+})();
+
+
 /* --- subsystems/projects/frontend/js/constants.js --- */
 // constants.js — 项目追踪子系统常量（不修改共享 api-base.js，避免跨系统影响）
 const ROLE_CN = Object.assign({ PM: '项目经理(PM)' }, { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' });
@@ -262,7 +316,7 @@ const PApi = {
 
 
 /* --- subsystems/projects/frontend/js/views/dashboard.js --- */
-// dashboard.js — 项目看板：统计卡（kb-stat 共享组件）+ 三维分布 + 近 8 周趋势
+// dashboard.js — 项目看板：统计卡（KbStats 共享组件，navigate 单击跳列表）+ 三维分布 + 近 8 周趋势
 async function renderProjectDashboard() {
   const v = $('#view');
   if (!v) return;
@@ -270,17 +324,17 @@ async function renderProjectDashboard() {
   const s = await api('GET', PApi.stats);
   // 竞态守卫：await 期间视图可能已被切换，节点脱离 document 后直接返回
   if (!v.isConnected) return;
+  // 统计卡：KbStats navigate 语义（单击跳任务列表并预选状态；项目卡跳项目列表）
+  // 跳转目标复用 list.js 既有 A4 深链（#/list?status= 由 lkRestoreFromHash 恢复），后端零改动
   const stats = [
-    { k: 'projects', n: s.project_count, l: '项目数', c: 'var(--brand)' },
-    { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)' },
-    { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)' },
-    { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8' },
-    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)' }
+    { k: 'projects', n: s.project_count, l: '项目数', c: 'var(--brand)', href: '#/projects', title: '查看项目列表' },
+    { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)', href: '#/list', title: '查看任务列表（全部）' },
+    { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)', href: '#/list?status=DONE', title: '查看已完成任务' },
+    { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8', href: '#/list?status=IN_PROGRESS', title: '查看进行中任务' },
+    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' }
   ];
-  // P1-1 修复：遵循共享 kb-stat 规范（fluent-card + .n/.l + --stat-color，数字 26px 粗体 + ::before 竖色条）
-  $('#pk-stats').innerHTML = stats.map(x =>
-    '<fluent-card class="kb-stat" style="--stat-color:' + x.c + '"><span class="n">' + x.n + '</span>' +
-    '<span class="l">' + x.l + '</span></fluent-card>').join('');
+  // KbStats 共享组件（kb-stat 规范：fluent-card + .n/.l + --stat-color 竖色条，样式见 /css/app.css）
+  $('#pk-stats').innerHTML = KbStats.render(stats, { click: 'navigate' });
   // 三维分布（类别/优先级）+ 完成率 + 趋势
   const dist = (arr, cn, base) => arr.map(x =>
     '<div class="pk-row"><span class="pk-name">' + (cn[x.category || x.priority] || x.category || x.priority) + '</span>' +

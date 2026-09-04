@@ -79,7 +79,18 @@ function _renderDashContent() {
   var d = _dashData;
 
   // 统计卡片（计数统一使用用户 myPending，而非全局 byStatus，确保点击前后数量一致）
-  var html = '<div class="kb-stats">' + DASH_STATS.map(function(cfg, i) {
+  // KbStats 共享组件（filter 单击 toggle 筛选 + href 双击跳列表）；href 仅限列表页可直达的单一状态卡，
+  // 复合键卡（待验证=3状态并集/待保养=两数据源/呆滞=非状态字段）暂不配 href，无双击转跳
+  var cardCfg = {
+    '待处理':   { href: '#/list',                 title: '单击筛选待办·双击查看列表' },
+    '待验证':   { title: '单击筛选待办' },
+    '领用中':   { href: '#/list?status=IN_USE',   title: '单击筛选待办·双击查看列表' },
+    '已接收':   { href: '#/list?status=ACCEPTED', title: '单击筛选待办·双击查看列表' },
+    '改善中':   { href: '#/list?status=IMPROVING', title: '单击筛选待办·双击查看列表' },
+    '待保养':   { title: '单击筛选待办' },
+    '呆滞':     { title: '单击筛选待办' }
+  };
+  var cardsHtml = DASH_STATS.map(function(cfg, i) {
     var count;
     if (cfg.status === 'MAINTENANCE_DUE') {
       count = (d.maintenanceOverdueCount || 0) + (d.maintenanceUpcomingCount || 0);
@@ -92,10 +103,10 @@ function _renderDashContent() {
     } else {
       count = d.myPending.length;
     }
-    var isActive = (_dashFilter === i);
-    var cls = isActive ? ' active' : '';
-    return '<fluent-card class="kb-stat' + cls + '" style="--stat-color:' + cfg.color + '" onclick="filterDashStats(' + i + ')"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
-  }).join('') + '</div>';
+    var extra = cardCfg[cfg.label] || {};
+    return { n: count, l: cfg.label, color: cfg.color, href: extra.href, title: extra.title };
+  });
+  var html = KbStats.wrap(KbStats.render(cardsHtml, { click: 'filter', filterHandler: 'filterDashStats', activeIndex: _dashFilter }));
 
   // 逾期表
   if (d.overdue.length > 0) {
