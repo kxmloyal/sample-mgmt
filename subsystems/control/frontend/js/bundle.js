@@ -1,4 +1,4 @@
-/** BUNDLE vbmtm856pw — 24 files */
+/** BUNDLE vbmtm8bv07 — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1600,6 +1600,15 @@ var _ctlUtil = {
     }
     return false;
   },
+  /** 追加 NCR 弹窗的委托单号建议值（2026-09-04 无纸化自动预填，可人工改）：
+   *  NCR-<管制单号>-<两位序号>，序号 = 该单已有 NCR 记录数 + 1（兜底 01）；数据不可用时回退 NCR-<管制单号> */
+  suggestNcrNo: function () {
+    var order = (_ctlDetailAgg && _ctlDetailAgg.order) || {};
+    if (!order.order_no) return '';
+    var n = ((_ctlDetailAgg && _ctlDetailAgg.ncrLogs) || []).length + 1;
+    var seq = (n >= 1 && n <= 99) ? ('0' + n).slice(-2) : '';
+    return seq ? ('NCR-' + order.order_no + '-' + seq) : ('NCR-' + order.order_no);
+  },
   /** 打开操作模态的配置：head（标题）/body（表单）/foot（按钮），字段 id 与 ctlSubmit 一致 */
   modalCfg: function (kind, action) {
     if (kind === 'sign') {
@@ -1628,7 +1637,7 @@ var _ctlUtil = {
       return {
         head: '追加不良品委托单',
         body: '<div class="ctl-form-grid">'
-          + '<div><label class="req">委托单号</label><input id="cf-ncr_no"></div>'
+          + '<div><label class="req">委托单号</label><input id="cf-ncr_no" value="' + _ctlUtil.suggestNcrNo() + '"></div>'
           + '<div><label>检验部门</label><select id="cf-inspect_dept"><option value="">请选择</option>' + deptOpts + '</select></div>'
           + '<div><label>处理部门</label><select id="cf-handle_dept"><option value="">请选择</option>' + deptOpts + '</select></div></div>',
         foot: _ctlUtil.foot('ncr')

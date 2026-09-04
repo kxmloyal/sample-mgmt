@@ -38,6 +38,15 @@ var _ctlUtil = {
     }
     return false;
   },
+  /** 追加 NCR 弹窗的委托单号建议值（2026-09-04 无纸化自动预填，可人工改）：
+   *  NCR-<管制单号>-<两位序号>，序号 = 该单已有 NCR 记录数 + 1（兜底 01）；数据不可用时回退 NCR-<管制单号> */
+  suggestNcrNo: function () {
+    var order = (_ctlDetailAgg && _ctlDetailAgg.order) || {};
+    if (!order.order_no) return '';
+    var n = ((_ctlDetailAgg && _ctlDetailAgg.ncrLogs) || []).length + 1;
+    var seq = (n >= 1 && n <= 99) ? ('0' + n).slice(-2) : '';
+    return seq ? ('NCR-' + order.order_no + '-' + seq) : ('NCR-' + order.order_no);
+  },
   /** 打开操作模态的配置：head（标题）/body（表单）/foot（按钮），字段 id 与 ctlSubmit 一致 */
   modalCfg: function (kind, action) {
     if (kind === 'sign') {
@@ -66,7 +75,7 @@ var _ctlUtil = {
       return {
         head: '追加不良品委托单',
         body: '<div class="ctl-form-grid">'
-          + '<div><label class="req">委托单号</label><input id="cf-ncr_no"></div>'
+          + '<div><label class="req">委托单号</label><input id="cf-ncr_no" value="' + _ctlUtil.suggestNcrNo() + '"></div>'
           + '<div><label>检验部门</label><select id="cf-inspect_dept"><option value="">请选择</option>' + deptOpts + '</select></div>'
           + '<div><label>处理部门</label><select id="cf-handle_dept"><option value="">请选择</option>' + deptOpts + '</select></div></div>',
         foot: _ctlUtil.foot('ncr')
