@@ -66,3 +66,11 @@
 - CAS 乐观锁（`version`+1）与 `verify_reject_count` 计数正确。
 
 结果：全部 PASS。
+
+---
+
+## 变更记录（2026-09-04）：验证权限收紧
+
+- **变更**：`VERIFY`/`VERIFY_REJECT` 权限由「申请部门 或 治具管理方（ME/QA/CUSTODY）」收紧为「**谁申请谁验证**（`u.dept === requested_dept`），ADMIN 兜底」。治具管理方不再可代验（避免裁判运动员责任归属问题，用户决策）。
+- **同步点位**：`fixture-actions-make.js canVerify`（含 2 处 403 文案）、`fixture-helpers.js allowedActions`、工作台「我的待办」`subsystems/workbench/db/my-todos.js` 待验证口径（三处同源）。
+- **兼容**：历史由管理方验证通过的存量数据不受影响；权限收紧为行为变更，无 schema 变更。上文 §权限 描述已被本节取代。

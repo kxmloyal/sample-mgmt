@@ -6,9 +6,9 @@
 //   治具 fixture：镜像 fixture-helpers.js allowedActions 权威权限表（2026-09-04 评审对齐，勿另行发明口径）：
 //     RD=REQUESTED(待接收)/ACCEPTED(制作中)/IMPROVING(改善中)/REPAIRING_RD(RD维修)；
 //     ME=REPAIRING_ME(ME维修)/REPAIR_DONE(待确认维修)/IMPROVING(改善中)/保养到期(TRANSFERRED|IN_USE 且 next_maintenance_at 到期)；
-//     治具管理方(ME/QA/CUSTODY)=VERIFY_PENDING(待验证)/TRANSFERRED(可领用 USE)/IMPROVING/IN_USE 逾期归还提醒；
-//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证，单人验证 canVerify 口径)；
-//     ADMIN=VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER，其余治具状态 ADMIN 无处理权限，不列待办)；
+//     治具管理方(ME/QA/CUSTODY)=TRANSFERRED(可领用 USE)/IMPROVING/IN_USE 逾期归还提醒；
+//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证，2026-09-04 收紧：谁申请谁验证 canVerify 口径)；
+//     ADMIN=VERIFY_PENDING 兜底验证 + VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER)；
 //     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)。
 //   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
 //     退回是会签的一部分，已由待我签核覆盖）；control_signs 待签行(decision 空) role 匹配=待我签核；
@@ -80,7 +80,8 @@ function fixtureTodoOf(f, u) {
       if (role === 'RD') reasons.push('制作中');
       break;
     case 'VERIFY_PENDING':
-      if (_isManager(role) || f.requested_dept === u.dept) reasons.push('待验证');
+      // 2026-09-04 收紧：谁申请谁验证（申请部门）+ ADMIN 兜底，与 canVerify/allowedActions 同源
+      if (f.requested_dept === u.dept || role === 'ADMIN') reasons.push('待验证');
       break;
     case 'VERIFY_RD_OK':
     case 'VERIFY_ORG_OK':

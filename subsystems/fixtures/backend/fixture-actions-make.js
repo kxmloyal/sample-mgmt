@@ -15,12 +15,13 @@ async function doMake(updated, u, ts, f, note, req, conn) {
 }
 
 // 单人验证：仅需申请部门人员验证即可移交（移除 RD 双人验证环节）
-// 判定依据:申请方(同部门)或治具管理方(ME/QA/CUSTODY)执行验证
+// 判定依据(2026-09-04 收紧)：谁申请谁验证（u.dept === requested_dept），ADMIN 兜底；
+// 移除原 ME/QA/CUSTODY 治具管理方代验权限（避免"裁判运动员"责任归属问题，用户决策）
 function canVerify(u, f) {
-  return u.dept === f.requested_dept || u.role === 'ME' || u.role === 'QA' || u.role === 'CUSTODY';
+  return u.dept === f.requested_dept || u.role === 'ADMIN';
 }
 async function doVerify(updated, u, ts, f, note) {
-  if (!canVerify(u, f)) throw { status: 403, message: '需要申请单位(' + f.requested_dept + ')或治具管理方(ME/QA/CUSTODY)执行验证' };
+  if (!canVerify(u, f)) throw { status: 403, message: '需要申请单位(' + f.requested_dept + ')执行验证（或管理员兜底）' };
   updated.verified_me = u.id; updated.verified_me_at = ts; updated.verify_note = note || '';
   updated.status = 'TRANSFERRED';
   updated.transferred_at = ts;
@@ -35,7 +36,7 @@ async function doVerify(updated, u, ts, f, note) {
 //   - 其余（初次制作 MAKE 进入）→ 退回 ACCEPTED 由 RD 重做
 // 登记验证不合格审计：verify_reject_by/at/note + 计数 verify_reject_count（可追溯次数与原因）
 async function doVerifyReject(updated, u, ts, f, note) {
-  if (!canVerify(u, f)) throw { status: 403, message: '需要申请单位(' + f.requested_dept + ')或治具管理方(ME/QA/CUSTODY)执行验证' };
+  if (!canVerify(u, f)) throw { status: 403, message: '需要申请单位(' + f.requested_dept + ')执行验证（或管理员兜底）' };
   if (!note || !note.trim()) throw { status: 400, message: '请填写验证不合格原因' };
   var returnTo = (f.improvement_count > 0) ? 'IMPROVING' : 'ACCEPTED';
   updated.status = returnTo;

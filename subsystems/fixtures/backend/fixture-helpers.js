@@ -24,7 +24,8 @@ async function allowedActions(role, status, fixture, userId, userDept) {
     rows.forEach(function(r) { if (r.category === 'design_drawing' && r.cnt > 0) hasDrawing = true; if (r.category === 'fixture_photo' && r.cnt > 0) hasPhoto = true; });
     if (hasDrawing && hasPhoto) actions.push('MAKE');
   }
-  if ((isMECustodyQA(role) || userDept === fixture.requested_dept) && status === 'VERIFY_PENDING') { actions.push('VERIFY'); actions.push('VERIFY_REJECT'); }
+  // VERIFY/VERIFY_REJECT（2026-09-04 收紧）：谁申请谁验证（申请部门），ADMIN 兜底；与 fixture-actions-make.js canVerify 同源同步
+  if ((userDept === fixture.requested_dept || role === 'ADMIN') && status === 'VERIFY_PENDING') { actions.push('VERIFY'); actions.push('VERIFY_REJECT'); }
   if (isMECustodyQA(role) && status === 'TRANSFERRED') actions.push('USE');
   if (isMECustodyQA(role) && status === 'IN_USE') actions.push('IMPROVE');
   if (isMECustodyQA(role) && status === 'IN_USE') { actions.push('RETURN'); actions.push('REPAIR_ME'); actions.push('REPAIR_RD_REQ'); }
