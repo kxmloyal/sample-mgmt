@@ -11,8 +11,10 @@
 //     ADMIN=VERIFY_PENDING 兜底验证 + VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER)；
 //     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)。
 //   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
-//     退回是会签的一部分，已由待我签核覆盖）；control_signs 待签行(decision 空) role 匹配=待我签核；
-//     ADMIN 对所有会签中单据可见。与 control 前端 todo.js 的差异：前端待我签核仅首步角色近似，本模块按任一待签行
+//     退回是会签的一部分，已由待我签核覆盖）；DRAFT 提交待办仅申请部门（apply_dept=我部门，起草人自己提交）；
+//     CUSTODY 职能池状态（入仓/报工/入库/出货）仅仓口部门（CTL_CUSTODY_DEPT_GATE，待办≠部门广播）；
+//     control_signs 待签行(decision 空) role 匹配=待我签核；ADMIN 对所有会签中单据可见。
+//     与 control 前端 todo.js 的差异：前端待我签核仅首步角色近似，本模块按任一待签行
 //     （会签已并行化，本口径更准）；前端 toFlow 含 REJECT 动作，本模块不含（评审 R6）。
 //   项目 project：project_tasks/project_subtasks assignee_id=本人且 status<>'DONE'（唯一按个人指派的子系统）。
 var D = require('../../../db');
@@ -147,27 +149,46 @@ async function collectFixtureTodos(u) {
 }
 
 /* ---------------- 管制 ---------------- */
+// CUSTODY 职能池仓口部门门槛（2026-09-04 收紧：待办只给仓口当事人部门，不再全 CUSTODY 部门广播；
+// ME/QA 为职能角色不受此门槛限制；DRAFT 提交待办单独按 apply_dept 匹配）
+var CTL_CUSTODY_DEPT_GATE = {
+  LABELED: ['资材部'],                            // 入管制仓：仓库口执行
+  REWORKING: ['生管部', '资材部', '制造部'],        // 报工：生产执行口
+  REWORK_REPORTED: ['资材部', '生管部'],            // 入库
+  REIN_STOCK: ['资材部', '生管部']                  // 出货
+};
+
 async function collectControlTodos(u) {
   var pool = D.pool();
   var byId = {}; // id → item（合并 待我流转/待我签核 两个来源）
 
   // 待我流转：transitions 角色匹配
   // 剔除 VOID（作废，破坏性）与 *_REJECT（会签退回是会签动作的一部分，已由待我签核覆盖，避免重复+语义混乱）
-  var flowMap = {}; // status → 动作 label
+  var flowMap = {}; // status → { label, action }
   (CTL_MANIFEST.stateMachine.transitions || []).forEach(function (t) {
     if (t.action === 'VOID' || t.action === 'SIGN_REJECT' || t.action === 'DISPOSAL_REJECT') return;
-    if (t.role.indexOf(u.role) !== -1 && !flowMap[t.from]) flowMap[t.from] = t.label;
+    if (t.role.indexOf(u.role) !== -1 && !flowMap[t.from]) flowMap[t.from] = { label: t.label, action: t.action };
   });
   var statuses = Object.keys(flowMap);
   if (statuses.length) {
     var ph = statuses.map(function () { return '?'; }).join(',');
     var [orders] = await pool.execute(
-      "SELECT id, order_no, part_name, status, updated_at FROM control_orders WHERE status IN (" + ph + ") ORDER BY updated_at DESC LIMIT 200",
+      "SELECT id, order_no, part_name, status, apply_dept, updated_at FROM control_orders WHERE status IN (" + ph + ") ORDER BY updated_at DESC LIMIT 200",
       statuses);
     orders.forEach(function (o) {
+      var fm = flowMap[o.status];
+      if (!fm) return;
+      // 部门门槛（2026-09-04）：DRAFT 提交会签 → 仅申请部门（起草人所在部门自己提交）；
+      // CUSTODY 职能池状态 → 仅仓口当事人部门（CTL_CUSTODY_DEPT_GATE）
+      if (o.status === 'DRAFT') {
+        if (o.apply_dept !== u.dept) return;
+      } else if (u.role === 'CUSTODY' && CTL_CUSTODY_DEPT_GATE[o.status]
+          && CTL_CUSTODY_DEPT_GATE[o.status].indexOf(u.dept) === -1) {
+        return;
+      }
       byId[o.id] = {
         id: o.id, item_type: 'control', item_no: o.order_no, name: o.part_name,
-        todo: '待流转：' + flowMap[o.status], status: o.status, status_cn: CONTROL_STATUS_CN[o.status] || o.status,
+        todo: '待流转：' + fm.label, status: o.status, status_cn: CONTROL_STATUS_CN[o.status] || o.status,
         urgent: false, hint: '', updated_at: o.updated_at
       };
     });
@@ -178,14 +199,14 @@ async function collectControlTodos(u) {
   var signRows;
   if (u.role === 'ADMIN') {
     var [r1] = await pool.execute(
-      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.updated_at FROM control_orders o " +
+      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at FROM control_orders o " +
       "WHERE o.status IN ('SIGNING','DISPOSAL_SIGNING') AND EXISTS (" +
       "  SELECT 1 FROM control_signs s WHERE s.order_id = o.id AND (s.decision IS NULL OR s.decision = '')" +
       ") ORDER BY o.updated_at DESC LIMIT 200");
     signRows = r1;
   } else {
     var [r2] = await pool.execute(
-      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.updated_at FROM control_signs s " +
+      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at FROM control_signs s " +
       "JOIN control_orders o ON o.id = s.order_id " +
       "WHERE (s.decision IS NULL OR s.decision = '') AND s.role = ? AND o.status IN ('SIGNING','DISPOSAL_SIGNING') " +
       "ORDER BY o.updated_at DESC LIMIT 200", [u.role]);
