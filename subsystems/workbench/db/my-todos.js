@@ -3,11 +3,11 @@
 //   样品 sample：RD=NEW(待制作确认)/RETURNING且retire_assigned_rd=本人(待重做)；QA=PRODUCED(待发行)/RETURNING(待审核退回)；
 //     CUSTODY|ME=RELEASED(待接收)；ADMIN=上述角色规则并集；其余角色(如 PM)=无样品待办。
 //     非 ADMIN 直接复用 D.listMyPendingSamples(role, userId)（与样品看板同一 DAO，数字互相印证）。
-//   治具 fixture：镜像 fixture-helpers.js allowedActions 权威权限表（2026-09-04 评审对齐，勿另行发明口径）：
+//   治具 fixture：allowedActions（权限）+ "行动主体才看待办"原则（2026-09-04，待办≠权限广播）：
 //     RD=REQUESTED(待接收)/ACCEPTED(制作中)/IMPROVING(改善中)/REPAIRING_RD(RD维修)；
 //     ME=REPAIRING_ME(ME维修)/REPAIR_DONE(待确认维修)/IMPROVING(改善中)/保养到期(TRANSFERRED|IN_USE 且 next_maintenance_at 到期)；
-//     治具管理方(ME/QA/CUSTODY)=TRANSFERRED(可领用 USE)/IMPROVING/IN_USE 逾期归还提醒；
-//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证，2026-09-04 收紧：谁申请谁验证 canVerify 口径)；
+//     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证)/TRANSFERRED(可领用)/IMPROVING(改善中)；
+//     借用人本人+借用部门+ME=IN_USE 归还逾期(expected_return_at 到期)；
 //     ADMIN=VERIFY_PENDING 兜底验证 + VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER)；
 //     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)。
 //   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
@@ -66,12 +66,15 @@ async function collectSampleTodos(u) {
 }
 
 /* ---------------- 治具 ---------------- */
-// 口径镜像 fixture-helpers.js allowedActions（权威）；RETURN/REPAIR_ME/REPAIR_RD_REQ/IMPROVE 为可选项不入待办，
-// RETIRE 为破坏性操作不入待办；MAKE 的图纸/照片文件门槛属执行时校验，待办仅按状态+角色提醒
+// 口径基准：allowedActions（权限）+ 2026-09-04 收紧的"行动主体才看待办"原则（待办 ≠ 权限广播）：
+// 待办只给当事人（申请人部门/借用人/借用部门）与职能口（RD 制作维修、ME 设备管理），旁观部门不广播。
+// RETURN/REPAIR_ME/REPAIR_RD_REQ/IMPROVE 为可选项不入待办，RETIRE 为破坏性操作不入待办；
+// MAKE 的图纸/照片文件门槛属执行时校验，待办仅按状态+角色提醒
 function fixtureTodoOf(f, u) {
   var reasons = [];
   var urgent = false;
   var role = u.role;
+  var borrower = f.used_by;
   switch (f.status) {
     case 'REQUESTED':
       if (role === 'RD') reasons.push('待接收');
@@ -80,7 +83,7 @@ function fixtureTodoOf(f, u) {
       if (role === 'RD') reasons.push('制作中');
       break;
     case 'VERIFY_PENDING':
-      // 2026-09-04 收紧：谁申请谁验证（申请部门）+ ADMIN 兜底，与 canVerify/allowedActions 同源
+      // 谁申请谁验证（申请部门）+ ADMIN 兜底，与 canVerify/allowedActions 同源
       if (f.requested_dept === u.dept || role === 'ADMIN') reasons.push('待验证');
       break;
     case 'VERIFY_RD_OK':
@@ -88,15 +91,19 @@ function fixtureTodoOf(f, u) {
       if (role === 'ADMIN') { reasons.push('死锁待强制移交'); urgent = true; } // F5 兜底态仅 ADMIN 可解锁
       break;
     case 'TRANSFERRED':
-      if (_isManager(role)) reasons.push('可领用');
+      // 可领用：申请部门（等着用）+ ME（设备台账管理口）；不再向 QA/CUSTODY 其他部门广播
+      if (f.requested_dept === u.dept || role === 'ME') reasons.push('可领用');
       break;
     case 'IN_USE':
-      if (_isManager(role) && f.expected_return_at && new Date(f.expected_return_at) <= new Date()) {
+      // 归还逾期：借用人本人 + 借用人部门 + ME（设备管理口催收/代办）；不再向 QA/CUSTODY 其他部门广播
+      if (f.expected_return_at && new Date(f.expected_return_at) <= new Date()
+          && (String(borrower) === String(u.id) || (f.used_by_dept && f.used_by_dept === u.dept) || role === 'ME')) {
         reasons.push('归还逾期'); urgent = true;
       }
       break;
     case 'IMPROVING':
-      if (role === 'RD' || _isManager(role)) reasons.push('改善中');
+      // 改善中：RD（改善主导）+ ME + 申请部门（等待方）；不再向 QA/CUSTODY 其他部门广播
+      if (role === 'RD' || role === 'ME' || f.requested_dept === u.dept) reasons.push('改善中');
       break;
     case 'REPAIRING_ME':
       if (role === 'ME') reasons.push('ME维修中');
@@ -113,22 +120,19 @@ function fixtureTodoOf(f, u) {
       && f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date()) {
     reasons.push('保养到期'); urgent = true;
   }
-  // 个人维度：我领用的治具归还逾期提醒（无论角色）
-  if (f.status === 'IN_USE' && String(f.used_by) === String(u.id)
-      && f.expected_return_at && new Date(f.expected_return_at) <= new Date()
-      && reasons.indexOf('归还逾期') === -1) {
-    reasons.push('归还逾期'); urgent = true;
-  }
+  // 个人维度已并入上方 IN_USE 归还逾期判定（借用人本人/借用部门/ME）
   if (!reasons.length) return null;
   return { todo: reasons.join('、'), urgent: urgent };
 }
 
 async function collectFixtureTodos(u) {
-  // 一次取回全部进行中治具（含死锁态），JS 侧按口径派生，避免超长 OR-SQL
+  // 一次取回全部进行中治具（含死锁态），JS 侧按口径派生，避免超长 OR-SQL；
+  // LEFT JOIN users 取借用人部门（归还逾期按借用部门广播用）
   var [rows] = await D.pool().execute(
-    "SELECT id, fixture_no, name, status, requested_dept, used_by, expected_return_at, next_maintenance_at, updated_at " +
-    "FROM fixtures WHERE status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE') " +
-    "ORDER BY updated_at DESC LIMIT 1000");
+    "SELECT f.id, f.fixture_no, f.name, f.status, f.requested_dept, f.used_by, ub.dept AS used_by_dept, f.expected_return_at, f.next_maintenance_at, f.updated_at " +
+    "FROM fixtures f LEFT JOIN users ub ON ub.id = f.used_by " +
+    "WHERE f.status IN ('REQUESTED','ACCEPTED','VERIFY_PENDING','VERIFY_RD_OK','VERIFY_ORG_OK','TRANSFERRED','IN_USE','IMPROVING','REPAIRING_ME','REPAIRING_RD','REPAIR_DONE') " +
+    "ORDER BY f.updated_at DESC LIMIT 1000");
   var out = [];
   rows.forEach(function (f) {
     var t = fixtureTodoOf(f, u);
