@@ -37,7 +37,10 @@ function fmtDate(v) {
   return s.slice(0, 10);
 }
 
-// 标签 HTML（左 QR + 管制信息）；autoPrint 控制是否 window.print()
+// 标签 HTML（左 QR + 管制信息）；autoPrint 控制是否自动调起打印
+// 2026-09-04 修复：原 autoPrint 脚本拼在 <head> 的 <style> 内部，成为 CSS 文本永不执行，
+// 导致「打印」按钮只开页面不弹打印预览；现移至 </body> 前独立 <script>，
+// 延迟 300ms 等待 QR 图片加载完成后再 window.print()
 function buildLabelHtml(o, qrDataUrl, autoPrint) {
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<title>管制标签 ' + esc(o.order_no) + '</title>'
@@ -45,7 +48,6 @@ function buildLabelHtml(o, qrDataUrl, autoPrint) {
     + '.qr{flex:0 0 168px;text-align:center}.qr img{width:168px;height:168px;display:block}.qr .no{margin-top:4px;font-size:12px;word-break:break-all}'
     + '.info{flex:1;font-size:13px;line-height:1.7}.info h2{margin:2px 0 6px;font-size:16px}.info .row{display:flex}.info .row .k{color:#444;width:72px;flex:0 0 72px}'
     + '.info .row .v{flex:1;font-weight:600}'
-    + (autoPrint ? '<script>window.onload=function(){window.print();}</script>' : '')
     + '</style></head><body>'
     + '<div class="label">'
     + '<div class="qr"><img src="' + qrDataUrl + '" alt="QR"><div class="no">' + esc(o.order_no) + '</div></div>'
@@ -58,7 +60,9 @@ function buildLabelHtml(o, qrDataUrl, autoPrint) {
     + '<div class="row"><span class="k">数量</span><span class="v">' + esc(o.qty) + '</span></div>'
     + '<div class="row"><span class="k">原因</span><span class="v">' + esc(o.reason) + '</span></div>'
     + '<div class="row"><span class="k">申请日期</span><span class="v">' + esc(fmtDate(o.apply_at)) + '</span></div>'
-    + '</div></div></body></html>';
+    + '</div></div>'
+    + (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},300);});</script>' : '')
+    + '</body></html>';
   return html;
 }
 
