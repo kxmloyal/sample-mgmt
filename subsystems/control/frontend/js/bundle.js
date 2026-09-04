@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmbqgs2 — 24 files */
+/** BUNDLE vbmtmccotg — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1182,20 +1182,22 @@ function renderNcrFormTab() {
   if (!agg || !agg.order) return '<div class="empty">暂无电子表单数据</div>';
   var o = agg.order;
 
-  // 报工子表最新一条（id 最大）作为处理结果；无则回退主表 good/ng/scrap
-  var rl = null;
-  (agg.reworkLogs || []).forEach(function (r) { if (!rl || r.id > rl.id) rl = r; });
+  // 2026-09-04 修复多批次矛盾：处理结果改用主单累计值（good/ng/scrap 为全部报工批次累加，
+  // 与出货结余校验同口径）；原逻辑数量取第一条、合格/不良/报废取最新一条，分批报工时自相矛盾。
+  // 批次/称重/确认人等仍取最新一条（表单呈现最近一次执行信息）。
+  var lastRl = null;
+  (agg.reworkLogs || []).forEach(function (r) { if (!lastRl || r.id > lastRl.id) lastRl = r; });
   // NCR 子表最新一条作为签核部门；无则空
   var nl = null;
   (agg.ncrLogs || []).forEach(function (n) { if (!nl || n.id > nl.id) nl = n; });
 
-  var good = rl ? rl.good_qty : o.good_qty;
-  var ng = rl ? rl.ng_qty : o.ng_qty;
-  var scrap = rl ? rl.scrap_qty : o.scrap_qty;
-  var batch = rl ? rl.batch_no : '';
-  var packRec = rl ? rl.pack_record : '';
-  var confirmBy = rl ? rl.confirm_by : '';
-  var qtyOk = rl ? (rl.qty_consistent ? '是' : '否') : '';
+  var good = o.good_qty;
+  var ng = o.ng_qty;
+  var scrap = o.scrap_qty;
+  var batch = lastRl ? lastRl.batch_no : '';
+  var packRec = lastRl ? lastRl.pack_record : '';
+  var confirmBy = lastRl ? lastRl.confirm_by : '';
+  var qtyOk = lastRl ? (lastRl.qty_consistent ? '是' : '否') : '';
 
   function fv(v) { return v == null || v === '' ? '—' : e(String(v)); }
   function row4(cells) { return '<div class="ncr-row ncr-c4">' + cells.join('') + '</div>'; }
@@ -1227,6 +1229,7 @@ function renderNcrFormTab() {
     // 处理结果
     + '<div class="ncr-sec">处理结果</div>'
     + row4([cell('全检/重工数量', fv(qtyOf(agg))), cell('不良品数', fv(ng)), cell('合格品数', fv(good)), cell('报废数', fv(scrap))])
+    + '<div class="ncr-row ncr-full"><span class="ncr-f">报废原因</span><span class="ncr-v">' + fv(lastRl ? lastRl.scrap_reason : (o.scrap_note || '')) + '</span></div>'
     + '<div class="ncr-row ncr-full"><span class="ncr-f">批次号</span><span class="ncr-v">' + fv(batch) + '</span></div>'
     + row4([cell('包装称重记录', fv(packRec)), cell('确认人', fv(confirmBy)), cell('确认数量是否一致', fv(qtyOk))])
     // 签署栏
@@ -1237,12 +1240,10 @@ function renderNcrFormTab() {
   return html;
 }
 
-// 处理结果「全检/重工数量」：报工子表为空时回退主表数量
+// 处理结果「全检/重工数量」= 良+不良+报废（主单累计值，与出货结余校验同源）
 function qtyOf(agg) {
   var o = agg.order || {};
-  var rl = (agg.reworkLogs || [])[0];
-  if (rl) return (Number(rl.good_qty || 0) + Number(rl.ng_qty || 0) + Number(rl.scrap_qty || 0));
-  return Number(o.qty || 0);
+  return (Number(o.good_qty) || 0) + (Number(o.ng_qty) || 0) + (Number(o.scrap_qty) || 0);
 }
 
 
