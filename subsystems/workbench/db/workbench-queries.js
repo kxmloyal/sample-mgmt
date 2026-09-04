@@ -22,6 +22,7 @@ var unionSQL = `
       WHEN 'PRODUCED' THEN '待发行'
       WHEN 'RELEASED' THEN '保管中'
       WHEN 'IN_CUSTODY' THEN '保管中'
+      WHEN 'CHECKED_OUT' THEN '领用中'
       WHEN 'RETURNING' THEN '退回审核中'
       WHEN 'RETIRED' THEN '已废弃'
     END AS stage_cn,
@@ -30,6 +31,7 @@ var unionSQL = `
       WHEN 'PRODUCED' THEN '研发部'
       WHEN 'RELEASED' THEN COALESCE(s.custody_dept, '品保文管中心')
       WHEN 'IN_CUSTODY' THEN COALESCE(s.custody_dept, '-')
+      WHEN 'CHECKED_OUT' THEN COALESCE(s.custody_dept, '-')
       WHEN 'RETURNING' THEN '品保文管中心'
       ELSE '-'
     END AS resp_dept,
@@ -40,7 +42,7 @@ var unionSQL = `
     TIMESTAMPDIFF(HOUR, s.updated_at, NOW()) AS dwell_hours,
     s.next_inspect_at,
     s.release_cycle_days,
-    NULL AS expected_return_at,
+    CASE WHEN s.status = 'CHECKED_OUT' THEN s.expected_return_at ELSE NULL END AS expected_return_at,
     NULL AS expected_finish_at,
     NULL AS next_maintenance_at,
     NULL AS transferred_at,
@@ -50,7 +52,7 @@ var unionSQL = `
     s.updated_at
   FROM samples s
   -- T13：排除软删除样品
-  WHERE s.deleted_at IS NULL AND s.status IN ('NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING')
+  WHERE s.deleted_at IS NULL AND s.status IN ('NEW','PRODUCED','RELEASED','IN_CUSTODY','CHECKED_OUT','RETURNING')
 
   UNION ALL
 

@@ -36,7 +36,7 @@ function register(app) {
 
   // 导出列表 CSV（复用列表筛选参数，忽略分页取全量；AGENTS.md §21 列表导出标准）
   // 注意：须注册在 GET /api/samples/:id 之前，避免 'export' 被 :id 捕获
-  const SAMPLE_STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
+  const SAMPLE_STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
   const INSPECT_SOON_DAYS = 7;
 
   /** 时间列格式化：mysql2 默认将 TIMESTAMP 列返回 Date 对象，统一转 ISO 后取 YYYY-MM-DD HH:mm；null/空 → '' */
@@ -77,6 +77,11 @@ function register(app) {
       { key: 'released_at', label: '发行时间', fmt: v => fmtTime(v) },
       { key: 'custody_dept', label: '保管部门' },
       { key: 'storage_location', label: '储位' },
+      { key: 'checkout_user', label: '领用人' },
+      { key: 'checkout_dept', label: '领用部门' },
+      { key: 'checkout_at', label: '领出时间', fmt: v => fmtTime(v) },
+      { key: 'expected_return_at', label: '应还时间', fmt: v => fmtTime(v) },
+      { key: 'returned_at', label: '归还时间', fmt: v => fmtTime(v) },
       { key: 'next_inspect_at', label: '复检到期', fmt: v => fmtTime(v) },
       { key: 'updated_at', label: '更新时间', fmt: v => fmtTime(v) }
     ];

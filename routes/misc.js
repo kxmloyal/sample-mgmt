@@ -22,16 +22,18 @@ function register(app) {
   // 看板
   app.get('/api/dashboard', requireAuth, async (req, res) => {
     const u = await currentUser(req);
-    var [rows, overdue, dueSoon, myPending] = await Promise.all([
+    var [rows, overdue, dueSoon, myPending, checkoutOverdue] = await Promise.all([
       D.countSamplesByStatus(),
       D.listOverdueSamples(),
       D.listDueSoonSamples(),
-      D.listMyPendingSamples(u.role, u.id)
+      D.listMyPendingSamples(u.role, u.id),
+      D.listCheckoutOverdue()
     ]);
-    var byStatus = { NEW: 0, PRODUCED: 0, RELEASED: 0, IN_CUSTODY: 0, RETURNING: 0, RETIRED: 0 };
+    var byStatus = { NEW: 0, PRODUCED: 0, RELEASED: 0, IN_CUSTODY: 0, CHECKED_OUT: 0, RETURNING: 0, RETIRED: 0 };
     var total = 0;
     for (var _i = 0; _i < rows.length; _i++) { var r = rows[_i]; byStatus[r.status] = Number(r.cnt); total += Number(r.cnt); }
-    res.json({ byStatus, total, overdue, dueSoon, myPending, role: u.role, dept: u.dept, display_name: u.display_name });
+    // 兼容：新增字段 checkoutOverdue 向后追加，旧前端忽略不受影响
+    res.json({ byStatus, total, overdue, dueSoon, myPending, checkoutOverdue, role: u.role, dept: u.dept, display_name: u.display_name });
   });
 
   // 日志（ADMIN 专属）
