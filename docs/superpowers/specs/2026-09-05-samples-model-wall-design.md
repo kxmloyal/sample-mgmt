@@ -43,5 +43,35 @@
 
 ## 五、状态
 
-- [x] 实施 + 部署（bundle v=见提交）+ 回归
-- 二期（后端 view=wall 聚合 + 状态徽章 + 复检逾期红标 + 封面图）：待用户安排宝塔重启窗口
+- [x] 一期实施 + 部署（bundle v=bmtms2rmm，css v=20260905a）+ 回归（提交 2998c78）
+- [x] 二期实施（见 §六）
+- 一期期间用户重启过一次后端（18:01，纯前端本不需重启）
+
+## 六、二期：后端 view=wall 聚合（2026-09-05）
+
+### 依赖清单（实施前已核）
+| 点位 | 结论 |
+|---|---|
+| `/api/samples/models` 调用方 ×4（models 管理 / new 下拉 / list 筛选下拉 / 机型墙） | 仅 `view=wall` 分支聚合返回；无参调用行为与结构不变 |
+| `D=require('../../../db')` 装配方式 | db.js `scanDao()` 按 `Object.keys(dao)` 展平透传 → 新增 DAO 方法自动暴露，无需改 db.js |
+| DAO 方法名跨子系统冲突 | 服务器现存 5 个 dao.js 均无 `aggregateModelsWall` 命名 → 无冲突；**注意**：db.js 冲突改名机制会加子系统前缀，治具后续做同款聚合须错开命名（如 aggregateFixtureModelsWall） |
+| 样品图片路径格式 | 前端列表/详情均直接 `<img src=e(s.produced_image||s.image)>` → 存完整 URL 路径，封面可直接用 |
+| 逾期口径 | 复检=dao.js ISO_UTC 规范化+IN_CUSTODY；领用超时=同法+CHECKED_OUT+expected_return_at（listCheckoutOverdue 同款）；聚合 SQL 逐字对齐 |
+| 缓存 | 新键 `sl_sample_models_wall` 加入 MODEL_CACHE_KEYS → POST/DELETE 机型即时失效 |
+
+### 变更内容
+- db/dao.js：+`aggregateModelsWall()`（两条 GROUP BY 只读 SQL，Promise.all 合并；封面取 MIN(id|图) 解析为 {id,photo}）
+- routes-samples-models.js：GET models 入口 `view=wall` 增量分支（主数据左联聚合，缺省补 0/空）；缓存键同步失效
+- views/model-wall.js：优先聚合渲染（状态徽章/复检逾期红标/领用超时橙标/封面图/汇总行）；旧后端返回纯主数据时自动回退一期并发计数
+- css/module.css：+徽章/角标/红边样式段（css `?v=20260905b`）
+
+### 兼容与回滚
+- 前端先上：旧后端（忽略 view 参数）→ 自动一期渲染，**零中断**；后端重启后自动升级
+- 回滚 = git revert 后端两文件（聚合为纯增量，无 schema 变更）；前端检测不到 sample_count 自动降级
+- **生效条件：宝塔重启 node 进程**（重启前 wall 页保持一期形态）
+
+### 验证记录
+- DAO 级：假依赖单测（q 桩按 SQL 区分两结果集）断言 sample_count/overdue/cover 解析/status_stats 合并 —— 部署脚本内联执行
+- 路由级：静态断言（view=wall 分支 / D.aggregateModelsWall 调用 / 聚合缓存键）+ `node --check`（模块 require 依赖运行时 DB 环境，接口行为留待重启后实测）
+- 静态链路：线上 bundle 含 smw-badge/has-overdue/checkout_overdue；css 含新段
+- 重启后待验：`GET /api/samples/models?view=wall`（登录态）返回 sample_count>0 且含 status_stats；机型墙显示徽章（回退消失）

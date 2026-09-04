@@ -39,3 +39,11 @@
 .smw-count{font-size:12px;margin-top:6px}
 .smw-count b{font-size:16px}
 @media(max-width:767px){.smw-grid{grid-template-columns:repeat(2,1fr)}}
+/* 二期聚合徽章（2026-09-05）：状态分布/逾期红标/领用超时橙标/封面图 */
+.smw-cover{position:relative}
+.smw-cover img{width:100%;height:100%;object-fit:cover}
+.smw-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:#dcfce7;color:#166534}
+.smw-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.smw-flag{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;font-size:11px;background:#fee2e2;color:#b91c1c;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.smw-flag-inline{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;background:#ffedd5;color:#c2410c;font-weight:600;vertical-align:1px}
+.smw-card.has-overdue{border-color:#fecaca}

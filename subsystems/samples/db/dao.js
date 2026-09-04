@@ -199,5 +199,36 @@ module.exports = function createDao(deps) {
   function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE deleted_at IS NULL AND model = ?', [code]).then(function (rows) { return rows[0].c; }); }
   function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
 
-  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
+  // 机型视图聚合（2026-09-05 二期，只读）：每机型样品总数/复检逾期/领用超时/状态分布/封面图
+  // 逾期口径与 listOverdueSamples / listCheckoutOverdue 一致：ISO UTC 字符串规范化后与当前 UTC 比较
+  // 封面图取该机型最早样品的制作图（produced_image 优先，退 image——与前端列表缩略图取值口径相同），存完整 URL 路径可直接作 img src
+  function aggregateModelsWall() {
+    var ISO = function (col) { return "LEFT(REPLACE(REPLACE(" + col + ",'T',' '),'Z',''),19)"; };
+    var NOW = "LEFT(UTC_TIMESTAMP(),19)";
+    return Promise.all([
+      q("SELECT model AS code, COUNT(*) AS sample_count, " +
+        "SUM(CASE WHEN status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO('next_inspect_at') + " < " + NOW + " THEN 1 ELSE 0 END) AS overdue_count, " +
+        "SUM(CASE WHEN status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO('expected_return_at') + " < " + NOW + " THEN 1 ELSE 0 END) AS checkout_overdue_count, " +
+        "MIN(CASE WHEN produced_image IS NOT NULL AND produced_image != '' THEN CONCAT(id,'|',produced_image) WHEN image IS NOT NULL AND image != '' THEN CONCAT(id,'|',image) END) AS cover_raw " +
+        "FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' GROUP BY model"),
+      q("SELECT model AS code, status, COUNT(*) AS cnt FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' GROUP BY model, status")
+    ]).then(function (rs) {
+      var byCode = {};
+      (rs[0] || []).forEach(function (r) {
+        var cover = null;
+        if (r.cover_raw) { var p = String(r.cover_raw).split('|'); cover = { id: Number(p[0]) || 0, photo: p.slice(1).join('|') }; }
+        byCode[r.code] = { sample_count: Number(r.sample_count) || 0, overdue_count: Number(r.overdue_count) || 0, checkout_overdue_count: Number(r.checkout_overdue_count) || 0, cover: cover };
+      });
+      var statusStats = {};
+      (rs[1] || []).forEach(function (r) {
+        if (!statusStats[r.code]) statusStats[r.code] = {};
+        statusStats[r.code][r.status] = Number(r.cnt) || 0;
+      });
+      return Object.keys(byCode).map(function (code) {
+        return Object.assign({ code: code, status_stats: statusStats[code] || {} }, byCode[code]);
+      });
+    });
+  }
+
+  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels, aggregateModelsWall };
 };

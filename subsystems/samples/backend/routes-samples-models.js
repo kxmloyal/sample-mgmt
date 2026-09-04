@@ -4,8 +4,8 @@ const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
 const cache = require('../../../shared/cache');
 
-// 机型主数据为共享表(sample_models)：写入后须失效样品侧机型/下拉缓存
-const MODEL_CACHE_KEYS = ['sl_sample_models', 'sl_sample_model_options'];
+// 机型主数据为共享表(sample_models)：写入后须失效样品侧机型/下拉缓存（含机型视图聚合缓存，2026-09-05 二期）
+const MODEL_CACHE_KEYS = ['sl_sample_models', 'sl_sample_model_options', 'sl_sample_models_wall'];
 function invalidateModelCaches() { MODEL_CACHE_KEYS.forEach(function (k) { cache.del(k); }); }
 
 function register(app) {
@@ -15,6 +15,28 @@ function register(app) {
   // 机型列表：GET 所有登录角色可读（新建下拉/筛选数据源）；POST/DELETE 仅 RD/ADMIN（须注册在 /:id 之前）
   // 字典缓存：机型为低变数据，TTL 60s；写操作走 invalidateModelCaches 即时失效（见 AGENTS.md 性能优化）
   app.get('/api/samples/models', requireAuth, asyncHandler(async (req, res) => {
+    // 机型视图聚合（2026-09-05 二期，增量分支）：view=wall → 主数据 + 样品数/复检逾期/领用超时/状态分布/封面图
+    // 兼容：不带 view 参数的调用（models 管理/新建下拉/列表筛选）行为与返回结构不变
+    if ((req.query || {}).view === 'wall') {
+      const cachedWall = cache.get('sl_sample_models_wall');
+      if (cachedWall !== undefined) return res.json(cachedWall);
+      const [models, wall] = await Promise.all([D.listModels(), D.aggregateModelsWall()]);
+      const byCode = {};
+      (wall || []).forEach(function (r) { byCode[r.code] = r; });
+      const merged = (models || []).map(function (m) {
+        const s = byCode[m.code] || {};
+        return {
+          code: m.code, full_name: m.full_name,
+          sample_count: s.sample_count || 0,
+          overdue_count: s.overdue_count || 0,
+          checkout_overdue_count: s.checkout_overdue_count || 0,
+          status_stats: s.status_stats || {},
+          cover: s.cover || null
+        };
+      });
+      cache.set('sl_sample_models_wall', merged);
+      return res.json(merged);
+    }
     let cached = cache.get('sl_sample_models');
     if (cached === undefined) {
       cached = await D.listModels();
