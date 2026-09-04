@@ -205,11 +205,12 @@
 - 变更出入参 MUST 保留旧参数兼容,排查下游
 
 ### 状态机
-**样品**:`NEW → PRODUCED → RELEASED → IN_CUSTODY → RETURNING → RETIRED`
+**样品**:`NEW → PRODUCED → RELEASED → IN_CUSTODY ⇄ CHECKED_OUT(领用中) → RETURNING → RETIRED`
 - 研发扫码 → PRODUCED
 - 品保扫码 → RELEASED
 - 保管扫码 → IN_CUSTODY
-- 周期到点 → 派生「待复检」/「逾期」
+- 保管/生技领出(CHECKOUT) → CHECKED_OUT；归还(RETURN_OUT) → IN_CUSTODY（2026-09-05，仅 CUSTODY/ME）
+- 周期到点 → 派生「待复检」/「逾期」；领用超时未归还 → 派生预警（非状态）
 
 **治具**:`REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`,另有 `IN_USE←IMPROVING` 改善流程。验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为历史状态（旧双人验证，存量数据兼容）
 - RD制作 → VERIFY_PENDING
@@ -225,6 +226,8 @@
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06），建议门户块拆独立样式文件（需三系统回归）
+- `subsystems/samples/db/dao.js` 达 ≈90% 字符红线（18044/20000，2026-09-05 领用+机型墙聚合后），后续 samples 迭代仅允许精简/重构，建议按域拆分 dao 文件
+- 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
 ## 12. 验证清单(提交前自检)
 
@@ -347,6 +350,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 - 卡片圆角/过渡/阴影 MUST 使用 app.css 的 `--card-radius`/`--card-hover`/`--card-shadow-hover` token，禁止硬编码
 - 统计卡 MUST 使用共享 `.kb-stat`（fluent-card + `.n`/`.l` + 可选 `.x` 扩展区），禁止自建卡片类
 - 交互协议：hover 上浮 / 单击筛选 / 再次单击取消 / active 高亮；双击跳列表（仅单一子系统看板）
+- 渲染组件：`shared/frontend/kb-stats.js` 的 `KbStats.render`（samples/fixtures/projects 已登记 bundle；control/workbench 未接入；samples 看板为协议等价内联实现）
 - 子系统补充样式（如积压标签 `.wb-tag`）写入本子系统 `module.css`
 
 ### 16.2 Claude 禁止行为（卡片相关）

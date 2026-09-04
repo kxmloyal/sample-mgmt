@@ -66,6 +66,19 @@
       ]
     },
     {
+      "key": "wall",
+      "label": "机型视图",
+      "icon": "cube",
+      "view": "viewSampleModelWall",
+      "roles": [
+        "ADMIN",
+        "RD",
+        "QA",
+        "CUSTODY",
+        "ME"
+      ]
+    },
+    {
       "key": "new",
       "label": "新建样品",
       "icon": "add",

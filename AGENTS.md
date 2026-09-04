@@ -24,7 +24,7 @@
 - 管理员:用户管理、全局查看、治具报废
 
 **状态机**:
-- 样品:`NEW → PRODUCED → RELEASED → IN_CUSTODY → RETURNING → RETIRED`
+- 样品:`NEW → PRODUCED → RELEASED → IN_CUSTODY ⇄ CHECKED_OUT(领用中, CHECKOUT/RETURN_OUT 仅 CUSTODY/ME, 2026-09-05) → RETURNING → RETIRED`（领用超时未归还是派生预警，非独立状态）
 - 治具:`REQUESTED → ACCEPTED → VERIFY_PENDING → TRANSFERRED ⇄ IN_USE → REPAIRING_ME/REPAIRING_RD → REPAIR_DONE → TRANSFERRED → RETIRED`，另有 `IN_USE←IMPROVING` 改善流程。验证为**单人验证**（申请部门人员验证即可移交）；`VERIFY_RD_OK/VERIFY_ORG_OK` 为历史状态（旧双人验证，存量数据兼容）
 
 ## 2. 技术栈
@@ -298,7 +298,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 返回 JSON,错误格式 `{ "error": "..." }`,HTTP 状态码语义化
 - 鉴权:session cookie(`requireAuth` 中间件)
 - 角色:`ADMIN`/`RD`/`ME`/`QA`/`CUSTODY`,接口需校验角色权限
-- 样品状态:`NEW`/`PRODUCED`/`RELEASED`/`IN_CUSTODY`/`RETURNING`/`RETIRED`
+- 样品状态:`NEW`/`PRODUCED`/`RELEASED`/`IN_CUSTODY`/`CHECKED_OUT`(领用中)/`RETURNING`/`RETIRED`
 - 治具状态:`REQUESTED`/`ACCEPTED`/`VERIFY_PENDING`/`VERIFY_RD_OK`/`VERIFY_ORG_OK`/`TRANSFERRED`/`IN_USE`/`IMPROVING`/`REPAIRING_ME`/`REPAIRING_RD`/`REPAIR_DONE`/`RETIRED`
 
 **变更 API 出入参** MUST 保留旧参数做兼容,全量排查下游(前端页面、第三方对接)。
@@ -338,6 +338,9 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
 - `db/migrations.js` 顶层函数 11 个（批次 2 新增 deleted_at 迁移后突破 §7.2 ≤10 上限，2026-09-01 记录），建议下批次拆分为 `db/migrations/` 目录按域分文件
 - `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
+- `subsystems/samples/db/dao.js` 2026-09-05（领用功能 + 机型墙聚合）后达 234 行 / 18044 字符（≈90% 字符红线），已达 90% 阈值——后续 samples 迭代**仅允许精简/重构**（建议按 建样序号/列表查询/机型 三个域拆分 dao 文件），禁止直接追加新查询函数
+- 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
+- db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
 
 ## 15. 禁止行为黑名单
 
@@ -827,6 +830,8 @@ module.exports = { register, initDB, seed };
 | active | 边框高亮 + `--stat-color` 2px 光环 + `#eef2ff` 背景 |
 
 **颜色语义（--stat-color）**：品牌/待办 = `var(--brand)`；警告/待验证 = `var(--warn)`；进行中 = `#1d4ed8`/`#065f46`/`#92400e`；危险/逾期 = `var(--bad)`。
+
+**渲染组件（2026-09-04）**：`shared/frontend/kb-stats.js` 提供 `KbStats.render(cards, opts)`（opts.click = filter/navigate、filterHandler、activeIndex）统一生成统计卡 HTML 与双击绑定；登记于 bundle-sources 的 samples/fixtures/projects 数组（control/workbench 未接入）。samples 看板当前为等价内联实现（协议一致），迁移统一时见 §14 技术债条目。
 
 ### 18.4 新子系统导入方法
 

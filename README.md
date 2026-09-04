@@ -29,14 +29,16 @@
 ### 状态机
 
 ```
-NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
+NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中) ⇄ CHECKED_OUT(领用中)
                                                     ↓
                                             RETURNING(退回审核中)
                                                     ↓
                                             RETIRED(已作废)
 ```
 
-周期到点派生 **待复检 / 逾期**（看板高亮预警）。
+周期到点派生 **待复检 / 逾期**（看板高亮预警）；领用超时未归还派生 **超时未还** 预警（看板/机型视图高亮，非独立状态）。
+
+> 注（2026-09-05 样品领用）：IN_CUSTODY 可由保管/生技**领出**（CHECKOUT，领用时长 1 小时~1 年 + 领用部门）→ CHECKED_OUT；归还（RETURN_OUT）→ IN_CUSTODY 并清空领用人字段、记录实际借用时长；CHECKED_OUT 期间保管/生技的「申请退回」入口隐藏（品保不受限）。
 
 > 注：IN_CUSTODY 临期（距复检日 ≤7 天，含逾期）支持 QA「到期复检」自环（INSPECT_CUSTODY）——样品不脱离保管，复检通过后顺延复检日、标示卡版次自动 +1 并触发重打（2026-09-01 批次 1）。
 
@@ -51,6 +53,8 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 | RELEASED(已发行) | 保管(CUSTODY) | → IN_CUSTODY | 填写储位 |
 | IN_CUSTODY 到期 | 品保(QA) | 复检 | 上传复检照片 |
 | IN_CUSTODY 临期(≤7天) | 品保(QA) | → IN_CUSTODY 到期复检 | 复检照片+周期(可沿用)+版次自动+1+触发重打 |
+| IN_CUSTODY | 保管/生技(CUSTODY/ME) | → CHECKED_OUT 领出 | 填领用时长(1h~1年)+领用部门（2026-09-05）|
+| CHECKED_OUT | 保管/生技(CUSTODY/ME) | → IN_CUSTODY 归还入库 | 记录实际借用时长（2026-09-05）|
 | IN_CUSTODY | 保管(CUSTODY) | → RETURNING | 填写退回原因 |
 | RETURNING | 品保(QA) | 多分支：重新发行/退回研发/直接作废/拒绝退回 | — |
 | RETURNING(退回审核中) | 管理员(ADMIN) | 兜底：强制改派 FORCE_REASSIGN / 强制作废 FORCE_RETIRE | 卡死兜底：改派须选启用状态 RD；作废须填原因（2026-09-01 批次 2）|
@@ -58,11 +62,19 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 ### 样品列表
 
-- 多维度组合筛选（状态/部门/类型/限度项目/来源 + 关键词搜索）
+- 多维度组合筛选（状态/部门/类型/限度项目/来源/机型 + 关键词搜索；支持 `#/samples?model=机型码` 深链预选机型）
 - 快捷筛选（待处理/逾期/近7天到期）+ 芯片可视化
 - 响应式表格（table-layout:fixed + colgroup）+ 列宽拖拽
 - 移动端 data-label 卡片式布局
 - 分页（默认 20 条/页）
+
+### 机型视图（模型墙，2026-09-05）
+
+按机型聚合的样品总览卡片墙：左侧菜单「机型视图」或样品列表工具栏入口进入。
+
+- 卡片信息：机型短码 / 全称 / 样品总数与各状态徽章（保管中/领用中/退回审核中等）/ 复检逾期红标 / 超时未还橙标 / 封面图（取该机型最早样品的制作照片）
+- 点击卡片 → 深链 `#/samples?model=机型码` 预选机型筛选；支持按编码/全称搜索
+- 数据接口 `GET /api/samples/models?view=wall`（后端 GROUP BY 聚合，60s 缓存，机型写入时失效）
 
 ### 样品详情弹窗
 
@@ -282,7 +294,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/me` | GET | 是 | 当前用户信息 |
 | `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
 | `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
-| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页）|
+| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
@@ -294,6 +306,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples/cards/print` | GET | 是 | 批量打印标示卡（ids 逗号分隔、一次 ≤50，单页多卡 + @page 分页）|
 | `/api/samples/:id/images` | GET | 是 | 样品历史照片列表（制作/复检全量留痕，时间倒序）|
 | `/api/samples/export` | GET | 是 | 样品列表导出 CSV（复用筛选参数，忽略分页）|
+| `/api/samples/models` | GET | 是 | 机型 CRUD 列表；`?view=wall` 返回机型墙聚合（各状态计数/复检逾期/超时未还/封面，60s 缓存，2026-09-05）|
 | `/api/fixtures` | GET | 是 | 治具列表（筛选/排序/分页）|
 | `/api/fixtures/export` | GET | 是 | 治具清单导出 CSV（复用筛选/排序参数，忽略分页）|
 | `/api/fixtures` | POST | 是 | 新建治具申请 |
@@ -326,7 +339,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/control/logs` | GET | 是 | 管制操作日志 |
 | `/api/control/settings` | GET/PUT | 是 | 管制子系统参数设置 |
 | `/api/resolve` | GET | 是 | 解析扫码内容 |
-| `/api/scan` | POST | 是 | 执行扫码操作（状态机；全链路乐观锁 CAS，版本冲突返回 409，请刷新后重试）|
+| `/api/scan` | POST | 是 | 执行扫码操作（状态机；全链路乐观锁 CAS，版本冲突返回 409，请刷新后重试；新增 CHECKOUT/RETURN_OUT 领用/归还动作，2026-09-05）|
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
 | `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats/applyDepts |
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
