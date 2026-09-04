@@ -12,6 +12,8 @@ function register(app) {
   require('./routes-risks').register(app);        // OA 移植：风险（/risks 静态前缀 + /:id/risks 列表）
   require('./routes-modelrefs').register(app);    // OA 移植二期：机型引用（/model-options 静态 + /:id/models）
   require('./routes-changes').register(app);      // OA 移植二期：变更单（/changes 静态前缀 + /:id/changes 列表）
+  require('./routes-templates').register(app);    // OA 移植二期批次2：项目模板（/templates 静态前缀）
+  require('./routes-graph').register(app);        // OA 移植二期批次3：关系+图谱聚合（/relations /graph 静态前缀）
   require('./routes-extras').register(app);       // OA 移植：预算/成本扩展（/:id/extras）
   require('./routes-projects').register(app);     // 最后注册 /:id 参数路由
 }

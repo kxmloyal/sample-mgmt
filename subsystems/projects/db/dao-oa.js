@@ -1,4 +1,4 @@
-// subsystems/projects/db/dao-oa.js — OA 能力移植数据访问层（里程碑/风险/预算扩展/变更单/机型引用）
+// subsystems/projects/db/dao-oa.js — OA 能力移植数据访问层（里程碑/风险/预算扩展/变更单/机型引用/模板/项目关系）
 // 方案A纯增量：只新增函数，不改现有 dao*.js 任何函数；工厂模式由 dao.js 聚合注入
 module.exports = function createDaoOa(deps) {
   var q = deps.q, one = deps.one, run = deps.run;
@@ -199,11 +199,67 @@ module.exports = function createDaoOa(deps) {
     return row ? row.n : 1;
   }
 
+  // ===== 项目模板（二期批次2） =====
+  async function listTemplates(conn) {
+    return fetchAll(conn, 'SELECT * FROM project_templates WHERE is_active=1 ORDER BY id DESC');
+  }
+  async function getTemplate(conn, id) {
+    return fetchOne(conn, 'SELECT * FROM project_templates WHERE id=? AND is_active=1', [id]);
+  }
+  async function createTemplate(conn, data, userId) {
+    const r = await conn.execute(
+      'INSERT INTO project_templates (name,description,tasks_json,milestones_json,created_by) VALUES (?,?,?,?,?)',
+      [data.name, data.description || '', data.tasks_json || '[]', data.milestones_json || '[]', userId]);
+    return { id: r[0].insertId };
+  }
+  async function updateTemplate(conn, id, data) {
+    const r = await conn.execute(
+      'UPDATE project_templates SET name=?, description=?, tasks_json=?, milestones_json=? WHERE id=? AND is_active=1',
+      [data.name, data.description || '', data.tasks_json || '[]', data.milestones_json || '[]', id]);
+    return { changed: r[0].affectedRows };
+  }
+  async function deleteTemplate(conn, id) {
+    // 停用式删除（兼容迭代）：保留历史数据，不再出现在列表/实例化
+    const r = await conn.execute('UPDATE project_templates SET is_active=0 WHERE id=?', [id]);
+    return { changed: r[0].affectedRows };
+  }
+  async function incrTemplateInstance(conn, id) {
+    await conn.execute('UPDATE project_templates SET instance_count=instance_count+1 WHERE id=?', [id]);
+  }
+
+  // ===== 项目关系（二期批次3；图谱数据源） =====
+  async function listRelations(conn) {
+    return fetchAll(conn, 'SELECT * FROM project_relations ORDER BY id DESC');
+  }
+  async function addRelation(conn, data, userId) {
+    // 幂等：UNIQUE(from,to,type,custom_type) 冲突时不重复插入
+    // custom_type 用空串而非 NULL（MySQL 唯一索引不约束 NULL，NULL 会导致幂等失效）
+    const r = await conn.execute(
+      'INSERT IGNORE INTO project_relations (from_project_id,to_project_id,relation_type,custom_type,note,created_by) VALUES (?,?,?,?,?,?)',
+      [data.from_project_id, data.to_project_id, data.relation_type, data.custom_type || '', data.note || null, userId]);
+    return { changed: r[0].affectedRows };
+  }
+  async function removeRelation(conn, id) {
+    const r = await conn.execute('DELETE FROM project_relations WHERE id=?', [id]);
+    return { changed: r[0].affectedRows };
+  }
+  async function getRelation(conn, id) {
+    return fetchOne(conn, 'SELECT * FROM project_relations WHERE id=?', [id]);
+  }
+  // 全部「项目-机型」引用对（图谱 SHARES_MODEL 自动推导用；JOIN 取机型 code）
+  async function listAllModelRefPairs(conn) {
+    return fetchAll(conn,
+      'SELECT r.project_id, r.model_id, m.code AS model_code FROM project_model_refs r ' +
+      'LEFT JOIN sample_models m ON m.id=r.model_id');
+  }
+
   return {
     listMilestones, getMilestone, createMilestone, updateMilestone, achieveMilestone, deleteMilestone,
     listRisks, getRisk, createRisk, updateRisk, resolveRisk, deleteRisk,
     getProjectExtras, saveProjectExtras,
     listChanges, getChange, createChange, updateChange, approveChange, deleteChange,
-    listModelRefs, addModelRef, removeModelRef, getModelExists, listAllModels, nextChangeSeq
+    listModelRefs, addModelRef, removeModelRef, getModelExists, listAllModels, nextChangeSeq,
+    listTemplates, getTemplate, createTemplate, updateTemplate, deleteTemplate, incrTemplateInstance,
+    listRelations, addRelation, removeRelation, getRelation, listAllModelRefPairs
   };
 };

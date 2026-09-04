@@ -7,10 +7,13 @@ const NAV=[
   {k:'milestones',t:'里程碑',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'risks',t:'风险管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'changes',t:'变更管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'gantt',t:'甘特图',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'graph',t:'关系图谱',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'templates',t:'项目模板',roles:['ADMIN','PM']},
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
-const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,workflow:renderWorkflow};
-const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',workflow:'状态机管理'};
+const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,gantt:renderGantt,graph:renderGraph,templates:renderTemplates,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',gantt:'甘特图',graph:'关系图谱',templates:'项目模板',workflow:'状态机管理'};
 function route(){
   // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');

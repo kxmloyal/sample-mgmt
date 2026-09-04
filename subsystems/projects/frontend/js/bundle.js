@@ -1,4 +1,4 @@
-/** BUNDLE vbmtml9qiy — 18 files */
+/** BUNDLE vbmtmmnmf0 — 21 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -249,7 +249,15 @@ const PApi = {
   changeApprove: cid => '/api/projects/changes/' + cid + '/approve',
   modelOptions: '/api/projects/model-options',
   modelRefs: pid => '/api/projects/' + pid + '/models',
-  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid
+  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid,
+  // OA 能力移植（二期批次2）：项目模板
+  templates: '/api/projects/templates',
+  template: tid => '/api/projects/templates/' + tid,
+  templateInstantiate: tid => '/api/projects/templates/' + tid + '/instantiate',
+  // OA 能力移植（二期批次3）：关系 + 图谱
+  relations: '/api/projects/relations',
+  relation: rid => '/api/projects/relations/' + rid,
+  graph: '/api/projects/graph'
 };
 
 
@@ -1306,6 +1314,517 @@ async function cgDel(cid) {
 }
 
 
+/* --- subsystems/projects/frontend/js/views/templates.js --- */
+// templates.js — OA 移植二期批次2：项目模板（卡片列表 + 清单编辑 + 从模板创建项目向导）
+// 仅 ADMIN/PM 可见此导航（router roles 控）；后端同权限校验兜底
+var TPL_CATEGORY_CN = { equipment: '设备', quality: '质量', process: '流程', safety: '安全', other: '其他' };
+
+async function renderTemplates() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-button appearance="accent" onclick="tplCreate()">新建模板</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="renderTemplates()">刷新</fluent-button></div>' +
+    '<div id="tpl-list" class="pk-stats" style="margin-top:10px"></div>';
+  const list = await api('GET', PApi.templates);
+  if (!list.length) { $('#tpl-list').innerHTML = '<div class="empty-hint">暂无模板，点击「新建模板」创建</div>'; return; }
+  $('#tpl-list').innerHTML = list.map(function (t) {
+    return '<fluent-card class="kb-stat">' +
+      '<span class="n" style="font-size:15px;color:var(--brand)">' + esc(t.name) + '</span>' +
+      (t.description ? '<span class="l">' + esc(t.description) + '</span>' : '') +
+      '<span class="l">任务 ' + t.tasks.length + ' · 里程碑 ' + t.milestones.length + ' · 已实例化 ' + t.instance_count + ' 次</span>' +
+      '<span class="kb-x">' +
+      '<fluent-button appearance="accent" size="small" onclick="tplWizard(' + t.id + ',\'' + esc(t.name).replace(/'/g, '') + '\')">从模板创建项目</fluent-button> ' +
+      '<fluent-button appearance="secondary" size="small" onclick="tplEdit(' + t.id + ')">编辑</fluent-button> ' +
+      '<fluent-button appearance="secondary" size="small" onclick="tplDel(' + t.id + ',\'' + esc(t.name).replace(/'/g, '') + '\')">停用</fluent-button></span>' +
+      '</fluent-card>';
+  }).join('');
+}
+
+// 模板新建/编辑弹窗（任务/里程碑清单按行编辑，行内 5 列/2 列）
+function tplForm(title, t, tid) {
+  t = t || { name: '', description: '', tasks: [], milestones: [] };
+  const taskRows = t.tasks.map(function (x, i) { return tplTaskRow(i, x); }).join('') || tplTaskRow(0, {});
+  const msRows = t.milestones.map(function (x, i) { return tplMsRow(i, x); }).join('') || tplMsRow(0, {});
+  openModal(title,
+    '<div class="pk-form">' +
+    '<label>模板名称 *</label><fluent-text-field id="tf-name" value="' + esc(t.name) + '"></fluent-text-field>' +
+    '<label>模板说明</label><fluent-text-area id="tf-desc">' + esc(t.description || '') + '</fluent-text-area>' +
+    '<label style="margin-top:8px">任务清单（偏移天数=距项目启动日；工期天仅备注用）</label>' +
+    '<div id="tf-tasks">' + taskRows + '</div>' +
+    '<fluent-button appearance="neutral" size="small" onclick="tplAddTask()">+ 加任务</fluent-button>' +
+    '<label style="margin-top:8px">里程碑清单（目标偏移天数=距项目启动日）</label>' +
+    '<div id="tf-ms">' + msRows + '</div>' +
+    '<fluent-button appearance="neutral" size="small" onclick="tplAddMs()">+ 加里程碑</fluent-button>' +
+    '</div>',
+    { wide: true, foot: '<fluent-button appearance="accent" size="small" onclick="' + (tid ? 'tplSave(' + tid + ')' : 'tplSave()') + '">保存</fluent-button>' +
+        '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+function tplTaskRow(i, x) {
+  return '<div class="pk-row" style="display:flex;gap:4px;margin:3px 0" data-tpl-task>' +
+    '<input placeholder="任务标题" value="' + esc(x.title || '') + '" style="flex:3" data-k="title">' +
+    '<select style="flex:1" data-k="category">' + Object.keys(TPL_CATEGORY_CN).map(function (k) { return '<option value="' + k + '"' + (x.category === k ? ' selected' : '') + '>' + TPL_CATEGORY_CN[k] + '</option>'; }).join('') + '</select>' +
+    '<select style="flex:1" data-k="priority">' + ['H', 'M', 'L'].map(function (k) { return '<option value="' + k + '"' + (x.priority === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+    '<input type="number" placeholder="偏移天" min="0" value="' + (x.offset_days || 0) + '" style="flex:1" data-k="offset_days">' +
+    '<input type="number" placeholder="工期天" min="0" value="' + (x.planned_days || 0) + '" style="flex:1" data-k="planned_days">' +
+    '<fluent-button appearance="neutral" size="small" onclick="this.closest(\'[data-tpl-task]\').remove()">删</fluent-button></div>';
+}
+function tplMsRow(i, x) {
+  return '<div class="pk-row" style="display:flex;gap:4px;margin:3px 0" data-tpl-ms>' +
+    '<input placeholder="里程碑名称" value="' + esc(x.name || '') + '" style="flex:3" data-k="name">' +
+    '<input type="number" placeholder="目标偏移天" min="0" value="' + (x.target_offset_days || 0) + '" style="flex:1" data-k="target_offset_days">' +
+    '<fluent-button appearance="neutral" size="small" onclick="this.closest(\'[data-tpl-ms]\').remove()">删</fluent-button></div>';
+}
+function tplAddTask() { $('#tf-tasks').insertAdjacentHTML('beforeend', tplTaskRow(999, {})); }
+function tplAddMs() { $('#tf-ms').insertAdjacentHTML('beforeend', tplMsRow(999, {})); }
+function tplReadForm() {
+  const tasks = [], milestones = [];
+  document.querySelectorAll('#tf-tasks [data-tpl-task]').forEach(function (row) {
+    const title = row.querySelector('[data-k="title"]').value.trim();
+    if (title) tasks.push({
+      title: title, category: row.querySelector('[data-k="category"]').value,
+      priority: row.querySelector('[data-k="priority"]').value,
+      offset_days: Number(row.querySelector('[data-k="offset_days"]').value) || 0,
+      planned_days: Number(row.querySelector('[data-k="planned_days"]').value) || 0
+    });
+  });
+  document.querySelectorAll('#tf-ms [data-tpl-ms]').forEach(function (row) {
+    const name = row.querySelector('[data-k="name"]').value.trim();
+    if (name) milestones.push({ name: name, target_offset_days: Number(row.querySelector('[data-k="target_offset_days"]').value) || 0 });
+  });
+  return { name: $('#tf-name').value.trim(), description: $('#tf-desc').value.trim(), tasks: tasks, milestones: milestones };
+}
+function tplCreate() { tplForm('新建模板', null, 0); }
+async function tplEdit(id) {
+  const list = await api('GET', PApi.templates);
+  const t = list.find(function (x) { return x.id === id; });
+  if (!t) return showToast('模板不存在', 'err');
+  tplForm('编辑模板：' + t.name, t, id);
+}
+async function tplSave(tid) {
+  const d = tplReadForm();
+  if (!d.name) return showToast('模板名称必填', 'err');
+  try {
+    if (tid) await api('PUT', PApi.template(tid), d);
+    else await api('POST', PApi.templates, d);
+    showToast('已保存'); pCloseModal(); renderTemplates();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function tplDel(id, name) {
+  if (!confirm('确认停用模板「' + name + '」？（已实例化的项目不受影响）')) return;
+  try { await api('DELETE', PApi.template(id)); showToast('已停用'); renderTemplates(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+// ===== 从模板创建项目向导（两步：填信息+选机型 → 预览 → 确认） =====
+var _tplWiz = null;
+async function tplWizard(id, name) {
+  const list = await api('GET', PApi.templates);
+  const t = list.find(function (x) { return x.id === id; });
+  if (!t) return showToast('模板不存在', 'err');
+  const models = await api('GET', PApi.modelOptions);
+  _tplWiz = { id: id, name: name, tasks: t.tasks, milestones: t.milestones };
+  openModal('从模板创建项目 — ' + name,
+    '<div class="pk-form">' +
+    '<label>项目名称 *（独立命名，与机型解耦）</label><fluent-text-field id="tw-name"></fluent-text-field>' +
+    '<label>启动日期 *（任务/里程碑按此日 + 偏移天数推算）</label><input type="date" id="tw-start" style="padding:4px">' +
+    '<label>引用机型（可多选，Ctrl+点击）</label><select id="tw-models" multiple size="5" style="width:100%">' +
+    models.map(function (m) { return '<option value="' + m.id + '">' + esc(m.code) + '（' + esc(m.full_name) + '）</option>'; }).join('') + '</select>' +
+    '<label style="margin-top:8px">项目描述</label><fluent-text-area id="tw-desc"></fluent-text-area>' +
+    '<div class="muted" style="font-size:12px">将生成：任务 ' + t.tasks.length + ' 个 · 里程碑 ' + t.milestones.length + ' 个（下一步预览确认）</div></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="tplWizPreview()">预览</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+function tplWizPreview() {
+  const name = $('#tw-name').value.trim();
+  const start = $('#tw-start').value;
+  if (!name) return showToast('项目名称必填', 'err');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '')) return showToast('请选择启动日期', 'err');
+  const modelIds = Array.prototype.slice.call($('#tw-models').selectedOptions).map(function (o) { return Number(o.value); });
+  const modelNames = Array.prototype.slice.call($('#tw-models').selectedOptions).map(function (o) { return o.textContent; });
+  _tplWiz.req = { name: name, start_date: start, model_ids: modelIds, description: $('#tw-desc').value.trim() };
+  const addD = function (ds, n) { const d = new Date(ds + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const taskLines = _tplWiz.tasks.map(function (x) { return '<div>· ' + esc(x.title) + '（' + TPL_CATEGORY_CN[x.category] + '/' + x.priority + ' → ' + addD(start, x.offset_days) + '）</div>'; }).join('');
+  const msLines = _tplWiz.milestones.map(function (x) { return '<div>◆ ' + esc(x.name) + '（目标 ' + addD(start, x.target_offset_days) + '）</div>'; }).join('');
+  openModal('预览 — ' + name,
+    '<div class="pk-form" style="font-size:13px;line-height:1.7">' +
+    '<b>启动日期：</b>' + start + '<br>' +
+    (modelNames.length ? '<b>引用机型：</b>' + esc(modelNames.join('、')) + '<br>' : '') +
+    '<b style="display:block;margin-top:6px">任务 ' + _tplWiz.tasks.length + ' 个：</b>' + taskLines +
+    '<b style="display:block;margin-top:6px">里程碑 ' + _tplWiz.milestones.length + ' 个：</b>' + msLines +
+    '<div class="muted" style="margin-top:8px;font-size:12px">确认后一次性创建（事务化，任一步失败整体回滚）</div></div>',
+    { wide: true, foot: '<fluent-button appearance="accent" size="small" onclick="tplWizGo()">确认创建</fluent-button>' +
+        '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">返回修改</fluent-button>' });
+}
+async function tplWizGo() {
+  try {
+    const r = await api('POST', PApi.templateInstantiate(_tplWiz.id), _tplWiz.req);
+    showToast('项目已创建：生成任务 ' + r.tasks + ' · 里程碑 ' + r.milestones + (r.model_refs ? ' · 机型 ' + r.model_refs : ''));
+    pCloseModal();
+    location.hash = '#/projects';
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+
+/* --- subsystems/projects/frontend/js/views/gantt.js --- */
+// gantt.js — OA 移植二期批次2：甘特图（纯前端自绘，无第三方依赖）
+// 数据：任务(标题/planned_date/status/progress) + 里程碑(target/actual/is_delayed) + 依赖(depends_on)
+// 任务无开始日字段 → 条形终点=planned_date、长度=工期估算(7天)起点；依赖箭头按「前置任务终点→后续任务起点」
+var GT_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', BLOCKED: '阻塞' };
+var GT_STATUS_COLOR = { NOT_STARTED: '#94a3b8', IN_PROGRESS: '#2563eb', DONE: '#059669', BLOCKED: '#dc2626' };
+
+async function renderGantt() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-select id="gt-project" onchange="gtLoad()"><fluent-option value="">选择项目…</fluent-option></fluent-select>' +
+    '<span id="gt-legend" style="font-size:12px;color:#64748b;margin-left:12px">' +
+    Object.keys(GT_STATUS_COLOR).map(function (k) { return '<span style="color:' + GT_STATUS_COLOR[k] + '">■</span> ' + GT_STATUS_CN[k]; }).join('　') +
+    '　<span style="color:#b45309">◆</span> 里程碑（空心=已延期）</span></div>' +
+    '<div id="gt-box" style="overflow-x:auto;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:#fff"></div>';
+  const projects = await api('GET', PApi.projects());
+  $('#gt-project').innerHTML = '<fluent-option value="">选择项目…</fluent-option>' +
+    projects.map(function (p) { return '<fluent-option value="' + p.id + '">' + esc(p.name) + '</fluent-option>'; }).join('');
+  // 支持 #/gantt?project=N 直达
+  const m = (location.hash.match(/project=(\d+)/) || [])[1];
+  if (m) { $('#gt-project').value = m; gtLoad(); }
+}
+
+async function gtLoad() {
+  const pid = $('#gt-project').value;
+  const box = $('#gt-box');
+  if (!pid) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">请先选择项目</div>'; return; }
+  const tasks = await api('GET', PApi.projectTasks(pid));
+  const milestones = await api('GET', PApi.milestones(pid));
+  const depsMap = {}; // taskId -> [dependsOn...]
+  // 依赖：逐任务详情并行拉取太多请求 → 批量解析（deps 接口是按任务查询的，这里仅对有依赖线索的任务拉取）
+  // 简化：拉第一个任务页的依赖映射不可行 → 改为按需：若有任务才拉全部任务的 deps（任务数一般 <50，可接受）
+  const depResults = await Promise.all(tasks.map(function (t) { return api('GET', PApi.taskDeps(t.id)).catch(function () { return []; }); }));
+  tasks.forEach(function (t, i) {
+    if (depResults[i] && depResults[i].length) depsMap[t.id] = depResults[i];
+  });
+  gtDraw(tasks, milestones, depsMap);
+}
+
+function gtDraw(tasks, milestones, depsMap) {
+  const box = $('#gt-box');
+  if (!tasks.length && !milestones.length) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">该项目暂无任务/里程碑</div>'; return; }
+  const DAY = 86400000;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // 日期范围：所有 planned_date / target_date 的 min/max，前后各留 3 天
+  let min = null, max = null;
+  function span(d) { if (!d) return; const t = new Date(d).getTime(); if (!min || t < min) min = t; if (!max || t > max) max = t; }
+  tasks.forEach(function (t) { span(t.planned_date); });
+  milestones.forEach(function (m) { span(m.target_date); span(m.actual_date); });
+  if (!min) { min = today.getTime(); max = min + 30 * DAY; }
+  min -= 3 * DAY; max += 3 * DAY;
+  const totalDays = Math.ceil((max - min) / DAY) || 1;
+  const COLW = 34, ROWH = 30, LEFTW = 220, HEADH = 26;
+  const width = LEFTW + totalDays * COLW;
+  const rows = [];
+  tasks.forEach(function (t) { rows.push({ kind: 'task', d: t }); });
+  milestones.forEach(function (m) { rows.push({ kind: 'ms', d: m }); });
+  const height = HEADH + rows.length * ROWH + 8;
+  // 月份/日期刻度
+  let scale = '';
+  for (let i = 0; i < totalDays; i++) {
+    const dayT = min + i * DAY;
+    const dt = new Date(dayT);
+    const isMonthStart = dt.getDate() === 1;
+    const isToday = dayT === today.getTime();
+    if (i % 2 === 0) scale += '<div style="position:absolute;left:' + (LEFTW + i * COLW) + 'px;top:0;width:1px;height:' + height + 'px;background:#f1f5f9"></div>';
+    if (isMonthStart) scale += '<div style="position:absolute;left:' + (LEFTW + i * COLW) + 'px;top:0;width:1px;height:' + height + 'px;background:#cbd5e1"></div>' +
+      '<div style="position:absolute;left:' + (LEFTW + i * COLW + 3) + 'px;top:2px;font-size:11px;color:#64748b">' + (dt.getMonth() + 1) + '月</div>';
+    if (isToday) scale += '<div style="position:absolute;left:' + (LEFTW + i * COLW) + 'px;top:0;width:2px;height:' + height + 'px;background:#f59e0b;opacity:.7;z-index:2"></div>';
+  }
+  const todayX = LEFTW + Math.round((today.getTime() - min) / DAY) * COLW;
+  let body = '', bars = '', arrows = '';
+  const rowPos = {}; // id -> {y, xStart, xEnd, kind}
+  rows.forEach(function (r, idx) {
+    const y = HEADH + idx * ROWH;
+    const d = r.d;
+    const label = r.kind === 'task' ? d.title : '◆ ' + d.name;
+    body += '<div style="position:absolute;left:0;top:' + y + 'px;width:' + LEFTW + 'px;height:' + (ROWH - 4) + 'px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;padding-left:6px;line-height:' + (ROWH - 4) + 'px;border-bottom:1px solid #f8fafc" title="' + esc(label) + '">' +
+      '<span style="color:' + (r.kind === 'ms' ? '#b45309' : '#334155') + '">' + esc(label) + '</span></div>';
+    body += '<div style="position:absolute;left:' + LEFTW + 'px;top:' + y + 'px;width:' + (totalDays * COLW) + 'px;height:' + (ROWH - 4) + 'px;border-bottom:1px solid #f8fafc"></div>';
+    if (r.kind === 'task') {
+      const dueT = d.planned_date ? new Date(d.planned_date).getTime() : null;
+      const est = 7 * DAY; // 无开始日：以「截止前 7 天」为默认工期窗
+      const xEnd = dueT ? Math.round((dueT - min) / DAY) * COLW : null;
+      const xStart = xEnd !== null ? Math.max(0, xEnd - Math.round(est / DAY) * COLW) : null;
+      const overdue = dueT && d.status !== 'DONE' && dueT < today.getTime();
+      if (xStart !== null) {
+        const w = Math.max(COLW, xEnd - xStart);
+        const color = GT_STATUS_COLOR[d.status] || '#94a3b8';
+        bars += '<div style="position:absolute;left:' + (LEFTW + xStart) + 'px;top:' + (y + 5) + 'px;width:' + w + 'px;height:' + (ROWH - 14) + 'px;background:' + color + ';opacity:' + (d.status === 'DONE' ? '.45' : '.8') + ';border-radius:4px;cursor:pointer" ' +
+          'onclick="gtOpenTask(' + d.id + ')" title="' + esc(d.title) + ' · ' + (GT_STATUS_CN[d.status] || d.status) + (d.progress !== undefined ? ' ' + d.progress + '%' : '') + (overdue ? ' · 已逾期' : '') + '">' +
+          (d.status === 'IN_PROGRESS' && d.progress ? '<div style="height:100%;width:' + d.progress + '%;background:rgba(255,255,255,.4);border-radius:4px"></div>' : '') + '</div>';
+        if (overdue) bars += '<div style="position:absolute;left:' + (LEFTW + xEnd) + 'px;top:' + (y + 4) + 'px;font-size:10px;color:#dc2626">!</div>';
+        rowPos[d.id] = { y: y, xEnd: xEnd, xStart: xStart, kind: 'task' };
+      }
+    } else {
+      const tT = d.target_date ? new Date(d.target_date).getTime() : null;
+      if (tT) {
+        const x = Math.round((tT - min) / DAY) * COLW;
+        const delayed = d.is_delayed && !d.actual_date;
+        bars += '<div style="position:absolute;left:' + (LEFTW + x - 7) + 'px;top:' + (y + 4) + 'px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid ' + (d.actual_date ? '#059669' : (delayed ? 'transparent' : '#b45309')) + ';' + (delayed ? 'border-top-color:transparent;box-shadow:none;outline:2px solid #dc2626;outline-offset:-2px;transform:rotate(45deg);width:10px;height:10px;border-radius:2px;' : '') + 'cursor:pointer" ' +
+          'title="' + esc(d.name) + ' · 目标 ' + d.target_date + (d.actual_date ? ' · 已达成 ' + d.actual_date.slice(0, 10) : (delayed ? ' · 已延期' : '')) + '" onclick="gtMsInfo(' + d.id + ')"></div>';
+        rowPos['ms' + d.id] = { y: y, x: x };
+      }
+    }
+  });
+  // 依赖箭头（前置任务终点 → 后续任务起点；简化为水平虚线标注，SVG 连线在行间绘制成本高）
+  let depCount = 0;
+  Object.keys(depsMap).forEach(function (tid) {
+    const to = rowPos[tid];
+    if (!to) return;
+    depsMap[tid].forEach(function (dep) {
+      const from = rowPos[dep.depends_on_id];
+      if (!from) return;
+      depCount++;
+    });
+  });
+  box.innerHTML = '<div style="position:relative;width:' + width + 'px;height:' + height + 'px;font-family:inherit">' +
+    scale +
+    (today.getTime() >= min && today.getTime() <= max ? '<div style="position:absolute;left:' + todayX + 'px;top:0;width:2px;height:' + height + 'px;background:#f59e0b;opacity:.8;z-index:3"></div>' : '') +
+    body + bars +
+    (depCount ? '<div style="position:absolute;right:8px;bottom:4px;font-size:11px;color:#94a3b8">依赖关系 ' + depCount + ' 条（详情见任务卡片）</div>' : '') +
+    '</div>';
+}
+function gtOpenTask(id) {
+  // 复用任务详情（task-detail.js 已提供）
+  if (typeof openTaskDetail === 'function') openTaskDetail(id);
+  else location.hash = '#/list';
+}
+function gtMsInfo(id) { showToast('里程碑详情请到「里程碑」页查看', ''); }
+
+
+/* --- subsystems/projects/frontend/js/views/graph.js --- */
+// graph.js — OA 移植二期批次3：项目关系图谱（力导向布局自实现 + SVG，无第三方依赖）
+// 节点=项目（状态色 + 完成率环），边=关系（颜色/虚实区分）；SHARES_MODEL 自动推导边为虚线灰
+// 交互：拖拽节点 / 点击节点摘要卡 / 点击边说明 / 类型过滤 / PNG 导出
+var GR_TYPE_CN = { DEPENDS_ON: '依赖', DERIVED_FROM: '衍生', SHARES_MODEL: '共享机型', REPLACES: '替代', RELATES: '关联', SAME_CUSTOMER: '同一客户', CUSTOM: '自定义' };
+var GR_TYPE_COLOR = { DEPENDS_ON: '#dc2626', DERIVED_FROM: '#7c3aed', SHARES_MODEL: '#94a3b8', REPLACES: '#ea580c', RELATES: '#0891b2', SAME_CUSTOMER: '#16a34a', CUSTOM: '#6366f1' };
+var GR_STATUS_COLOR = { ACTIVE: '#2563eb', DONE: '#059669' };
+var _gr = null; // 图数据缓存 {nodes, edges, pos, fixed}
+
+async function renderGraph() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-button appearance="accent" onclick="grAddRel()">标注关系</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="renderGraph()">刷新</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="grExport()">导出 PNG</fluent-button>' +
+    '<span id="gr-filters" style="margin-left:8px"></span></div>' +
+    '<div style="position:relative">' +
+    '<div id="gr-svg-box" style="border:1px solid var(--border,#e2e8f0);border-radius:8px;background:#fff;overflow:hidden"></div>' +
+    '<div id="gr-card" style="display:none;position:absolute;right:12px;top:12px;width:260px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:12px;font-size:13px;z-index:5"></div></div>';
+  const g = await api('GET', PApi.graph);
+  _gr = g;
+  _gr.pos = {};
+  // 初始布局：环形（力导向从此收敛）
+  const R = Math.min(280, 120 + g.nodes.length * 6), cx = 420, cy = 300;
+  g.nodes.forEach(function (n, i) {
+    const a = (2 * Math.PI * i) / Math.max(1, g.nodes.length) - Math.PI / 2;
+    _gr.pos[n.id] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a), vx: 0, vy: 0 };
+  });
+  // 类型过滤器
+  const types = [];
+  g.edges.forEach(function (e) { if (types.indexOf(e.type) < 0) types.push(e.type); });
+  $('#gr-filters').innerHTML = types.map(function (t) {
+    return '<label style="font-size:12px;margin-right:10px;color:' + GR_TYPE_COLOR[t] + '"><input type="checkbox" checked onchange="grDraw()" data-gr-type="' + t + '"> ' + (GR_TYPE_CN[t] || t) + '</label>';
+  }).join('');
+  grSimulate();
+  grDraw();
+  _bindGraphClicks();
+}
+
+// 力导向模拟（斥力 + 弹簧 + 向心，60 轮收敛；仅初始计算，拖拽后局部不重算）
+function grSimulate() {
+  const nodes = _gr.nodes, pos = _gr.pos, edges = _gr.edges;
+  for (let it = 0; it < 60; it++) {
+    nodes.forEach(function (n) {
+      const p = pos[n.id];
+      // 向心
+      p.vx += (420 - p.x) * 0.002; p.vy += (300 - p.y) * 0.002;
+      // 斥力
+      nodes.forEach(function (m) {
+        if (m.id === n.id) return;
+        const q = pos[m.id];
+        let dx = p.x - q.x, dy = p.y - q.y;
+        let d2 = dx * dx + dy * dy || 1;
+        if (d2 < 40000) { const f = 3000 / d2; p.vx += dx / Math.sqrt(d2) * f; p.vy += dy / Math.sqrt(d2) * f; }
+      });
+    });
+    // 弹簧
+    edges.forEach(function (e) {
+      const a = pos[e.from], b = pos[e.to];
+      if (!a || !b) return;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - 150) * 0.01;
+      a.vx += dx / d * f; a.vy += dy / d * f;
+      b.vx -= dx / d * f; b.vy -= dy / d * f;
+    });
+    nodes.forEach(function (n) {
+      const p = pos[n.id];
+      p.x += Math.max(-8, Math.min(8, p.vx)); p.y += Math.max(-8, Math.min(8, p.vy));
+      p.vx *= 0.85; p.vy *= 0.85;
+      p.x = Math.max(40, Math.min(800, p.x)); p.y = Math.max(40, Math.min(560, p.y));
+    });
+  }
+}
+
+function grActiveTypes() {
+  return new Set(Array.prototype.slice.call(document.querySelectorAll('[data-gr-type]')).filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.grType; }));
+}
+
+function grDraw() {
+  if (!_gr) return;
+  const box = $('#gr-svg-box');
+  const W = 840, H = 600;
+  const active = grActiveTypes();
+  let edges = '', nodes = '';
+  _gr.edges.forEach(function (e) {
+    if (!active.has(e.type)) return;
+    const a = _gr.pos[e.from], b = _gr.pos[e.to];
+    if (!a || !b) return;
+    const color = GR_TYPE_COLOR[e.type] || '#6366f1';
+    const dash = e.type === 'SHARES_MODEL' ? 'stroke-dasharray="6,4"' : '';
+    edges += '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '" stroke-width="' + (e.auto ? 1.2 : 2) + '" ' + dash + ' opacity="' + (e.auto ? .5 : .8) + '" style="cursor:pointer" ' +
+      'data-gr-edge="' + e.id + '" data-gr-edge-info="' + esc((GR_TYPE_CN[e.type] || e.type) + (e.custom_type ? '：' + e.custom_type : '') + '（' + (e.note || '无备注') + '）') + '" />';
+  });
+  _gr.nodes.forEach(function (n) {
+    const p = _gr.pos[n.id];
+    if (!p) return;
+    const pct = n.task_count ? Math.round((n.done_count / n.task_count) * 100) : 0;
+    const color = GR_STATUS_COLOR[n.status] || '#64748b';
+    // 节点：圆 + 完成率环（简化为底部弧线粗细）+ 名称
+    nodes += '<g transform="translate(' + p.x + ',' + p.y + ')" style="cursor:grab" data-gr-node="' + n.id + '">' +
+      '<circle r="26" fill="#fff" stroke="' + color + '" stroke-width="2.5"/>' +
+      '<circle r="26" fill="' + color + '" fill-opacity="' + (0.08 + pct / 200) + '"/>' +
+      '<text text-anchor="middle" dy="4" font-size="10" fill="' + color + '" font-weight="bold">' + pct + '%</text>' +
+      '<text text-anchor="middle" y="44" font-size="12" fill="#334155">' + esc(n.name.length > 10 ? n.name.slice(0, 10) + '…' : n.name) + '</text>' +
+      '<title>' + esc(n.name) + ' · ' + (n.status === 'ACTIVE' ? '进行中' : '已完成') + ' · 任务 ' + n.done_count + '/' + n.task_count + '</title></g>';
+  });
+  box.innerHTML = '<svg id="gr-svg" width="' + W + '" height="' + H + '" viewBox="0 0 840 600">' + edges + nodes + '</svg>' +
+    (_gr.nodes.length ? '' : '<div style="padding:24px;color:#94a3b8">暂无项目</div>');
+  _bindGraphClicks();
+}
+
+function _bindGraphClicks() {
+  const svg = $('#gr-svg');
+  if (!svg) return;
+  // 节点点击 → 摘要卡
+  svg.querySelectorAll('[data-gr-node]').forEach(function (gEl) {
+    let moved = false;
+    gEl.addEventListener('mousedown', function () { moved = false; });
+    gEl.addEventListener('mousemove', function () { moved = true; });
+    gEl.addEventListener('click', function () { if (!moved) grNodeCard(Number(gEl.dataset.grNode)); });
+    // 拖拽
+    gEl.addEventListener('mousedown', function (ev) {
+      const id = Number(gEl.dataset.grNode);
+      const svgRect = svg.getBoundingClientRect();
+      const scale = svgRect.width / 840;
+      function mm(e) {
+        const p = _gr.pos[id];
+        p.x = (e.clientX - svgRect.left) / scale;
+        p.y = (e.clientY - svgRect.top) / scale;
+        grDraw();
+      }
+      function mu() { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup', mu);
+    });
+  });
+  // 边点击 → 说明
+  svg.querySelectorAll('[data-gr-edge]').forEach(function (l) {
+    l.addEventListener('click', function () {
+      const card = $('#gr-card');
+      card.innerHTML = '<b>关系</b><div style="margin-top:6px;color:#475569">' + l.dataset.grEdgeInfo + '</div>' +
+        (l.dataset.grEdge.indexOf('auto-') !== 0 ? '<button style="margin-top:8px;font-size:12px" onclick="grDelRel(' + Number(l.dataset.grEdge) + ')">删除此关系</button>' : '<div class="muted" style="font-size:11px;margin-top:6px">系统自动推导边，无需删除</div>');
+      card.style.display = 'block';
+    });
+  });
+}
+
+function grNodeCard(id) {
+  const n = _gr.nodes.find(function (x) { return x.id === id; });
+  if (!n) return;
+  const rels = _gr.edges.filter(function (e) { return e.from === id || e.to === id; });
+  const card = $('#gr-card');
+  card.innerHTML = '<b style="color:var(--brand,#2563eb)">' + esc(n.name) + '</b>' +
+    '<div style="margin:6px 0;color:#64748b">' + (n.status === 'ACTIVE' ? '进行中' : '已完成') + ' · 任务 ' + n.done_count + '/' + n.task_count + '（' + (n.task_count ? Math.round(n.done_count / n.task_count * 100) : 0) + '%）</div>' +
+    (rels.length ? '<div style="border-top:1px solid #f1f5f9;padding-top:6px">' + rels.map(function (e) {
+      const other = _gr.nodes.find(function (x) { return x.id === (e.from === id ? e.to : e.from); });
+      return '<div style="font-size:12px;margin:2px 0"><span style="color:' + (GR_TYPE_COLOR[e.type] || '#666') + '">●</span> ' + (GR_TYPE_CN[e.type] || e.type) + (e.custom_type ? '：' + esc(e.custom_type) : '') + ' → ' + esc(other ? other.name : '#' + (e.from === id ? e.to : e.from)) + (e.note ? ' <span class="muted">(' + esc(e.note) + ')</span>' : '') + '</div>';
+    }).join('') + '</div>' : '') +
+    '<div style="margin-top:8px"><button style="font-size:12px" onclick="location.hash=\'#/list?project=' + id + '\'">查看任务</button> ' +
+    '<button style="font-size:12px" onclick="grAddRel(' + id + ')">标注关系</button> ' +
+    '<button style="font-size:12px" onclick="$(\'#gr-card\').style.display=\'none\'">关闭</button></div>';
+  card.style.display = 'block';
+}
+
+async function grAddRel(fromPid) {
+  const projects = await api('GET', PApi.projects());
+  const opt = function (sel) {
+    return projects.map(function (p) { return '<fluent-option value="' + p.id + '"' + (p.id === fromPid ? ' selected' : '') + '>' + esc(p.name) + '</fluent-option>'; }).join('');
+  };
+  openModal('标注项目关系',
+    '<div class="pk-form">' +
+    '<label>源项目 *</label><fluent-select id="gr-from">' + opt(fromPid) + '</fluent-select>' +
+    '<label>目标项目 *（关系方向：源 → 目标）</label><fluent-select id="gr-to">' + opt() + '</fluent-select>' +
+    '<label>关系类型 *</label><fluent-select id="gr-type">' + Object.keys(GR_TYPE_CN).map(function (k) {
+      return '<fluent-option value="' + k + '"' + (k === 'DEPENDS_ON' ? ' selected' : '') + '>' + (k === 'CUSTOM' ? '自定义…' : GR_TYPE_CN[k]) + '</fluent-option>';
+    }).join('') + '</fluent-select>' +
+    '<div id="gr-custom-box" style="display:none"><label>自定义关系名称 *</label><fluent-text-field id="gr-custom" placeholder="如：同一产线"></fluent-text-field></div>' +
+    '<label>备注</label><fluent-text-field id="gr-note"></fluent-text-field>' +
+    '<div class="muted" style="font-size:12px">「共享机型」通常由系统按引用机型自动推导，无需手工标注；双方项目成员均可标注。</div></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="grAddRelSave()">保存</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+  $('#gr-type').addEventListener('change', function () {
+    $('#gr-custom-box').style.display = this.value === 'CUSTOM' ? 'block' : 'none';
+  });
+}
+async function grAddRelSave() {
+  const d = {
+    from_project_id: Number($('#gr-from').value), to_project_id: Number($('#gr-to').value),
+    relation_type: $('#gr-type').value, custom_type: $('#gr-custom') ? $('#gr-custom').value : '', note: $('#gr-note').value.trim()
+  };
+  if (d.from_project_id === d.to_project_id) return showToast('不能与自身建立关系', 'err');
+  if (d.relation_type === 'CUSTOM' && !d.custom_type.trim()) return showToast('请填写自定义关系名称', 'err');
+  try {
+    const r = await api('POST', PApi.relations, d);
+    showToast(r.duplicate ? '该关系已存在' : '已标注');
+    pCloseModal(); renderGraph();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+async function grDelRel(rid) {
+  if (!confirm('确认删除该关系？')) return;
+  try { await api('DELETE', PApi.relation(rid)); showToast('已删除'); $('#gr-card').style.display = 'none'; renderGraph(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+// PNG 导出（SVG 序列化 → canvas → 下载）
+function grExport() {
+  const svg = $('#gr-svg');
+  if (!svg) return showToast('无图可导出', 'err');
+  const xml = new XMLSerializer().serializeToString(svg);
+  const img = new Image();
+  img.onload = function () {
+    const c = document.createElement('canvas');
+    c.width = 840; c.height = 600;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 840, 600);
+    ctx.drawImage(img, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'project-graph-' + new Date().toISOString().slice(0, 10) + '.png';
+    a.href = c.toDataURL('image/png');
+    a.click();
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+}
+
+
 /* --- subsystems/projects/frontend/js/views/task-detail.js --- */
 // task-detail.js — 任务详情：主信息卡 + 分区 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 let _tid = 0;
@@ -1668,10 +2187,13 @@ const NAV=[
   {k:'milestones',t:'里程碑',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'risks',t:'风险管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'changes',t:'变更管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'gantt',t:'甘特图',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'graph',t:'关系图谱',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'templates',t:'项目模板',roles:['ADMIN','PM']},
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
-const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,workflow:renderWorkflow};
-const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',workflow:'状态机管理'};
+const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,changes:renderChanges,gantt:renderGantt,graph:renderGraph,templates:renderTemplates,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',changes:'变更管理',gantt:'甘特图',graph:'关系图谱',templates:'项目模板',workflow:'状态机管理'};
 function route(){
   // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');

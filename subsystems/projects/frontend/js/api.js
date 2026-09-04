@@ -25,5 +25,13 @@ const PApi = {
   changeApprove: cid => '/api/projects/changes/' + cid + '/approve',
   modelOptions: '/api/projects/model-options',
   modelRefs: pid => '/api/projects/' + pid + '/models',
-  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid
+  modelRef: (pid, mid) => '/api/projects/' + pid + '/models/' + mid,
+  // OA 能力移植（二期批次2）：项目模板
+  templates: '/api/projects/templates',
+  template: tid => '/api/projects/templates/' + tid,
+  templateInstantiate: tid => '/api/projects/templates/' + tid + '/instantiate',
+  // OA 能力移植（二期批次3）：关系 + 图谱
+  relations: '/api/projects/relations',
+  relation: rid => '/api/projects/relations/' + rid,
+  graph: '/api/projects/graph'
 };
