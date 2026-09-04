@@ -46,9 +46,9 @@ function sampleTodoOf(s, u) {
 async function collectSampleTodos(u) {
   var rows;
   if (u.role === 'ADMIN') {
-    // ADMIN=各角色规则并集（不用 dao 的全量回退，避免把全部样品当作待办）
+    // ADMIN=各角色规则并集（不用 dao 的全量回退，避免把全部样品当作待办）；上限与 listMyPendingSamples 对齐 200
     var [r] = await D.pool().execute(
-      "SELECT * FROM samples WHERE deleted_at IS NULL AND (status IN ('NEW','PRODUCED','RELEASED','RETURNING')) ORDER BY id DESC LIMIT 100");
+      "SELECT * FROM samples WHERE deleted_at IS NULL AND (status IN ('NEW','PRODUCED','RELEASED','RETURNING')) ORDER BY id DESC LIMIT 200");
     rows = r;
   } else if (['RD', 'QA', 'CUSTODY', 'ME'].indexOf(u.role) !== -1) {
     rows = await D.listMyPendingSamples(u.role, u.id);

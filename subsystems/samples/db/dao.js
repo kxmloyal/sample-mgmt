@@ -164,10 +164,11 @@ module.exports = function createDao(deps) {
   }
 
   function listMyPendingSamples(role, userId) {
-    if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 50", [userId]);
-    if (role === 'QA') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 50");
-    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RELEASED' ORDER BY id DESC LIMIT 50");
-    return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 50');
+    // 2026-09-04：上限 50→200（评审问题2：NEW 积压 57 条被静默截断 7 条；workbench 我的待办与样品看板共用本 DAO）
+    if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 200", [userId]);
+    if (role === 'QA') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 200");
+    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RELEASED' ORDER BY id DESC LIMIT 200");
+    return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 200');
   }
 
   // 日志
