@@ -136,6 +136,11 @@
         "color": "#991b1b",
         "bg": "#fee2e2"
       },
+      "CHECKED_OUT": {
+        "label": "领用中",
+        "color": "#1d4ed8",
+        "bg": "#dbeafe"
+      },
       "RETIRED": {
         "label": "已作废",
         "color": "#999999",
@@ -180,6 +185,26 @@
           "ME"
         ],
         "label": "申请退回"
+      },
+      {
+        "from": "IN_CUSTODY",
+        "to": "CHECKED_OUT",
+        "action": "CHECKOUT",
+        "role": [
+          "CUSTODY",
+          "ME"
+        ],
+        "label": "领出"
+      },
+      {
+        "from": "CHECKED_OUT",
+        "to": "IN_CUSTODY",
+        "action": "RETURN_OUT",
+        "role": [
+          "CUSTODY",
+          "ME"
+        ],
+        "label": "归还入库"
       },
       {
         "from": "RETURNING",

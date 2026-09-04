@@ -142,6 +142,35 @@ async function applyAction(chosenAction, ctx) {
     updated.storage_location = location.trim();
     logData = { sample_id: s.id, action: 'CUSTODY', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' };
   }
+  // === 领用/归还流程（2026-09-05，docs/superpowers/specs/2026-09-05-samples-checkout-design.md） ===
+  else if (chosenAction === 'CHECKOUT') {
+    // 领出：登记领用人/领用部门/领用时长（小时），写应还时间 expected_return_at；储位保留（归还后回原储位）
+    // returned_at 置空开启新借用周期（上次归还留痕随日志查询，字段只承载最近一次归还）
+    const { checkout_user, checkout_dept, durationHours } = req.body || {};
+    if (!checkout_user || !checkout_user.trim()) return { status: 400, error: '请填写领用人' };
+    const dur = Number(durationHours);
+    if (!Number.isInteger(dur) || dur < 1 || dur > 8760) return { status: 400, error: '领用时长须为 1~8760 小时的整数' };
+    const due = new Date(ts); due.setUTCHours(due.getUTCHours() + dur);
+    updated.status = 'CHECKED_OUT';
+    updated.checkout_user = checkout_user.trim();
+    updated.checkout_dept = (checkout_dept && checkout_dept.trim()) || u.dept || '';
+    updated.checkout_at = ts;
+    updated.expected_return_at = due.toISOString();
+    updated.checkout_note = (note && note.trim()) || null;
+    updated.returned_at = null;
+    logData = { sample_id: s.id, action: 'CHECKOUT', role: u.role, user_id: u.id, dept: u.dept, note: '样品领出：领用人 ' + updated.checkout_user + '（' + updated.checkout_dept + '），领用 ' + dur + ' 小时，应还 ' + updated.expected_return_at + (updated.checkout_note ? '，备注：' + updated.checkout_note : '') };
+  } else if (chosenAction === 'RETURN_OUT') {
+    // 归还入库：回 IN_CUSTODY，写实际归还时间，清全部领用字段；日志留借出时长实绩
+    updated.status = 'IN_CUSTODY';
+    updated.returned_at = ts;
+    const borrowedHours = s.checkout_at ? Math.max(1, Math.round((new Date(ts) - new Date(s.checkout_at)) / 3600000)) : null;
+    updated.checkout_user = null;
+    updated.checkout_dept = null;
+    updated.checkout_at = null;
+    updated.expected_return_at = null;
+    updated.checkout_note = null;
+    logData = { sample_id: s.id, action: 'RETURN_OUT', role: u.role, user_id: u.id, dept: u.dept, note: '归还入库' + (borrowedHours ? '，实际借出 ' + borrowedHours + ' 小时' : '') + (s.checkout_user ? '（领用人 ' + s.checkout_user + '）' : '') + ((note && note.trim()) ? '，备注：' + note.trim() : '') };
+  }
   // === 新增 Action ===
   else if (chosenAction === 'EDIT_CARD') {
     const { sample_type, limit_item, source_type, card_version, test_data, test_standard } = req.body || {};

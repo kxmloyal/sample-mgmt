@@ -11,4 +11,22 @@ async function migrateSamplesSoftDelete(pool) {
   catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
 }
 
-module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete };
+// 领用/归还流程底座：samples 借出六列（2026-09-05，幂等，全列可空兼容存量）
+// 设计文档：docs/superpowers/specs/2026-09-05-samples-checkout-design.md
+const CHECKOUT_COLUMNS = [
+  ['checkout_user', 'VARCHAR(50) NULL DEFAULT NULL'],
+  ['checkout_dept', 'VARCHAR(50) NULL DEFAULT NULL'],
+  ['checkout_at', 'VARCHAR(24) NULL DEFAULT NULL'],
+  ['expected_return_at', 'VARCHAR(24) NULL DEFAULT NULL'],
+  ['returned_at', 'VARCHAR(24) NULL DEFAULT NULL'],
+  ['checkout_note', 'VARCHAR(200) NULL DEFAULT NULL']
+];
+
+async function migrateSamplesCheckout(pool) {
+  for (const [name, def] of CHECKOUT_COLUMNS) {
+    try { await pool.execute('ALTER TABLE samples ADD COLUMN ' + name + ' ' + def); }
+    catch (e) { if (e.code !== 'ER_DUP_FIELDNAME') throw e; }
+  }
+}
+
+module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout };

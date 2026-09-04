@@ -20,6 +20,13 @@ CREATE TABLE IF NOT EXISTS samples (
   next_inspect_at VARCHAR(24),
   custody_dept VARCHAR(50),
   storage_location VARCHAR(100),
+  -- 领用/归还流程（2026-09-05，幂等迁移见 db/migrations/samples.js migrateSamplesCheckout；全列可空，兼容存量数据）
+  checkout_user VARCHAR(50),
+  checkout_dept VARCHAR(50),
+  checkout_at VARCHAR(24),
+  expected_return_at VARCHAR(24),
+  returned_at VARCHAR(24),
+  checkout_note VARCHAR(200),
   notes TEXT,
   sample_type VARCHAR(20),
   limit_item VARCHAR(50),

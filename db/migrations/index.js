@@ -6,7 +6,7 @@ const { migrateProjectTaskIndexes } = require('./projects');
 const { migrateProjectOaExtras } = require('./projects-oa');
 const { migrateProjectOaP2 } = require('./projects-oa-p2');
 const { migrateProjectOaP2b } = require('./projects-oa-p2b');
-const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete } = require('./samples');
+const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout } = require('./samples');
 const { migrateUserEnabled, migrateUsersSessionVersion } = require('./users');
 
 async function runMigrations(pool) {
@@ -26,6 +26,7 @@ async function runMigrations(pool) {
   await migrateProjectOaP2b(pool);
   await migrateSamplesOptimisticLock(pool);
   await migrateSamplesSoftDelete(pool);
+  await migrateSamplesCheckout(pool);
   await migrateUsersSessionVersion(pool);
 }
 

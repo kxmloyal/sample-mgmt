@@ -123,8 +123,8 @@ module.exports = function createDao(deps) {
   // （conn.execute 返回 ResultSetHeader）；非 conn 路径传 expectedVersion 时降级为更新后回读 version 比对。
   async function updateSample(s, conn, expectedVersion) {
     var cas = expectedVersion !== undefined && expectedVersion !== null;
-    var sql = 'UPDATE samples SET status=?, produced_at=?, released_at=?, release_cycle_days=?, next_inspect_at=?, custody_dept=?, storage_location=?, model=?, station=?, image=?, produced_image=?, inspect_image=?, notes=?, sample_type=?, limit_item=?, source_type=?, valid_until=?, card_version=?, test_standard=?, test_data=?, signed_by_rd=?, signed_by_qa=?, retired_reason=?, replaced_by=?, replaces=?, retire_assigned_rd=?' + (cas ? ', version=version+1' : '') + ' WHERE id=?' + (cas ? ' AND version=?' : '');
-    var params = [s.status, s.produced_at || null, s.released_at || null, s.release_cycle_days ?? null, s.next_inspect_at || null, s.custody_dept || null, s.storage_location || null, s.model ?? null, s.station ?? null, s.image ?? null, s.produced_image ?? null, s.inspect_image ?? null, s.notes || null, s.sample_type ?? '', s.limit_item ?? '', s.source_type ?? '', s.valid_until ?? null, s.card_version ?? '', s.test_standard ?? '', s.test_data ?? '', s.signed_by_rd ?? '', s.signed_by_qa ?? '', s.retired_reason ?? null, s.replaced_by ?? null, s.replaces ?? null, s.retire_assigned_rd ?? null, s.id];
+    var sql = 'UPDATE samples SET status=?, produced_at=?, released_at=?, release_cycle_days=?, next_inspect_at=?, custody_dept=?, storage_location=?, checkout_user=?, checkout_dept=?, checkout_at=?, expected_return_at=?, returned_at=?, checkout_note=?, model=?, station=?, image=?, produced_image=?, inspect_image=?, notes=?, sample_type=?, limit_item=?, source_type=?, valid_until=?, card_version=?, test_standard=?, test_data=?, signed_by_rd=?, signed_by_qa=?, retired_reason=?, replaced_by=?, replaces=?, retire_assigned_rd=?' + (cas ? ', version=version+1' : '') + ' WHERE id=?' + (cas ? ' AND version=?' : '');
+    var params = [s.status, s.produced_at || null, s.released_at || null, s.release_cycle_days ?? null, s.next_inspect_at || null, s.custody_dept || null, s.storage_location || null, s.checkout_user ?? null, s.checkout_dept ?? null, s.checkout_at ?? null, s.expected_return_at ?? null, s.returned_at ?? null, s.checkout_note ?? null, s.model ?? null, s.station ?? null, s.image ?? null, s.produced_image ?? null, s.inspect_image ?? null, s.notes || null, s.sample_type ?? '', s.limit_item ?? '', s.source_type ?? '', s.valid_until ?? null, s.card_version ?? '', s.test_standard ?? '', s.test_data ?? '', s.signed_by_rd ?? '', s.signed_by_qa ?? '', s.retired_reason ?? null, s.replaced_by ?? null, s.replaces ?? null, s.retire_assigned_rd ?? null, s.id];
     if (cas) params.push(expectedVersion);
     var affected = 1;
     if (conn) {
@@ -163,6 +163,12 @@ module.exports = function createDao(deps) {
     return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
   }
 
+  // 领用/归还（2026-09-05）：领出超时未归还清单——纯查询计算，无定时任务
+  // 口径：status=CHECKED_OUT 且 expected_return_at（ISO UTC 字符串，与复检字段同 ISO_UTC 规范化）早于当前 UTC 时间
+  function listCheckoutOverdue() {
+    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO_UTC.replace(/next_inspect_at/g, 'expected_return_at') + " < " + NOW_UTC + " ORDER BY expected_return_at ASC LIMIT 50");
+  }
+
   function listMyPendingSamples(role, userId) {
     // 2026-09-04：上限 50→200（评审问题2：NEW 积压 57 条被静默截断 7 条；workbench 我的待办与样品看板共用本 DAO）
     if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 200", [userId]);
@@ -193,5 +199,5 @@ module.exports = function createDao(deps) {
   function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE deleted_at IS NULL AND model = ?', [code]).then(function (rows) { return rows[0].c; }); }
   function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
 
-  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
+  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels };
 };
