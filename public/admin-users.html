@@ -58,7 +58,9 @@ html,body{height:auto;min-height:100%;overflow:auto}
       <fluent-option value="QA">品保 QA</fluent-option>
       <fluent-option value="CUSTODY">保管 CUSTODY</fluent-option>
       <fluent-option value="PM">项目经理 PM</fluent-option>
+      <fluent-option value="ADMIN">管理员 ADMIN</fluent-option>
     </fluent-select>
+    <fluent-text-field id="u-roles-extra" placeholder="兼任角色（可选，逗号分隔如 QA,CUSTODY）"></fluent-text-field>
     <fluent-select id="u-dept"><fluent-option value="">请选择部门</fluent-option></fluent-select>
     <fluent-text-field id="u-pass" placeholder="初始密码" value="123456"></fluent-text-field>
     <fluent-button appearance="accent" size="small" onclick="addUser()">新增账号</fluent-button>
@@ -94,7 +96,17 @@ html,body{height:auto;min-height:100%;overflow:auto}
 // 2026-08-06 从 samples 子系统移出为独立页面，逻辑基于原 views/users.js，新增：
 //   1) 前端禁用保护账号（内置 admin / id=1 / 当前登录者）勾选，全选自动跳过（后端同样拦截，前端仅为体验优化）
 //   2) 角色枚举加入 PM（与项目追踪子系统 ADMIN/PM 权限对齐）
-var ROLE_OPTIONS = '<fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option><fluent-option value="PM">项目经理 PM</fluent-option>';
+// 2026-09-04 提交③ 多角色：角色列显示全部 roles 徽章；编辑弹窗多选授予；新增支持兼任角色
+var ROLE_OPTIONS = '<fluent-option value="RD">研发 RD</fluent-option><fluent-option value="ME">生技 ME</fluent-option><fluent-option value="QA">品保 QA</fluent-option><fluent-option value="CUSTODY">保管 CUSTODY</fluent-option><fluent-option value="PM">项目经理 PM</fluent-option><fluent-option value="ADMIN">管理员 ADMIN</fluent-option>';
+var ROLE_ENUM = ['RD', 'ME', 'QA', 'CUSTODY', 'PM', 'ADMIN'];
+// 角色徽章渲染（u.roles 数组；兼容 roles 缺失回退单角色）
+function roleBadges(u) {
+  var roles = Array.isArray(u.roles) && u.roles.length ? u.roles : [u.role];
+  return roles.map(function (r) {
+    return '<span style="display:inline-block;padding:1px 8px;margin-right:4px;border-radius:10px;font-size:12px;' +
+      'background:var(--accent-fill-rest,#e8edf5);color:#1a3a6b">' + (ROLE[r] || r) + '</span>';
+  }).join('');
+}
 // 部门下拉选项：单一事实来源 = data/depts.json，由 /js/shared-constants.js 注入 DEPTS（2026-08-06 研发中心→研发部）
 var DEPT_OPTIONS = (window.DEPTS || ['系统','研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部']).map(function(d){ return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
 
@@ -133,7 +145,7 @@ async function loadUsers(){
           : '<fluent-checkbox class="u-cb" data-id="' + u.id + '" onchange="refreshCount()"></fluent-checkbox>') + '</td>' +
         '<td>' + e(u.username) + (prot ? '<span class="au-prot">受保护</span>' : '') + '</td>' +
         '<td>' + e(u.display_name || '—') + '</td>' +
-        '<td>' + (ROLE[u.role] || u.role) + '</td>' +
+        '<td>' + roleBadges(u) + '</td>' +
         '<td class="muted">' + e(u.dept || '—') + '</td>' +
         '<td>' + (u.enabled === 0 ? '<span style="color:var(--bad)">已停用</span>' : '<span style="color:var(--ok)">正常</span>') + '</td>' +
         '<td><fluent-button appearance="neutral" size="small" onclick="openEditUser(' + u.id + ')">编辑</fluent-button></td>' +
@@ -227,21 +239,29 @@ async function doBatchDelete(){
     closeModal(document.querySelector('.modal-mask')); loadUsers();
   } catch (err) { toast(err.message, 'err'); }
 }
-// 编辑用户弹窗：用户信息卡 + 姓名/新密码分段字段（账号只读）
+// 编辑用户弹窗：用户信息卡 + 姓名/角色多选/新密码分段字段（账号只读）
 function openEditUser(id){
   const u = (window.__users || []).find(x => x.id === id); if (!u) return;
   const avatar = e((u.display_name || u.username || '?').trim().charAt(0));
-  const roleLabel = e(ROLE[u.role] || u.role);
+  const roles = Array.isArray(u.roles) && u.roles.length ? u.roles : [u.role];
+  const roleChecks = ROLE_ENUM.map(function (r) {
+    const on = roles.indexOf(r) !== -1;
+    return '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;cursor:pointer">' +
+      '<input type="checkbox" class="eu-role" value="' + r + '"' + (on ? ' checked' : '') + '> ' + (ROLE[r] || r) + '</label>';
+  }).join('');
   openModal('编辑用户',
     '<div class="ue-form">' +
     '<div class="ue-user-card">' +
     '<div class="ue-avatar">' + avatar + '</div>' +
     '<div class="ue-meta"><div class="ue-name">' + e(u.display_name || u.username) + '</div>' +
-    '<div class="ue-sub">账号 ' + e(u.username) + ' · ' + roleLabel + ' · ' + e(u.dept || '—') + '</div></div>' +
+    '<div class="ue-sub">账号 ' + e(u.username) + ' · ' + roleBadges(u) + ' · ' + e(u.dept || '—') + '</div></div>' +
     '</div>' +
     '<div class="ue-field"><div class="ue-label">姓名</div>' +
     '<fluent-text-field id="eu-name" value="' + e(u.display_name || '') + '"></fluent-text-field>' +
     '<div class="ue-hint">修改后，操作日志与签署记录将显示新姓名</div></div>' +
+    '<div class="ue-field"><div class="ue-label">角色（可多选，第一个为该账号在列表中的主角色）</div>' +
+    '<div>' + roleChecks + '</div>' +
+    '<div class="ue-hint">多角色并集生效：待办按全部角色聚合；变更保存后该账号需重新登录</div></div>' +
     '<div class="ue-field"><div class="ue-label">新密码</div>' +
     '<fluent-text-field id="eu-pass" type="password" placeholder="不修改请留空"></fluent-text-field>' +
     '<div class="ue-hint">留空表示不修改密码；保存后旧密码立即失效</div></div>' +
@@ -252,21 +272,27 @@ async function saveUser(id){
   const body = {}; const name = $('#eu-name').value.trim(); const pass = $('#eu-pass').value;
   if (name !== '') body.display_name = name;
   if (pass !== '') body.password = pass;
+  const roles = [...document.querySelectorAll('.eu-role:checked')].map(cb => cb.value);
+  if (roles.length) body.roles = roles;
   if (!Object.keys(body).length) { toast('未做任何修改', 'err'); return; }
   try {
     await api('PUT', '/api/users/' + id, body);
-    toast('已保存', 'ok');
+    toast('已保存' + (body.roles ? '（角色变更，该账号需重新登录）' : ''), 'ok');
     closeModal(document.querySelector('.modal-mask')); loadUsers();
   } catch (err) { toast(err.message, 'err'); }
 }
 async function addUser(){
   try {
+    // 多角色：主角色下拉 + 兼任角色输入（逗号分隔）合并为 roles 数组
+    const main = $('#u-role').value;
+    const extra = ($('#u-roles-extra').value || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    const roles = [main].concat(extra.filter(r => ROLE_ENUM.indexOf(r) !== -1 && r !== main));
     await api('POST', '/api/users', {
       username: $('#u-user').value, display_name: $('#u-name').value,
-      role: $('#u-role').value, dept: $('#u-dept').value, password: $('#u-pass').value
+      roles: roles, dept: $('#u-dept').value, password: $('#u-pass').value
     });
-    toast('账号已创建', 'ok');
-    $('#u-user').value = ''; $('#u-name').value = ''; $('#u-dept').value = ''; loadUsers();
+    toast('账号已创建' + (roles.length > 1 ? '（' + roles.length + ' 个角色）' : ''), 'ok');
+    $('#u-user').value = ''; $('#u-name').value = ''; $('#u-dept').value = ''; $('#u-roles-extra').value = ''; loadUsers();
   } catch (e) { toast(e.message, 'err'); }
 }
 </script>

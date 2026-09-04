@@ -109,9 +109,11 @@ const dbRef = {
     const pool = getPool();
     const [r] = await pool.execute(sql, params || []);
     return r.affectedRows;
-  }
+  },
+  // 事务入口（2026-09-04 提交③多角色：users.updateUser roles 路径需要事务支持）
+  tx: function(fn) { return txWithTransaction(getPool(), fn); }
 };
-const users = require('./db/users')({ q, one, dbRef, tx: function(fn) { return withTransaction(fn); } });
+const users = require('./db/users')({ q, one, dbRef, tx: function(fn) { return dbRef.tx(fn); } });
 const portalPrefs = require('./db/portal-prefs')({ q, one, dbRef });
 
 // ★ Phase 6: 自动扫描 subsystems/*/db/dao.js 工厂函数并实例化

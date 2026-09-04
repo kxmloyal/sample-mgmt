@@ -58,5 +58,8 @@ function showApp() {
 
 function fillMe() {
   document.getElementById('me-name').textContent = me.display_name || me.username;
-  document.getElementById('me-role').textContent = (ROLE[me.role] || me.role) + ' · ' + (me.dept || '');
+  // 多角色（2026-09-04 提交③）：显示全部角色（roles 并集，斜杠分隔）；单角色显示不变
+  var roles = (me.roles && me.roles.length ? me.roles : [me.role]);
+  var rolesText = roles.map(function (r) { return ROLE[r] || r; }).join(' / ');
+  document.getElementById('me-role').textContent = rolesText + ' · ' + (me.dept || '');
 }

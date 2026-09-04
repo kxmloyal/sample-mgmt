@@ -45,7 +45,8 @@ function register(app) {
   app.get('/api/me', async (req, res) => {
     const u = await currentUser(req);
     if (!u || u.enabled !== 1) return res.status(401).json({ error: '未登录或账号已停用' });
-    res.json({ id: u.id, username: u.username, role: u.role, dept: u.dept, display_name: u.display_name });
+    // 多角色（2026-09-04 提交③）：附加 roles[]（currentUser 已组装 u.roles）；role=主角色保留兼容
+    res.json({ id: u.id, username: u.username, role: u.role, roles: u.roles || [u.role], dept: u.dept, display_name: u.display_name });
   });
 
   // 自助修改密码（全员可用，含 ADMIN）：校验旧密码 → 更新新密码 → 销毁会话强制重新登录

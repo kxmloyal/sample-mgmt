@@ -51,15 +51,21 @@ function register(app) {
   app.post('/api/users', requireAuth, async (req, res) => {
     const u = await currentUser(req);
     if (u.role !== 'ADMIN') return res.status(403).json({ error: '无权限' });
-    const { username, password, role, dept, display_name } = req.body || {};
-    if (!username || !password || !role) return res.status(400).json({ error: '账号/密码/角色必填' });
+    const { username, password, roles, role, dept, display_name } = req.body || {};
+    if (!username || !password) return res.status(400).json({ error: '账号/密码必填' });
     if (await D.getUserByUsername(username)) return res.status(409).json({ error: '账号已存在' });
-    if (!['RD', 'ME', 'QA', 'CUSTODY', 'PM'].includes(role)) return res.status(400).json({ error: '角色只能是 RD/ME/QA/CUSTODY/PM' });
-    const created = await D.createUser({ username, password_hash: bcrypt.hashSync(password, 10), role, dept: dept || '', display_name: display_name || '' });
-    res.json(created);
+    // 多角色（2026-09-04 提交③）：roles 数组优先；兼容旧 role 单值（转单元素数组）
+    const roleList = Array.isArray(roles) ? roles : (roles ? [roles] : (role ? [role] : []));
+    if (!roleList.length) return res.status(400).json({ error: '角色必填' });
+    const ROLE_ENUM = ['RD', 'ME', 'QA', 'CUSTODY', 'PM', 'ADMIN'];
+    const bad = roleList.find(r => !ROLE_ENUM.includes(r));
+    if (bad) return res.status(400).json({ error: '角色只能是 RD/ME/QA/CUSTODY/PM/ADMIN' });
+    const created = await D.createUser({ username, password_hash: bcrypt.hashSync(password, 10), role: roleList[0], dept: dept || '', display_name: display_name || '' });
+    if (roleList.length > 1) await D.syncUserRoles(created.id, roleList); // 单角色 createUser 已写；多角色重写并集
+    res.json(await D.getUserById(created.id));
   });
 
-  // 修改用户（ADMIN 专属）：姓名 / 密码，至少一项；账号 username 不可变
+  // 修改用户（ADMIN 专属）：姓名 / 密码 / 角色（多选），至少一项；账号 username 不可变
   app.put('/api/users/:id', requireAuth, async (req, res) => {
     const u = await currentUser(req);
     if (u.role !== 'ADMIN') return res.status(403).json({ error: '无权限' });
@@ -67,7 +73,7 @@ function register(app) {
     if (!id) return res.status(400).json({ error: '无效用户 ID' });
     const target = await D.getUserById(id);
     if (!target) return res.status(404).json({ error: '用户不存在' });
-    const { display_name, password } = req.body || {};
+    const { display_name, password, roles } = req.body || {};
     const fields = {};
     if (display_name !== undefined) {
       if (typeof display_name !== 'string' || display_name.length > 50) return res.status(400).json({ error: '姓名长度需 ≤50 字符' });
@@ -77,8 +83,19 @@ function register(app) {
       if (typeof password !== 'string' || !password.trim()) return res.status(400).json({ error: '密码不能为空' });
       fields.password_hash = bcrypt.hashSync(password, 10);
     }
-    if (!Object.keys(fields).length) return res.status(400).json({ error: '请至少提供姓名或新密码' });
-    res.json(await D.updateUser(id, fields));
+    if (roles !== undefined) {
+      // 多角色（2026-09-04 提交③）：重写授予并集（users.role 双写主角色）；变更后旧会话失效
+      const roleList = Array.isArray(roles) ? roles : [roles];
+      const ROLE_ENUM = ['RD', 'ME', 'QA', 'CUSTODY', 'PM', 'ADMIN'];
+      if (!roleList.length) return res.status(400).json({ error: '至少保留一个角色' });
+      const bad = roleList.find(r => !ROLE_ENUM.includes(r));
+      if (bad) return res.status(400).json({ error: '角色只能是 RD/ME/QA/CUSTODY/PM/ADMIN' });
+      fields.roles = roleList;
+    }
+    if (!Object.keys(fields).length) return res.status(400).json({ error: '请至少提供姓名、新密码或角色' });
+    const updated = await D.updateUser(id, fields);
+    if (roles !== undefined || password !== undefined) await D.bumpSessionVersion(id); // 角色/密码变更踢旧会话
+    res.json(updated);
   });
 
   // 批量管理用户（ADMIN 专属，2026-08-06）：delete / reset-password / update / enable / disable
