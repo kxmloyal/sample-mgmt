@@ -27,3 +27,15 @@
 .nf-actions fluent-button{min-width:180px}
 .new-grid>.new-col{min-width:0}
 @media(max-width:767px){.nf-grid{grid-template-columns:1fr}}
+
+/* 机型视图卡片墙（2026-09-05 一期，模式同治具 fx-wall-*；smw-* 前缀独立命名避免混用） */
+.smw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.smw-card{background:var(--panel);border:var(--card-border);border-radius:var(--card-radius);overflow:hidden;cursor:pointer;transition:var(--card-hover,box-shadow .15s,transform .15s)}
+.smw-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow-hover)}
+.smw-cover{height:96px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#eef2ff,#e0e7ff);color:#6366f1;font-size:34px}
+.smw-body{padding:10px 12px}
+.smw-code{font-size:14px}
+.smw-name{color:var(--muted);font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.smw-count{font-size:12px;margin-top:6px}
+.smw-count b{font-size:16px}
+@media(max-width:767px){.smw-grid{grid-template-columns:repeat(2,1fr)}}

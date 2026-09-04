@@ -30,7 +30,9 @@ async function viewSamples() {
     '<fluent-select id="f-model" onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
     '<fluent-select id="f-sort" onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
-    '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button></div>' +
+    '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button>' +
+    // 机型视图切换入口（hash 路由切换；勿直调 viewSampleModelWall——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
+    '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
     '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>' +
@@ -39,7 +41,19 @@ async function viewSamples() {
     '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span></div>' +
     '<div id="s-list"></div>';
   var stMatch = location.hash.match(/[?&]status=([^&]+)/);
+  var moMatch = location.hash.match(/[?&]model=([^&]+)/);
   if (stMatch) { var stBox = $('#f-status'); if (stBox) stBox.value = decodeURIComponent(stMatch[1]); loadSamplesWithStatus(decodeURIComponent(stMatch[1])); }
+  else if (moMatch) {
+    // 机型视图深链：#/samples?model=X 预选机型下拉（fluent-select 选项异步注册，重试赋值直到生效，模式同 projects list 预选项目）
+    var moVal = decodeURIComponent(moMatch[1]);
+    var moSel = $('#f-model');
+    var tries = 0;
+    (function attempt() {
+      moSel.value = moVal;
+      if (moSel.value === moVal || ++tries >= 10) loadSamples();
+      else setTimeout(attempt, 60);
+    })();
+  }
   else loadSamples();
 }
 
