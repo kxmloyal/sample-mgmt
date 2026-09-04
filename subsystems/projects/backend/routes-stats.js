@@ -100,8 +100,13 @@ function register(app) {
         if (!from || !to || !act) return res.status(400).json({ error: '转边 from/to/action 均不能为空' });
         if (KEYS.indexOf(from) < 0 || KEYS.indexOf(to) < 0)
           return res.status(400).json({ error: '转边 from/to 必须为合法状态（' + KEYS.join('/') + '）' });
-        if (seenActions.has(act)) return res.status(400).json({ error: '转边 action 重复：' + act });
-        seenActions.add(act);
+        // 存量缺陷修复：SYSTEM 伪角色的转边（如 AUTO_OVERDUE 双边）豁免 action 唯一校验——
+        // 人工流转仍严格唯一，系统边按"源状态+动作"判重，与 manifest 默认配置自洽
+        const isSystemEdge = Array.isArray(tr.role) && tr.role.includes('SYSTEM');
+        if (!isSystemEdge) {
+          if (seenActions.has(act)) return res.status(400).json({ error: '转边 action 重复：' + act });
+          seenActions.add(act);
+        }
         if (!Array.isArray(tr.role) || tr.role.length === 0)
           return res.status(400).json({ error: '转边 ' + from + '→' + to + ' 必须指定至少一个角色' });
         if (!String(tr.label || '').trim())

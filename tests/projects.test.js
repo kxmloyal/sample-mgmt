@@ -389,7 +389,8 @@ describe('缺陷#2 用户列表权限放宽', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0]).toHaveProperty('id');
-    expect(res.body[0]).toHaveProperty('username');
+    // P1-4 安全收敛（13e8f2f）：接口不再返回 username（登录名），仅 id+display_name；断言同步更新
+    expect(res.body[0]).not.toHaveProperty('username');
     expect(res.body[0]).toHaveProperty('display_name');
     expect(res.body[0]).not.toHaveProperty('password_hash');
   });
@@ -405,7 +406,8 @@ describe('缺陷#2 用户列表权限放宽', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0]).toHaveProperty('id');
-    expect(res.body[0]).toHaveProperty('username');
+    // P1-4 安全收敛（13e8f2f）：接口不再返回 username（登录名），仅 id+display_name；断言同步更新
+    expect(res.body[0]).not.toHaveProperty('username');
     expect(res.body[0]).toHaveProperty('display_name');
     expect(res.body[0]).not.toHaveProperty('password_hash');
   });
