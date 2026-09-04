@@ -28,6 +28,9 @@ var CONTROL_BAD_TYPES = ['外观不良', '功能不良', '尺寸不良', '性能
 var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制造部', 'FQC', '生技部'];
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
+// 2026-09-04 会签退回闭环（方案A）：剔除 SIGN_REJECT/DISPOSAL_REJECT 两条旁路退回边——
+// 退回唯一入口 = 「去会签」弹窗选「退回」（意见必填，签字人留痕）；重提时后端清旧签字行重建模板。
+// manifest 保留两条退回边仅作 API 兼容，transition 接口已显式拒绝这两个 action。
 var CONTROL_TRANSITIONS = [
   { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME', 'QA'], label: '提交会签' },
   { from: 'SIGNING', to: 'LABELED', action: 'SIGN_OK', role: ['QA'], label: '闸口①会签通过/贴标' },
@@ -38,9 +41,7 @@ var CONTROL_TRANSITIONS = [
   { from: 'REWORK_OPENED', to: 'REWORKING', action: 'START', role: ['ME'], label: '生产确认开工' },
   { from: 'REWORKING', to: 'REWORK_REPORTED', action: 'REPORT', role: ['CUSTODY', 'ME'], label: '报工' },
   { from: 'REWORK_REPORTED', to: 'REIN_STOCK', action: 'IN_STOCK', role: ['CUSTODY', 'ME'], label: '入库' },
-  { from: 'REIN_STOCK', to: 'SHIPPED', action: 'SHIP', role: ['CUSTODY', 'ME'], label: '出货' },
-  { from: 'SIGNING', to: 'DRAFT', action: 'SIGN_REJECT', role: ['QA', 'RD', 'ME', 'CUSTODY'], label: '闸口①会签退回' },
-  { from: 'DISPOSAL_SIGNING', to: 'NCR_DONE', action: 'DISPOSAL_REJECT', role: ['QA', 'RD'], label: '闸口②会签退回' }
+  { from: 'REIN_STOCK', to: 'SHIPPED', action: 'SHIP', role: ['CUSTODY', 'ME'], label: '出货' }
 ];
 
 // 按当前状态 + 角色返回可执行的流转按钮列表（不含 VOID 作废）

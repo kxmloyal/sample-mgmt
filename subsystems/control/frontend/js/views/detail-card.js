@@ -80,7 +80,8 @@ function ctlCardHtml(agg) {
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
- *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作 → 作废（仅 ADMIN），点击统一走 ctlOpen。
+ *  会签退回闭环（方案A）：流转区不再有退回按钮（constants.js 已剔除边）——退回在「去会签」弹窗选「退回」）
  *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
 function ctlActionButtons(agg) {
   var o = agg.order;
@@ -99,8 +100,7 @@ function ctlActionButtons(agg) {
   }
   btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
-  }).join('');
-  if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {
+  }).join('');  if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {
     btns += '<button class="btn danger" onclick="ctlOpen(\'void\')">作废</button>';
   }
   return btns || '<span class="muted">当前状态/角色无可执行操作</span>';

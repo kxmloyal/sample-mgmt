@@ -12,6 +12,12 @@ const {
 } = require('./flow-ops');
 const { deptGateAllowed, deptEquals } = require('./flow');
 
+// 会签退回闭环（2026-09-04 方案A）：退回归位签字接口，流转旁路封禁。
+// 退回唯一入口 = POST /sign decision=REJECT（意见必填、留痕到 control_signs+control_logs）；
+// 重提时 SUBMIT/DISPATCH 事务内清旧闸口行+重建模板，每轮会签独立、旧 AGREE 不带病生效。
+const SIGN_REJECT_ACTIONS = ['SIGN_REJECT', 'DISPOSAL_REJECT'];
+const SIGN_REJECT_HINT = '会签退回请在详情页「去会签」弹窗中选择「退回」（须填写退回意见），不在此处操作';
+
 // 流转 action → 留痕备注文案（无法从 manifest 语义翻译的口径）
 const ACTION_LOG = {
   SUBMIT: '提交会签', SIGN_OK: '闸口①会签通过/贴标', STORE: '入管制仓',
@@ -220,6 +226,8 @@ function register(app) {
     if (!order) return res.status(404).json({ error: '管制单不存在' });
     const action = ((req.body || {}).action || '').trim();
     if (!action) return res.status(400).json({ error: '请指定操作类型' });
+    // 会签退回闭环（2026-09-04 方案A）：流转旁路不再受理退回类 action（前端已同步移除按钮，此处防直调）
+    if (SIGN_REJECT_ACTIONS.includes(action)) return res.status(400).json({ error: SIGN_REJECT_HINT });
     const sm = getStateMachine();
     // 提交② 多角色角色关：任一角色命中即过（u.roles 并集，等价旧 u.role 单值判定）
     const rolesOk = (u.roles || [u.role]).some(r => sm.canTransition(r, order.status, action));
@@ -254,7 +262,17 @@ function register(app) {
         const updated = applyActionFields(order, action, req.body || {});
         updated.status = t.to;
         const r = await D.updateOrder(updated, conn, order.version);
-        if (action === 'DISPATCH') { // 初始化闸口② 会签模板
+        if (action === 'SUBMIT') {
+          // 会签退回闭环（2026-09-04 方案A）：重提即新一轮会签——清掉闸口①全部旧签字行
+          //（含上轮 REJECT/AGREE 残留），重建空模板；旧轮次结论以 control_logs 留痕为准
+          await D.deleteSignsByOrder(order.id, 'APPLY_SIGN', conn);
+        }
+        if (action === 'SUBMIT' || action === 'DISPATCH') { // 初始化对应闸口会签模板（空行，待签）
+          for (const s of buildSignTemplate(order.id, action === 'SUBMIT' ? 'APPLY_SIGN' : 'DISPOSAL_SIGN')) await D.addSign(s, conn);
+        }
+        if (action === 'DISPATCH') {
+          // 幂等兜底：DISPOSAL_SIGN 若有历史残留（异常路径产生），重建前先清
+          await D.deleteSignsByOrder(order.id, 'DISPOSAL_SIGN', conn);
           for (const s of buildSignTemplate(order.id, 'DISPOSAL_SIGN')) await D.addSign(s, conn);
         }
         await D.addControlLog({ order_id: order.id, action, role: u.role, user_id: u.id, dept: u.dept, comment: (req.body || {}).comment || ACTION_LOG[action] || action }, conn);
@@ -280,6 +298,8 @@ function register(app) {
     if (order.status !== node.trigger_status) return res.status(400).json({ error: '当前状态不可会签' });
     const decision = (body.decision || '').trim().toUpperCase();
     if (!['AGREE', 'REJECT', 'SKIP'].includes(decision)) return res.status(400).json({ error: '非法会签决定' });
+    // 会签退回闭环（2026-09-04 方案A）：REJECT 为唯一退回入口，退回意见必填（整单回退，理由必须留档）
+    if (decision === 'REJECT' && !(body.comment || '').trim()) return res.status(400).json({ error: '退回必须填写退回意见' });
     if (decision === 'SKIP' && u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可强制跳过会签' });
     const target = resolveSignTarget(node, await D.listSignsByOrder(order.id), u, null);
     if (target.code) return res.status(target.code).json({ error: target.error });

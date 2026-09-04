@@ -141,6 +141,18 @@ module.exports = function createDao(deps) {
 
   function listSignsByOrder(order_id) { return q('SELECT * FROM control_signs WHERE order_id = ? ORDER BY `seq` ASC', [order_id]); }
 
+  // 删除某单某闸口的全部会签行（2026-09-04 会签退回闭环：REJECT 回退后旧签字行必须作废，
+  // 由 SUBMIT/DISPATCH 重提时在事务内清行+重建模板，杜绝旧 AGREE 带病生效/重签被锁死）。
+  // node_key 可选：缺省清该单全部闸口行。仅限事务内 conn 调用，历史留痕以 control_logs 为准。
+  function deleteSignsByOrder(order_id, node_key, conn) {
+    const sql = node_key
+      ? 'DELETE FROM control_signs WHERE order_id = ? AND node_key = ?'
+      : 'DELETE FROM control_signs WHERE order_id = ?';
+    const params = node_key ? [order_id, node_key] : [order_id];
+    if (conn) return conn.execute(sql, params);
+    return run(sql, params);
+  }
+
   // 各会签中单据的待签行集合（decision 空行，含 role+sign_dept；供列表接口注入 pending 行，
   // 前端「待我签核」按角色+部门精准判定，与会签按部门区分同口径）
   function listPendingSignRoles() {
@@ -273,5 +285,5 @@ module.exports = function createDao(deps) {
 
   function getControlUploadDir() { return CONTROL_UPLOAD_DIR; }
 
-  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, listPendingSignRoles, listOverdueSigns, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting, ctlListOrderFiles, ctlGetOrderFile, ctlAddOrderFile, ctlDeleteOrderFile, getControlUploadDir };
+  return { createOrder, getOrderById, getOrderByNo, listOrders, countAllOrders, updateOrder, countOrdersByStatus, addSign, listSignsByOrder, deleteSignsByOrder, listPendingSignRoles, listOverdueSigns, addNcrLog, listNcrLogsByOrder, listNcrAgg, countNcrAgg, addReworkLog, listReworkLogsByOrder, addControlLog, listLogsByOrder, listLogsAll, countLogsAll, getControlSetting, setControlSetting, ctlListOrderFiles, ctlGetOrderFile, ctlAddOrderFile, ctlDeleteOrderFile, getControlUploadDir };
 };

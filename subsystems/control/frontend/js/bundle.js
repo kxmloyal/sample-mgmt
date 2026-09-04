@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmisidq — 24 files */
+/** BUNDLE vbmtmmwwmu — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -238,6 +238,9 @@ var CONTROL_BAD_TYPES = ['外观不良', '功能不良', '尺寸不良', '性能
 var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制造部', 'FQC', '生技部'];
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
+// 2026-09-04 会签退回闭环（方案A）：剔除 SIGN_REJECT/DISPOSAL_REJECT 两条旁路退回边——
+// 退回唯一入口 = 「去会签」弹窗选「退回」（意见必填，签字人留痕）；重提时后端清旧签字行重建模板。
+// manifest 保留两条退回边仅作 API 兼容，transition 接口已显式拒绝这两个 action。
 var CONTROL_TRANSITIONS = [
   { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME', 'QA'], label: '提交会签' },
   { from: 'SIGNING', to: 'LABELED', action: 'SIGN_OK', role: ['QA'], label: '闸口①会签通过/贴标' },
@@ -248,9 +251,7 @@ var CONTROL_TRANSITIONS = [
   { from: 'REWORK_OPENED', to: 'REWORKING', action: 'START', role: ['ME'], label: '生产确认开工' },
   { from: 'REWORKING', to: 'REWORK_REPORTED', action: 'REPORT', role: ['CUSTODY', 'ME'], label: '报工' },
   { from: 'REWORK_REPORTED', to: 'REIN_STOCK', action: 'IN_STOCK', role: ['CUSTODY', 'ME'], label: '入库' },
-  { from: 'REIN_STOCK', to: 'SHIPPED', action: 'SHIP', role: ['CUSTODY', 'ME'], label: '出货' },
-  { from: 'SIGNING', to: 'DRAFT', action: 'SIGN_REJECT', role: ['QA', 'RD', 'ME', 'CUSTODY'], label: '闸口①会签退回' },
-  { from: 'DISPOSAL_SIGNING', to: 'NCR_DONE', action: 'DISPOSAL_REJECT', role: ['QA', 'RD'], label: '闸口②会签退回' }
+  { from: 'REIN_STOCK', to: 'SHIPPED', action: 'SHIP', role: ['CUSTODY', 'ME'], label: '出货' }
 ];
 
 // 按当前状态 + 角色返回可执行的流转按钮列表（不含 VOID 作废）
@@ -1330,7 +1331,8 @@ function ctlCardHtml(agg) {
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
- *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作 → 作废（仅 ADMIN），点击统一走 ctlOpen。
+ *  会签退回闭环（方案A）：流转区不再有退回按钮（constants.js 已剔除边）——退回在「去会签」弹窗选「退回」）
  *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
 function ctlActionButtons(agg) {
   var o = agg.order;
@@ -1349,8 +1351,7 @@ function ctlActionButtons(agg) {
   }
   btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
-  }).join('');
-  if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {
+  }).join('');  if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {
     btns += '<button class="btn danger" onclick="ctlOpen(\'void\')">作废</button>';
   }
   return btns || '<span class="muted">当前状态/角色无可执行操作</span>';
