@@ -2,11 +2,15 @@
 // 注册顺序（Task 7 修正）：stats 静态路径最先（/workflow /stats /tasks/export /tasks），
 // 避免 GET /api/projects/tasks/export 被 routes-tasks 的 /tasks/:tid 参数路由抢占（tid='export' → 404）；
 // routes-tasks 其次（/tasks/:tid 参数路由）；routes-task-extras 子路径路由（/tasks/:tid/deps|files|links）；
+// routes-milestones/routes-risks/routes-extras（OA 能力移植，静态前缀，须在 :id 之前）；
 // routes-projects 最后（/:id 参数路由）
 function register(app) {
   require('./routes-stats').register(app);        // 静态路径（/workflow /stats /tasks/export /tasks）最先，避免被 :tid 抢占
   require('./routes-tasks').register(app);        // 含 /tasks/:tid 参数路由
   require('./routes-task-extras').register(app);  // 子路径路由
+  require('./routes-milestones').register(app);   // OA 移植：里程碑（/milestones 静态前缀 + /:id/milestones 列表）
+  require('./routes-risks').register(app);        // OA 移植：风险（/risks 静态前缀 + /:id/risks 列表）
+  require('./routes-extras').register(app);       // OA 移植：预算/成本扩展（/:id/extras）
   require('./routes-projects').register(app);     // 最后注册 /:id 参数路由
 }
 

@@ -1,4 +1,4 @@
-/** BUNDLE vbmtlmu7pm — 15 files */
+/** BUNDLE vbmtmi40cg — 17 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -234,7 +234,15 @@ const PApi = {
   taskLinks: (tid, refType, refId) => '/api/projects/tasks/' + tid + '/links' + (refType ? '/' + refType + (refId ? '/' + refId : '') : ''),
   stats: '/api/projects/stats',
   exportCsv: '/api/projects/tasks/export',
-  workflow: '/api/projects/workflow'
+  workflow: '/api/projects/workflow',
+  // OA 能力移植（方案A一期）：里程碑/风险/预算扩展
+  milestones: pid => '/api/projects/' + pid + '/milestones',
+  milestone: mid => '/api/projects/milestones/' + mid,
+  milestoneAchieve: mid => '/api/projects/milestones/' + mid + '/achieve',
+  risks: pid => '/api/projects/' + pid + '/risks',
+  risk: rid => '/api/projects/risks/' + rid,
+  riskResolve: rid => '/api/projects/risks/' + rid + '/resolve',
+  extras: pid => '/api/projects/' + pid + '/extras'
 };
 
 
@@ -878,6 +886,245 @@ async function memRemove(uid) {
 }
 
 
+/* --- subsystems/projects/frontend/js/views/milestones.js --- */
+// milestones.js — OA 能力移植：里程碑管理（项目下拉 + 里程碑列表 + 新建/编辑/达成/删除）
+// 权限：新建/编辑/达成/删除 = ADMIN/PM（owner 由后端二次校验）；其他角色只读
+async function renderMilestones() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-select id="ms-project" onchange="msLoad()"><fluent-option value="">选择项目…</fluent-option></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="msCreate()">新建里程碑</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="msLoad()">刷新</fluent-button></div>' +
+    '<div id="ms-list"></div>';
+  const projects = await api('GET', PApi.projects());
+  $('#ms-project').innerHTML = '<fluent-option value="">选择项目…</fluent-option>' +
+    projects.map(function (p) { return '<fluent-option value="' + p.id + '">' + esc(p.name) + '</fluent-option>'; }).join('');
+}
+
+async function msLoad() {
+  const pid = $('#ms-project').value;
+  const box = $('#ms-list');
+  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  const list = await api('GET', PApi.milestones(pid));
+  const canManage = me.role === 'ADMIN' || me.role === 'PM';
+  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无里程碑</div>'; return; }
+  box.innerHTML = '<div class="pk-stats">' + list.map(function (m) {
+    const done = m.status === 'ACHIEVED';
+    return '<fluent-card class="kb-stat">' +
+      '<span class="n" style="font-size:15px">' + esc(m.name) + '</span>' +
+      '<span class="l">目标 ' + (m.target_date || '—') +
+      (done ? ' · 达成 ' + (m.actual_date || '') + (m.is_delayed ? ' <b style="color:#b91c1c">（延期）</b>' : '') : '') + '</span>' +
+      '<span class="l">' + (done
+        ? '<span style="color:#065f46">✔ 已达成</span>'
+        : '待达成' + (m.target_date && m.target_date < new Date().toISOString().slice(0, 10) ? ' <b style="color:#b91c1c">（已超期）</b>' : '')) + '</span>' +
+      (canManage
+        ? '<span class="kb-x">' +
+          (done ? '' : '<fluent-button appearance="accent" size="small" onclick="msAchieve(' + m.id + ',' + m.version + ')">达成</fluent-button> ') +
+          '<fluent-button appearance="secondary" size="small" onclick="msEdit(' + m.id + ')">编辑</fluent-button> ' +
+          '<fluent-button appearance="secondary" size="small" onclick="msDel(' + m.id + ')">删除</fluent-button></span>'
+        : '') +
+      '</fluent-card>';
+  }).join('') + '</div>';
+}
+
+function msCreate() {
+  const pid = $('#ms-project').value;
+  if (!pid) return showToast('请先选择项目', 'err');
+  openModal('新建里程碑',
+    '<div class="pk-form">' +
+    '<label>里程碑名称 *</label><fluent-text-field id="ms-name"></fluent-text-field>' +
+    '<label>目标日期</label><fluent-text-field id="ms-date" type="date"></fluent-text-field>' +
+    '<label>排序（小在前）</label><fluent-text-field id="ms-sort" type="number" value="0"></fluent-text-field>' +
+    '<label>描述</label><fluent-text-area id="ms-desc"></fluent-text-area></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="msCreateSave()">创建</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function msCreateSave() {
+  const pid = $('#ms-project').value;
+  const name = $('#ms-name').value.trim();
+  if (!name) return showToast('里程碑名称必填', 'err');
+  try {
+    await api('POST', PApi.milestones(pid), {
+      name: name, target_date: $('#ms-date').value || null,
+      sort: Number($('#ms-sort').value) || 0, description: $('#ms-desc').value
+    });
+    showToast('创建成功'); pCloseModal(); msLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+async function msEdit(id) {
+  const pid = $('#ms-project').value;
+  const list = await api('GET', PApi.milestones(pid));
+  const m = list.find(function (x) { return x.id === id; });
+  if (!m) return showToast('里程碑不存在', 'err');
+  if (m.status === 'ACHIEVED') return showToast('已达成里程碑不可编辑', 'err');
+  openModal('编辑里程碑',
+    '<div class="pk-form">' +
+    '<label>里程碑名称 *</label><fluent-text-field id="ms-name" value="' + esc(m.name) + '"></fluent-text-field>' +
+    '<label>目标日期</label><fluent-text-field id="ms-date" type="date" value="' + (m.target_date || '') + '"></fluent-text-field>' +
+    '<label>排序</label><fluent-text-field id="ms-sort" type="number" value="' + (m.sort || 0) + '"></fluent-text-field>' +
+    '<label>描述</label><fluent-text-area id="ms-desc">' + esc(m.description || '') + '</fluent-text-area></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="msEditSave(' + id + ',' + m.version + ')">保存</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function msEditSave(id, version) {
+  const name = $('#ms-name').value.trim();
+  if (!name) return showToast('里程碑名称必填', 'err');
+  try {
+    await api('PUT', PApi.milestone(id), {
+      name: name, target_date: $('#ms-date').value || null,
+      sort: Number($('#ms-sort').value) || 0, description: $('#ms-desc').value, version: version
+    });
+    showToast('已保存'); pCloseModal(); msLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+// 达成里程碑（CAS：传读取时 version；409 时提示刷新）
+async function msAchieve(id, version) {
+  if (!confirm('确认标记该里程碑已达成？（若已超过目标日期将自动标记延期）')) return;
+  try {
+    await api('POST', PApi.milestoneAchieve(id), { version: version });
+    showToast('已达成'); msLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+async function msDel(id) {
+  if (!confirm('确认删除该里程碑？')) return;
+  try { await api('DELETE', PApi.milestone(id)); showToast('已删除'); msLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+
+/* --- subsystems/projects/frontend/js/views/risks.js --- */
+// risks.js — OA 能力移植：风险管理（项目下拉 + 风险列表 + 严重度×概率矩阵标记 + 新建/编辑/解决/删除）
+// 权限：识别 = 项目成员（后端校验）；编辑/解决/删除 = ADMIN/PM（owner 后端二次校验）；只读角色仅浏览
+async function renderRisks() {
+  const v = $('#view');
+  v.innerHTML =
+    '<div class="pk-filters">' +
+    '<fluent-select id="rk-project" onchange="rkLoad()"><fluent-option value="">选择项目…</fluent-option></fluent-select>' +
+    '<fluent-button appearance="accent" onclick="rkCreate()">识别风险</fluent-button>' +
+    '<fluent-button appearance="secondary" onclick="rkLoad()">刷新</fluent-button></div>' +
+    '<div id="rk-list"></div>';
+  const projects = await api('GET', PApi.projects());
+  $('#rk-project').innerHTML = '<fluent-option value="">选择项目…</fluent-option>' +
+    projects.map(function (p) { return '<fluent-option value="' + p.id + '">' + esc(p.name) + '</fluent-option>'; }).join('');
+}
+
+// 严重度/概率中文与颜色（对齐 constants.js 优先级配色习惯）
+var SEV_CN = { H: '高', M: '中', L: '低' };
+var SEV_COLOR = { H: '#b91c1c', M: '#92400e', L: '#065f46' };
+var RISK_TYPE_CN = { schedule: '进度', quality: '质量', resource: '资源', tech: '技术', other: '其他' };
+
+async function rkLoad() {
+  const pid = $('#rk-project').value;
+  const box = $('#rk-list');
+  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  const list = await api('GET', PApi.risks(pid));
+  const canManage = me.role === 'ADMIN' || me.role === 'PM';
+  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无风险记录</div>'; return; }
+  box.innerHTML = '<div class="pk-stats">' + list.map(function (r) {
+    const resolved = r.status === 'RESOLVED';
+    return '<fluent-card class="kb-stat">' +
+      '<span class="n" style="font-size:15px">' + esc(r.risk_name) + '</span>' +
+      '<span class="l">' + (RISK_TYPE_CN[r.risk_type] || r.risk_type || '—') +
+      ' · 严重度 <b style="color:' + SEV_COLOR[r.severity] + '">' + (SEV_CN[r.severity] || r.severity) + '</b>' +
+      ' · 概率 <b style="color:' + SEV_COLOR[r.probability] + '">' + (SEV_CN[r.probability] || r.probability) + '</b></span>' +
+      (r.impact ? '<span class="l">影响：' + esc(r.impact) + '</span>' : '') +
+      '<span class="l">' + (resolved
+        ? '<span style="color:#065f46">✔ 已解决</span>' + (r.resolved_name ? '（' + esc(r.resolved_name) + ' ' + (r.resolved_at || '').slice(0, 10) + '）' : '')
+        : '<span style="color:#b91c1c">● 开放</span>' + (r.identified_name ? '（' + esc(r.identified_name) + ' 识别）' : '')) + '</span>' +
+      (canManage
+        ? '<span class="kb-x">' +
+          (resolved ? '' : '<fluent-button appearance="accent" size="small" onclick="rkResolve(' + r.id + ',' + r.version + ')">解决</fluent-button> ' +
+          '<fluent-button appearance="secondary" size="small" onclick="rkEdit(' + r.id + ')">编辑</fluent-button> ') +
+          '<fluent-button appearance="secondary" size="small" onclick="rkDel(' + r.id + ')">删除</fluent-button></span>'
+        : '') +
+      '</fluent-card>';
+  }).join('') + '</div>';
+}
+
+function rkCreate() {
+  const pid = $('#rk-project').value;
+  if (!pid) return showToast('请先选择项目', 'err');
+  openModal('识别风险',
+    '<div class="pk-form">' +
+    '<label>风险名称 *</label><fluent-text-field id="rk-name"></fluent-text-field>' +
+    '<label>类型</label><fluent-select id="rk-type">' +
+    Object.keys(RISK_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '">' + RISK_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>严重度</label><fluent-select id="rk-sev"><fluent-option value="H">高</fluent-option><fluent-option value="M" selected>中</fluent-option><fluent-option value="L">低</fluent-option></fluent-select>' +
+    '<label>发生概率</label><fluent-select id="rk-prob"><fluent-option value="H">高</fluent-option><fluent-option value="M" selected>中</fluent-option><fluent-option value="L">低</fluent-option></fluent-select>' +
+    '<label>影响说明</label><fluent-text-field id="rk-impact"></fluent-text-field>' +
+    '<label>缓解措施</label><fluent-text-area id="rk-mit"></fluent-text-area>' +
+    '<label>描述</label><fluent-text-area id="rk-desc"></fluent-text-area></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="rkCreateSave()">提交</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function rkCreateSave() {
+  const pid = $('#rk-project').value;
+  const name = $('#rk-name').value.trim();
+  if (!name) return showToast('风险名称必填', 'err');
+  try {
+    await api('POST', PApi.risks(pid), {
+      risk_name: name, risk_type: $('#rk-type').value,
+      severity: $('#rk-sev').value, probability: $('#rk-prob').value,
+      impact: $('#rk-impact').value, mitigation: $('#rk-mit').value, description: $('#rk-desc').value
+    });
+    showToast('已识别'); pCloseModal(); rkLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+async function rkEdit(id) {
+  const pid = $('#rk-project').value;
+  const list = await api('GET', PApi.risks(pid));
+  const r = list.find(function (x) { return x.id === id; });
+  if (!r) return showToast('风险不存在', 'err');
+  if (r.status === 'RESOLVED') return showToast('已解决风险不可编辑', 'err');
+  openModal('编辑风险',
+    '<div class="pk-form">' +
+    '<label>风险名称 *</label><fluent-text-field id="rk-name" value="' + esc(r.risk_name) + '"></fluent-text-field>' +
+    '<label>类型</label><fluent-select id="rk-type">' +
+    Object.keys(RISK_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '"' + (r.risk_type === k ? ' selected' : '') + '>' + RISK_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>严重度</label><fluent-select id="rk-sev">' +
+    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + (r.severity === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>发生概率</label><fluent-select id="rk-prob">' +
+    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + (r.probability === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>影响说明</label><fluent-text-field id="rk-impact" value="' + esc(r.impact || '') + '"></fluent-text-field>' +
+    '<label>缓解措施</label><fluent-text-area id="rk-mit">' + esc(r.mitigation || '') + '</fluent-text-area>' +
+    '<label>描述</label><fluent-text-area id="rk-desc">' + esc(r.description || '') + '</fluent-text-area></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="rkEditSave(' + id + ',' + r.version + ')">保存</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function rkEditSave(id, version) {
+  const name = $('#rk-name').value.trim();
+  if (!name) return showToast('风险名称必填', 'err');
+  try {
+    await api('PUT', PApi.risk(id), {
+      risk_name: name, risk_type: $('#rk-type').value,
+      severity: $('#rk-sev').value, probability: $('#rk-prob').value,
+      impact: $('#rk-impact').value, mitigation: $('#rk-mit').value,
+      description: $('#rk-desc').value, version: version
+    });
+    showToast('已保存'); pCloseModal(); rkLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+async function rkResolve(id, version) {
+  if (!confirm('确认标记该风险已解决？')) return;
+  try {
+    await api('POST', PApi.riskResolve(id), { version: version });
+    showToast('已解决'); rkLoad();
+  } catch (e) { showToast(e.message, 'err'); }
+}
+
+async function rkDel(id) {
+  if (!confirm('确认删除该风险记录？')) return;
+  try { await api('DELETE', PApi.risk(id)); showToast('已删除'); rkLoad(); }
+  catch (e) { showToast(e.message, 'err'); }
+}
+
+
 /* --- subsystems/projects/frontend/js/views/task-detail.js --- */
 // task-detail.js — 任务详情：主信息卡 + 分区 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 let _tid = 0;
@@ -1237,10 +1484,12 @@ const NAV=[
   {k:'kanban',t:'任务看板',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'list',t:'任务列表',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'projects',t:'项目列表',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'milestones',t:'里程碑',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
+  {k:'risks',t:'风险管理',roles:['ADMIN','PM','RD','QA','CUSTODY','ME']},
   {k:'workflow',t:'状态机管理',roles:['ADMIN']},
 ];
-const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,workflow:renderWorkflow};
-const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',workflow:'状态机管理'};
+const VIEWS={dashboard:renderProjectDashboard,kanban:renderTaskKanban,list:renderTaskList,projects:renderProjects,milestones:renderMilestones,risks:renderRisks,workflow:renderWorkflow};
+const META={dashboard:'项目看板',kanban:'任务看板',list:'任务列表',projects:'项目列表',milestones:'里程碑',risks:'风险管理',workflow:'状态机管理'};
 function route(){
   // P0-2 修复：剥离 query string（#/list?project=xx），与 samples 路由一致
   const raw=location.hash.replace('#/','');

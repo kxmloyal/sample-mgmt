@@ -10,5 +10,13 @@ const PApi = {
   taskLinks: (tid, refType, refId) => '/api/projects/tasks/' + tid + '/links' + (refType ? '/' + refType + (refId ? '/' + refId : '') : ''),
   stats: '/api/projects/stats',
   exportCsv: '/api/projects/tasks/export',
-  workflow: '/api/projects/workflow'
+  workflow: '/api/projects/workflow',
+  // OA 能力移植（方案A一期）：里程碑/风险/预算扩展
+  milestones: pid => '/api/projects/' + pid + '/milestones',
+  milestone: mid => '/api/projects/milestones/' + mid,
+  milestoneAchieve: mid => '/api/projects/milestones/' + mid + '/achieve',
+  risks: pid => '/api/projects/' + pid + '/risks',
+  risk: rid => '/api/projects/risks/' + rid,
+  riskResolve: rid => '/api/projects/risks/' + rid + '/resolve',
+  extras: pid => '/api/projects/' + pid + '/extras'
 };
