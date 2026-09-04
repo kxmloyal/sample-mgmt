@@ -56,5 +56,12 @@
     { "stage": 3, "key": "ncr_disposal", "name": "NCR与处理会签", "dept": ["品保", "研发"] },
     { "stage": 4, "key": "rework", "name": "重工执行", "dept": ["生管", "制造部", "仓库"] },
     { "stage": 5, "key": "in_stock_ship", "name": "入库出货", "dept": ["仓库", "制造部"] }
-  ]
+  ],
+  "flowPolicy": {
+    "_comment": "部门门槛策略（2026-09-04 下沉授权层）：CUSTODY 执行下列动作时须 dept 命中别名列之一；ME/QA/ADMIN 不受限。待办投递/前端按钮/后端 403 三处同源引用本表。",
+    "STORE": ["仓库"],
+    "REPORT": ["生管", "制造部", "仓库"],
+    "IN_STOCK": ["仓库", "生管"],
+    "SHIP": ["仓库", "生管"]
+  }
 }

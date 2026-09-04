@@ -10,6 +10,7 @@ const {
   getStateMachine, statusLabel, findSignNode, buildSignTemplate,
   gateForAction, isGatePassed, resolveSignTarget, rejectTargetOf, targetOf
 } = require('./flow-ops');
+const { deptGateAllowed, deptEquals } = require('./flow');
 
 // 流转 action → 留痕备注文案（无法从 manifest 语义翻译的口径）
 const ACTION_LOG = {
@@ -220,7 +221,11 @@ function register(app) {
     const action = ((req.body || {}).action || '').trim();
     if (!action) return res.status(400).json({ error: '请指定操作类型' });
     const sm = getStateMachine();
-    if (!sm.canTransition(u.role, order.status, action)) return res.status(403).json({ error: '当前状态/角色不允许该操作' });
+    // 提交② 多角色角色关：任一角色命中即过（u.roles 并集，等价旧 u.role 单值判定）
+    const rolesOk = (u.roles || [u.role]).some(r => sm.canTransition(r, order.status, action));
+    if (!rolesOk) return res.status(403).json({ error: '当前状态/角色不允许该操作' });
+    // 提交② 部门关下沉（策略源 control-flow.json flowPolicy）：CUSTODY 仓口动作须部门命中
+    if (!deptGateAllowed(u, action)) return res.status(403).json({ error: '该操作由仓库口（' + ((require('../../../data/control-flow.json').flowPolicy || {})[action] || []).join('/') + '）执行，您所在部门无权操作' });
     const gate = gateForAction(action);
     if (gate && !isGatePassed(await D.listSignsByOrder(order.id), gate)) return res.status(400).json({ error: '该节点会签未完成' });
     const t = targetOf(action, order.status);

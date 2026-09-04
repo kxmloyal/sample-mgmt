@@ -41,6 +41,30 @@ function deptEquals(a, b) {
   return na.some(function (x) { return nb.indexOf(x) !== -1; });
 }
 
+// 部门门槛策略（2026-09-04 下沉授权层，单一来源 = control-flow.json flowPolicy）：
+// CUSTODY（仓口角色）执行列出的动作时用户部门须命中（deptEquals 别名等价）；
+// ME/QA/RD/ADMIN 不受限（跨部门协作与兜底），待办投递与前端按钮同源引用本表。
+const FLOW_POLICY = FLOW.flowPolicy || {};
+
+/**
+ * 部门门槛判定（提交②）：CUSTODY 角色且动作配置了部门门槛时校验用户部门；
+ * 命中任一角色即过角色关（多角色架构：u.roles 并集）；CUSTODY 命中后再过部门关。
+ * @param {object} u   当前用户（u.dept + u.roles[]/u.role）
+ * @param {string} action 流转动作（STORE/REPORT/IN_STOCK/SHIP）
+ * @returns {boolean} true=允许
+ */
+function deptGateAllowed(u, action) {
+  const gate = FLOW_POLICY[action];
+  if (!gate) return true; // 未配置门槛的动作不受限
+  const roles = (u && (u.roles || (u.role ? [u.role] : []))) || [];
+  if (!roles.some(function (r) { return r !== 'CUSTODY'; })) {
+    // 纯仓口角色（无 ME/QA/ADMIN 等其他角色）：必须部门命中
+    return roles.some(function (r) { return r === 'CUSTODY'; }) && !!u.dept &&
+      (gate || []).some(function (g) { return deptEquals(u.dept, g); });
+  }
+  return true; // 兼任非仓口角色（ME/QA/ADMIN 等）→ 不受限
+}
+
 /**
  * 获取状态所属阶段（§7.1）。
  * @param {string} status 状态机状态
@@ -135,4 +159,4 @@ function deriveProgress(order, bonus) {
   return { steps, stages, currentStage: getStageOf(order.status), allDone };
 }
 
-module.exports = { SIGN_NODES, deriveProgress, calcReworkRemain, getStageOf, normalizeDept, deptEquals };
+module.exports = { SIGN_NODES, deriveProgress, calcReworkRemain, getStageOf, normalizeDept, deptEquals, deptGateAllowed };

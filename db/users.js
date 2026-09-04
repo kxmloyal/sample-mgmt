@@ -27,9 +27,19 @@ module.exports = function({ q, one, dbRef }) {
     return list;
   }
   // 追加角色（幂等）：不覆盖既有授予，仅补缺失行 + 必要时双写主角色
+  // 兼容防御（提交②修复）：users 行存在但 user_roles 无行（绕过 DAO 建号的存量/外部数据）
+  // 时，先把 users.role 补入关联表作为基线，再做追加——避免并集丢主角色
   async function addUserRoles(userId, roles, conn) {
     const list = normalizeRoles(roles);
     const run = conn ? function(sql, p) { return conn.execute(sql, p); } : function(sql, p) { return dbRef.run(sql, p); };
+    const existing = await getUserRoles(userId);
+    if (!existing.length) {
+      const row = await one('SELECT role FROM users WHERE id = ?', [userId]);
+      if (row && row.role) {
+        try { await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [userId, row.role]); }
+        catch (e) { if (e.code !== 'ER_DUP_ENTRY') throw e; }
+      }
+    }
     for (var i = 0; i < list.length; i++) {
       try { await run('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [userId, list[i]]); }
       catch (e) { if (e.code !== 'ER_DUP_ENTRY') throw e; }
@@ -53,12 +63,12 @@ module.exports = function({ q, one, dbRef }) {
     return await getUserById(row.id);
   }
   // 安全字段查询（不含 password_hash）
-  // 2026-09-04 提交①：附加 roles 聚合列（JSON_ARRAYAGG 按授予顺序，空表回退 role）——
-  // 兼容设计：roles 字段为新增可选输出，既有调用方只读 role 的行为零变化
+  // 2026-09-04 提交①：附加 roles 聚合列——关联行为空时回退 [users.role]（IFNULL 兜底，
+  // 修复 RIGHT JOIN 空行时 COUNT=1 误走 ELSE 返回 null 的缺陷）；既有调用方行为零变化
   function safeCols() {
     return 'id,username,role,dept,display_name,enabled,created_at,session_version,' +
-      '(SELECT CASE WHEN COUNT(*)=0 THEN JSON_ARRAY(u2.role) ELSE CAST(CONCAT("[", GROUP_CONCAT(JSON_QUOTE(ur.role) ORDER BY ur.id SEPARATOR ","), "]") AS JSON) END ' +
-      'FROM user_roles ur RIGHT JOIN users u2 ON ur.user_id = u2.id WHERE u2.id = users.id) AS roles';
+      '(SELECT IFNULL(CAST(CONCAT("[", GROUP_CONCAT(JSON_QUOTE(ur.role) ORDER BY ur.id SEPARATOR ","), "]") AS JSON), JSON_ARRAY(users.role)) ' +
+      'FROM user_roles ur WHERE ur.user_id = users.id) AS roles';
   }
   function getUserById(id) { return one('SELECT ' + safeCols() + ' FROM users WHERE id = ?', [id]); }
   // 登录查询：必须含 password_hash（供 bcrypt 校验），仅内部鉴权使用，不直接返回给前端

@@ -25,11 +25,14 @@ async function requireAuth(req, res, next) {
 }
 
 // 角色列表规范化：优先 user_roles 关联表；空/异常时回退 users.role 单值（兼容期防御）
-// 异常防御：迁移未跑/表损坏时仍保证鉴权可用（roles 至少含 [role]）
+// 异常防御：迁移未跑/表损坏/绕过 DAO 建号时仍保证鉴权可用（roles 至少含 [role]）
 async function resolveRoles(u) {
   try {
     const list = await D.getUserRoles(u.id);
-    if (Array.isArray(list) && list.length) return list;
+    if (Array.isArray(list) && list.length) {
+      // 关联表存在但缺当前主角色行（极端不一致）：并入 u.role 保证不丢权限
+      return (u.role && list.indexOf(u.role) === -1) ? [u.role].concat(list) : list;
+    }
   } catch (e) { /* 回退单角色 */ }
   return [u.role];
 }

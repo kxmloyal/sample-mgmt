@@ -1,5 +1,15 @@
 // routes/fixture-actions-cycle.js — 接收/撤销/归还/领用 action 执行器
+// 2026-09-04 提交②：RETURN 归还借用关系校验（"行动主体才看待办"口径的授权层下沉）：
+// 归还人 = 借用人本人 / 借用人同部门（管理方代办） / ME(设备管理口) / ADMIN；其他部门 CUSTODY/QA 不再放行
+// （旧行为：任何 ME/QA/CUSTODY 均可归还，FQC 借的治具可被制造部"代还"，借用关系被无声清除）
 var D = require('../../../db');
+
+function canReturnFixture(u, f) {
+  if (u.role === 'ME' || u.role === 'ADMIN') return true;
+  if (String(f.used_by) === String(u.id)) return true;          // 借用人本人
+  if (f.used_by_dept && f.used_by_dept === u.dept) return true; // 借用人同部门代办
+  return false;
+}
 
 async function doAccept(updated, u, ts, f, note, expectedDays) {
   if (!expectedDays || expectedDays <= 0) throw { status: 400, message: '请填写预计完成天数' };
@@ -21,6 +31,9 @@ async function doCancel(updated, u, ts, f, note) {
 }
 
 async function doReturn(updated, u, ts, f, note) {
+  if (!canReturnFixture(u, f)) {
+    throw { status: 403, message: '归还须由借用人（本人或同部门）或生技/管理员执行' };
+  }
   updated.status = 'TRANSFERRED';
   updated.expected_return_days = null; updated.expected_return_at = null;
   await D.addFixtureLog({ fixture_id: f.id, action: 'RETURN', role: u.role, user_id: u.id, dept: u.dept,

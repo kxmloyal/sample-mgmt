@@ -1,33 +1,30 @@
 // subsystems/workbench/db/my-todos.js — 「我的待办」跨子系统聚合（全部实时派生，零落库零迁移）
+// 2026-09-04 提交② 多角色适配：u.roles[] 并集判定（hasRole 语义），单值 u.role 兼容保留。
+//   每个用户可见其全部角色并集的待办；ADMIN 仍为全量兜底。
 // 归属口径（用户已确认：角色/部门可处理 + 个人指派合并）：
 //   样品 sample：RD=NEW(待制作确认)/RETURNING且retire_assigned_rd=本人(待重做)；QA=PRODUCED(待发行)/RETURNING(待审核退回)；
 //     CUSTODY|ME=RELEASED(待接收)；ADMIN=上述角色规则并集；其余角色(如 PM)=无样品待办。
-//     非 ADMIN 直接复用 D.listMyPendingSamples(role, userId)（与样品看板同一 DAO，数字互相印证）。
 //   治具 fixture：allowedActions（权限）+ "行动主体才看待办"原则（2026-09-04，待办≠权限广播）：
 //     RD=REQUESTED(待接收)/ACCEPTED(制作中)/IMPROVING(改善中)/REPAIRING_RD(RD维修)；
 //     ME=REPAIRING_ME(ME维修)/REPAIR_DONE(待确认维修)/IMPROVING(改善中)/保养到期(TRANSFERRED|IN_USE 且 next_maintenance_at 到期)；
 //     申请部门(requested_dept=我部门)=VERIFY_PENDING(待验证)/TRANSFERRED(可领用)/IMPROVING(改善中)；
 //     借用人本人+借用部门+ME=IN_USE 归还逾期(expected_return_at 到期)；
-//     ADMIN=VERIFY_PENDING 兜底验证 + VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER)；
-//     个人=领用逾期归还(used_by=本人且 expected_return_at 到期)。
-//   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
-//     退回是会签的一部分，已由待我签核覆盖）；DRAFT 提交待办仅申请部门（apply_dept=我部门，起草人自己提交）；
-//     CUSTODY 职能池状态（入仓/报工/入库/出货）仅仓口部门（CTL_CUSTODY_DEPT_GATE，待办≠部门广播）；
-//     control_signs 待签行(decision 空) role+sign_dept 匹配=待我签核（2026-09-04 会签按部门区分，
-//     与后端 resolveSignTarget/前端 canSign 同口径）；ADMIN 对所有会签中单据可见。
-//   项目 project：project_tasks/project_subtasks assignee_id=本人且 status<>'DONE'（唯一按个人指派的子系统）。
+//     ADMIN=VERIFY_PENDING 兜底验证 + VERIFY_RD_OK/VERIFY_ORG_OK 死锁态(待强制移交 FORCE_TRANSFER)。
+//   管制 control：manifest transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回）；
+//     DRAFT 提交待办仅申请部门；仓口职能池部门门槛单一来源=data/control-flow.json flowPolicy
+//     （状态→动作映射 + deptAliases 归一，本文件不再手抄策略副本）；
+//     control_signs 待签行 role+sign_dept 匹配=待我签核（多角色：任一待签行命中任一角色+部门）。
+//   项目 project：project_tasks/project_subtasks assignee_id=本人且 status<>'DONE'。
 var D = require('../../../db');
 var CTL_MANIFEST = require('../../control/manifest.json');
+var CTL_FLOW = require('../../../data/control-flow.json');
 
-// 会签步骤短名部门 → 用户表部门全名（与 data/control-flow.json 的 deptAliases 同源，两处维护勿漂移）；
-// control_signs.sign_dept 存模板短名（生管/仓库等），与 users.dept 全名比较前须展开
-var CTL_DEPT_ALIAS = {
-  '品保': ['品保文管中心'],
-  '研发': ['研发部', '测试部'],
-  '生管': ['生管部'],
-  '仓库': ['资材部'],
-  '制造部': ['制造部']
-};
+// 部门别名（单一来源 control-flow.json deptAliases——原手抄副本已删除，防漂移）
+var CTL_DEPT_ALIAS = CTL_FLOW.deptAliases || {};
+
+// 管制状态 → 流转动作 → 部门门槛（flowPolicy 短名）：入仓=STORE、报工=REPORT、入库=IN_STOCK、出货=SHIP
+// （原 CTL_CUSTODY_DEPT_GATE 手写副本已删除，与后端 403 门槛/前端按钮同源）
+var CTL_STATUS_ACTION = { LABELED: 'STORE', REWORKING: 'REPORT', REWORK_REPORTED: 'IN_STOCK', REIN_STOCK: 'SHIP' };
 
 // 状态中文映射（与各子系统权威来源对齐：workbench-queries.js CASE / control manifest.states / projects manifest.states）
 var SAMPLE_STATUS_CN = { NEW: '制样中', PRODUCED: '待发行', RELEASED: '保管中', IN_CUSTODY: '保管中', RETURNING: '退回审核中' };
@@ -39,7 +36,28 @@ var CONTROL_STATUS_CN = {};
 Object.keys(CTL_MANIFEST.stateMachine.states).forEach(function (k) { CONTROL_STATUS_CN[k] = CTL_MANIFEST.stateMachine.states[k].label; });
 var PROJECT_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', OVERDUE: '已延期' };
 
-function _isManager(role) { return role === 'ME' || role === 'QA' || role === 'CUSTODY'; } // 对齐 isMECustodyQA
+// —— 多角色判定基元（提交②）：命中任一角色即 true ——
+function hasRole(u, roles) {
+  var mine = (u && (u.roles || (u.role ? [u.role] : []))) || [];
+  var want = Array.isArray(roles) ? roles : [roles];
+  return want.some(function (r) { return mine.indexOf(r) !== -1; });
+}
+function isAdmin(u) { return hasRole(u, 'ADMIN'); }
+// 部门别名气命中：sign_dept 短名 / flowPolicy 短名 vs u.dept 全名
+function deptHit(shortName, dept) {
+  if (!dept) return false;
+  var aliases = CTL_DEPT_ALIAS[shortName] || [shortName];
+  return aliases.indexOf(dept) !== -1;
+}
+// 管制仓口部门门槛（flowPolicy 同源判定，与后端 deptGateAllowed 403 同口径）
+function ctlDeptGateOk(u, status) {
+  var action = CTL_STATUS_ACTION[status];
+  if (!action) return true;
+  var gate = (CTL_FLOW.flowPolicy || {})[action];
+  if (!gate) return true;
+  if (hasRole(u, ['ME', 'QA', 'ADMIN'])) return true; // 职能角色不受限（与后端一致）
+  return hasRole(u, 'CUSTODY') && gate.some(function (g) { return deptHit(g, u.dept); });
+}
 
 /* ---------------- 样品 ---------------- */
 // 待办类型派生（对齐 samples 前端 dashboard-todo.js 的 _getTodoInfo）
@@ -49,20 +67,27 @@ function sampleTodoOf(s, u) {
   if (s.status === 'RELEASED') return { todo: '待接收', urgent: false };
   if (s.status === 'RETURNING') {
     if (String(s.retire_assigned_rd) === String(u.id)) return { todo: '待重做', urgent: true };
-    return { todo: '待审核退回', urgent: u.role === 'QA' || u.role === 'ADMIN' };
+    return { todo: '待审核退回', urgent: hasRole(u, ['QA', 'ADMIN']) };
   }
   return { todo: '待处理', urgent: false };
 }
 
 async function collectSampleTodos(u) {
   var rows;
-  if (u.role === 'ADMIN') {
+  if (isAdmin(u)) {
     // ADMIN=各角色规则并集（不用 dao 的全量回退，避免把全部样品当作待办）；上限与 listMyPendingSamples 对齐 200
     var [r] = await D.pool().execute(
       "SELECT * FROM samples WHERE deleted_at IS NULL AND (status IN ('NEW','PRODUCED','RELEASED','RETURNING')) ORDER BY id DESC LIMIT 200");
     rows = r;
-  } else if (['RD', 'QA', 'CUSTODY', 'ME'].indexOf(u.role) !== -1) {
-    rows = await D.listMyPendingSamples(u.role, u.id);
+  } else if (hasRole(u, ['RD', 'QA', 'CUSTODY', 'ME'])) {
+    // 多角色：逐角色查询合并去重（同一样品只留一条，待办文案按状态派生与角色无关）
+    var seen = {}; rows = [];
+    for (var i = 0; i < (u.roles || [u.role]).length; i++) {
+      var role = (u.roles || [u.role])[i];
+      if (['RD', 'QA', 'CUSTODY', 'ME'].indexOf(role) === -1) continue;
+      var rs = await D.listMyPendingSamples(role, u.id);
+      (rs || []).forEach(function (s) { if (!seen[s.id]) { seen[s.id] = 1; rows.push(s); } });
+    }
   } else {
     return [];
   }
@@ -77,61 +102,55 @@ async function collectSampleTodos(u) {
 }
 
 /* ---------------- 治具 ---------------- */
-// 口径基准：allowedActions（权限）+ 2026-09-04 收紧的"行动主体才看待办"原则（待办 ≠ 权限广播）：
-// 待办只给当事人（申请人部门/借用人/借用部门）与职能口（RD 制作维修、ME 设备管理），旁观部门不广播。
-// RETURN/REPAIR_ME/REPAIR_RD_REQ/IMPROVE 为可选项不入待办，RETIRE 为破坏性操作不入待办；
-// MAKE 的图纸/照片文件门槛属执行时校验，待办仅按状态+角色提醒
+// 口径基准：allowedActions（权限）+ 2026-09-04 收紧的"行动主体才看待办"原则（待办 ≠ 权限广播）
+// RETURN/REPAIR_ME/REPAIR_RD_REQ/IMPROVE 为可选项不入待办，RETIRE 为破坏性操作不入待办
 function fixtureTodoOf(f, u) {
   var reasons = [];
   var urgent = false;
-  var role = u.role;
   var borrower = f.used_by;
   switch (f.status) {
     case 'REQUESTED':
-      if (role === 'RD') reasons.push('待接收');
+      if (hasRole(u, 'RD')) reasons.push('待接收');
       break;
     case 'ACCEPTED':
-      if (role === 'RD') reasons.push('制作中');
+      if (hasRole(u, 'RD')) reasons.push('制作中');
       break;
     case 'VERIFY_PENDING':
       // 谁申请谁验证（申请部门）+ ADMIN 兜底，与 canVerify/allowedActions 同源
-      if (f.requested_dept === u.dept || role === 'ADMIN') reasons.push('待验证');
+      if (f.requested_dept === u.dept || isAdmin(u)) reasons.push('待验证');
       break;
     case 'VERIFY_RD_OK':
     case 'VERIFY_ORG_OK':
-      if (role === 'ADMIN') { reasons.push('死锁待强制移交'); urgent = true; } // F5 兜底态仅 ADMIN 可解锁
+      if (isAdmin(u)) { reasons.push('死锁待强制移交'); urgent = true; }
       break;
     case 'TRANSFERRED':
-      // 可领用：申请部门（等着用）+ ME（设备台账管理口）；不再向 QA/CUSTODY 其他部门广播
-      if (f.requested_dept === u.dept || role === 'ME') reasons.push('可领用');
+      if (f.requested_dept === u.dept || hasRole(u, 'ME')) reasons.push('可领用');
       break;
     case 'IN_USE':
-      // 归还逾期：借用人本人 + 借用人部门 + ME（设备管理口催收/代办）；不再向 QA/CUSTODY 其他部门广播
+      // 归还逾期：借用人本人 + 借用人部门 + ME
       if (f.expected_return_at && new Date(f.expected_return_at) <= new Date()
-          && (String(borrower) === String(u.id) || (f.used_by_dept && f.used_by_dept === u.dept) || role === 'ME')) {
+          && (String(borrower) === String(u.id) || (f.used_by_dept && f.used_by_dept === u.dept) || hasRole(u, 'ME'))) {
         reasons.push('归还逾期'); urgent = true;
       }
       break;
     case 'IMPROVING':
-      // 改善中：RD（改善主导）+ ME + 申请部门（等待方）；不再向 QA/CUSTODY 其他部门广播
-      if (role === 'RD' || role === 'ME' || f.requested_dept === u.dept) reasons.push('改善中');
+      if (hasRole(u, ['RD', 'ME']) || f.requested_dept === u.dept) reasons.push('改善中');
       break;
     case 'REPAIRING_ME':
-      if (role === 'ME') reasons.push('ME维修中');
+      if (hasRole(u, 'ME')) reasons.push('ME维修中');
       break;
     case 'REPAIRING_RD':
-      if (role === 'RD') reasons.push('RD维修中');
+      if (hasRole(u, 'RD')) reasons.push('RD维修中');
       break;
     case 'REPAIR_DONE':
-      if (role === 'ME') reasons.push('待确认维修');
+      if (hasRole(u, 'ME')) reasons.push('待确认维修');
       break;
   }
   // 保养到期：MAINTENANCE 动作权威=ME（TRANSFERRED/IN_USE）
-  if (role === 'ME' && ['TRANSFERRED', 'IN_USE'].indexOf(f.status) !== -1
+  if (hasRole(u, 'ME') && ['TRANSFERRED', 'IN_USE'].indexOf(f.status) !== -1
       && f.next_maintenance_at && new Date(f.next_maintenance_at) <= new Date()) {
     reasons.push('保养到期'); urgent = true;
   }
-  // 个人维度已并入上方 IN_USE 归还逾期判定（借用人本人/借用部门/ME）
   if (!reasons.length) return null;
   return { todo: reasons.join('、'), urgent: urgent };
 }
@@ -158,25 +177,24 @@ async function collectFixtureTodos(u) {
 }
 
 /* ---------------- 管制 ---------------- */
-// CUSTODY 职能池仓口部门门槛（2026-09-04 收紧：待办只给仓口当事人部门，不再全 CUSTODY 部门广播；
-// ME/QA 为职能角色不受此门槛限制；DRAFT 提交待办单独按 apply_dept 匹配）
-var CTL_CUSTODY_DEPT_GATE = {
-  LABELED: ['资材部'],                            // 入管制仓：仓库口执行
-  REWORKING: ['生管部', '资材部', '制造部'],        // 报工：生产执行口
-  REWORK_REPORTED: ['资材部', '生管部'],            // 入库
-  REIN_STOCK: ['资材部', '生管部']                  // 出货
-};
-
 async function collectControlTodos(u) {
   var pool = D.pool();
   var byId = {}; // id → item（合并 待我流转/待我签核 两个来源）
+  var admin = isAdmin(u);
 
-  // 待我流转：transitions 角色匹配
+  // 待我流转：transitions 角色匹配（多角色：任一角色命中该状态的转移即纳入候选）
   // 剔除 VOID（作废，破坏性）与 *_REJECT（会签退回是会签动作的一部分，已由待我签核覆盖，避免重复+语义混乱）
+  // ADMIN 兜底（提交②修复）：剔除后 ADMIN 在 transitions 无非 VOID 命中，但按"管理员全局查看"
+  // 口径，ADMIN 待办 = 全部活跃状态的流转池（每状态取首个定义作展示动作）
   var flowMap = {}; // status → { label, action }
+  var isAdminUser = admin;
   (CTL_MANIFEST.stateMachine.transitions || []).forEach(function (t) {
     if (t.action === 'VOID' || t.action === 'SIGN_REJECT' || t.action === 'DISPOSAL_REJECT') return;
-    if (t.role.indexOf(u.role) !== -1 && !flowMap[t.from]) flowMap[t.from] = { label: t.label, action: t.action };
+    if (isAdminUser) {
+      if (!flowMap[t.from]) flowMap[t.from] = { label: t.label, action: t.action };
+    } else if (hasRole(u, t.role) && !flowMap[t.from]) {
+      flowMap[t.from] = { label: t.label, action: t.action };
+    }
   });
   var statuses = Object.keys(flowMap);
   if (statuses.length) {
@@ -187,12 +205,11 @@ async function collectControlTodos(u) {
     orders.forEach(function (o) {
       var fm = flowMap[o.status];
       if (!fm) return;
-      // 部门门槛（2026-09-04）：DRAFT 提交会签 → 仅申请部门（起草人所在部门自己提交）；
-      // CUSTODY 职能池状态 → 仅仓口当事人部门（CTL_CUSTODY_DEPT_GATE）
+      // 部门门槛（同源 flowPolicy）：DRAFT 提交会签 → 仅申请部门（起草人所在部门自己提交）；
+      // CUSTODY 职能池状态 → 仓口部门命中（ME/QA/ADMIN 职能角色不受限，与后端 403 同口径）
       if (o.status === 'DRAFT') {
-        if (o.apply_dept !== u.dept) return;
-      } else if (u.role === 'CUSTODY' && CTL_CUSTODY_DEPT_GATE[o.status]
-          && CTL_CUSTODY_DEPT_GATE[o.status].indexOf(u.dept) === -1) {
+        if (o.apply_dept !== u.dept && !admin) return;
+      } else if (!admin && !ctlDeptGateOk(u, o.status)) {
         return;
       }
       byId[o.id] = {
@@ -203,12 +220,11 @@ async function collectControlTodos(u) {
     });
   }
 
-  // 待我签核：control_signs 待签行 role+sign_dept 匹配（2026-09-04 会签按部门区分：
-  // 同角色不同部门不可互相代签，待办与详情页按钮/后端校验同口径）；
-  // sign_dept 为模板短名（生管/仓库等），DEPT_ALIAS_MAP 展开后与 u.dept 全名比较；
+  // 待我签核：control_signs 待签行 role+sign_dept 匹配（多角色：逐角色查询并集去重）
+  // sign_dept 为模板短名（生管/仓库等），deptAliases（control-flow.json 单一来源）展开后与 u.dept 比较；
   // ADMIN 对所有会签中单据可见
   var signRows;
-  if (u.role === 'ADMIN') {
+  if (admin) {
     var [r1] = await pool.execute(
       "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at FROM control_orders o " +
       "WHERE o.status IN ('SIGNING','DISPOSAL_SIGNING') AND EXISTS (" +
@@ -216,19 +232,26 @@ async function collectControlTodos(u) {
       ") ORDER BY o.updated_at DESC LIMIT 200");
     signRows = r1;
   } else {
-    var [r2] = await pool.execute(
-      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at, s.sign_dept FROM control_signs s " +
-      "JOIN control_orders o ON o.id = s.order_id " +
-      "WHERE (s.decision IS NULL OR s.decision = '') AND s.role = ? AND o.status IN ('SIGNING','DISPOSAL_SIGNING') " +
-      "ORDER BY o.updated_at DESC LIMIT 200", [u.role]);
-    // SQL 只能按 role 预筛，sign_dept 别名归一在 JS 侧完成（DISTINCT 会因 sign_dept 不同多行，按单据 id 去重）
+    var roles = (u.roles || [u.role]).filter(function (r) { return r !== 'ADMIN'; });
     var seenOrder = {};
-    signRows = r2.filter(function (r) {
-      if (seenOrder[r.id]) return false;
-      var aliases = CTL_DEPT_ALIAS[r.sign_dept] || [r.sign_dept];
-      var ok = aliases.indexOf(u.dept) !== -1;
-      if (ok) seenOrder[r.id] = 1;
-      return ok;
+    signRows = [];
+    for (var i = 0; i < roles.length; i++) {
+      var [r2] = await pool.execute(
+        "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at, s.sign_dept FROM control_signs s " +
+        "JOIN control_orders o ON o.id = s.order_id " +
+        "WHERE (s.decision IS NULL OR s.decision = '') AND s.role = ? AND o.status IN ('SIGNING','DISPOSAL_SIGNING') " +
+        "ORDER BY o.updated_at DESC LIMIT 200", [roles[i]]);
+      r2.forEach(function (r) {
+        if (seenOrder[r.id + '|' + r.sign_dept]) return;
+        seenOrder[r.id + '|' + r.sign_dept] = 1;
+        if (deptHit(r.sign_dept, u.dept)) signRows.push(r);
+      });
+    }
+    // 同单据去重（保留首条：updated_at DESC 顺序）
+    var seenOnce = {};
+    signRows = signRows.filter(function (r) {
+      if (seenOnce[r.id]) return false;
+      seenOnce[r.id] = 1; return true;
     });
   }
   signRows.forEach(function (o) {
