@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmo3jqm — 26 files */
+/** BUNDLE vbmtmpf6rz — 26 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -90,7 +90,7 @@ var $ = function (s, r) { return (r || document).querySelector(s); };
 var ROLE = { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)', PM: '项目经理(PM)' };
 var STATUS = {
   // 样品状态
-  NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中',
+  NEW: '新建·待制作确认', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中',
   // 治具状态
   REQUESTED: '已申请', ACCEPTED: '已接收', VERIFY_PENDING: '待验证',
   VERIFY_RD_OK: 'RD验证通过', VERIFY_ORG_OK: '申请单位确认',
@@ -102,7 +102,7 @@ var STATUS = {
 var ACTION_CN = {
   // 样品操作
   CREATE: '新建样品', PRODUCE: '确认制作完成', RELEASE: '正式发行', INSPECT: '复检完成', INSPECT_EARLY: '提前复检',
-  CUSTODY: '接收保管', EDIT_CARD: '修正标示卡', EDIT_STORAGE: '修改储位',
+  CUSTODY: '接收保管', CHECKOUT: '领出', RETURN_OUT: '归还入库', EDIT_CARD: '修正标示卡', EDIT_STORAGE: '修改储位',
   RETURN_REQUEST: '申请退回', RE_RELEASE: '重新发行', RETIRE_RECREATE: '退回研发重做', RETIRE_ONLY: '直接作废',
   RETURN_REJECT: '拒绝退回', RECREATE: '创建替代品', RECREATE_REPLACED: '被替代', UPDATE_CARD: '更新标示卡信息',
   // 治具操作
@@ -295,8 +295,10 @@ function showApp(){
 
 // ---- 样品专用 helpers ----
 function overdue(s){return s.status==='IN_CUSTODY'&&s.next_inspect_at&&new Date(s.next_inspect_at).getTime()<Date.now();}
-// 覆盖 shared/api-base.js 的 statusBadge：样品逾期检测
-function statusBadge(s){var cls='b-'+(s.status==='IN_CUSTODY'&&overdue(s)?'overdue':s.status);return '<fluent-badge class="badge '+cls+'" appearance="filled">'+(STATUS[s.status]||s.status)+'</fluent-badge>';}
+// 领用超时未归还（2026-09-05）：领用中且已过应还时间 → 与复检逾期同款 b-overdue 高亮
+function checkoutOverdue(s){return s.status==='CHECKED_OUT'&&s.expected_return_at&&new Date(s.expected_return_at).getTime()<Date.now();}
+// 覆盖 shared/api-base.js 的 statusBadge：样品逾期检测（复检逾期 + 领用超时）
+function statusBadge(s){var hot=(s.status==='IN_CUSTODY'&&overdue(s))||checkoutOverdue(s);var cls='b-'+(hot?'overdue':s.status);return '<fluent-badge class="badge '+cls+'" appearance="filled">'+(STATUS[s.status]||s.status)+'</fluent-badge>';}
 function goScan(code){location.hash='#/scan';setTimeout(()=>{if(code)$('#scan-code').value=code;},50);}
 
 // ---- T6: 统一防重提交 / 409 / 401 / 请求序号 helpers ----
@@ -383,6 +385,8 @@ var _dashOverduePager = { limit: 5, offset: 0, total: 0 };
 var _dashDueSoonPager = { limit: 5, offset: 0, total: 0 };
 var _dashOverdueData = [];
 var _dashDueSoonData = [];
+var _dashCheckoutPager = { limit: 5, offset: 0, total: 0 };
+var _dashCheckoutData = [];
 
 // 统计卡配置（对齐治具 DASH_STATS 模式，配置驱动 + 角色排序）
 var DASH_STATS = [
@@ -391,6 +395,7 @@ var DASH_STATS = [
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
   { label: '已发行', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
   { label: '保管中', key: 'IN_CUSTODY', color: 'var(--brand)', countByStatus: true },
+  { label: '领用中', key: 'CHECKED_OUT', color: '#1d4ed8', countByStatus: true },
   { label: '退回审核中', key: 'RETURNING', color: 'var(--bad)', countByStatus: true },
   { label: '已废弃', key: 'RETIRED', color: 'var(--muted)', countByStatus: true }
 ];
@@ -399,15 +404,15 @@ var STAT_COLORS = {};
 DASH_STATS.forEach(function(c) { STAT_COLORS[c.key] = c.color; });
 // 角色优先级排序：高优先级状态前置（RD制作优先/QA发行优先/CUSTODY接收优先）
 var STAT_ORDER = {
-  ADMIN:   ['total','NEW','PRODUCED','RELEASED','IN_CUSTODY','RETURNING','RETIRED'],
-  RD:      ['total','NEW','PRODUCED','RETURNING','RELEASED','IN_CUSTODY','RETIRED'],
-  QA:      ['total','PRODUCED','RETURNING','RELEASED','NEW','IN_CUSTODY','RETIRED'],
-  ME:      ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED'],
-  CUSTODY: ['total','RELEASED','IN_CUSTODY','NEW','PRODUCED','RETURNING','RETIRED']
+  ADMIN:   ['total','NEW','PRODUCED','RELEASED','IN_CUSTODY','CHECKED_OUT','RETURNING','RETIRED'],
+  RD:      ['total','NEW','PRODUCED','RETURNING','RELEASED','IN_CUSTODY','CHECKED_OUT','RETIRED'],
+  QA:      ['total','PRODUCED','RETURNING','RELEASED','NEW','IN_CUSTODY','CHECKED_OUT','RETIRED'],
+  ME:      ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED'],
+  CUSTODY: ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED']
 };
 var STAT_LABELS = {
   NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行',
-  IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已废弃'
+  IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃'
 };
 
 // 主入口：拉取 /api/dashboard 并渲染全部区块，失败显示点击重试
@@ -420,6 +425,7 @@ async function viewDashboard() {
     h += _renderStats(d);
     h += _renderOverdue(d.overdue || []);
     h += _renderDueSoon(d.dueSoon || []);
+    h += _renderCheckoutOverdue(d.checkoutOverdue || []);
     h += '<div id="dash-todo"></div>';
     v.innerHTML = h;
     // 预警表格列宽拖拽
@@ -440,18 +446,15 @@ function _renderStats(d) {
   var sorted = DASH_STATS.slice().sort(function(a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
   // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]
   _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? total : (s[cfg.key] || 0), cfg.key]; });
-  // 统计卡：KbStats 共享组件等价迁移（原内联 HTML 行为协议逐项保留——
-  // 单击 filterKbStat toggle 筛选 + 双击跳列表 + title 提示；初始渲染无高亮，
-  // active 由 filterKbStat 自行 DOM 切换，故此处 activeIndex 恒为 null）
-  var cards = KbStats.render(sorted.map(function(cfg) {
+  var cards = sorted.map(function(cfg, idx) {
     var count = cfg.key === 'total' ? total : (s[cfg.key] || 0);
     var href = cfg.key === 'total' ? '#/samples' : '#/samples?status=' + cfg.key;
-    return { n: count, l: cfg.label, color: cfg.color, href: href, title: '单击筛选待办·双击查看列表' };
-  }), { click: 'filter', filterHandler: 'filterKbStat', activeIndex: null });
+    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
+  }).join('');
   // 比例条
   var barHtml = '';
   if (total > 0) {
-    var keys = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'RETURNING', 'RETIRED'];
+    var keys = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'CHECKED_OUT', 'RETURNING', 'RETIRED'];
     var segs = keys.map(function(k) {
       var pct = ((s[k] || 0) / total * 100);
       if (pct < 0.1) return '';
@@ -497,6 +500,32 @@ function goDueSoonPage(page) {
   _dashDueSoonPager.offset = (page - 1) * _dashDueSoonPager.limit;
   var box = $('#dash-soon');
   if (box) { box.outerHTML = _renderAlertBlock('soon', '⏰ 即将到期·7天内', _dashDueSoonData, _dashDueSoonPager, 'goDueSoonPage', false); setTimeout(function() { var t = document.querySelector('#dash-soon .dash-alert-table'); if (t && typeof _initColResize === 'function') _initColResize(t); }, 0); }
+}
+
+// 领用超时未归还预警（2026-09-05，蓝色区块区分复检预警，5 条/页；空列表不渲染与既有区块一致）
+function _renderCheckoutOverdue(list) {
+  _dashCheckoutPager.total = list.length;
+  _dashCheckoutPager.offset = 0;
+  return _renderCheckoutBlock(list, _dashCheckoutPager);
+}
+function goCheckoutPage(page) {
+  _dashCheckoutPager.offset = (page - 1) * _dashCheckoutPager.limit;
+  var box = $('#dash-checkout');
+  if (box) { box.outerHTML = _renderCheckoutBlock(_dashCheckoutData, _dashCheckoutPager); setTimeout(function() { var t = document.querySelector('#dash-checkout .dash-alert-table'); if (t && typeof _initColResize === 'function') _initColResize(t); }, 0); }
+}
+function _renderCheckoutBlock(list, pager) {
+  _dashCheckoutData = list;
+  if (!list.length) return '';
+  var pageList = list.slice(pager.offset, pager.offset + pager.limit);
+  var colgroup = '<colgroup><col style="width:100px"><col style="width:130px"><col style="width:52px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:90px"><col style="width:70px"></colgroup>';
+  var thead = '<thead><tr><th>编号<span class="col-rsz"></span></th><th>名称<span class="col-rsz"></span></th><th>图片<span class="col-rsz"></span></th><th>领用人<span class="col-rsz"></span></th><th>领用部门<span class="col-rsz"></span></th><th>领出时间<span class="col-rsz"></span></th><th>应还时间<span class="col-rsz"></span></th><th>操作<span class="col-rsz"></span></th></tr></thead>';
+  var rows = pageList.map(function(s) {
+    var img = (s.produced_image || s.image) ? '<img src="' + e(s.produced_image || s.image) + '" width="40" height="40" style="border-radius:4px;object-fit:cover" loading="lazy"/>' : '—';
+    var lateDays = Math.ceil((Date.now() - new Date(s.expected_return_at).getTime()) / 86400000);
+    return '<tr class="dash-alert-row" onclick="viewDetail(\'' + s.id + '\')" style="cursor:pointer"><td data-label="编号">' + e(s.sample_no) + '</td><td data-label="名称">' + e(s.name || '—') + '</td><td data-label="图片">' + img + '</td><td data-label="领用人">' + e(s.checkout_user || '—') + '</td><td data-label="领用部门">' + e(s.checkout_dept || '—') + '</td><td data-label="领出时间" class="muted">' + fmt(s.checkout_at) + '</td><td data-label="应还时间" class="b-overdue" style="font-weight:700">' + fmt(s.expected_return_at) + '（超' + lateDays + '天）</td><td data-label="操作"><a class="link" onclick="event.stopPropagation();goScan(\'' + e(s.sample_no) + '\')">去催还</a></td></tr>';
+  }).join('');
+  var pagerHtml = _renderPager(pager, 'goCheckoutPage');
+  return '<div class="dash-alert-checkout" id="dash-checkout"><h3>📤 领用超时未归还（' + list.length + '）</h3><div style="overflow-x:auto"><table class="dash-alert-table">' + colgroup + thead + '<tbody>' + rows + '</tbody></table></div>' + pagerHtml + '</div>';
 }
 
 // 预警区块通用渲染（isOverdue 控制红色/黄色样式与缓存目标）
@@ -745,7 +774,7 @@ async function viewSamples() {
   try {
     (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
   } catch (_) {}
-  var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
+  var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
@@ -846,7 +875,7 @@ function renderChips() {
   var html = '', st = $('#f-status').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
-  var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', RETURNING: '退回审核中', RETIRED: '已作废' };
+  var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
   if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || st) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
@@ -1079,6 +1108,13 @@ function _cardInfo(s) {
   var h = '<div class="overview-card"><div class="title">基础信息</div><div class="field-grid">';
   h += kv('名称', e(s.name)) + kv('机型', e(s.model)) + kv('站别', e(s.station));
   h += kv('规格', e(s.spec)) + kv('保管', e(s.custody_dept)) + kv('储位', e(s.storage_location));
+  // 领用/归还（2026-09-05）：领用中展示领用人/部门/应还时间（超时红色高亮），非领用态展示最近归还时间
+  if (s.status === 'CHECKED_OUT') {
+    var coLate = s.expected_return_at && new Date(s.expected_return_at).getTime() < Date.now();
+    h += '<span class="label">领用</span><span class="' + (coLate ? 'b-overdue' : '') + '" style="font-weight:600">' + e(s.checkout_user || '—') + '（' + e(s.checkout_dept || '—') + '）· 应还 ' + fmt(s.expected_return_at) + (coLate ? '（已超时）' : '') + '</span>';
+  } else if (s.returned_at) {
+    h += kv('最近归还', fmt(s.returned_at));
+  }
   var ov = overdue(s);
   h += '<span class="label">复检</span><span class="' + (ov ? 'b-overdue' : '') + '" style="font-weight:600">' + (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at) + '</span>';
   h += kv('备注', e(s.notes));
@@ -1089,6 +1125,8 @@ function _cardInfo(s) {
 
 function _cardProgress(s) {
   var steps = [['制作完成', s.produced_at], ['正式发行', s.released_at], ['分发保管', s.status === 'IN_CUSTODY' ? '储位 ' + e(s.storage_location) : null]];
+  if (s.status === 'CHECKED_OUT') steps.push(['领用中（' + e(s.checkout_user || '—') + '）', s.expected_return_at]);
+  if (s.returned_at) steps.push(['最近归还', s.returned_at]);
   if (s.status === 'RETURNING' || s.status === 'RETIRED') steps.push(['退回审核', s.retired_reason || '']);
   if (s.status === 'RETIRED') steps.push(['已作废', s.retired_reason || '']);
   return '<div class="overview-card"><div class="title">流转进度</div><div class="progress-timeline">' +
@@ -1123,6 +1161,7 @@ var _LOG_FLOW = {
   PRODUCE: '⬆ NEW ➜ 制作完成',
   RELEASE: '⬆ 制作完成 ➜ 已发行',
   CUSTODY: '⬆ 已发行 ➜ 保管中',
+  CHECKOUT: '⬆ 保管中 ➜ 领用中', RETURN_OUT: '⬆ 领用中 ➜ 保管中',
   INSPECT: '⬆ 已发行（自环）', INSPECT_EARLY: '⬆ 已发行（自环）', INSPECT_CUSTODY: '⬆ 保管中（自环）',
   EDIT_CARD: '⬆ 修正标示卡（自环）', EDIT_STORAGE: '⬆ 修改储位（自环）',
   RETURN_REQUEST: '⬆ 保管中 ➜ 退回审核',
@@ -1860,6 +1899,20 @@ function showScanActionForm(action){
   }else if(action==='CUSTODY'){
     html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
+  }else if(action==='CHECKOUT'){
+    // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
+    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="如 张三" value="'+e(me.display_name||me.username||'')+'"></fluent-text-field>'+
+      '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
+      '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
+      '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
+      '<label>领用备注</label><fluent-text-field id="scan-note" placeholder="如：产线对比测试用"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CHECKOUT\',this)">确认领出</fluent-button></div>';
+  }else if(action==='RETURN_OUT'){
+    // 归还表单：展示当前借出信息供核对，备注选填
+    html='<p style="font-size:13px">当前领用人：<b>'+e(s.checkout_user||'—')+'</b>（'+e(s.checkout_dept||'—')+'）</p>'+
+      '<p class="muted" style="font-size:12px">领出于 '+fmt(s.checkout_at)+' · 应还 '+fmt(s.expected_return_at)+(s.expected_return_at&&new Date(s.expected_return_at).getTime()<Date.now()?' <b style="color:var(--bad)">（已超时）</b>':'')+'</p>'+
+      '<label>归还备注</label><fluent-text-field id="scan-note" placeholder="如：外观无异常，已归还"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'RETURN_OUT\',this)">确认归还入库</fluent-button></div>';
   }else if(action==='EDIT_CARD'){
     html=buildCardFieldTable(s,true)+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
@@ -1887,6 +1940,31 @@ function collectCustodyCycle(body){
   var n=Number(v);
   if(!Number.isInteger(n)||n<1||n>3650){toast('复检周期须为 1~3650 天的整数（留空则沿用原周期）','err');return false;}
   body.cycleDays=n;return true;
+}
+// 领用（2026-09-05）：应还时间实时预览——时长输入变化时计算 now+时长 并回显
+function previewCheckoutDue(){
+  var el=document.getElementById('scan-co-hours');
+  var tip=document.getElementById('scan-co-due');
+  if(!el||!tip)return;
+  var n=Number(el.value);
+  if(!el.value||!Number.isInteger(n)||n<1||n>8760){tip.textContent='';return;}
+  var due=new Date(Date.now()+n*3600000);
+  tip.textContent='预计应还时间：'+fmt(due.toISOString())+'（'+n+' 小时后）';
+}
+// 收集 CHECKOUT 表单：领用人必填、时长前端软校验 1~8760 整数（后端仍兜底 400）
+// 返回 false 表示校验失败（已 toast），调用方中止提交
+function collectCheckoutPayload(body){
+  var uEl=document.getElementById('scan-co-user');
+  var dEl=document.getElementById('scan-co-dept');
+  var hEl=document.getElementById('scan-co-hours');
+  var user=uEl&&uEl.value?uEl.value.trim():'';
+  if(!user){toast('请填写领用人','err');return false;}
+  var hours=hEl&&hEl.value?Number(hEl.value.trim()):NaN;
+  if(!Number.isInteger(hours)||hours<1||hours>8760){toast('领用时长须为 1~8760 小时的整数','err');return false;}
+  body.checkout_user=user;
+  if(dEl&&dEl.value.trim())body.checkout_dept=dEl.value.trim();
+  body.durationHours=hours;
+  return true;
 }
 // 从向导状态收集 RELEASE/RE_RELEASE 公共字段（去重：原两分支字段完全相同）
 function collectWizardPayload(body){
@@ -1926,9 +2004,10 @@ async function confirmScan(action,btn){
     var dataEl=document.getElementById('scan-card-data');if(dataEl&&dataEl.value.trim())body.test_data=dataEl.value.trim();
   }
   if(action==='INSPECT_CUSTODY'&&!collectCustodyCycle(body))return;
+  if(action==='CHECKOUT'&&!collectCheckoutPayload(body))return;
   if(action==='RELEASE'||action==='RE_RELEASE'){collectWizardPayload(body);}
   if(action==='CUSTODY'||action==='EDIT_STORAGE'){body.location=document.getElementById('scan-loc').value;}
-  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'){
+  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'){
     var noteEl2=document.getElementById('scan-note');if(noteEl2&&noteEl2.value.trim())body.note=noteEl2.value.trim();
   }
   if(action==='RETIRE_RECREATE'){
@@ -2089,6 +2168,15 @@ var HELP_DATA=[
       {h:'申请退回',body:'保管/生技人员在保管中样品上发起\n填写退回原因（必填）→ 状态变为「退回审核中」'},
       {h:'品保审核',body:'退回审核中样品，品保可选择：\n1.重新发行 — 更新标示卡，状态回已发行\n2.退回研发重做 — 指派RD，状态回NEW\n3.直接作废 — 不再使用\n4.拒绝退回 — 拒绝申请，状态回保管中'},
       {h:'研发重做',body:'被退回研发的样品 → 研发制作新样品 → 创建替代品\n新样品自动复制标示卡信息，编号自动分配'}
+    ]
+  },
+  {
+    id:'checkout', module:'领用与归还', desc:'保管中样品领出使用与归还',
+    items:[
+      {h:'领出样品',body:'保管/生技人员在「保管中」样品上发起（扫码台或样品详情）\n填写领用人（必填）、领用部门、领用时长（1~8760 小时）→ 状态变为「领用中」\n储位保留，归还后回原储位'},
+      {h:'超时提醒',body:'超过应还时间未归还 → 看板出现「领用超时未归还」蓝色预警区块\n样品列表状态徽章变橙色、详情页显示已超时\n提醒保管部门催还，归还后提醒消失'},
+      {h:'归还入库',body:'保管/生技人员扫「领用中」样品 → 归还入库\n记录实际归还时间与借出时长 → 状态回「保管中」\n领用中的样品不能申请退回，须先归还'},
+      {h:'与退回的区别',body:'领用/归还：样品短期借出使用，仍属保管资产\n申请退回：样品存在问题走品保审核，可能重新发行或作废'}
     ]
   },
   {
