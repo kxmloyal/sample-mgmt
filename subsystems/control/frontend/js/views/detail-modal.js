@@ -25,7 +25,10 @@ var _ctlUtil = {
     var m = map[rec.decision] || ['待签', 'muted'];
     return '<span class="sign-state ' + m[1] + '">' + m[0] + (rec.signer_name ? ' · ' + rec.signer_name : '') + '</span>';
   },
-  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 轮到本角色/管理员） */
+  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色判定）
+   *  2026-09-04 修复：原顺序首步短路逻辑（遇第一个未签步即判定），导致并行会签下
+   *  非首步角色（如闸口① seq4 制造部）轮到自己时「去会签」按钮不显示；
+   *  现与后端 flow-ops.resolveSignTarget 的 C2 并行语义一致：我的角色存在任一未签步即可签 */
   canSign: function (node) {
     var order = _ctlDetailAgg.order || {};
     if (!order || order.status !== node.trigger_status) return false;
@@ -33,8 +36,8 @@ var _ctlUtil = {
     for (var i = 0; i < node.steps.length; i++) {
       var st = node.steps[i];
       var rec = signs.find(function (s) { return s.seq === st.seq; });
-      if (!rec || !rec.decision) return st.role === me.role || me.role === 'ADMIN';
-      if (rec.decision !== 'AGREE') return false;
+      var done = rec && (rec.decision === 'AGREE' || rec.decision === 'SKIP'); // 与后端 signed 集合同口径
+      if (!done && (st.role === me.role || me.role === 'ADMIN')) return true;
     }
     return false;
   },
