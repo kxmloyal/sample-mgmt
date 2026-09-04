@@ -178,16 +178,6 @@
       },
       {
         "from": "IN_CUSTODY",
-        "to": "RETURNING",
-        "action": "RETURN_REQUEST",
-        "role": [
-          "CUSTODY",
-          "ME"
-        ],
-        "label": "申请退回"
-      },
-      {
-        "from": "IN_CUSTODY",
         "to": "CHECKED_OUT",
         "action": "CHECKOUT",
         "role": [
@@ -260,6 +250,16 @@
           "ME"
         ],
         "label": "修改储位"
+      },
+      {
+        "from": "IN_CUSTODY",
+        "to": "RETURNING",
+        "action": "RETURN_REQUEST",
+        "role": [
+          "CUSTODY",
+          "ME"
+        ],
+        "label": "申请退回"
       },
       {
         "from": "RETURNING",
