@@ -76,4 +76,11 @@ projects：单击 5 卡分别跳项目/任务列表→status 深链预选→分�
 实施期间检测到另一并行会话正在开发样品「领用中 CHECKED_OUT / CHECKOUT 领出 / RETURN_OUT 归还入库」功能：
 - 其未提交改动：db/migrations/index.js、db/migrations/samples.js、routes/misc.js、shared/frontend/api-base.js，并在本组件版本之上为 samples 看板追加了第 8 张「领用中」统计卡（格式与 KbStats 协议一致，兼容）
 - 本提交将 samples/dashboard.js 暂存为纯 KbStats 迁移版（与 bundle 构建输入一致）；工作区保留并行会话的 CHECKED_OUT 增量未动
-- **并行会话完成其功能后需自行重建 bundle 并提交**（其源码增量基于 KbStats 版本，无冲突）
+
+## 十、合并结果（2026-09-04 并行会话结束后核查）
+
+并行会话以 7 提交（a23d631..e6521c7）完成领用/归还全链路并重建全部 5 个 bundle（v=bmtmpf6rz），工作区干净，4000 端口 17:02 重启后后端已生效。**对本组件的影响**：
+
+- **fixtures / projects：KbStats 接入完好保留**（组件 md5 未变，仍是这两 bundle 的渲染源）
+- **samples：其最终提交的 dashboard.js 回到内联渲染 + 第 8 张 CHECKED_OUT 卡**——交互协议（onclick toggle/ondblclick 跳列表/title 提示）逐项保留，仅渲染实现未走 KbStats；本组件在 samples bundle 中成为未引用的死代码（约 1.6KB，无害）
+- 处置：保持现状（samples 交互行为与等价迁移目标一致，不追加生产变更）；后续任意会话因 samples 改动重建 bundle 时，可顺手从 bundle-sources.json 的 samples 数组移除 kb-stats.js 完成死代码清理，或届时再补一行 KbStats.render 迁移
