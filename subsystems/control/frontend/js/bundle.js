@@ -1,4 +1,4 @@
-/** BUNDLE vbmtm8bv07 — 24 files */
+/** BUNDLE vbmtmaa4mr — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -239,7 +239,7 @@ var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
 var CONTROL_TRANSITIONS = [
-  { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME'], label: '提交会签' },
+  { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME', 'QA'], label: '提交会签' },
   { from: 'SIGNING', to: 'LABELED', action: 'SIGN_OK', role: ['QA'], label: '闸口①会签通过/贴标' },
   { from: 'LABELED', to: 'CONTROL_STORED', action: 'STORE', role: ['CUSTODY'], label: '入管制仓' },
   { from: 'CONTROL_STORED', to: 'NCR_DONE', action: 'CREATE_NCR', role: ['QA'], label: '开不良品委托单' },
@@ -455,8 +455,10 @@ function controlRenderStageCards(agg) {
 /* --- subsystems/control/frontend/js/todo.js --- */
 // subsystems/control/frontend/js/todo.js — 角色待办派生与渲染（看板顶部待办区）
 // 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.3
-// 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）与 progress.js 的 CONTROL_SIGN_NODES（待我签核）
-// 说明：看板列表接口不含会签 signs，待我签核按「状态命中会签节点 + 该节点首步角色匹配当前角色/管理员」近似圈定。
+// 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）；
+// 待我签核按列表接口注入的 pending_roles（该单全部待签行的角色集合）精准判定。
+// 2026-09-04 修复：原「会签节点首步角色」近似导致非首步角色（如制造部 seq4）轮到签核时
+// 待办缺失、只看到「会签退回」流转提示（误导）；现与 workbench 我的待办口径一致。
 
 // 派生当前角色待办：toFlow=待我流转, toSign=待我签核（各返回单据数组 + 计数）
 function ctlTodoOf(orders, role) {
@@ -465,8 +467,9 @@ function ctlTodoOf(orders, role) {
   var toSign = [];
   list.forEach(function (o) {
     if (controlTransitionsOf(o.status, role).length) toFlow.push(o);
-    var node = CONTROL_SIGN_NODES.find(function (n) { return n.trigger_status === o.status; });
-    if (node && node.steps && node.steps.length && (node.steps[0].role === role || role === 'ADMIN')) {
+    var pending = o.pending_roles || [];
+    if ((o.status === 'SIGNING' || o.status === 'DISPOSAL_SIGNING')
+        && (pending.indexOf(role) > -1 || (role === 'ADMIN' && pending.length))) {
       toSign.push(o);
     }
   });
@@ -475,8 +478,11 @@ function ctlTodoOf(orders, role) {
 
 // 单条待办项 HTML：单号 + 品名 + 状态徽章 + 下一动作提示（点击跳详情）
 function ctlTodoItemHtml(o) {
-  var next = controlTransitionsOf(o.status, me.role);
-  var hint = next.length ? next[0].label : '查看详情';
+  // 轮到我签核时优先提示「待我会签」，否则按角色可执行流转（如退回），无可执行动作则「查看详情」
+  var pending = o.pending_roles || [];
+  var trans = controlTransitionsOf(o.status, me.role);
+  var hint = pending.indexOf(me.role) > -1 ? '待我会签'
+    : (trans.length ? trans[0].label : '查看详情');
   return '<a class="todo-item" href="#/detail?id=' + o.id + '">'
     + '<span class="mono">' + e(o.order_no) + '</span>'
     + '<span>' + e(o.part_name || '—') + '</span>'

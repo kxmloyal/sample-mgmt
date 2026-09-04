@@ -29,7 +29,7 @@ var CONTROL_DEPTS = ['品保文管中心', '研发部', '生管', '仓库', '制
 
 // 状态流转规则（前端动作按钮过滤：与 manifest.stateMachine.transitions 保持一致；VOID 作废仅 ADMIN，由详情页单独处理）
 var CONTROL_TRANSITIONS = [
-  { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME'], label: '提交会签' },
+  { from: 'DRAFT', to: 'SIGNING', action: 'SUBMIT', role: ['CUSTODY', 'ME', 'QA'], label: '提交会签' },
   { from: 'SIGNING', to: 'LABELED', action: 'SIGN_OK', role: ['QA'], label: '闸口①会签通过/贴标' },
   { from: 'LABELED', to: 'CONTROL_STORED', action: 'STORE', role: ['CUSTODY'], label: '入管制仓' },
   { from: 'CONTROL_STORED', to: 'NCR_DONE', action: 'CREATE_NCR', role: ['QA'], label: '开不良品委托单' },

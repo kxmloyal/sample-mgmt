@@ -78,8 +78,19 @@ function register(app) {
     const pageOffset = Math.max(parseInt(req.query.offset || '0', 10) || 0, 0);
     const baseOpts = await withOverdueHours(buildListOpts(req));
     const filterOpts = Object.assign({}, baseOpts, { limit: pageLimit, offset: pageOffset });
-    const [orders, total] = await Promise.all([D.listOrders(filterOpts), D.countAllOrders(baseOpts)]);
-    res.json({ orders, total, limit: pageLimit, offset: pageOffset });
+    const [orders, total, pendingRows] = await Promise.all([
+      D.listOrders(filterOpts), D.countAllOrders(baseOpts),
+      // 各单待签角色集合（decision 空的行；前端「待我签核」按此精准判定，替代首步角色近似）
+      D.listPendingSignRoles()
+    ]);
+    const pendingMap = {};
+    (pendingRows || []).forEach(function (r) { (pendingMap[r.id] = pendingMap[r.id] || []).push(r.role); });
+    res.json({
+      orders: (orders || []).map(function (o) {
+        return Object.assign({}, o, { pending_roles: pendingMap[o.id] || [] });
+      }),
+      total, limit: pageLimit, offset: pageOffset
+    });
   }));
 
   // 全局留痕日志分页（登录可读）：单查 control_logs JOIN 主单带 order_no/part_name，按 id DESC 分页
