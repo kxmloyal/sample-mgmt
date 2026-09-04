@@ -3,8 +3,9 @@
 const { migrateFixtureLifecycle, migrateFixtureFiles, migrateFixtureMaintenance, migratePerfIndexes, migrateFixtureSchemaAlign } = require('./fixtures');
 const { migrateControlNcrDetail, migrateControlNcrForm, migrateControlOptimisticLock, migrateControlSignsCreatedAt } = require('./control');
 const { migrateProjectTaskIndexes } = require('./projects');
+const { migrateProjectOaExtras } = require('./projects-oa');
 const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete } = require('./samples');
-const { migrateUserEnabled, migrateUsersSessionVersion } = require('./users');
+const { migrateUserEnabled, migrateUsersSessionVersion, migrateUserRolesTable } = require('./users');
 
 async function runMigrations(pool) {
   await migrateFixtureLifecycle(pool);
@@ -18,9 +19,11 @@ async function runMigrations(pool) {
   await migrateControlOptimisticLock(pool);
   await migrateControlSignsCreatedAt(pool);
   await migrateProjectTaskIndexes(pool);
+  await migrateProjectOaExtras(pool);
   await migrateSamplesOptimisticLock(pool);
   await migrateSamplesSoftDelete(pool);
   await migrateUsersSessionVersion(pool);
+  await migrateUserRolesTable(pool);
 }
 
 module.exports = { runMigrations };

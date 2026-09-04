@@ -111,7 +111,7 @@ const dbRef = {
     return r.affectedRows;
   }
 };
-const users = require('./db/users')({ q, one, dbRef });
+const users = require('./db/users')({ q, one, dbRef, tx: function(fn) { return withTransaction(fn); } });
 const portalPrefs = require('./db/portal-prefs')({ q, one, dbRef });
 
 // ★ Phase 6: 自动扫描 subsystems/*/db/dao.js 工厂函数并实例化
