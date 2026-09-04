@@ -75,14 +75,24 @@ function ctlCardHtml(agg) {
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
     + '<div class="ctl-sec">流程进度</div>' + controlRenderProgress(agg)
     + '<div class="ctl-sec">阶段</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>'
-    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(o) + '</div>'
+    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(agg) + '</div>'
     + ctlLabelBtn(o) + '</div>';
 }
 
-/** 可执行流转按钮（含作废，仅 ADMIN），点击统一走 ctlOpen('trans'/'void') */
-function ctlActionButtons(o) {
-  var ts = controlTransitionsOf(o.status, me.role);
-  var btns = ts.map(function (t) {
+/** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
+ *  顺序 = 去会签（闸口①/②） → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
+function ctlActionButtons(agg) {
+  var o = agg.order;
+  var btns = '';
+  // 会签字位（角色+部门双匹配，同 canSign 口径）：轮到我签的闸口生成按钮，统一放最左
+  CONTROL_SIGN_NODES.forEach(function (node) {
+    if (o.status === node.trigger_status && _ctlUtil.canSign(node)) {
+      var gate = node.node_key === 'APPLY_SIGN' ? '闸口①' : '闸口②';
+      btns += '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签（' + gate + '）</button>';
+    }
+  });
+  btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
   }).join('');
   if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {

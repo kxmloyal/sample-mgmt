@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmbeevh — 24 files */
+/** BUNDLE vbmtmbqgs2 — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1324,14 +1324,24 @@ function ctlCardHtml(agg) {
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
     + '<div class="ctl-sec">流程进度</div>' + controlRenderProgress(agg)
     + '<div class="ctl-sec">阶段</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>'
-    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(o) + '</div>'
+    + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(agg) + '</div>'
     + ctlLabelBtn(o) + '</div>';
 }
 
-/** 可执行流转按钮（含作废，仅 ADMIN），点击统一走 ctlOpen('trans'/'void') */
-function ctlActionButtons(o) {
-  var ts = controlTransitionsOf(o.status, me.role);
-  var btns = ts.map(function (t) {
+/** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
+ *  顺序 = 去会签（闸口①/②） → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
+function ctlActionButtons(agg) {
+  var o = agg.order;
+  var btns = '';
+  // 会签字位（角色+部门双匹配，同 canSign 口径）：轮到我签的闸口生成按钮，统一放最左
+  CONTROL_SIGN_NODES.forEach(function (node) {
+    if (o.status === node.trigger_status && _ctlUtil.canSign(node)) {
+      var gate = node.node_key === 'APPLY_SIGN' ? '闸口①' : '闸口②';
+      btns += '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签（' + gate + '）</button>';
+    }
+  });
+  btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
   }).join('');
   if (me.role === 'ADMIN' && o.status !== 'SHIPPED' && o.status !== 'RETIRED') {
@@ -1357,6 +1367,8 @@ function ctlLabelBtn(o) {
 // 各明细 Tab 渲染函数（sign/ncr/rework/logs/form）
 var _ctlTabSheet = {
   sign: function () {
+    // 2026-09-04：「去会签」按钮已统一收编到详情主卡操作区（退回按钮左侧），
+    // 本页签只保留各闸口签核状态展示，避免同一动作两处入口（单一职责）
     return CONTROL_SIGN_NODES.map(function (node) {
       var nodeSigns = (_ctlDetailAgg.signs || []).filter(function (s) { return s.node_key === node.node_key; });
       var steps = node.steps.map(function (st) {
@@ -1365,9 +1377,7 @@ var _ctlTabSheet = {
           + '<span class="sign-name">' + st.dept + '</span><span class="sign-dept">(' + st.role + ')</span>'
           + (rec ? _ctlUtil.signState(rec) : '<span class="sign-state muted">待签</span>') + '</div>';
       }).join('');
-      var btn = _ctlUtil.canSign(node) ? '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签</button>' : '';
-      return '<div class="ctl-sec">' + node.node_name + '</div><div class="card">' + steps
-        + (btn ? '<div style="margin-top:10px">' + btn + '</div>' : '') + '</div>';
+      return '<div class="ctl-sec">' + node.node_name + '</div><div class="card">' + steps + '</div>';
     }).join('');
   },
   ncr: function () {

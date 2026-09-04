@@ -7,6 +7,8 @@
 // 各明细 Tab 渲染函数（sign/ncr/rework/logs/form）
 var _ctlTabSheet = {
   sign: function () {
+    // 2026-09-04：「去会签」按钮已统一收编到详情主卡操作区（退回按钮左侧），
+    // 本页签只保留各闸口签核状态展示，避免同一动作两处入口（单一职责）
     return CONTROL_SIGN_NODES.map(function (node) {
       var nodeSigns = (_ctlDetailAgg.signs || []).filter(function (s) { return s.node_key === node.node_key; });
       var steps = node.steps.map(function (st) {
@@ -15,9 +17,7 @@ var _ctlTabSheet = {
           + '<span class="sign-name">' + st.dept + '</span><span class="sign-dept">(' + st.role + ')</span>'
           + (rec ? _ctlUtil.signState(rec) : '<span class="sign-state muted">待签</span>') + '</div>';
       }).join('');
-      var btn = _ctlUtil.canSign(node) ? '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签</button>' : '';
-      return '<div class="ctl-sec">' + node.node_name + '</div><div class="card">' + steps
-        + (btn ? '<div style="margin-top:10px">' + btn + '</div>' : '') + '</div>';
+      return '<div class="ctl-sec">' + node.node_name + '</div><div class="card">' + steps + '</div>';
     }).join('');
   },
   ncr: function () {
