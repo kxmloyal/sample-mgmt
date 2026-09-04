@@ -2,7 +2,7 @@
 // 权威依据：docs/superpowers/specs/2026-08-24-control-flow-design.md §8/§12
 // 职责：会签闸口/目标解析、状态机封装、状态中文、模板初始化、流转目标推导，均为纯函数（不依赖 DB）
 const { createStateMachine } = require('../../../shared/state-machine');
-const { SIGN_NODES, deriveProgress, calcReworkRemain } = require('./flow');
+const { SIGN_NODES, deriveProgress, calcReworkRemain, deptEquals } = require('./flow');
 
 const MANIFEST = require('../manifest.json');
 const sm = createStateMachine(MANIFEST.stateMachine);
@@ -70,18 +70,24 @@ function currentSignSeq(node, signs) {
  */
 function resolveSignTarget(node, signs, u, requestedSeq) {
   if (!node) return { code: 400, error: '会签节点不存在' };
-  // C2 并行会签（2026-09-03）：任一未签步骤且角色匹配即可签，不再强制顺序
+  // C2 并行会签（2026-09-03）：任一未签步骤即可签，不再强制顺序
+  // 2026-09-04 收紧：会签按部门区分（role+dept 双匹配）——同角色不同部门（如 CUSTODY 的
+  // 生管/制造部/仓库）互相代签属越权；ADMIN 兜底不受限。deptEquals 处理模板短名↔users 全名
   var signed = {}; (signs || []).forEach(function (s) { if (s.node_key === node.node_key && (s.decision === 'AGREE' || s.decision === 'SKIP')) signed[s.seq] = true; });
   var allSigned = node.steps.every(function (s) { return signed[s.seq]; });
   if (allSigned) return { code: 400, error: '该节点会签已完成' };
   var available = node.steps.filter(function (s) {
     if (signed[s.seq]) return false;
     if (u.role === 'ADMIN') return true;
-    return s.role === u.role;
+    return s.role === u.role && deptEquals(s.dept, u.dept);
   });
   if (available.length === 0) {
-    var waitingRoles = node.steps.filter(function (s) { return !signed[s.seq]; }).map(function (s) { return s.role; });
-    return { code: 403, error: '当前节点待 ' + waitingRoles.join('/') + ' 会签' };
+    var waiting = node.steps.filter(function (s) { return !signed[s.seq]; });
+    if (waiting.some(function (s) { return s.role === u.role; })) {
+      // 角色有份但部门不符：明确提示越权代签
+      return { code: 403, error: '会签按部门执行：该步待 ' + waiting.map(function (s) { return s.dept; }).join('/') + ' 签核' };
+    }
+    return { code: 403, error: '当前节点待 ' + waiting.map(function (s) { return s.role; }).join('/') + ' 会签' };
   }
   var target = available[0];
   if (requestedSeq != null) {

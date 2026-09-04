@@ -25,6 +25,22 @@ const STEP_DEFS = FLOW.stepDefs;
 // 5 阶段定义（§5.1）
 const STAGE_DEFS = FLOW.stageDefs;
 
+// 会签步骤短名部门 → 用户表部门全名 归一（2026-09-04 会签按部门区分）：
+// 模板 step.dept 为短名（品保/研发/生管/仓库），users.dept 为全名（品保文管中心/研发部/生管部/资材部）。
+// 未配置别名的部门名原样返回（含制造部等全名直接配置的步骤），向前兼容。
+function normalizeDept(d) {
+  const m = FLOW.deptAliases || {};
+  return m[d] || [d];
+}
+
+/** 部门等价判定：任一别名命中即等价（双向：短名↔全名均先展开再比较） */
+function deptEquals(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const na = normalizeDept(a), nb = normalizeDept(b);
+  return na.some(function (x) { return nb.indexOf(x) !== -1; });
+}
+
 /**
  * 获取状态所属阶段（§7.1）。
  * @param {string} status 状态机状态
@@ -119,4 +135,4 @@ function deriveProgress(order, bonus) {
   return { steps, stages, currentStage: getStageOf(order.status), allDone };
 }
 
-module.exports = { SIGN_NODES, deriveProgress, calcReworkRemain, getStageOf };
+module.exports = { SIGN_NODES, deriveProgress, calcReworkRemain, getStageOf, normalizeDept, deptEquals };

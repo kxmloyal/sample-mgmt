@@ -1,9 +1,9 @@
-/** BUNDLE vbmtmartul — 24 files */
+/** BUNDLE vbmtmbeevh — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
 var DEPTS = ["系统","研发部","品保文管中心","制造部","资材部","FQC","生技部","项目部"];
-var CONTROL_FLOW = {"statusOrder":["DRAFT","SIGNING","LABELED","CONTROL_STORED","NCR_DONE","DISPOSAL_SIGNING","REWORK_OPENED","REWORKING","REWORK_REPORTED","REIN_STOCK","SHIPPED"],"stageOfStatus":{"DRAFT":1,"SIGNING":1,"LABELED":2,"CONTROL_STORED":2,"NCR_DONE":3,"DISPOSAL_SIGNING":3,"REWORK_OPENED":4,"REWORKING":4,"REWORK_REPORTED":4,"REIN_STOCK":5,"SHIPPED":5},"signNodes":[{"node_key":"APPLY_SIGN","node_name":"申请管制会签","trigger_status":"SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"},{"seq":3,"role":"CUSTODY","dept":"生管"},{"seq":4,"role":"CUSTODY","dept":"制造部"},{"seq":5,"role":"CUSTODY","dept":"仓库"}]},{"node_key":"DISPOSAL_SIGN","node_name":"处理方式会签","trigger_status":"DISPOSAL_SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"}]}],"stepDefs":[{"seq":1,"key":"apply","label":"申请","stage":1},{"seq":2,"key":"sign1","label":"会签(闸口①)","stage":1},{"seq":3,"key":"label","label":"贴标","stage":2},{"seq":4,"key":"store","label":"入仓","stage":2},{"seq":5,"key":"ncr","label":"开NCR","stage":3},{"seq":6,"key":"sign2","label":"处理会签(闸口②)","stage":3},{"seq":7,"key":"rework_open","label":"开重工单","stage":4},{"seq":8,"key":"schedule","label":"排产","stage":4},{"seq":9,"key":"report","label":"报工","stage":4},{"seq":10,"key":"in_stock","label":"入库","stage":5},{"seq":11,"key":"ship","label":"出货","stage":5}],"stageDefs":[{"stage":1,"key":"apply_sign","name":"申请与会签","dept":["品保","研发","生管","制造部","仓库"]},{"stage":2,"key":"label_store","name":"贴标与入仓","dept":["品保","仓库"]},{"stage":3,"key":"ncr_disposal","name":"NCR与处理会签","dept":["品保","研发"]},{"stage":4,"key":"rework","name":"重工执行","dept":["生管","制造部","仓库"]},{"stage":5,"key":"in_stock_ship","name":"入库出货","dept":["仓库","制造部"]}]};
+var CONTROL_FLOW = {"statusOrder":["DRAFT","SIGNING","LABELED","CONTROL_STORED","NCR_DONE","DISPOSAL_SIGNING","REWORK_OPENED","REWORKING","REWORK_REPORTED","REIN_STOCK","SHIPPED"],"deptAliases":{"品保":["品保文管中心"],"研发":["研发部","测试部"],"生管":["生管部"],"仓库":["资材部"],"制造部":["制造部"]},"stageOfStatus":{"DRAFT":1,"SIGNING":1,"LABELED":2,"CONTROL_STORED":2,"NCR_DONE":3,"DISPOSAL_SIGNING":3,"REWORK_OPENED":4,"REWORKING":4,"REWORK_REPORTED":4,"REIN_STOCK":5,"SHIPPED":5},"signNodes":[{"node_key":"APPLY_SIGN","node_name":"申请管制会签","trigger_status":"SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"},{"seq":3,"role":"CUSTODY","dept":"生管"},{"seq":4,"role":"CUSTODY","dept":"制造部"},{"seq":5,"role":"CUSTODY","dept":"仓库"}]},{"node_key":"DISPOSAL_SIGN","node_name":"处理方式会签","trigger_status":"DISPOSAL_SIGNING","steps":[{"seq":1,"role":"QA","dept":"品保"},{"seq":2,"role":"RD","dept":"研发"}]}],"stepDefs":[{"seq":1,"key":"apply","label":"申请","stage":1},{"seq":2,"key":"sign1","label":"会签(闸口①)","stage":1},{"seq":3,"key":"label","label":"贴标","stage":2},{"seq":4,"key":"store","label":"入仓","stage":2},{"seq":5,"key":"ncr","label":"开NCR","stage":3},{"seq":6,"key":"sign2","label":"处理会签(闸口②)","stage":3},{"seq":7,"key":"rework_open","label":"开重工单","stage":4},{"seq":8,"key":"schedule","label":"排产","stage":4},{"seq":9,"key":"report","label":"报工","stage":4},{"seq":10,"key":"in_stock","label":"入库","stage":5},{"seq":11,"key":"ship","label":"出货","stage":5}],"stageDefs":[{"stage":1,"key":"apply_sign","name":"申请与会签","dept":["品保","研发","生管","制造部","仓库"]},{"stage":2,"key":"label_store","name":"贴标与入仓","dept":["品保","仓库"]},{"stage":3,"key":"ncr_disposal","name":"NCR与处理会签","dept":["品保","研发"]},{"stage":4,"key":"rework","name":"重工执行","dept":["生管","制造部","仓库"]},{"stage":5,"key":"in_stock_ship","name":"入库出货","dept":["仓库","制造部"]}]};
 
 /* --- shared/frontend/shared/utils.js --- */
 // shared/utils.js — 跨子系统公共工具函数
@@ -456,9 +456,22 @@ function controlRenderStageCards(agg) {
 // subsystems/control/frontend/js/todo.js — 角色待办派生与渲染（看板顶部待办区）
 // 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.3
 // 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）；
-// 待我签核按列表接口注入的 pending_roles（该单全部待签行的角色集合）精准判定。
-// 2026-09-04 修复：原「会签节点首步角色」近似导致非首步角色（如制造部 seq4）轮到签核时
-// 待办缺失、只看到「会签退回」流转提示（误导）；现与 workbench 我的待办口径一致。
+// 待我签核按列表接口注入的 pending 行（该单全部待签行的 role+dept）精准判定。
+// 2026-09-04 修复与收紧：①原「会签节点首步角色」近似导致非首步角色待办缺失（误导）；
+// ②会签按部门区分（role+dept 双匹配，deptAliases 展开短名↔全名），同角色不同部门不互代签——
+// 与后端 resolveSignTarget、详情页 canSign、workbench 我的待办四处同口径。
+
+// 会签步骤短名部门 → 用户表部门全名（与 data/control-flow.json 的 deptAliases 同源，两处维护勿漂移）
+var CTL_DEPT_ALIAS = { '品保': ['品保文管中心'], '研发': ['研发部', '测试部'], '生管': ['生管部'], '仓库': ['资材部'], '制造部': ['制造部'] };
+
+// 我的部门是否命中会签步骤部门（短名/全名双向展开比较）
+function ctlSignDeptHit(stepDept, myDept) {
+  if (!stepDept || !myDept) return false;
+  if (stepDept === myDept) return true;
+  var a = CTL_DEPT_ALIAS[stepDept] || [stepDept];
+  var b = CTL_DEPT_ALIAS[myDept] || [myDept];
+  return a.some(function (x) { return b.indexOf(x) !== -1; });
+}
 
 // 派生当前角色待办：toFlow=待我流转, toSign=待我签核（各返回单据数组 + 计数）
 function ctlTodoOf(orders, role) {
@@ -467,10 +480,13 @@ function ctlTodoOf(orders, role) {
   var toSign = [];
   list.forEach(function (o) {
     if (controlTransitionsOf(o.status, role).length) toFlow.push(o);
-    var pending = o.pending_roles || [];
+    var pending = o.pending || [];
     if ((o.status === 'SIGNING' || o.status === 'DISPOSAL_SIGNING')
-        && (pending.indexOf(role) > -1 || (role === 'ADMIN' && pending.length))) {
-      toSign.push(o);
+        && pending.some(function (p) { return p.role === role || (role === 'ADMIN' && p.role); })) {
+      // 非 ADMIN 再按部门过滤（ADMIN 见所有待签单）
+      if (role === 'ADMIN' || pending.some(function (p) { return p.role === role && ctlSignDeptHit(p.dept, me.dept); })) {
+        toSign.push(o);
+      }
     }
   });
   return { toFlow: toFlow, toSign: toSign, flowCount: toFlow.length, signCount: toSign.length };
@@ -478,10 +494,11 @@ function ctlTodoOf(orders, role) {
 
 // 单条待办项 HTML：单号 + 品名 + 状态徽章 + 下一动作提示（点击跳详情）
 function ctlTodoItemHtml(o) {
-  // 轮到我签核时优先提示「待我会签」，否则按角色可执行流转（如退回），无可执行动作则「查看详情」
-  var pending = o.pending_roles || [];
+  // 轮到我（角色+部门）签核时优先提示「待我会签」，否则按角色可执行流转（如退回），无可执行动作则「查看详情」
+  var pending = o.pending || [];
+  var mine = pending.some(function (p) { return p.role === me.role && ctlSignDeptHit(p.dept, me.dept); });
   var trans = controlTransitionsOf(o.status, me.role);
-  var hint = pending.indexOf(me.role) > -1 ? '待我会签'
+  var hint = mine ? '待我会签'
     : (trans.length ? trans[0].label : '查看详情');
   return '<a class="todo-item" href="#/detail?id=' + o.id + '">'
     + '<span class="mono">' + e(o.order_no) + '</span>'
@@ -1593,19 +1610,23 @@ var _ctlUtil = {
     var m = map[rec.decision] || ['待签', 'muted'];
     return '<span class="sign-state ' + m[1] + '">' + m[0] + (rec.signer_name ? ' · ' + rec.signer_name : '') + '</span>';
   },
-  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色判定）
-   *  2026-09-04 修复：原顺序首步短路逻辑（遇第一个未签步即判定），导致并行会签下
-   *  非首步角色（如闸口① seq4 制造部）轮到自己时「去会签」按钮不显示；
-   *  现与后端 flow-ops.resolveSignTarget 的 C2 并行语义一致：我的角色存在任一未签步即可签 */
+  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色/部门判定）
+   *  2026-09-04 修复与收紧：①并行判定（原顺序首步短路导致非首步角色按钮缺失）；
+   *  ②按部门区分（与后端 resolveSignTarget 的 role+dept 双匹配一致）——
+   *  同角色不同部门（CUSTODY 的生管/制造部/仓库）不可互相代签；ADMIN 兜底不受限。
+   *  部门别名展开同源 CONTROL_FLOW.deptAliases（品保=品保文管中心、仓库=资材部等） */
   canSign: function (node) {
     var order = _ctlDetailAgg.order || {};
     if (!order || order.status !== node.trigger_status) return false;
     var signs = (_ctlDetailAgg.signs || []).filter(function (s) { return s.node_key === node.node_key; });
+    var al = (typeof CONTROL_FLOW !== 'undefined' && CONTROL_FLOW && CONTROL_FLOW.deptAliases) || {};
+    var expand = function (d) { return al[d] || [d]; };
+    var hit = function (a, b) { if (!a || !b) return false; if (a === b) return true; var na = expand(a), nb = expand(b); return na.some(function (x) { return nb.indexOf(x) !== -1; }); };
     for (var i = 0; i < node.steps.length; i++) {
       var st = node.steps[i];
       var rec = signs.find(function (s) { return s.seq === st.seq; });
       var done = rec && (rec.decision === 'AGREE' || rec.decision === 'SKIP'); // 与后端 signed 集合同口径
-      if (!done && (st.role === me.role || me.role === 'ADMIN')) return true;
+      if (!done && (st.role === me.role || me.role === 'ADMIN') && (me.role === 'ADMIN' || hit(st.dept, me.dept))) return true;
     }
     return false;
   },

@@ -1,5 +1,6 @@
 node_modules/
-data/
+# data/ 上传产物目录整体忽略，仅放行管制流程单一事实来源 control-flow.json（git 不进入被忽略目录，须用 /* 形式）
+data/*
 public/uploads/
 *.log
 .DS_Store
@@ -28,3 +29,6 @@ tmp/
 
 # 前端 bundle 构建产物版本号（每次构建自动生成，无版本控制价值）
 tools/.bundle-ver
+
+# 管制流程单一事实来源（流程 JSON 由工具构建时注入前端，必须版本管理）
+!/data/control-flow.json

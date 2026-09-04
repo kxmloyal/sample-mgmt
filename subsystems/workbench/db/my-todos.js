@@ -13,12 +13,21 @@
 //   管制 control：manifest.stateMachine.transitions 角色匹配=待我流转（剔除 VOID 作废与 *_REJECT 退回——
 //     退回是会签的一部分，已由待我签核覆盖）；DRAFT 提交待办仅申请部门（apply_dept=我部门，起草人自己提交）；
 //     CUSTODY 职能池状态（入仓/报工/入库/出货）仅仓口部门（CTL_CUSTODY_DEPT_GATE，待办≠部门广播）；
-//     control_signs 待签行(decision 空) role 匹配=待我签核；ADMIN 对所有会签中单据可见。
-//     与 control 前端 todo.js 的差异：前端待我签核仅首步角色近似，本模块按任一待签行
-//     （会签已并行化，本口径更准）；前端 toFlow 含 REJECT 动作，本模块不含（评审 R6）。
+//     control_signs 待签行(decision 空) role+sign_dept 匹配=待我签核（2026-09-04 会签按部门区分，
+//     与后端 resolveSignTarget/前端 canSign 同口径）；ADMIN 对所有会签中单据可见。
 //   项目 project：project_tasks/project_subtasks assignee_id=本人且 status<>'DONE'（唯一按个人指派的子系统）。
 var D = require('../../../db');
 var CTL_MANIFEST = require('../../control/manifest.json');
+
+// 会签步骤短名部门 → 用户表部门全名（与 data/control-flow.json 的 deptAliases 同源，两处维护勿漂移）；
+// control_signs.sign_dept 存模板短名（生管/仓库等），与 users.dept 全名比较前须展开
+var CTL_DEPT_ALIAS = {
+  '品保': ['品保文管中心'],
+  '研发': ['研发部', '测试部'],
+  '生管': ['生管部'],
+  '仓库': ['资材部'],
+  '制造部': ['制造部']
+};
 
 // 状态中文映射（与各子系统权威来源对齐：workbench-queries.js CASE / control manifest.states / projects manifest.states）
 var SAMPLE_STATUS_CN = { NEW: '制样中', PRODUCED: '待发行', RELEASED: '保管中', IN_CUSTODY: '保管中', RETURNING: '退回审核中' };
@@ -194,8 +203,10 @@ async function collectControlTodos(u) {
     });
   }
 
-  // 待我签核：control_signs 待签行 role 匹配（会签已并行化，任一待签步即可签）；
-  // ADMIN 对所有会签中单据可见（对齐 control 前端 todo.js 的 ADMIN 规则）
+  // 待我签核：control_signs 待签行 role+sign_dept 匹配（2026-09-04 会签按部门区分：
+  // 同角色不同部门不可互相代签，待办与详情页按钮/后端校验同口径）；
+  // sign_dept 为模板短名（生管/仓库等），DEPT_ALIAS_MAP 展开后与 u.dept 全名比较；
+  // ADMIN 对所有会签中单据可见
   var signRows;
   if (u.role === 'ADMIN') {
     var [r1] = await pool.execute(
@@ -206,11 +217,19 @@ async function collectControlTodos(u) {
     signRows = r1;
   } else {
     var [r2] = await pool.execute(
-      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at FROM control_signs s " +
+      "SELECT DISTINCT o.id, o.order_no, o.part_name, o.status, o.apply_dept, o.updated_at, s.sign_dept FROM control_signs s " +
       "JOIN control_orders o ON o.id = s.order_id " +
       "WHERE (s.decision IS NULL OR s.decision = '') AND s.role = ? AND o.status IN ('SIGNING','DISPOSAL_SIGNING') " +
       "ORDER BY o.updated_at DESC LIMIT 200", [u.role]);
-    signRows = r2;
+    // SQL 只能按 role 预筛，sign_dept 别名归一在 JS 侧完成（DISTINCT 会因 sign_dept 不同多行，按单据 id 去重）
+    var seenOrder = {};
+    signRows = r2.filter(function (r) {
+      if (seenOrder[r.id]) return false;
+      var aliases = CTL_DEPT_ALIAS[r.sign_dept] || [r.sign_dept];
+      var ok = aliases.indexOf(u.dept) !== -1;
+      if (ok) seenOrder[r.id] = 1;
+      return ok;
+    });
   }
   signRows.forEach(function (o) {
     var signLabel = o.status === 'SIGNING' ? '待签核：闸口①会签' : '待签核：闸口②会签';

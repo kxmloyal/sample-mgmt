@@ -1,0 +1,60 @@
+{
+  "statusOrder": ["DRAFT", "SIGNING", "LABELED", "CONTROL_STORED", "NCR_DONE", "DISPOSAL_SIGNING", "REWORK_OPENED", "REWORKING", "REWORK_REPORTED", "REIN_STOCK", "SHIPPED"],
+  "deptAliases": {
+    "品保": ["品保文管中心"],
+    "研发": ["研发部", "测试部"],
+    "生管": ["生管部"],
+    "仓库": ["资材部"],
+    "制造部": ["制造部"]
+  },
+  "stageOfStatus": {
+    "DRAFT": 1, "SIGNING": 1,
+    "LABELED": 2, "CONTROL_STORED": 2,
+    "NCR_DONE": 3, "DISPOSAL_SIGNING": 3,
+    "REWORK_OPENED": 4, "REWORKING": 4, "REWORK_REPORTED": 4,
+    "REIN_STOCK": 5, "SHIPPED": 5
+  },
+  "signNodes": [
+    {
+      "node_key": "APPLY_SIGN",
+      "node_name": "申请管制会签",
+      "trigger_status": "SIGNING",
+      "steps": [
+        { "seq": 1, "role": "QA", "dept": "品保" },
+        { "seq": 2, "role": "RD", "dept": "研发" },
+        { "seq": 3, "role": "CUSTODY", "dept": "生管" },
+        { "seq": 4, "role": "CUSTODY", "dept": "制造部" },
+        { "seq": 5, "role": "CUSTODY", "dept": "仓库" }
+      ]
+    },
+    {
+      "node_key": "DISPOSAL_SIGN",
+      "node_name": "处理方式会签",
+      "trigger_status": "DISPOSAL_SIGNING",
+      "steps": [
+        { "seq": 1, "role": "QA", "dept": "品保" },
+        { "seq": 2, "role": "RD", "dept": "研发" }
+      ]
+    }
+  ],
+  "stepDefs": [
+    { "seq": 1, "key": "apply", "label": "申请", "stage": 1 },
+    { "seq": 2, "key": "sign1", "label": "会签(闸口①)", "stage": 1 },
+    { "seq": 3, "key": "label", "label": "贴标", "stage": 2 },
+    { "seq": 4, "key": "store", "label": "入仓", "stage": 2 },
+    { "seq": 5, "key": "ncr", "label": "开NCR", "stage": 3 },
+    { "seq": 6, "key": "sign2", "label": "处理会签(闸口②)", "stage": 3 },
+    { "seq": 7, "key": "rework_open", "label": "开重工单", "stage": 4 },
+    { "seq": 8, "key": "schedule", "label": "排产", "stage": 4 },
+    { "seq": 9, "key": "report", "label": "报工", "stage": 4 },
+    { "seq": 10, "key": "in_stock", "label": "入库", "stage": 5 },
+    { "seq": 11, "key": "ship", "label": "出货", "stage": 5 }
+  ],
+  "stageDefs": [
+    { "stage": 1, "key": "apply_sign", "name": "申请与会签", "dept": ["品保", "研发", "生管", "制造部", "仓库"] },
+    { "stage": 2, "key": "label_store", "name": "贴标与入仓", "dept": ["品保", "仓库"] },
+    { "stage": 3, "key": "ncr_disposal", "name": "NCR与处理会签", "dept": ["品保", "研发"] },
+    { "stage": 4, "key": "rework", "name": "重工执行", "dept": ["生管", "制造部", "仓库"] },
+    { "stage": 5, "key": "in_stock_ship", "name": "入库出货", "dept": ["仓库", "制造部"] }
+  ]
+}

@@ -25,19 +25,23 @@ var _ctlUtil = {
     var m = map[rec.decision] || ['待签', 'muted'];
     return '<span class="sign-state ' + m[1] + '">' + m[0] + (rec.signer_name ? ' · ' + rec.signer_name : '') + '</span>';
   },
-  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色判定）
-   *  2026-09-04 修复：原顺序首步短路逻辑（遇第一个未签步即判定），导致并行会签下
-   *  非首步角色（如闸口① seq4 制造部）轮到自己时「去会签」按钮不显示；
-   *  现与后端 flow-ops.resolveSignTarget 的 C2 并行语义一致：我的角色存在任一未签步即可签 */
+  /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色/部门判定）
+   *  2026-09-04 修复与收紧：①并行判定（原顺序首步短路导致非首步角色按钮缺失）；
+   *  ②按部门区分（与后端 resolveSignTarget 的 role+dept 双匹配一致）——
+   *  同角色不同部门（CUSTODY 的生管/制造部/仓库）不可互相代签；ADMIN 兜底不受限。
+   *  部门别名展开同源 CONTROL_FLOW.deptAliases（品保=品保文管中心、仓库=资材部等） */
   canSign: function (node) {
     var order = _ctlDetailAgg.order || {};
     if (!order || order.status !== node.trigger_status) return false;
     var signs = (_ctlDetailAgg.signs || []).filter(function (s) { return s.node_key === node.node_key; });
+    var al = (typeof CONTROL_FLOW !== 'undefined' && CONTROL_FLOW && CONTROL_FLOW.deptAliases) || {};
+    var expand = function (d) { return al[d] || [d]; };
+    var hit = function (a, b) { if (!a || !b) return false; if (a === b) return true; var na = expand(a), nb = expand(b); return na.some(function (x) { return nb.indexOf(x) !== -1; }); };
     for (var i = 0; i < node.steps.length; i++) {
       var st = node.steps[i];
       var rec = signs.find(function (s) { return s.seq === st.seq; });
       var done = rec && (rec.decision === 'AGREE' || rec.decision === 'SKIP'); // 与后端 signed 集合同口径
-      if (!done && (st.role === me.role || me.role === 'ADMIN')) return true;
+      if (!done && (st.role === me.role || me.role === 'ADMIN') && (me.role === 'ADMIN' || hit(st.dept, me.dept))) return true;
     }
     return false;
   },

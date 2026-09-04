@@ -141,10 +141,11 @@ module.exports = function createDao(deps) {
 
   function listSignsByOrder(order_id) { return q('SELECT * FROM control_signs WHERE order_id = ? ORDER BY `seq` ASC', [order_id]); }
 
-  // 各会签中单据的待签角色集合（decision 空的行去重；供列表接口注入 pending_roles，前端「待我签核」精准判定）
+  // 各会签中单据的待签行集合（decision 空行，含 role+sign_dept；供列表接口注入 pending 行，
+  // 前端「待我签核」按角色+部门精准判定，与会签按部门区分同口径）
   function listPendingSignRoles() {
     return q(
-      "SELECT DISTINCT o.id, s.role FROM control_signs s JOIN control_orders o ON o.id = s.order_id " +
+      "SELECT DISTINCT o.id, s.role, s.sign_dept FROM control_signs s JOIN control_orders o ON o.id = s.order_id " +
       "WHERE (s.decision IS NULL OR s.decision = '') AND o.status IN ('SIGNING','DISPOSAL_SIGNING')");
   }
 

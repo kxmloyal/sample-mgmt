@@ -80,11 +80,14 @@ function register(app) {
     const filterOpts = Object.assign({}, baseOpts, { limit: pageLimit, offset: pageOffset });
     const [orders, total, pendingRows] = await Promise.all([
       D.listOrders(filterOpts), D.countAllOrders(baseOpts),
-      // 各单待签角色集合（decision 空的行；前端「待我签核」按此精准判定，替代首步角色近似）
+      // 各单待签行（decision 空，含角色+部门短名；前端「待我签核」按 role+dept 精准判定，
+      // 与 resolveSignTarget 的会签按部门区分同口径；deptAliases 展开在前端 todo.js 完成）
       D.listPendingSignRoles()
     ]);
     const pendingMap = {};
-    (pendingRows || []).forEach(function (r) { (pendingMap[r.id] = pendingMap[r.id] || []).push(r.role); });
+    (pendingRows || []).forEach(function (r) {
+      (pendingMap[r.id] = pendingMap[r.id] || []).push({ role: r.role, dept: r.sign_dept });
+    });
     res.json({
       orders: (orders || []).map(function (o) {
         return Object.assign({}, o, { pending_roles: pendingMap[o.id] || [] });

@@ -1,9 +1,22 @@
 // subsystems/control/frontend/js/todo.js — 角色待办派生与渲染（看板顶部待办区）
 // 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.3
 // 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）；
-// 待我签核按列表接口注入的 pending_roles（该单全部待签行的角色集合）精准判定。
-// 2026-09-04 修复：原「会签节点首步角色」近似导致非首步角色（如制造部 seq4）轮到签核时
-// 待办缺失、只看到「会签退回」流转提示（误导）；现与 workbench 我的待办口径一致。
+// 待我签核按列表接口注入的 pending 行（该单全部待签行的 role+dept）精准判定。
+// 2026-09-04 修复与收紧：①原「会签节点首步角色」近似导致非首步角色待办缺失（误导）；
+// ②会签按部门区分（role+dept 双匹配，deptAliases 展开短名↔全名），同角色不同部门不互代签——
+// 与后端 resolveSignTarget、详情页 canSign、workbench 我的待办四处同口径。
+
+// 会签步骤短名部门 → 用户表部门全名（与 data/control-flow.json 的 deptAliases 同源，两处维护勿漂移）
+var CTL_DEPT_ALIAS = { '品保': ['品保文管中心'], '研发': ['研发部', '测试部'], '生管': ['生管部'], '仓库': ['资材部'], '制造部': ['制造部'] };
+
+// 我的部门是否命中会签步骤部门（短名/全名双向展开比较）
+function ctlSignDeptHit(stepDept, myDept) {
+  if (!stepDept || !myDept) return false;
+  if (stepDept === myDept) return true;
+  var a = CTL_DEPT_ALIAS[stepDept] || [stepDept];
+  var b = CTL_DEPT_ALIAS[myDept] || [myDept];
+  return a.some(function (x) { return b.indexOf(x) !== -1; });
+}
 
 // 派生当前角色待办：toFlow=待我流转, toSign=待我签核（各返回单据数组 + 计数）
 function ctlTodoOf(orders, role) {
@@ -12,10 +25,13 @@ function ctlTodoOf(orders, role) {
   var toSign = [];
   list.forEach(function (o) {
     if (controlTransitionsOf(o.status, role).length) toFlow.push(o);
-    var pending = o.pending_roles || [];
+    var pending = o.pending || [];
     if ((o.status === 'SIGNING' || o.status === 'DISPOSAL_SIGNING')
-        && (pending.indexOf(role) > -1 || (role === 'ADMIN' && pending.length))) {
-      toSign.push(o);
+        && pending.some(function (p) { return p.role === role || (role === 'ADMIN' && p.role); })) {
+      // 非 ADMIN 再按部门过滤（ADMIN 见所有待签单）
+      if (role === 'ADMIN' || pending.some(function (p) { return p.role === role && ctlSignDeptHit(p.dept, me.dept); })) {
+        toSign.push(o);
+      }
     }
   });
   return { toFlow: toFlow, toSign: toSign, flowCount: toFlow.length, signCount: toSign.length };
@@ -23,10 +39,11 @@ function ctlTodoOf(orders, role) {
 
 // 单条待办项 HTML：单号 + 品名 + 状态徽章 + 下一动作提示（点击跳详情）
 function ctlTodoItemHtml(o) {
-  // 轮到我签核时优先提示「待我会签」，否则按角色可执行流转（如退回），无可执行动作则「查看详情」
-  var pending = o.pending_roles || [];
+  // 轮到我（角色+部门）签核时优先提示「待我会签」，否则按角色可执行流转（如退回），无可执行动作则「查看详情」
+  var pending = o.pending || [];
+  var mine = pending.some(function (p) { return p.role === me.role && ctlSignDeptHit(p.dept, me.dept); });
   var trans = controlTransitionsOf(o.status, me.role);
-  var hint = pending.indexOf(me.role) > -1 ? '待我会签'
+  var hint = mine ? '待我会签'
     : (trans.length ? trans[0].label : '查看详情');
   return '<a class="todo-item" href="#/detail?id=' + o.id + '">'
     + '<span class="mono">' + e(o.order_no) + '</span>'
