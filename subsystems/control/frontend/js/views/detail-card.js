@@ -80,7 +80,7 @@ function ctlCardHtml(agg) {
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
- *  顺序 = 去会签（闸口①/②） → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
  *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
 function ctlActionButtons(agg) {
   var o = agg.order;
@@ -92,6 +92,11 @@ function ctlActionButtons(agg) {
       btns += '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签（' + gate + '）</button>';
     }
   });
+  // 追加报工（2026-09-04 修复：拆分重构时入口按钮遗失，弹窗与后端一直存在却无人可调）；
+  // 显示条件与后端 rework-log 门控一致：REWORKING 且角色 ∈ {CUSTODY, ME}（可多次分批报工）
+  if (o.status === 'REWORKING' && (me.role === 'CUSTODY' || me.role === 'ME')) {
+    btns += '<button class="btn primary" onclick="ctlOpen(\'rework\')">追加报工</button>';
+  }
   btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
   }).join('');

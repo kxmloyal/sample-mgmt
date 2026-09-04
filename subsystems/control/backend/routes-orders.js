@@ -229,6 +229,12 @@ function register(app) {
       var remainQty = Number(order.qty) - (Number(order.good_qty) || 0) - (Number(order.ng_qty) || 0) - (Number(order.scrap_qty) || 0);
       if (order.qty != null && remainQty !== 0) return res.status(400).json({ error: '结余未清零（余 ' + remainQty + '），无法出货' });
     }
+    if (action === 'REPORT') { // 2026-09-04 加固：报工确认前须已有报工记录且结余清零（杜绝零数量推进）
+      var logs = await D.listReworkLogsByOrder(order.id);
+      if (!logs.length) return res.status(400).json({ error: '请先追加报工记录（录入良品/不良/报废数量）后再确认报工' });
+      var remainR = Number(order.qty) - (Number(order.good_qty) || 0) - (Number(order.ng_qty) || 0) - (Number(order.scrap_qty) || 0);
+      if (order.qty != null && remainR !== 0) return res.status(400).json({ error: '结余未清零（余 ' + remainR + '），请继续报工后再确认' });
+    }
     if (action === 'DISPATCH') { // 处理方式会签发起：重工/全检标准必填（SOP 必填 + 指导/其他至少一项）
       const rb = req.body || {};
       const sop = (rb.rework_sop || '').trim();

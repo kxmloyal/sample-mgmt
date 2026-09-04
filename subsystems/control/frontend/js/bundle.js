@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmccotg — 24 files */
+/** BUNDLE vbmtmcu17m — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1330,7 +1330,7 @@ function ctlCardHtml(agg) {
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
- *  顺序 = 去会签（闸口①/②） → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
+ *  顺序 = 去会签（闸口①/②） → 追加报工 → 流转动作（含退回） → 作废（仅 ADMIN），点击统一走 ctlOpen）
  *  @param {Object} agg 详情聚合 { order, signs, ... }（canSign 需 signs + 状态） */
 function ctlActionButtons(agg) {
   var o = agg.order;
@@ -1342,6 +1342,11 @@ function ctlActionButtons(agg) {
       btns += '<button class="btn primary" onclick="ctlOpen(\'sign\',\'' + node.node_key + '\')">去会签（' + gate + '）</button>';
     }
   });
+  // 追加报工（2026-09-04 修复：拆分重构时入口按钮遗失，弹窗与后端一直存在却无人可调）；
+  // 显示条件与后端 rework-log 门控一致：REWORKING 且角色 ∈ {CUSTODY, ME}（可多次分批报工）
+  if (o.status === 'REWORKING' && (me.role === 'CUSTODY' || me.role === 'ME')) {
+    btns += '<button class="btn primary" onclick="ctlOpen(\'rework\')">追加报工</button>';
+  }
   btns += controlTransitionsOf(o.status, me.role).map(function (t) {
     return '<button class="btn primary" onclick="ctlOpen(\'trans\',\'' + t.action + '\')">' + e(t.label) + '</button>';
   }).join('');
