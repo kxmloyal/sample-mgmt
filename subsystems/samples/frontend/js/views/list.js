@@ -4,6 +4,10 @@
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
+/** 角色默认状态过滤（2026-09-07）：打开列表按角色优先显示对应状态；深链与用户主动筛选优先 */
+var ROLE_DEFAULT_STATUS = { RD: 'NEW', QA: 'PRODUCED,RETURNING', CUSTODY: 'IN_CUSTODY', ME: 'IN_CUSTODY' };
+var _roleDefaultApplied = false; // 本次进入列表是否应用了角色默认（用于提示芯片；用户清除/深链后为 false）
+
 var _debounceTimer = null;
 var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
 var samplePager = { limit: 20, offset: 0, total: 0 };
@@ -22,7 +26,7 @@ async function viewSamples() {
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
+    '<fluent-select id="f-status" onchange="_roleDefaultApplied=false;loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -54,14 +58,28 @@ async function viewSamples() {
       else setTimeout(attempt, 60);
     })();
   }
+  else if (ROLE_DEFAULT_STATUS[me.role]) {
+    // 角色默认优先显示（2026-09-07）：无深链时按角色过滤默认状态，芯片区显示提示、点 ✕ 看全量
+    _roleDefaultApplied = true;
+    loadSamplesWithStatus(ROLE_DEFAULT_STATUS[me.role]);
+  }
   else loadSamples();
 }
 
 async function loadSamples() {
   _quickFilterType = null;
   _sampleIsOverdue = false;
-  _sampleBuildParams = function() { return _buildQueryParams(''); };
+  // 角色默认粘性（2026-09-07）：已应用且未被用户清除时，搜索/翻页/其它筛选变更仍保持状态范围；
+  // 清除途径仅三条：角色提示芯片 ✕（clearRoleDefault）、状态下拉主动选择（onchange 置 false）、快捷筛选
+  var base = _roleDefaultApplied && ROLE_DEFAULT_STATUS[me.role] ? 'status=' + ROLE_DEFAULT_STATUS[me.role] : '';
+  _sampleBuildParams = function() { return _buildQueryParams(base); };
   _fetchSamplePage(true);
+}
+
+/** 清除角色默认优先显示 → 回全量（角色提示芯片 ✕ 入口） */
+function clearRoleDefault() {
+  _roleDefaultApplied = false;
+  loadSamples();
 }
 
 async function deleteSample(id) {

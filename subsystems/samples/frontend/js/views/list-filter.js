@@ -1,5 +1,5 @@
 // sample-filter.js — 样品筛选、chips、快捷过滤
-// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams/_roleDefaultApplied/ROLE_DEFAULT_STATUS/clearRoleDefault (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
 function _buildQueryParams(baseParams) {
@@ -19,14 +19,21 @@ function _buildQueryParams(baseParams) {
   return p;
 }
 
+/** 状态值（可含逗号多值）→ 中文标签串（2026-09-07：多状态/角色默认共用） */
+function _roleStatusLabel(v) {
+  var M = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
+  return String(v || '').split(',').map(function (s) { return M[s] || s; }).join('、');
+}
+
 function loadSamplesWithStatus(statusStr) {
   _sampleIsOverdue = false;
-  _sampleBuildParams = function() { return _buildQueryParams('status=' + statusStr); };
+  _sampleBuildParams = function() { return _buildQueryParams(statusStr ? 'status=' + statusStr : ''); };
   _fetchSamplePage(true);
 }
 
 function quickFilter(type) {
   _quickFilterType = type;
+  _roleDefaultApplied = false; // 用户主动点快捷筛选 = 明确意图，覆盖角色默认提示
   if (type === 'pending') {
     var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
     $('#f-status').value = ''; $('#f-dept').value = '';
@@ -40,6 +47,7 @@ function quickFilter(type) {
 function loadSamplesOverdue(v) {
   _quickFilterType = v === '1' ? 'overdue' : 'soon';
   _sampleIsOverdue = true;
+  _roleDefaultApplied = false;
   $('#f-status').value = ''; $('#f-dept').value = '';
   _sampleBuildParams = function() { return _buildQueryParams('overdue=' + v); };
   _fetchSamplePage(true);
@@ -51,7 +59,10 @@ function renderChips() {
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || st) + ' ✕</span>';
+  // 角色默认优先提示芯片（橙色，区别于普通筛选芯片；点 ✕ 回全量）
+  if (_roleDefaultApplied && ROLE_DEFAULT_STATUS[me.role])
+    html += '<span class="chip done" style="cursor:pointer;background:#fff7ed;color:#9a3412;border-color:#fdba74" onclick="clearRoleDefault()">已按角色优先显示：' + e(_roleStatusLabel(ROLE_DEFAULT_STATUS[me.role])) + ' ✕</span>';
+  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }

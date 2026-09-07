@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmsy36n — 27 files */
+/** BUNDLE vbmtqndjpd — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -760,6 +760,10 @@ function downloadQR(id){
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
+/** 角色默认状态过滤（2026-09-07）：打开列表按角色优先显示对应状态；深链与用户主动筛选优先 */
+var ROLE_DEFAULT_STATUS = { RD: 'NEW', QA: 'PRODUCED,RETURNING', CUSTODY: 'IN_CUSTODY', ME: 'IN_CUSTODY' };
+var _roleDefaultApplied = false; // 本次进入列表是否应用了角色默认（用于提示芯片；用户清除/深链后为 false）
+
 var _debounceTimer = null;
 var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
 var samplePager = { limit: 20, offset: 0, total: 0 };
@@ -778,7 +782,7 @@ async function viewSamples() {
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
+    '<fluent-select id="f-status" onchange="_roleDefaultApplied=false;loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -810,14 +814,28 @@ async function viewSamples() {
       else setTimeout(attempt, 60);
     })();
   }
+  else if (ROLE_DEFAULT_STATUS[me.role]) {
+    // 角色默认优先显示（2026-09-07）：无深链时按角色过滤默认状态，芯片区显示提示、点 ✕ 看全量
+    _roleDefaultApplied = true;
+    loadSamplesWithStatus(ROLE_DEFAULT_STATUS[me.role]);
+  }
   else loadSamples();
 }
 
 async function loadSamples() {
   _quickFilterType = null;
   _sampleIsOverdue = false;
-  _sampleBuildParams = function() { return _buildQueryParams(''); };
+  // 角色默认粘性（2026-09-07）：已应用且未被用户清除时，搜索/翻页/其它筛选变更仍保持状态范围；
+  // 清除途径仅三条：角色提示芯片 ✕（clearRoleDefault）、状态下拉主动选择（onchange 置 false）、快捷筛选
+  var base = _roleDefaultApplied && ROLE_DEFAULT_STATUS[me.role] ? 'status=' + ROLE_DEFAULT_STATUS[me.role] : '';
+  _sampleBuildParams = function() { return _buildQueryParams(base); };
   _fetchSamplePage(true);
+}
+
+/** 清除角色默认优先显示 → 回全量（角色提示芯片 ✕ 入口） */
+function clearRoleDefault() {
+  _roleDefaultApplied = false;
+  loadSamples();
 }
 
 async function deleteSample(id) {
@@ -838,7 +856,7 @@ function exportSamplesCsv() {
 
 /* --- subsystems/samples/frontend/js/views/list-filter.js --- */
 // sample-filter.js — 样品筛选、chips、快捷过滤
-// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams/_roleDefaultApplied/ROLE_DEFAULT_STATUS/clearRoleDefault (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
 function _buildQueryParams(baseParams) {
@@ -858,14 +876,21 @@ function _buildQueryParams(baseParams) {
   return p;
 }
 
+/** 状态值（可含逗号多值）→ 中文标签串（2026-09-07：多状态/角色默认共用） */
+function _roleStatusLabel(v) {
+  var M = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
+  return String(v || '').split(',').map(function (s) { return M[s] || s; }).join('、');
+}
+
 function loadSamplesWithStatus(statusStr) {
   _sampleIsOverdue = false;
-  _sampleBuildParams = function() { return _buildQueryParams('status=' + statusStr); };
+  _sampleBuildParams = function() { return _buildQueryParams(statusStr ? 'status=' + statusStr : ''); };
   _fetchSamplePage(true);
 }
 
 function quickFilter(type) {
   _quickFilterType = type;
+  _roleDefaultApplied = false; // 用户主动点快捷筛选 = 明确意图，覆盖角色默认提示
   if (type === 'pending') {
     var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
     $('#f-status').value = ''; $('#f-dept').value = '';
@@ -879,6 +904,7 @@ function quickFilter(type) {
 function loadSamplesOverdue(v) {
   _quickFilterType = v === '1' ? 'overdue' : 'soon';
   _sampleIsOverdue = true;
+  _roleDefaultApplied = false;
   $('#f-status').value = ''; $('#f-dept').value = '';
   _sampleBuildParams = function() { return _buildQueryParams('overdue=' + v); };
   _fetchSamplePage(true);
@@ -890,7 +916,10 @@ function renderChips() {
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || st) + ' ✕</span>';
+  // 角色默认优先提示芯片（橙色，区别于普通筛选芯片；点 ✕ 回全量）
+  if (_roleDefaultApplied && ROLE_DEFAULT_STATUS[me.role])
+    html += '<span class="chip done" style="cursor:pointer;background:#fff7ed;color:#9a3412;border-color:#fdba74" onclick="clearRoleDefault()">已按角色优先显示：' + e(_roleStatusLabel(ROLE_DEFAULT_STATUS[me.role])) + ' ✕</span>';
+  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
