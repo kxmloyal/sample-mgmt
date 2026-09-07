@@ -180,7 +180,7 @@ function register(app) {
       await conn.beginTransaction();
       var fixtures = [];
       for (var i = 0; i < cleaned.length; i++) {
-        var f = await D.createFixture(Object.assign({ model: model, requested_by: u.id, requested_dept: u.dept, request_note: cleaned[i].request_note || batch_note || undefined }, cleaned[i]), conn);
+        var f = await D.createFixture(Object.assign({}, cleaned[i], { model: model, requested_by: u.id, requested_dept: u.dept, request_note: cleaned[i].request_note || batch_note || undefined }), conn);
         await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '批量新建申请' }, conn);
         fixtures.push(f);
       }
