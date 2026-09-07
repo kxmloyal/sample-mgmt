@@ -187,8 +187,9 @@ function register(app) {
   });
 
   // 批量新建样品（2026-09-07 对齐治具批量申请模式）：RD/ADMIN、1~50 条、单事务整体回滚
-  // items 每行 {name*, source_type*, station*, notes?}；model/card_version 批次级共用（样品编号机型段一致才成批）
-  // 注意：必须注册在 /api/samples/:id 类路由语义之前；createSample 内部含 SAVEPOINT 重试，事务内逐条复用安全
+  // 批次级：model/card_version/source_type/station 整批共用（样品编号前四段一致才成批）
+  // items 每行 {name*, notes?, sample_type?, limit_item?, test_standard?}（限度样品信息按行填写）
+  // 兼容：行级 source_type/station 仍接受但忽略（旧前端 payload 不报错）；createSample 内含 SAVEPOINT 重试，事务内逐条复用安全
   app.post('/api/samples/batch', requireAuth, async (req, res) => {
     let conn;
     try {
@@ -198,8 +199,12 @@ function register(app) {
       const _b = req.body || {};
       const model = (_b.model || '').trim();
       const cardVersion = (_b.card_version || '').trim() || '01';
+      const src = ((_b.source_type) || '').toUpperCase();
+      const station = ((_b.station) || '').trim();
       const items = Array.isArray(_b.items) ? _b.items : [];
       if (!model || model.length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
+      if (!['C', 'T', 'G'].includes(src)) return res.status(400).json({ error: '请选择有效的提供处（C/T/G）' });
+      if (!STATION_GROUPS.includes(station)) return res.status(400).json({ error: '请选择有效的组别' });
       if (!items.length) return res.status(400).json({ error: '请至少填写一条样品' });
       if (items.length > 50) return res.status(400).json({ error: '单次最多创建 50 条样品' });
       const m = await D.getModelByCode(model);
@@ -207,12 +212,8 @@ function register(app) {
       const cleaned = items.map((it, idx) => {
         const name = ((it || {}).name || '').trim();
         if (!name) { const e = new Error('第 ' + (idx + 1) + ' 行：样品名称必填'); e.status = 400; throw e; }
-        const src = (((it || {}).source_type) || '').toUpperCase();
-        if (!['C', 'T', 'G'].includes(src)) { const e = new Error('第 ' + (idx + 1) + ' 行：请选择有效的提供处（C/T/G）'); e.status = 400; throw e; }
-        const station = ((it || {}).station || '').trim();
-        if (!STATION_GROUPS.includes(station)) { const e = new Error('第 ' + (idx + 1) + ' 行：请选择有效的组别'); e.status = 400; throw e; }
         return {
-          name, source_type: src, station,
+          name,
           notes: ((it || {}).notes || '').trim(),
           sample_type: ((it || {}).sample_type || '').trim(),
           limit_item: ((it || {}).limit_item || '').trim(),
@@ -224,10 +225,10 @@ function register(app) {
         for (let i = 0; i < cleaned.length; i++) {
           const ns = await D.createSample({
             name: cleaned[i].name, spec: m.full_name || '', model,
-            station: cleaned[i].station, notes: cleaned[i].notes, image: '',
+            station, notes: cleaned[i].notes, image: '',
             created_by: u.id,
             sample_type: cleaned[i].sample_type, limit_item: cleaned[i].limit_item,
-            source_type: cleaned[i].source_type,
+            source_type: src,
             card_version: cardVersion, test_standard: cleaned[i].test_standard,
             test_data: '',
             signed_by_rd: u.display_name || u.username,

@@ -53,11 +53,12 @@
 .nb-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .nb-row .nb-cell{box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:13px;background:#fff;color:inherit}
 .nb-row select.nb-cell{height:34px}
-/* 列宽体系：名称弹性为主、提供处/组别定宽、备注次弹性、删除固定（表头与行共用保证对齐） */
-.nb-row .nb-name{flex:2;min-width:0}
-.nb-row .nb-src{flex:0 0 108px}
-.nb-row .nb-sta{flex:0 0 108px}
-.nb-row .nb-note{flex:1.5;min-width:0}
+/* 列宽体系：名称弹性为主、类型/限度定宽、标准范围次弹性、备注弹性、删除固定（表头与行共用保证对齐） */
+.nb-row .nb-name{flex:1.6;min-width:0}
+.nb-row .nb-type{flex:0 0 96px}
+.nb-row .nb-limit{flex:0 0 168px}
+.nb-row .nb-std{flex:1.4;min-width:0}
+.nb-row .nb-note{flex:1;min-width:0}
 /* 行号（堆叠态显示来源，桌面隐藏占位） */
 .nb-row .nb-idx{display:none}
 /* 删除：红色描边幽灵钮，定宽与其他行元素轴对齐 */
