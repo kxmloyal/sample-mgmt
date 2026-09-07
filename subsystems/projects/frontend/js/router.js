@@ -56,4 +56,5 @@ function showApp(){
   $('#me-role').textContent = (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
   buildNav();
   route();
+  ntfStart(); // 站内通知轮询（方案B-②：登录后启动 60s 未读数刷新）
 }

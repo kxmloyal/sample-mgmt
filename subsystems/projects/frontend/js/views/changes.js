@@ -106,14 +106,16 @@ async function cgEditSave(cid, version) {
 // 审批（decision=APPROVED/REJECTED；CAS version 防并发双审）
 async function cgApprove(cid, version, decision) {
   const word = decision === 'APPROVED' ? '批准' : '驳回';
-  if (!confirm('确认' + word + '该变更单？（BUDGET 类批准后自动更新项目预算）')) return;
+  pkConfirm('确认' + word + '该变更单？（BUDGET 类批准后自动更新项目预算）', 'cgApproveDo(' + [id, version, "'" + word + "'"].join(',') + ')');
   try {
     await api('POST', PApi.changeApprove(cid), { decision: decision, version: version });
     showToast('已' + word); cgLoad();
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function cgDel(cid) {
-  if (!confirm('确认删除该变更单？（已审批单留档不可删）')) return;
+  pkConfirm('确认删除该变更单？（已审批单留档不可删）', 'cgDelOk(cid)');
+}
+async function cgDelOk(cid) {
   try { await api('DELETE', PApi.change(cid)); showToast('已删除'); cgLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }

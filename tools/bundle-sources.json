@@ -82,7 +82,11 @@
     "subsystems/projects/frontend/js/views/templates.js",
     "subsystems/projects/frontend/js/views/gantt.js",
     "subsystems/projects/frontend/js/views/graph.js",
+    "subsystems/projects/frontend/js/views/graph-cluster.js",
+    "subsystems/projects/frontend/js/views/ui-helpers.js",
+    "subsystems/projects/frontend/js/views/notifications.js",
     "subsystems/projects/frontend/js/views/task-detail.js",
+    "subsystems/projects/frontend/js/views/task-detail-actions.js",
     "subsystems/projects/frontend/js/views/workflow.js",
     "subsystems/projects/frontend/js/router.js"
   ],

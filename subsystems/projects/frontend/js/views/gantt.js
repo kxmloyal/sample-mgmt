@@ -27,12 +27,12 @@ async function gtLoad() {
   if (!pid) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">请先选择项目</div>'; return; }
   const tasks = await api('GET', PApi.projectTasks(pid));
   const milestones = await api('GET', PApi.milestones(pid));
-  const depsMap = {}; // taskId -> [dependsOn...]
-  // 依赖：逐任务详情并行拉取太多请求 → 批量解析（deps 接口是按任务查询的，这里仅对有依赖线索的任务拉取）
-  // 简化：拉第一个任务页的依赖映射不可行 → 改为按需：若有任务才拉全部任务的 deps（任务数一般 <50，可接受）
-  const depResults = await Promise.all(tasks.map(function (t) { return api('GET', PApi.taskDeps(t.id)).catch(function () { return []; }); }));
-  tasks.forEach(function (t, i) {
-    if (depResults[i] && depResults[i].length) depsMap[t.id] = depResults[i];
+  const depsMap = {}; // taskId -> [dependsOn...]（行结构与单任务 deps 完全一致，仅数据源换批量端点）
+  // 方案B-③：N+1 消除——deps-batch 一次 SQL 拉全项目依赖（此前逐任务 GET taskDeps，百任务=百请求）
+  const depRows = await api('GET', PApi.taskDepsBatch(pid)).catch(function () { return []; });
+  (depRows || []).forEach(function (d) {
+    if (!depsMap[d.task_id]) depsMap[d.task_id] = [];
+    depsMap[d.task_id].push(d);
   });
   gtDraw(tasks, milestones, depsMap);
 }

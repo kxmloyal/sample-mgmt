@@ -106,7 +106,17 @@ module.exports = function createExtraDao(deps) {
       "WHERE l.entity_type='task' AND l.entity_id=? ORDER BY l.id DESC LIMIT 200", [taskId]);
   }
 
+  // ===== 项目依赖批量查询（方案B-③ 甘特去 N+1：一次 SQL 替代逐任务 N 次请求）=====
+  // 返回行结构与 listTaskDeps 对齐（含 depends_on_title），前端 gantt 零适配换数据源
+  async function listProjectDepsBatch(conn, projectId) {
+    return fetchAll(conn,
+      'SELECT d.*, t.title AS depends_on_title FROM project_task_deps d ' +
+      'JOIN project_tasks t ON t.id=d.depends_on_id ' +
+      'JOIN project_tasks tt ON tt.id=d.task_id ' +
+      'WHERE tt.project_id=? ORDER BY d.id', [projectId]);
+  }
+
   return { listTaskDeps, addTaskDep, removeTaskDep, hasCycle,
     createTaskFile, listTaskFiles, deleteTaskFile,
-    addTaskLink, listTaskLinks, removeTaskLink, listTaskLogs };
+    addTaskLink, listTaskLinks, removeTaskLink, listTaskLogs, listProjectDepsBatch };
 };

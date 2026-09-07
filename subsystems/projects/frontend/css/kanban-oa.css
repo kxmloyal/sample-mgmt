@@ -1,0 +1,11 @@
+/* kanban-oa.css — 方案B-⑥ OA 摘要卡 + B-⑦⑧ 看板增强（项目子系统内自治样式） */
+.kb-oa-row{display:flex;gap:10px;margin:10px 0 14px;flex-wrap:wrap}
+.kb-oa-card{flex:1;min-width:150px;display:flex;align-items:baseline;gap:8px;padding:12px 16px;border-radius:10px;cursor:pointer;border:1px solid var(--border,#e2e8f0);background:#fff;transition:box-shadow .15s}
+.kb-oa-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.kb-oa-card .n{font-size:22px;font-weight:700}
+.kb-oa-card .t{font-size:13px;color:#475569}
+.kb-oa-card .tip{font-size:11px;color:#94a3b8;margin-left:auto}
+.kb-oa-card.oa-ms .n{color:#1d4ed8}
+.kb-oa-card.oa-rk .n{color:#b45309}
+.kb-oa-card.oa-ch .n{color:#047857}
+@media(max-width:576px){.kb-oa-card{min-width:100%}}

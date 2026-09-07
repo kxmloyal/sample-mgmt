@@ -5,6 +5,7 @@
 // routes-milestones/routes-risks/routes-extras（OA 能力移植，静态前缀，须在 :id 之前）；
 // routes-projects 最后（/:id 参数路由）
 function register(app) {
+  require('./routes-notif').register(app);        // 站内通知（方案B-②）：/notifications 静态前缀最先，避免被 :id 抢占
   require('./routes-stats').register(app);        // 静态路径（/workflow /stats /tasks/export /tasks）最先，避免被 :tid 抢占
   require('./routes-tasks').register(app);        // 含 /tasks/:tid 参数路由
   require('./routes-task-extras').register(app);  // 子路径路由

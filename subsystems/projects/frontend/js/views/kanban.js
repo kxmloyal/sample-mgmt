@@ -3,7 +3,38 @@
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
 // 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
+// 方案B-⑥：看板顶部 OA 摘要卡（里程碑/风险/变更 三卡，当前筛选项目范围；空数据显示 0 计数+引导语）
+// 方案B-⑦：30s 静默轮询（页面不可见时暂停；数据有变化才重渲染，无变化不打扰拖拽操作）
+// 方案B-⑧：筛选记忆（localStorage 持久化，进入看板自动恢复上次筛选组合；URL hash 优先级更高）
 var _kbMine = false;
+var _kbPollTimer = null;
+var _kbLastSig = '';
+
+// ⑥ OA 摘要卡：拉当前项目范围的里程碑/风险/变更汇总并渲染三卡
+async function kbRenderOaCards() {
+  const box = $('#kb-oa');
+  if (!box) return;
+  const f = kbFilters();
+  const pid = f.project_id || (_kbMine ? null : null);
+  const scope = pid ? 'project_id=' + pid + '&' : '';
+  const [ms, rk, ch] = await Promise.all([
+    pid ? api('GET', PApi.milestones(pid)).catch(function () { return []; }) : Promise.resolve([]),
+    api('GET', '/api/projects/risks' + (pid ? '?' + scope : '')).catch(function () { return []; }),
+    api('GET', '/api/projects/changes' + (pid ? '?' + scope : '')).catch(function () { return []; })
+  ]);
+  const msDue = ms.filter(function (m) { return !m.achieved_at; }).length;
+  const rkOpen = rk.filter(function (r) { return r.status === 'OPEN'; }).length;
+  const chPend = ch.filter(function (c) { return c.status === 'PENDING'; }).length;
+  const cards = [
+    { t: '里程碑', n: msDue, cls: 'oa-ms', tip: msDue ? '个未达成' : '全部达成', link: '#/milestones' },
+    { t: '风险', n: rkOpen, cls: 'oa-rk', tip: rkOpen ? '个未解决' : '暂无未解决', link: '#/risks' },
+    { t: '变更', n: chPend, cls: 'oa-ch', tip: chPend ? '单待审批' : '无待审批', link: '#/changes' }
+  ];
+  box.innerHTML = cards.map(function (c) {
+    return '<div class="kb-oa-card ' + c.cls + '" onclick="location.hash=\'' + c.link + '\'">' +
+      '<span class="n">' + c.n + '</span><span class="t">' + c.t + '</span><span class="tip">' + c.tip + '</span></div>';
+  }).join('');
+}
 async function kbToggleMine() {
   _kbMine = !_kbMine;
   $('#kb-mine').classList.toggle('active', _kbMine);
@@ -56,6 +87,7 @@ async function renderTaskKanban() {
     '<fluent-button appearance="accent" onclick="kbCreate()">新建任务</fluent-button>' +
     '<fluent-button appearance="secondary" id="kb-mine" onclick="kbToggleMine()">我的任务</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="kbLoad()">刷新</fluent-button></div>' +
+    '<div class="kb-oa-row" id="kb-oa"><div class="muted" style="padding:4px 2px">OA 摘要加载中…</div></div>' +
     '<div class="pk-kanban" id="pk-kanban"></div>';
   const projects = await api('GET', PApi.projects());
   const sel = $('#kb-project');
@@ -73,8 +105,61 @@ async function renderTaskKanban() {
     selA.appendChild(opt);
   }
   // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）
+  // B-⑧ 筛选记忆：hash 无筛选时回退 localStorage 记忆（URL 优先）
+  if (!location.hash.includes('?')) kbRestoreFromMemory();
   kbRestoreFromHash();
+  kbRememberFilters();
   await kbLoad();
+  kbRenderOaCards(); // B-⑥ OA 摘要卡
+  kbStartPolling();  // B-⑦ 30s 静默轮询
+}
+
+// B-⑧ 筛选记忆：保存/恢复（localStorage key = projects.kanban.filters）
+function kbRememberFilters() {
+  try {
+    const f = kbFilters();
+    localStorage.setItem('projects.kanban.filters', JSON.stringify({ project_id: f.project_id, category: f.category, priority: f.priority, assignee_id: f.assignee_id, mine: _kbMine }));
+  } catch (e) {}
+}
+function kbRestoreFromMemory() {
+  try {
+    const s = localStorage.getItem('projects.kanban.filters');
+    if (!s) return;
+    const f = JSON.parse(s);
+    const map = { 'kb-project': f.project_id, 'kb-category': f.category, 'kb-priority': f.priority, 'kb-assignee': f.assignee_id };
+    Object.keys(map).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && map[id]) el.value = String(map[id]);
+    });
+    if (f.mine) { _kbMine = true; const b = $('#kb-mine'); if (b) b.classList.add('active'); }
+  } catch (e) {}
+}
+
+// B-⑦ 静默轮询：30s 拉当前筛选任务集做签名比对，变化才 kbLoad 重渲染；页面隐藏时暂停
+function kbStartPolling() {
+  if (_kbPollTimer) clearInterval(_kbPollTimer);
+  _kbLastSig = '';
+  _kbPollTimer = setInterval(async function () {
+    if (document.hidden) return;                     // 后台标签页暂停
+    if (!document.getElementById('pk-kanban')) {     // 已离开看板视图 → 停止
+      clearInterval(_kbPollTimer); _kbPollTimer = null; return;
+    }
+    try {
+      const f = kbFilters();
+      const qs = new URLSearchParams();
+      if (f.project_id) qs.set('project_id', f.project_id);
+      if (f.category) qs.set('category', f.category);
+      if (f.priority) qs.set('priority', f.priority);
+      if (_kbMine) qs.set('assignee_id', me.id);
+      const rows = await api('GET', '/api/projects/tasks' + (qs.toString() ? '?' + qs : ''));
+      const sig = (Array.isArray(rows) ? rows : []).map(function (t) { return t.id + ':' + (t.status_eff || t.status) + ':' + (t.version || 0) + ':' + (t.progress || 0); }).sort().join('|');
+      if (sig !== _kbLastSig) {
+        const first = _kbLastSig === '';
+        _kbLastSig = sig;
+        if (!first) { await kbLoad(); kbRenderOaCards(); } // 首轮只记基线不渲染（kbLoad 刚跑过）
+      }
+    } catch (e) { /* 静默 */ }
+  }, 30000);
 }
 
 // 加载当前筛选下的任务并分组渲染 4 列（统一走跨项目列表端点，支持多维筛选参数）

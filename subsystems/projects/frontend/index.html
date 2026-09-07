@@ -8,6 +8,8 @@
 <title>制造品质管理系统 - 项目追踪</title>
 <link rel="stylesheet" href="/css/app.css?v=20260805b">
 <link rel="stylesheet" href="/subsystems/projects/frontend/css/module.css?v=20260806a">
+<link rel="stylesheet" href="/subsystems/projects/frontend/css/notifications.css?v=20260908a">
+<link rel="stylesheet" href="/subsystems/projects/frontend/css/kanban-oa.css?v=20260908a">
 <link rel="preload" href="/vendor/fluentui-web-components.js" as="script">
 <script type="module" src="/vendor/fluentui-web-components.js"></script>
 </head>
@@ -50,12 +52,15 @@
     </div>
   </div>
   <div class="main">
-    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div></div>
+    <div class="topbar"><h2 id="page-title"></h2><div id="page-actions"></div>
+      <button class="ntf-bell" onclick="ntfToggle()" title="通知">🔔<span class="ntf-badge" id="ntf-badge" style="display:none"></span></button>
+    </div>
     <div id="view"></div>
   </div>
 </div>
 </fluent-provider>
 <div class="toast" id="toast"></div>
-<script src="/subsystems/projects/frontend/js/bundle.js?v=bmtmpf6rz" defer></script>
+<div class="ntf-panel" id="ntf-panel"></div>
+<script src="/subsystems/projects/frontend/js/bundle.js?v=bmtrh8wk4" defer></script>
 </body>
 </html>

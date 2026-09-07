@@ -47,6 +47,15 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // 项目依赖批量（方案B-③ 甘特去 N+1：/deps-batch 静态路径，注册顺序在 :id 之前不受抢占）
+  app.get('/api/projects/deps-batch', requireAuth, async (req, res) => {
+    try {
+      const pid = Number(req.query.project_id);
+      if (!pid) return res.status(400).json({ error: 'project_id 必填' });
+      res.json(await D.listProjectDepsBatch(null, pid));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // CSV 导出（UTF-8 BOM；列：项目名称/任务名称/类别/优先级/责任人/状态/进度/计划日期/实际日期/描述/方案/备注）
   // 缺陷#3 修复：复用列表筛选参数（q/category/priority/status/assignee_id/project_id），与 AGENTS.md §21 列表导出标准一致
   app.get('/api/projects/tasks/export', requireAuth, async (req, res) => {

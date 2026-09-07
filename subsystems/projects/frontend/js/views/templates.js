@@ -94,7 +94,9 @@ async function tplSave(tid) {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function tplDel(id, name) {
-  if (!confirm('确认停用模板「' + name + '」？（已实例化的项目不受影响）')) return;
+  pkConfirm('确认停用模板「' + name + '」？（已实例化的项目不受影响）', 'tplDelOk(id,'+name+')');
+}
+async function tplDelOk(id, name) {
   try { await api('DELETE', PApi.template(id)); showToast('已停用'); renderTemplates(); }
   catch (e) { showToast(e.message, 'err'); }
 }

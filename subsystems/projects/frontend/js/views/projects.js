@@ -59,7 +59,9 @@ async function projEditSave(id) {
 
 // 删除项目（有任务时后端 409 保护）
 async function projDel(id) {
-  if (!confirm('确认删除该项目？（项目下有任务时将被拒绝）')) return;
+  pkConfirm('确认删除该项目？（项目下有任务时将被拒绝）', 'projDelOk(id)');
+}
+async function projDelOk(id) {
   try { await api('DELETE', PApi.projects(id)); showToast('已删除'); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -116,7 +118,9 @@ async function memTransfer(uid) {
   catch (e) { showToast(e.message, 'err'); }
 }
 async function memRemove(uid) {
-  if (!confirm('确认移除该成员？')) return;
+  pkConfirm('确认移除该成员？', 'memRemoveOk(uid)');
+}
+async function memRemoveOk(uid) {
   try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -163,7 +167,9 @@ async function pmAdd() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function pmRemove(mid) {
-  if (!confirm('确认移除该机型引用？（不影响机型本身）')) return;
+  pkConfirm('确认移除该机型引用？（不影响机型本身）', 'pmRemoveOk(mid)');
+}
+async function pmRemoveOk(mid) {
   try {
     await api('DELETE', PApi.modelRef(_pjModelId, mid));
     showToast('已移除');

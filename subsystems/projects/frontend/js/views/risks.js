@@ -112,7 +112,9 @@ async function rkEditSave(id, version) {
 }
 
 async function rkResolve(id, version) {
-  if (!confirm('确认标记该风险已解决？')) return;
+  pkConfirm('确认标记该风险已解决？', 'rkResolveOk(id,version)');
+}
+async function rkResolveOk(id, version) {
   try {
     await api('POST', PApi.riskResolve(id), { version: version });
     showToast('已解决'); rkLoad();
@@ -120,7 +122,9 @@ async function rkResolve(id, version) {
 }
 
 async function rkDel(id) {
-  if (!confirm('确认删除该风险记录？')) return;
+  pkConfirm('确认删除该风险记录？', 'rkDelOk(id)');
+}
+async function rkDelOk(id) {
   try { await api('DELETE', PApi.risk(id)); showToast('已删除'); rkLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }

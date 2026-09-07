@@ -37,6 +37,14 @@ function register(app) {
           category: req.body.category, priority: req.body.priority, assignee_id: req.body.assignee_id || null,
           planned_date: req.body.planned_date || null, created_by: u.id }, conn);
         await D.addProjectLog(conn, 'task', task.id, 'CREATE', JSON.stringify({ title }), u.id);
+        // 通知触发点①：新建任务带指派人 → 通知被指派人（自己创建给自己不发）
+        // 注：createTask 仅返回 {id}，assignee 从请求体取（兼容 DAO 契约不变）
+        const newAssignee = Number(req.body.assignee_id) || null;
+        if (newAssignee && newAssignee !== u.id) {
+          await D.addNotification(conn, { user_id: newAssignee, type: 'ASSIGN',
+            title: '新任务指派：' + title, body: (p.name || '') + ' · 优先级 ' + (task.priority || req.body.priority || 'M'),
+            link: '#/tasks/' + task.id, ref_type: 'task', ref_id: task.id });
+        }
         return task;
       });
       res.status(201).json({ id: t.id });
@@ -85,6 +93,15 @@ function register(app) {
         const r = await D.updateTask(conn, tid, body, Number(body.version));
         if (r.changed === 0) return { status: 409, body: { error: '数据已被他人修改，请刷新后重试' } };
         await D.addProjectLog(conn, 'task', tid, 'UPDATE', JSON.stringify({ fields: Object.keys(body).filter(k => k !== 'version') }), u.id);
+        // 通知触发点②：编辑改指派人 → 通知新指派人（旧指派人改派不通知，避免噪音）
+        if (body.assignee_id !== undefined) {
+          const na = Number(body.assignee_id) || null;
+          if (na && na !== t.assignee_id && na !== u.id) {
+            await D.addNotification(conn, { user_id: na, type: 'ASSIGN',
+              title: '任务改派给你：' + t.title, body: (t.project_name || ''),
+              link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
+          }
+        }
         return { status: 200, body: { ok: 1 } };
       });
       res.status(r2.status).json(r2.body);
@@ -148,6 +165,16 @@ function register(app) {
           await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
         }
         await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action }), u.id);
+        // 通知触发点③：任务完成/退回 → 通知创建人（操作人是创建人自己则不通知）
+        if (tr.to === 'DONE' || tr.to === 'NOT_STARTED') {
+          if (t.created_by && t.created_by !== u.id) {
+            await D.addNotification(conn, { user_id: t.created_by,
+              type: 'STATUS',
+              title: (tr.to === 'DONE' ? '任务已完成：' : '任务被退回：') + t.title,
+              body: '操作人 ' + (u.display_name || u.username || ('#' + u.id)),
+              link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
+          }
+        }
         const nt = await D.getTask(conn, tid);
         return { status: 200, body: { task: nt, message: tr.label } };
       });
@@ -302,6 +329,12 @@ function register(app) {
             const assigneeId = Number(body.assignee_id) || null;
             await D.updateTask(conn, tid, { assignee_id: assigneeId, version: t.version }, t.version);
             await D.addProjectLog(conn, 'task', tid, 'BATCH_ASSIGN', JSON.stringify({ assignee_id: assigneeId }), u.id);
+            // 通知触发点④：批量改派 → 通知新指派人
+            if (assigneeId && assigneeId !== t.assignee_id && assigneeId !== u.id) {
+              await D.addNotification(conn, { user_id: assigneeId, type: 'ASSIGN',
+                title: '批量改派任务给你：' + t.title, body: '',
+                link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
+            }
           } else if (action === 'status') {
             const act2 = String(body.action2 || '').trim();
             const cfg = await wf.loadWorkflow(conn);
@@ -325,6 +358,14 @@ function register(app) {
               await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
             }
             await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action: act2, batch: 1 }), u.id);
+            // 通知触发点⑤：批量完成/退回 → 通知创建人
+            if ((tr.to === 'DONE' || tr.to === 'NOT_STARTED') && t.created_by && t.created_by !== u.id) {
+              await D.addNotification(conn, { user_id: t.created_by,
+                type: 'STATUS',
+                title: (tr.to === 'DONE' ? '任务已完成：' : '任务被退回：') + t.title,
+                body: '批量操作',
+                link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
+            }
           } else if (action === 'delete') {
             await D.deleteTaskCascade(conn, tid);
             await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title, batch: 1 }), u.id);

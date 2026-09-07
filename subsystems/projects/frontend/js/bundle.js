@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmpf6rz — 22 files */
+/** BUNDLE vbmtrh8wk4 — 26 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -311,7 +311,13 @@ const PApi = {
   // OA 能力移植（二期批次3）：关系 + 图谱
   relations: '/api/projects/relations',
   relation: rid => '/api/projects/relations/' + rid,
-  graph: '/api/projects/graph'
+  graph: '/api/projects/graph',
+  // 站内通知（方案B-②）
+  notifUnread: '/api/projects/notifications/unread',
+  notifications: '/api/projects/notifications',
+  notifRead: '/api/projects/notifications/read',
+  // 甘特依赖批量（方案B-③去 N+1）
+  taskDepsBatch: pid => '/api/projects/' + pid + '/deps-batch'
 };
 
 
@@ -365,7 +371,38 @@ async function renderProjectDashboard() {
 // 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
 // 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
+// 方案B-⑥：看板顶部 OA 摘要卡（里程碑/风险/变更 三卡，当前筛选项目范围；空数据显示 0 计数+引导语）
+// 方案B-⑦：30s 静默轮询（页面不可见时暂停；数据有变化才重渲染，无变化不打扰拖拽操作）
+// 方案B-⑧：筛选记忆（localStorage 持久化，进入看板自动恢复上次筛选组合；URL hash 优先级更高）
 var _kbMine = false;
+var _kbPollTimer = null;
+var _kbLastSig = '';
+
+// ⑥ OA 摘要卡：拉当前项目范围的里程碑/风险/变更汇总并渲染三卡
+async function kbRenderOaCards() {
+  const box = $('#kb-oa');
+  if (!box) return;
+  const f = kbFilters();
+  const pid = f.project_id || (_kbMine ? null : null);
+  const scope = pid ? 'project_id=' + pid + '&' : '';
+  const [ms, rk, ch] = await Promise.all([
+    pid ? api('GET', PApi.milestones(pid)).catch(function () { return []; }) : Promise.resolve([]),
+    api('GET', '/api/projects/risks' + (pid ? '?' + scope : '')).catch(function () { return []; }),
+    api('GET', '/api/projects/changes' + (pid ? '?' + scope : '')).catch(function () { return []; })
+  ]);
+  const msDue = ms.filter(function (m) { return !m.achieved_at; }).length;
+  const rkOpen = rk.filter(function (r) { return r.status === 'OPEN'; }).length;
+  const chPend = ch.filter(function (c) { return c.status === 'PENDING'; }).length;
+  const cards = [
+    { t: '里程碑', n: msDue, cls: 'oa-ms', tip: msDue ? '个未达成' : '全部达成', link: '#/milestones' },
+    { t: '风险', n: rkOpen, cls: 'oa-rk', tip: rkOpen ? '个未解决' : '暂无未解决', link: '#/risks' },
+    { t: '变更', n: chPend, cls: 'oa-ch', tip: chPend ? '单待审批' : '无待审批', link: '#/changes' }
+  ];
+  box.innerHTML = cards.map(function (c) {
+    return '<div class="kb-oa-card ' + c.cls + '" onclick="location.hash=\'' + c.link + '\'">' +
+      '<span class="n">' + c.n + '</span><span class="t">' + c.t + '</span><span class="tip">' + c.tip + '</span></div>';
+  }).join('');
+}
 async function kbToggleMine() {
   _kbMine = !_kbMine;
   $('#kb-mine').classList.toggle('active', _kbMine);
@@ -418,6 +455,7 @@ async function renderTaskKanban() {
     '<fluent-button appearance="accent" onclick="kbCreate()">新建任务</fluent-button>' +
     '<fluent-button appearance="secondary" id="kb-mine" onclick="kbToggleMine()">我的任务</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="kbLoad()">刷新</fluent-button></div>' +
+    '<div class="kb-oa-row" id="kb-oa"><div class="muted" style="padding:4px 2px">OA 摘要加载中…</div></div>' +
     '<div class="pk-kanban" id="pk-kanban"></div>';
   const projects = await api('GET', PApi.projects());
   const sel = $('#kb-project');
@@ -435,8 +473,61 @@ async function renderTaskKanban() {
     selA.appendChild(opt);
   }
   // A4 URL 化：进入页面时从 hash 恢复筛选（程序化赋值不触发 change，显式 kbLoad）
+  // B-⑧ 筛选记忆：hash 无筛选时回退 localStorage 记忆（URL 优先）
+  if (!location.hash.includes('?')) kbRestoreFromMemory();
   kbRestoreFromHash();
+  kbRememberFilters();
   await kbLoad();
+  kbRenderOaCards(); // B-⑥ OA 摘要卡
+  kbStartPolling();  // B-⑦ 30s 静默轮询
+}
+
+// B-⑧ 筛选记忆：保存/恢复（localStorage key = projects.kanban.filters）
+function kbRememberFilters() {
+  try {
+    const f = kbFilters();
+    localStorage.setItem('projects.kanban.filters', JSON.stringify({ project_id: f.project_id, category: f.category, priority: f.priority, assignee_id: f.assignee_id, mine: _kbMine }));
+  } catch (e) {}
+}
+function kbRestoreFromMemory() {
+  try {
+    const s = localStorage.getItem('projects.kanban.filters');
+    if (!s) return;
+    const f = JSON.parse(s);
+    const map = { 'kb-project': f.project_id, 'kb-category': f.category, 'kb-priority': f.priority, 'kb-assignee': f.assignee_id };
+    Object.keys(map).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && map[id]) el.value = String(map[id]);
+    });
+    if (f.mine) { _kbMine = true; const b = $('#kb-mine'); if (b) b.classList.add('active'); }
+  } catch (e) {}
+}
+
+// B-⑦ 静默轮询：30s 拉当前筛选任务集做签名比对，变化才 kbLoad 重渲染；页面隐藏时暂停
+function kbStartPolling() {
+  if (_kbPollTimer) clearInterval(_kbPollTimer);
+  _kbLastSig = '';
+  _kbPollTimer = setInterval(async function () {
+    if (document.hidden) return;                     // 后台标签页暂停
+    if (!document.getElementById('pk-kanban')) {     // 已离开看板视图 → 停止
+      clearInterval(_kbPollTimer); _kbPollTimer = null; return;
+    }
+    try {
+      const f = kbFilters();
+      const qs = new URLSearchParams();
+      if (f.project_id) qs.set('project_id', f.project_id);
+      if (f.category) qs.set('category', f.category);
+      if (f.priority) qs.set('priority', f.priority);
+      if (_kbMine) qs.set('assignee_id', me.id);
+      const rows = await api('GET', '/api/projects/tasks' + (qs.toString() ? '?' + qs : ''));
+      const sig = (Array.isArray(rows) ? rows : []).map(function (t) { return t.id + ':' + (t.status_eff || t.status) + ':' + (t.version || 0) + ':' + (t.progress || 0); }).sort().join('|');
+      if (sig !== _kbLastSig) {
+        const first = _kbLastSig === '';
+        _kbLastSig = sig;
+        if (!first) { await kbLoad(); kbRenderOaCards(); } // 首轮只记基线不渲染（kbLoad 刚跑过）
+      }
+    } catch (e) { /* 静默 */ }
+  }, 30000);
 }
 
 // 加载当前筛选下的任务并分组渲染 4 列（统一走跨项目列表端点，支持多维筛选参数）
@@ -893,7 +984,9 @@ async function projEditSave(id) {
 
 // 删除项目（有任务时后端 409 保护）
 async function projDel(id) {
-  if (!confirm('确认删除该项目？（项目下有任务时将被拒绝）')) return;
+  pkConfirm('确认删除该项目？（项目下有任务时将被拒绝）', 'projDelOk(id)');
+}
+async function projDelOk(id) {
   try { await api('DELETE', PApi.projects(id)); showToast('已删除'); renderProjects(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -950,7 +1043,9 @@ async function memTransfer(uid) {
   catch (e) { showToast(e.message, 'err'); }
 }
 async function memRemove(uid) {
-  if (!confirm('确认移除该成员？')) return;
+  pkConfirm('确认移除该成员？', 'memRemoveOk(uid)');
+}
+async function memRemoveOk(uid) {
   try { await api('DELETE', PApi.projects(_pjMemId) + '/members/' + uid); showToast('已移除'); memRefresh(); memRenderOpts(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -997,7 +1092,9 @@ async function pmAdd() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function pmRemove(mid) {
-  if (!confirm('确认移除该机型引用？（不影响机型本身）')) return;
+  pkConfirm('确认移除该机型引用？（不影响机型本身）', 'pmRemoveOk(mid)');
+}
+async function pmRemoveOk(mid) {
   try {
     await api('DELETE', PApi.modelRef(_pjModelId, mid));
     showToast('已移除');
@@ -1103,7 +1200,10 @@ async function msEditSave(id, version) {
 
 // 达成里程碑（CAS：传读取时 version；409 时提示刷新）
 async function msAchieve(id, version) {
-  if (!confirm('确认标记该里程碑已达成？（若已超过目标日期将自动标记延期）')) return;
+  msAchieveConfirm(id, version);
+}
+async function msAchieveOk(id, version) {
+  pkConfirm('确认标记该里程碑已达成？（若已超过目标日期将自动标记延期）', 'msAchieveOk(' + id + ',' + version + ')');
   try {
     await api('POST', PApi.milestoneAchieve(id), { version: version });
     showToast('已达成'); msLoad();
@@ -1111,7 +1211,10 @@ async function msAchieve(id, version) {
 }
 
 async function msDel(id) {
-  if (!confirm('确认删除该里程碑？')) return;
+  pkConfirm('确认删除该里程碑？', 'msDelOk(' + id + ')');
+}
+async function msDelOk(id) {
+  pkConfirm('确认删除该里程碑？', 'msDelOk(' + id + ')');
   try { await api('DELETE', PApi.milestone(id)); showToast('已删除'); msLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -1232,7 +1335,9 @@ async function rkEditSave(id, version) {
 }
 
 async function rkResolve(id, version) {
-  if (!confirm('确认标记该风险已解决？')) return;
+  pkConfirm('确认标记该风险已解决？', 'rkResolveOk(id,version)');
+}
+async function rkResolveOk(id, version) {
   try {
     await api('POST', PApi.riskResolve(id), { version: version });
     showToast('已解决'); rkLoad();
@@ -1240,7 +1345,9 @@ async function rkResolve(id, version) {
 }
 
 async function rkDel(id) {
-  if (!confirm('确认删除该风险记录？')) return;
+  pkConfirm('确认删除该风险记录？', 'rkDelOk(id)');
+}
+async function rkDelOk(id) {
   try { await api('DELETE', PApi.risk(id)); showToast('已删除'); rkLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -1355,14 +1462,16 @@ async function cgEditSave(cid, version) {
 // 审批（decision=APPROVED/REJECTED；CAS version 防并发双审）
 async function cgApprove(cid, version, decision) {
   const word = decision === 'APPROVED' ? '批准' : '驳回';
-  if (!confirm('确认' + word + '该变更单？（BUDGET 类批准后自动更新项目预算）')) return;
+  pkConfirm('确认' + word + '该变更单？（BUDGET 类批准后自动更新项目预算）', 'cgApproveDo(' + [id, version, "'" + word + "'"].join(',') + ')');
   try {
     await api('POST', PApi.changeApprove(cid), { decision: decision, version: version });
     showToast('已' + word); cgLoad();
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function cgDel(cid) {
-  if (!confirm('确认删除该变更单？（已审批单留档不可删）')) return;
+  pkConfirm('确认删除该变更单？（已审批单留档不可删）', 'cgDelOk(cid)');
+}
+async function cgDelOk(cid) {
   try { await api('DELETE', PApi.change(cid)); showToast('已删除'); cgLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -1465,7 +1574,9 @@ async function tplSave(tid) {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function tplDel(id, name) {
-  if (!confirm('确认停用模板「' + name + '」？（已实例化的项目不受影响）')) return;
+  pkConfirm('确认停用模板「' + name + '」？（已实例化的项目不受影响）', 'tplDelOk(id,'+name+')');
+}
+async function tplDelOk(id, name) {
   try { await api('DELETE', PApi.template(id)); showToast('已停用'); renderTemplates(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -1550,12 +1661,12 @@ async function gtLoad() {
   if (!pid) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">请先选择项目</div>'; return; }
   const tasks = await api('GET', PApi.projectTasks(pid));
   const milestones = await api('GET', PApi.milestones(pid));
-  const depsMap = {}; // taskId -> [dependsOn...]
-  // 依赖：逐任务详情并行拉取太多请求 → 批量解析（deps 接口是按任务查询的，这里仅对有依赖线索的任务拉取）
-  // 简化：拉第一个任务页的依赖映射不可行 → 改为按需：若有任务才拉全部任务的 deps（任务数一般 <50，可接受）
-  const depResults = await Promise.all(tasks.map(function (t) { return api('GET', PApi.taskDeps(t.id)).catch(function () { return []; }); }));
-  tasks.forEach(function (t, i) {
-    if (depResults[i] && depResults[i].length) depsMap[t.id] = depResults[i];
+  const depsMap = {}; // taskId -> [dependsOn...]（行结构与单任务 deps 完全一致，仅数据源换批量端点）
+  // 方案B-③：N+1 消除——deps-batch 一次 SQL 拉全项目依赖（此前逐任务 GET taskDeps，百任务=百请求）
+  const depRows = await api('GET', PApi.taskDepsBatch(pid)).catch(function () { return []; });
+  (depRows || []).forEach(function (d) {
+    if (!depsMap[d.task_id]) depsMap[d.task_id] = [];
+    depsMap[d.task_id].push(d);
   });
   gtDraw(tasks, milestones, depsMap);
 }
@@ -1669,6 +1780,10 @@ async function renderGraph() {
     '<fluent-button appearance="accent" onclick="grAddRel()">标注关系</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="renderGraph()">刷新</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="grExport()">导出 PNG</fluent-button>' +
+    '<span style="margin-left:10px;font-size:12px;color:#64748b">聚簇：</span>' +
+    '<fluent-button appearance="secondary" id="gr-m-flat" onclick="grSetMode(\'flat\')">展开</fluent-button>' +
+    '<fluent-button appearance="secondary" id="gr-m-status" onclick="grSetMode(\'status\')">状态簇</fluent-button>' +
+    '<fluent-button appearance="secondary" id="gr-m-component" onclick="grSetMode(\'component\')">族谱簇</fluent-button>' +
     '<span id="gr-filters" style="margin-left:8px"></span></div>' +
     '<div style="position:relative">' +
     '<div id="gr-svg-box" style="border:1px solid var(--border,#e2e8f0);border-radius:8px;background:#fff;overflow:hidden"></div>' +
@@ -1676,6 +1791,7 @@ async function renderGraph() {
   const g = await api('GET', PApi.graph);
   _gr = g;
   _gr.pos = {};
+  _grExpanded = new Set(); _grHighlightId = null;
   // 初始布局：环形（力导向从此收敛）
   const R = Math.min(280, 120 + g.nodes.length * 6), cx = 420, cy = 300;
   g.nodes.forEach(function (n, i) {
@@ -1691,6 +1807,34 @@ async function renderGraph() {
   grSimulate();
   grDraw();
   _bindGraphClicks();
+}
+
+// B-⑨ 聚簇模式切换（flat=普通展开图；status/component=聚合 mega 节点）
+function grSetMode(m) {
+  _grMode = m;
+  _grExpanded = new Set(); _grHighlightId = null;
+  ['flat', 'status', 'component'].forEach(function (k) {
+    const b = document.getElementById('gr-m-' + k);
+    if (b) b.classList.toggle('active', k === m);
+  });
+  grDraw();
+}
+
+// B-⑨ 簇下钻/收起
+function grToggleCluster(cid) {
+  if (_grExpanded.has(cid)) _grExpanded.delete(cid);
+  else _grExpanded.add(cid);
+  grDraw();
+}
+
+// B-⑨ 邻居高亮：点击项目节点高亮其直连邻居（聚簇模式下仅展开图内生效）
+function grNeighborsOf(nid) {
+  const set = new Set([nid]);
+  _gr.edges.forEach(function (e) {
+    if (e.from === nid) set.add(e.to);
+    if (e.to === nid) set.add(e.from);
+  });
+  return set;
 }
 
 // 力导向模拟（斥力 + 弹簧 + 向心，60 轮收敛；仅初始计算，拖拽后局部不重算）
@@ -1738,29 +1882,94 @@ function grDraw() {
   const box = $('#gr-svg-box');
   const W = 840, H = 600;
   const active = grActiveTypes();
+  grComputeClusters(); // B-⑨：每次绘制前重算簇（数据源不变，成本可忽略）
   let edges = '', nodes = '';
+  const flatMode = _grMode === 'flat';
+  // 聚簇模式：成员全部收进 mega 节点的簇 → 隐藏其成员间边；跨簇边画到 mega 中心
+  const megaList = grMegaNodes();
+  const megaCenter = {};
+  megaList.forEach(function (m) {
+    const ms = m.members.map(function (id) { return _gr.pos[id]; }).filter(Boolean);
+    if (!ms.length) return;
+    const cx2 = ms.reduce(function (s, p) { return s + p.x; }, 0) / ms.length;
+    const cy2 = ms.reduce(function (s, p) { return s + p.y; }, 0) / ms.length;
+    megaCenter[m.id] = { x: cx2, y: cy2 };
+  });
+  const hiddenMembers = new Set();
+  if (!flatMode) {
+    megaList.forEach(function (m) { m.members.forEach(function (id) { hiddenMembers.add(id); }); });
+    Object.keys(_gr.pos).forEach(function (id) {
+      if (!hiddenMembers.has(Number(id)) && !grMemberOfExpanded(Number(id))) hiddenMembers.add(Number(id));
+    });
+    // 展开簇的成员保持可见
+    _grExpanded.forEach(function (cid) {
+      const c = (_grCluster || []).find(function (x) { return x.id === cid; });
+      if (c) c.members.forEach(function (id) { hiddenMembers.delete(id); });
+    });
+  }
+  // 边渲染
   _gr.edges.forEach(function (e) {
     if (!active.has(e.type)) return;
-    const a = _gr.pos[e.from], b = _gr.pos[e.to];
+    let a = _gr.pos[e.from], b = _gr.pos[e.to];
     if (!a || !b) return;
+    if (!flatMode) {
+      const inHiddenA = hiddenMembers.has(e.from), inHiddenB = hiddenMembers.has(e.to);
+      const mA = megaList.find(function (m) { return m.members.indexOf(e.from) >= 0; });
+      const mB = megaList.find(function (m) { return m.members.indexOf(e.to) >= 0; });
+      if (mA && megaCenter[mA.id]) a = megaCenter[mA.id];
+      if (mB && megaCenter[mB.id]) b = megaCenter[mB.id];
+      // 两端同簇（都收起）→ 不画
+      if (mA && mB && mA.id === mB.id && _grExpanded.size === 0) return;
+      if (mA && mB && mA.id === mB.id && inHiddenA && inHiddenB) return;
+    }
     const color = GR_TYPE_COLOR[e.type] || '#6366f1';
     const dash = e.type === 'SHARES_MODEL' ? 'stroke-dasharray="6,4"' : '';
     edges += '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '" stroke-width="' + (e.auto ? 1.2 : 2) + '" ' + dash + ' opacity="' + (e.auto ? .5 : .8) + '" style="cursor:pointer" ' +
       'data-gr-edge="' + e.id + '" data-gr-edge-info="' + esc((GR_TYPE_CN[e.type] || e.type) + (e.custom_type ? '：' + e.custom_type : '') + '（' + (e.note || '无备注') + '）') + '" />';
   });
+  // 展开的成员节点（聚簇模式下仅这些 + flat 全部）
+  const hl = _grHighlightId ? grNeighborsOf(_grHighlightId) : null;
   _gr.nodes.forEach(function (n) {
+    if (!flatMode && hiddenMembers.has(n.id)) return;
     const p = _gr.pos[n.id];
     if (!p) return;
     const pct = n.task_count ? Math.round((n.done_count / n.task_count) * 100) : 0;
     const color = GR_STATUS_COLOR[n.status] || '#64748b';
-    // 节点：圆 + 完成率环（简化为底部弧线粗细）+ 名称
-    nodes += '<g transform="translate(' + p.x + ',' + p.y + ')" style="cursor:grab" data-gr-node="' + n.id + '">' +
+    const dim = hl && !hl.has(n.id) ? ' opacity="0.25"' : '';
+    nodes += '<g transform="translate(' + p.x + ',' + p.y + ')" style="cursor:grab"' + dim + ' data-gr-node="' + n.id + '">' +
       '<circle r="26" fill="#fff" stroke="' + color + '" stroke-width="2.5"/>' +
       '<circle r="26" fill="' + color + '" fill-opacity="' + (0.08 + pct / 200) + '"/>' +
       '<text text-anchor="middle" dy="4" font-size="10" fill="' + color + '" font-weight="bold">' + pct + '%</text>' +
       '<text text-anchor="middle" y="44" font-size="12" fill="#334155">' + esc(n.name.length > 10 ? n.name.slice(0, 10) + '…' : n.name) + '</text>' +
       '<title>' + esc(n.name) + ' · ' + (n.status === 'ACTIVE' ? '进行中' : '已完成') + ' · 任务 ' + n.done_count + '/' + n.task_count + '</title></g>';
   });
+  // mega 节点（B-⑨ 核心：聚合大节点，尺寸随成员数，点击下钻）
+  if (!flatMode) {
+    megaList.forEach(function (m) {
+      const c = megaCenter[m.id];
+      if (!c) return;
+      const r = 30 + Math.min(30, m.size * 4);
+      const col = m.active > 0 ? '#2563eb' : '#059669';
+      nodes += '<g transform="translate(' + c.x + ',' + c.y + ')" style="cursor:pointer" data-gr-mega="' + m.id + '">' +
+        '<circle r="' + r + '" fill="#fff" stroke="' + col + '" stroke-width="3" stroke-dasharray="4,3"/>' +
+        '<circle r="' + r + '" fill="' + col + '" fill-opacity="' + (0.06 + m.pct / 300) + '"/>' +
+        '<text text-anchor="middle" dy="-2" font-size="' + (12 + Math.min(6, m.size)) + '" fill="' + col + '" font-weight="bold">' + m.size + ' 项目</text>' +
+        '<text text-anchor="middle" dy="16" font-size="11" fill="#475569">完成 ' + m.pct + '%</text>' +
+        '<text text-anchor="middle" y="' + (r + 18) + '" font-size="12" fill="#0f172a" font-weight="600">' + esc(m.label) + '</text>' +
+        '<text text-anchor="middle" y="' + (r + 34) + '" font-size="10" fill="#94a3b8">点击展开 ▾</text>' +
+        '<title>' + esc(m.label) + '：' + m.size + ' 个项目 · 完成 ' + m.pct + '% · 点击下钻展开成员</title></g>';
+    });
+    // 已展开簇的提示条（收起入口）
+    _grExpanded.forEach(function (cid) {
+      const c = (_grCluster || []).find(function (x) { return x.id === cid; });
+      if (!c) return;
+      const cc = megaCenter[cid];
+      if (!cc) return;
+      nodes += '<g transform="translate(' + cc.x + ',' + (cc.y - 70) + ')" style="cursor:pointer" data-gr-collapse="' + cid + '">' +
+        '<rect x="-52" y="-12" width="104" height="22" rx="11" fill="#eef2ff" stroke="#6366f1"/>' +
+        '<text text-anchor="middle" dy="4" font-size="11" fill="#4338ca">收起 ' + esc(c.label) + ' ▴</text></g>';
+    });
+  }
   box.innerHTML = '<svg id="gr-svg" width="' + W + '" height="' + H + '" viewBox="0 0 840 600">' + edges + nodes + '</svg>' +
     (_gr.nodes.length ? '' : '<div style="padding:24px;color:#94a3b8">暂无项目</div>');
   _bindGraphClicks();
@@ -1769,12 +1978,27 @@ function grDraw() {
 function _bindGraphClicks() {
   const svg = $('#gr-svg');
   if (!svg) return;
-  // 节点点击 → 摘要卡
+  // B-⑨：mega 节点点击 → 下钻展开；展开簇收起条点击 → 收起
+  svg.querySelectorAll('[data-gr-mega]').forEach(function (gEl) {
+    gEl.addEventListener('click', function () { grToggleCluster(gEl.dataset.grMega); });
+  });
+  svg.querySelectorAll('[data-gr-collapse]').forEach(function (gEl) {
+    gEl.addEventListener('click', function () { grToggleCluster(gEl.dataset.grCollapse); });
+  });
+  // 节点点击 → 摘要卡 + 邻居高亮（聚簇模式下二次点击同节点取消高亮）
   svg.querySelectorAll('[data-gr-node]').forEach(function (gEl) {
     let moved = false;
     gEl.addEventListener('mousedown', function () { moved = false; });
     gEl.addEventListener('mousemove', function () { moved = true; });
-    gEl.addEventListener('click', function () { if (!moved) grNodeCard(Number(gEl.dataset.grNode)); });
+    gEl.addEventListener('click', function () {
+      if (moved) return;
+      const nid = Number(gEl.dataset.grNode);
+      if (_grMode !== 'flat') {
+        _grHighlightId = (_grHighlightId === nid) ? null : nid;
+        grDraw();
+      }
+      grNodeCard(nid);
+    });
     // 拖拽
     gEl.addEventListener('mousedown', function (ev) {
       const id = Number(gEl.dataset.grNode);
@@ -1854,7 +2078,9 @@ async function grAddRelSave() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function grDelRel(rid) {
-  if (!confirm('确认删除该关系？')) return;
+  pkConfirm('确认删除该关系？', 'grDelRelOk(rid)');
+}
+async function grDelRelOk(rid) {
   try { await api('DELETE', PApi.relation(rid)); showToast('已删除'); $('#gr-card').style.display = 'none'; renderGraph(); }
   catch (e) { showToast(e.message, 'err'); }
 }
@@ -1876,6 +2102,193 @@ function grExport() {
     a.click();
   };
   img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+}
+
+
+/* --- subsystems/projects/frontend/js/views/graph-cluster.js --- */
+// graph-cluster.js — 方案B-⑨ 图谱聚簇（路径2 借鉴 GraphVis 设计，原生实现零依赖）
+// 簇模式：mega-node（聚合节点，尺寸=成员数+完成率环）→ 点击下钻展开成员 → 邻居高亮
+// 簇算法（纯前端，数据全部来自现有 /api/projects/graph，无后端改动）：
+//   ① 状态簇：按项目 status（ACTIVE/DONE）分组——看健康度
+//   ② 连通分量簇：union-find 按 SHARES_MODEL（含 auto）+ 其它人工边连通——看机型族谱
+var _grMode = 'flat';            // flat | status | component
+var _grCluster = null;           // 聚簇结果缓存
+var _grExpanded = new Set();     // 已下钻的簇 id
+var _grHighlightId = null;       // 邻居高亮的项目 id
+
+// === 簇计算（在 grDraw 前调用；_gr 已就绪） ===
+function grComputeClusters() {
+  const nodes = _gr.nodes, edges = _gr.edges;
+  if (_grMode === 'status') {
+    const by = {};
+    nodes.forEach(function (n) { (by[n.status] = by[n.status] || []).push(n); });
+    _grCluster = Object.keys(by).map(function (k) {
+      const members = by[k];
+      return { id: 'cs-' + k, label: k === 'ACTIVE' ? '进行中项目' : '已完成项目', members: members.map(m => m.id) };
+    });
+  } else if (_grMode === 'component') {
+    // union-find 连通分量（所有边参与：共享机型边让同机型项目聚成族谱）
+    const parent = {};
+    nodes.forEach(function (n) { parent[n.id] = n.id; });
+    function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+    edges.forEach(function (e) {
+      const a = find(e.from), b = find(e.to);
+      if (a !== b) parent[a] = b;
+    });
+    const by = {};
+    nodes.forEach(function (n) { (by[find(n.id)] = by[find(n.id)] || []).push(n); });
+    const big = Object.keys(by).filter(function (k) { return by[k].length >= 2; }); // 单体不成簇
+    _grCluster = big.map(function (k, i) {
+      const members = by[k];
+      // 簇名：取共享机型推导边 note 里的首个机型 code；找不到用「族谱 N」
+      let label = '族谱 ' + (i + 1);
+      for (const e of edges) {
+        if (e.type === 'SHARES_MODEL' && (members.some(m => m.id === e.from) )) {
+          const m = (e.note || '').match(/共享机型：([^、]+)/);
+          if (m) { label = '机型 ' + m[1]; break; }
+        }
+      }
+      return { id: 'cc-' + k, label: label, members: members.map(m => m.id) };
+    });
+  } else { _grCluster = null; }
+}
+
+// 成员是否属于已展开簇（展开的成员按普通节点绘制）
+function grMemberOfExpanded(nid) {
+  if (!_grCluster) return false;
+  return _grCluster.some(function (c) { return _grExpanded.has(c.id) && c.members.indexOf(nid) >= 0; });
+}
+
+// 待绘制的 mega 节点（未展开的簇）
+function grMegaNodes() {
+  if (!_grCluster) return [];
+  return _grCluster.filter(function (c) { return !_grExpanded.has(c.id); }).map(function (c) {
+    const ms = c.members.map(function (id) { return _gr.nodes.find(function (n) { return n.id === id; }); }).filter(Boolean);
+    const tasks = ms.reduce(function (s, m) { return s + (m.task_count || 0); }, 0);
+    const done = ms.reduce(function (s, m) { return s + (m.done_count || 0); }, 0);
+    const pct = tasks ? Math.round(done / tasks * 100) : 0;
+    const activeN = ms.filter(function (m) { return m.status === 'ACTIVE'; }).length;
+    return { id: c.id, label: c.label, size: ms.length, pct: pct, active: activeN, members: c.members };
+  });
+}
+
+
+/* --- subsystems/projects/frontend/js/views/ui-helpers.js --- */
+// views/ui-helpers.js — 项目子系统视图层三件套（方案B-④）
+// 目标：收敛 8 个视图里重复的 确认框/表单弹窗 foot 按钮/只读KV行 三个模式
+// 纯前端重构：不改任何路由/数据结构；各视图逐个切换调用后删除各自重复实现
+
+// ① 模态确认框（替代 11 处原生 confirm()；onOk 为函数名字符串，与 task-detail.js pConfirm 同形态）
+// 用法：pkConfirm('确认删除？', 'delMilestone(5)')
+function pkConfirm(message, onOkFnName) {
+  if (typeof pConfirm === 'function') { pConfirm(message, onOkFnName); return; }
+  // 兜底：无共享确认组件时退回原生
+  if (confirm(message)) { try { (window[onOkFnName] || function () {})(); } catch (e) { console.error(e); } }
+}
+
+// ② 标准表单弹窗骨架（收敛「openModal + accent 保存按钮 + neutral 取消按钮」foot 三件套）
+// fields: [{tag:'fluent-text-field'|'fluent-text-area'|'fluent-select'|'input'|'select'|'date', id, label, value, type, options:[{v,t}], placeholder, required}]
+// onSave: 函数名字符串（保存按钮 onclick）；wide: 是否加宽
+function pkFormModal(title, fields, onSaveFnName, opts) {
+  opts = opts || {};
+  const html = fields.map(function (f) {
+    const v = f.value == null ? '' : String(f.value);
+    let inner = '';
+    if (f.options) {
+      const opts2 = f.options.map(function (o) {
+        const ov = o.v == null ? '' : String(o.v);
+        return '<fluent-option value="' + ov + '"' + (ov === v ? ' selected' : '') + '>' + esc(o.t == null ? ov : o.t) + '</fluent-option>';
+      }).join('');
+      inner = '<fluent-select id="' + f.id + '"' + (f.onChange ? ' onchange="' + f.onChange + '"' : '') + '>' + opts2 + '</fluent-select>';
+    } else if (f.tag === 'fluent-text-area') {
+      inner = '<fluent-text-area id="' + f.id + '"' + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '') + '>' + esc(v) + '</fluent-text-area>';
+    } else {
+      inner = '<fluent-text-field id="' + f.id + '" type="' + (f.type || 'text') + '" value="' + esc(v) + '"' +
+        (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '') + '></fluent-text-field>';
+    }
+    return '<label' + (f.gap ? ' style="margin-top:8px"' : '') + '>' + f.label + (f.required ? ' *' : '') + '</label>' + inner;
+  }).join('');
+  openModal(title,
+    '<div class="pk-form">' + html + '</div>',
+    { wide: !!opts.wide,
+      foot: '<fluent-button appearance="accent" size="small" onclick="' + onSaveFnName + '">保存</fluent-button>' +
+            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+
+// ③ 取字段值（pkFormModal 配套；集合内 id 从 DOM 依次读）
+function pkVal(id) {
+  const el = document.getElementById(id);
+  if (!el) return '';
+  return (el.value == null ? '' : el.value).trim();
+}
+
+
+/* --- subsystems/projects/frontend/js/views/notifications.js --- */
+// views/notifications.js — 站内通知铃铛 + 面板（2026-09-08 方案B-②）
+// 轮询 60s 拉未读数；面板内列表/全部已读/单条已读；点击通知跳转 link 深链
+var _ntfTimer = null;
+
+// 启动轮询（登录成功后调用一次）
+function ntfStart() {
+  ntfRefresh();
+  if (_ntfTimer) clearInterval(_ntfTimer);
+  _ntfTimer = setInterval(ntfRefresh, 60000);
+}
+
+// 拉未读数并更新徽标
+async function ntfRefresh() {
+  try {
+    const r = await api('GET', PApi.notifUnread);
+    const b = document.getElementById('ntf-badge');
+    if (!b) return;
+    b.textContent = r.unread > 99 ? '99+' : (r.unread || '');
+    b.style.display = r.unread > 0 ? 'flex' : 'none';
+  } catch (e) { /* 静默：通知失败不影响主流程 */ }
+}
+
+// 打开/关闭通知面板
+async function ntfToggle() {
+  const panel = document.getElementById('ntf-panel');
+  if (!panel) return;
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="ntf-loading muted">加载中…</div>';
+  try {
+    const list = await api('GET', PApi.notifications);
+    if (!list.length) { panel.innerHTML = '<div class="ntf-loading muted">暂无通知</div>'; return; }
+    const unread = list.filter(x => !x.is_read).length;
+    panel.innerHTML =
+      '<div class="ntf-head"><b>通知</b>' +
+      (unread ? '<a class="link" onclick="ntfReadAll()">全部已读</a>' : '') +
+      '</div>' +
+      '<div class="ntf-list">' + list.map(function (x) {
+        const icon = { ASSIGN: '👤', STATUS: '✅', OVERDUE: '⏰', CHANGE_APPROVAL: '📋', MENTION: '💬' }[x.type] || '🔔';
+        return '<div class="ntf-item' + (x.is_read ? '' : ' ntf-unread') + '" onclick="ntfClick(' + x.id + ',\'' + (x.link || '').replace(/'/g, '') + '\')">' +
+          '<span class="ntf-icon">' + icon + '</span>' +
+          '<span class="ntf-body"><b>' + esc(x.title) + '</b>' +
+          (x.body ? '<span class="muted">' + esc(x.body) + '</span>' : '') +
+          '<span class="ntf-time muted">' + String(x.created_at || '').slice(0, 16).replace('T', ' ') + '</span></span>' +
+          (x.is_read ? '' : '<span class="ntf-dot"></span>') +
+          '</div>';
+      }).join('') + '</div>';
+  } catch (e) {
+    panel.innerHTML = '<div class="ntf-loading muted">加载失败</div>';
+  }
+}
+
+// 点击通知：标已读 + 跳深链 + 关面板
+async function ntfClick(id, link) {
+  try { await api('POST', PApi.notifRead, { id: id }); } catch (e) {}
+  ntfToggle();
+  ntfRefresh();
+  if (link) location.hash = link.replace(/^#/, '#/');
+}
+
+// 全部已读
+async function ntfReadAll() {
+  try { await api('POST', PApi.notifRead, {}); } catch (e) {}
+  ntfToggle();
+  ntfRefresh();
 }
 
 
@@ -1996,6 +2409,12 @@ function renderTdLogs(d) {
     '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');
 }
 
+
+
+/* --- subsystems/projects/frontend/js/views/task-detail-actions.js --- */
+// task-detail-actions.js — 任务详情动作区（方案B-⑤ 从 task-detail.js 拆出）
+// 范围：编辑弹窗/子任务增删改/依赖增删/关联搜索添加/评论删除/附件上传删除/删除任务
+// 依赖：主文件的 _tid/_tdCache/tdRefresh/tdLoadSection 与 pkFormModal 等 helper（bundle 内同域共享）
 // v2：弹窗关闭 helper（shared closeModal 需 mask 参数，统一封装）
 function pCloseModal() {
   document.querySelectorAll('.modal-mask').forEach(function (m) { m.remove(); });
@@ -2290,6 +2709,7 @@ function showApp(){
   $('#me-role').textContent = (ROLE_CN[me.role] || me.role) + (me.dept ? ' · ' + me.dept : '');
   buildNav();
   route();
+  ntfStart(); // 站内通知轮询（方案B-②：登录后启动 60s 未读数刷新）
 }
 
 

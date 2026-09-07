@@ -33,5 +33,11 @@ const PApi = {
   // OA 能力移植（二期批次3）：关系 + 图谱
   relations: '/api/projects/relations',
   relation: rid => '/api/projects/relations/' + rid,
-  graph: '/api/projects/graph'
+  graph: '/api/projects/graph',
+  // 站内通知（方案B-②）
+  notifUnread: '/api/projects/notifications/unread',
+  notifications: '/api/projects/notifications',
+  notifRead: '/api/projects/notifications/read',
+  // 甘特依赖批量（方案B-③去 N+1）
+  taskDepsBatch: pid => '/api/projects/' + pid + '/deps-batch'
 };

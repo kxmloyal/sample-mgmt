@@ -13,6 +13,10 @@ async function renderGraph() {
     '<fluent-button appearance="accent" onclick="grAddRel()">标注关系</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="renderGraph()">刷新</fluent-button>' +
     '<fluent-button appearance="secondary" onclick="grExport()">导出 PNG</fluent-button>' +
+    '<span style="margin-left:10px;font-size:12px;color:#64748b">聚簇：</span>' +
+    '<fluent-button appearance="secondary" id="gr-m-flat" onclick="grSetMode(\'flat\')">展开</fluent-button>' +
+    '<fluent-button appearance="secondary" id="gr-m-status" onclick="grSetMode(\'status\')">状态簇</fluent-button>' +
+    '<fluent-button appearance="secondary" id="gr-m-component" onclick="grSetMode(\'component\')">族谱簇</fluent-button>' +
     '<span id="gr-filters" style="margin-left:8px"></span></div>' +
     '<div style="position:relative">' +
     '<div id="gr-svg-box" style="border:1px solid var(--border,#e2e8f0);border-radius:8px;background:#fff;overflow:hidden"></div>' +
@@ -20,6 +24,7 @@ async function renderGraph() {
   const g = await api('GET', PApi.graph);
   _gr = g;
   _gr.pos = {};
+  _grExpanded = new Set(); _grHighlightId = null;
   // 初始布局：环形（力导向从此收敛）
   const R = Math.min(280, 120 + g.nodes.length * 6), cx = 420, cy = 300;
   g.nodes.forEach(function (n, i) {
@@ -35,6 +40,34 @@ async function renderGraph() {
   grSimulate();
   grDraw();
   _bindGraphClicks();
+}
+
+// B-⑨ 聚簇模式切换（flat=普通展开图；status/component=聚合 mega 节点）
+function grSetMode(m) {
+  _grMode = m;
+  _grExpanded = new Set(); _grHighlightId = null;
+  ['flat', 'status', 'component'].forEach(function (k) {
+    const b = document.getElementById('gr-m-' + k);
+    if (b) b.classList.toggle('active', k === m);
+  });
+  grDraw();
+}
+
+// B-⑨ 簇下钻/收起
+function grToggleCluster(cid) {
+  if (_grExpanded.has(cid)) _grExpanded.delete(cid);
+  else _grExpanded.add(cid);
+  grDraw();
+}
+
+// B-⑨ 邻居高亮：点击项目节点高亮其直连邻居（聚簇模式下仅展开图内生效）
+function grNeighborsOf(nid) {
+  const set = new Set([nid]);
+  _gr.edges.forEach(function (e) {
+    if (e.from === nid) set.add(e.to);
+    if (e.to === nid) set.add(e.from);
+  });
+  return set;
 }
 
 // 力导向模拟（斥力 + 弹簧 + 向心，60 轮收敛；仅初始计算，拖拽后局部不重算）
@@ -82,29 +115,94 @@ function grDraw() {
   const box = $('#gr-svg-box');
   const W = 840, H = 600;
   const active = grActiveTypes();
+  grComputeClusters(); // B-⑨：每次绘制前重算簇（数据源不变，成本可忽略）
   let edges = '', nodes = '';
+  const flatMode = _grMode === 'flat';
+  // 聚簇模式：成员全部收进 mega 节点的簇 → 隐藏其成员间边；跨簇边画到 mega 中心
+  const megaList = grMegaNodes();
+  const megaCenter = {};
+  megaList.forEach(function (m) {
+    const ms = m.members.map(function (id) { return _gr.pos[id]; }).filter(Boolean);
+    if (!ms.length) return;
+    const cx2 = ms.reduce(function (s, p) { return s + p.x; }, 0) / ms.length;
+    const cy2 = ms.reduce(function (s, p) { return s + p.y; }, 0) / ms.length;
+    megaCenter[m.id] = { x: cx2, y: cy2 };
+  });
+  const hiddenMembers = new Set();
+  if (!flatMode) {
+    megaList.forEach(function (m) { m.members.forEach(function (id) { hiddenMembers.add(id); }); });
+    Object.keys(_gr.pos).forEach(function (id) {
+      if (!hiddenMembers.has(Number(id)) && !grMemberOfExpanded(Number(id))) hiddenMembers.add(Number(id));
+    });
+    // 展开簇的成员保持可见
+    _grExpanded.forEach(function (cid) {
+      const c = (_grCluster || []).find(function (x) { return x.id === cid; });
+      if (c) c.members.forEach(function (id) { hiddenMembers.delete(id); });
+    });
+  }
+  // 边渲染
   _gr.edges.forEach(function (e) {
     if (!active.has(e.type)) return;
-    const a = _gr.pos[e.from], b = _gr.pos[e.to];
+    let a = _gr.pos[e.from], b = _gr.pos[e.to];
     if (!a || !b) return;
+    if (!flatMode) {
+      const inHiddenA = hiddenMembers.has(e.from), inHiddenB = hiddenMembers.has(e.to);
+      const mA = megaList.find(function (m) { return m.members.indexOf(e.from) >= 0; });
+      const mB = megaList.find(function (m) { return m.members.indexOf(e.to) >= 0; });
+      if (mA && megaCenter[mA.id]) a = megaCenter[mA.id];
+      if (mB && megaCenter[mB.id]) b = megaCenter[mB.id];
+      // 两端同簇（都收起）→ 不画
+      if (mA && mB && mA.id === mB.id && _grExpanded.size === 0) return;
+      if (mA && mB && mA.id === mB.id && inHiddenA && inHiddenB) return;
+    }
     const color = GR_TYPE_COLOR[e.type] || '#6366f1';
     const dash = e.type === 'SHARES_MODEL' ? 'stroke-dasharray="6,4"' : '';
     edges += '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + color + '" stroke-width="' + (e.auto ? 1.2 : 2) + '" ' + dash + ' opacity="' + (e.auto ? .5 : .8) + '" style="cursor:pointer" ' +
       'data-gr-edge="' + e.id + '" data-gr-edge-info="' + esc((GR_TYPE_CN[e.type] || e.type) + (e.custom_type ? '：' + e.custom_type : '') + '（' + (e.note || '无备注') + '）') + '" />';
   });
+  // 展开的成员节点（聚簇模式下仅这些 + flat 全部）
+  const hl = _grHighlightId ? grNeighborsOf(_grHighlightId) : null;
   _gr.nodes.forEach(function (n) {
+    if (!flatMode && hiddenMembers.has(n.id)) return;
     const p = _gr.pos[n.id];
     if (!p) return;
     const pct = n.task_count ? Math.round((n.done_count / n.task_count) * 100) : 0;
     const color = GR_STATUS_COLOR[n.status] || '#64748b';
-    // 节点：圆 + 完成率环（简化为底部弧线粗细）+ 名称
-    nodes += '<g transform="translate(' + p.x + ',' + p.y + ')" style="cursor:grab" data-gr-node="' + n.id + '">' +
+    const dim = hl && !hl.has(n.id) ? ' opacity="0.25"' : '';
+    nodes += '<g transform="translate(' + p.x + ',' + p.y + ')" style="cursor:grab"' + dim + ' data-gr-node="' + n.id + '">' +
       '<circle r="26" fill="#fff" stroke="' + color + '" stroke-width="2.5"/>' +
       '<circle r="26" fill="' + color + '" fill-opacity="' + (0.08 + pct / 200) + '"/>' +
       '<text text-anchor="middle" dy="4" font-size="10" fill="' + color + '" font-weight="bold">' + pct + '%</text>' +
       '<text text-anchor="middle" y="44" font-size="12" fill="#334155">' + esc(n.name.length > 10 ? n.name.slice(0, 10) + '…' : n.name) + '</text>' +
       '<title>' + esc(n.name) + ' · ' + (n.status === 'ACTIVE' ? '进行中' : '已完成') + ' · 任务 ' + n.done_count + '/' + n.task_count + '</title></g>';
   });
+  // mega 节点（B-⑨ 核心：聚合大节点，尺寸随成员数，点击下钻）
+  if (!flatMode) {
+    megaList.forEach(function (m) {
+      const c = megaCenter[m.id];
+      if (!c) return;
+      const r = 30 + Math.min(30, m.size * 4);
+      const col = m.active > 0 ? '#2563eb' : '#059669';
+      nodes += '<g transform="translate(' + c.x + ',' + c.y + ')" style="cursor:pointer" data-gr-mega="' + m.id + '">' +
+        '<circle r="' + r + '" fill="#fff" stroke="' + col + '" stroke-width="3" stroke-dasharray="4,3"/>' +
+        '<circle r="' + r + '" fill="' + col + '" fill-opacity="' + (0.06 + m.pct / 300) + '"/>' +
+        '<text text-anchor="middle" dy="-2" font-size="' + (12 + Math.min(6, m.size)) + '" fill="' + col + '" font-weight="bold">' + m.size + ' 项目</text>' +
+        '<text text-anchor="middle" dy="16" font-size="11" fill="#475569">完成 ' + m.pct + '%</text>' +
+        '<text text-anchor="middle" y="' + (r + 18) + '" font-size="12" fill="#0f172a" font-weight="600">' + esc(m.label) + '</text>' +
+        '<text text-anchor="middle" y="' + (r + 34) + '" font-size="10" fill="#94a3b8">点击展开 ▾</text>' +
+        '<title>' + esc(m.label) + '：' + m.size + ' 个项目 · 完成 ' + m.pct + '% · 点击下钻展开成员</title></g>';
+    });
+    // 已展开簇的提示条（收起入口）
+    _grExpanded.forEach(function (cid) {
+      const c = (_grCluster || []).find(function (x) { return x.id === cid; });
+      if (!c) return;
+      const cc = megaCenter[cid];
+      if (!cc) return;
+      nodes += '<g transform="translate(' + cc.x + ',' + (cc.y - 70) + ')" style="cursor:pointer" data-gr-collapse="' + cid + '">' +
+        '<rect x="-52" y="-12" width="104" height="22" rx="11" fill="#eef2ff" stroke="#6366f1"/>' +
+        '<text text-anchor="middle" dy="4" font-size="11" fill="#4338ca">收起 ' + esc(c.label) + ' ▴</text></g>';
+    });
+  }
   box.innerHTML = '<svg id="gr-svg" width="' + W + '" height="' + H + '" viewBox="0 0 840 600">' + edges + nodes + '</svg>' +
     (_gr.nodes.length ? '' : '<div style="padding:24px;color:#94a3b8">暂无项目</div>');
   _bindGraphClicks();
@@ -113,12 +211,27 @@ function grDraw() {
 function _bindGraphClicks() {
   const svg = $('#gr-svg');
   if (!svg) return;
-  // 节点点击 → 摘要卡
+  // B-⑨：mega 节点点击 → 下钻展开；展开簇收起条点击 → 收起
+  svg.querySelectorAll('[data-gr-mega]').forEach(function (gEl) {
+    gEl.addEventListener('click', function () { grToggleCluster(gEl.dataset.grMega); });
+  });
+  svg.querySelectorAll('[data-gr-collapse]').forEach(function (gEl) {
+    gEl.addEventListener('click', function () { grToggleCluster(gEl.dataset.grCollapse); });
+  });
+  // 节点点击 → 摘要卡 + 邻居高亮（聚簇模式下二次点击同节点取消高亮）
   svg.querySelectorAll('[data-gr-node]').forEach(function (gEl) {
     let moved = false;
     gEl.addEventListener('mousedown', function () { moved = false; });
     gEl.addEventListener('mousemove', function () { moved = true; });
-    gEl.addEventListener('click', function () { if (!moved) grNodeCard(Number(gEl.dataset.grNode)); });
+    gEl.addEventListener('click', function () {
+      if (moved) return;
+      const nid = Number(gEl.dataset.grNode);
+      if (_grMode !== 'flat') {
+        _grHighlightId = (_grHighlightId === nid) ? null : nid;
+        grDraw();
+      }
+      grNodeCard(nid);
+    });
     // 拖拽
     gEl.addEventListener('mousedown', function (ev) {
       const id = Number(gEl.dataset.grNode);
@@ -198,7 +311,9 @@ async function grAddRelSave() {
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function grDelRel(rid) {
-  if (!confirm('确认删除该关系？')) return;
+  pkConfirm('确认删除该关系？', 'grDelRelOk(rid)');
+}
+async function grDelRelOk(rid) {
   try { await api('DELETE', PApi.relation(rid)); showToast('已删除'); $('#gr-card').style.display = 'none'; renderGraph(); }
   catch (e) { showToast(e.message, 'err'); }
 }

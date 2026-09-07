@@ -93,7 +93,10 @@ async function msEditSave(id, version) {
 
 // 达成里程碑（CAS：传读取时 version；409 时提示刷新）
 async function msAchieve(id, version) {
-  if (!confirm('确认标记该里程碑已达成？（若已超过目标日期将自动标记延期）')) return;
+  msAchieveConfirm(id, version);
+}
+async function msAchieveOk(id, version) {
+  pkConfirm('确认标记该里程碑已达成？（若已超过目标日期将自动标记延期）', 'msAchieveOk(' + id + ',' + version + ')');
   try {
     await api('POST', PApi.milestoneAchieve(id), { version: version });
     showToast('已达成'); msLoad();
@@ -101,7 +104,10 @@ async function msAchieve(id, version) {
 }
 
 async function msDel(id) {
-  if (!confirm('确认删除该里程碑？')) return;
+  pkConfirm('确认删除该里程碑？', 'msDelOk(' + id + ')');
+}
+async function msDelOk(id) {
+  pkConfirm('确认删除该里程碑？', 'msDelOk(' + id + ')');
   try { await api('DELETE', PApi.milestone(id)); showToast('已删除'); msLoad(); }
   catch (e) { showToast(e.message, 'err'); }
 }

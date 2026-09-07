@@ -1,0 +1,19 @@
+/* notifications.css — 通知铃铛与面板（方案B-②，项目子系统内自治样式） */
+.ntf-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;cursor:pointer;background:transparent;border:none;font-size:17px}
+.ntf-bell:hover{background:rgba(0,0,0,.06)}
+.ntf-badge{position:absolute;top:-2px;right:-4px;min-width:16px;height:16px;padding:0 4px;background:#dc2626;color:#fff;border-radius:8px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1}
+.ntf-panel{display:none;position:fixed;top:52px;right:14px;width:340px;max-height:70vh;background:#fff;border:1px solid var(--border,#e2e8f0);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:1200;overflow:hidden}
+.ntf-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border,#e2e8f0);font-size:14px}
+.ntf-head .link{cursor:pointer;color:var(--brand,#2563eb);font-size:12px}
+.ntf-list{overflow-y:auto;max-height:calc(70vh - 45px)}
+.ntf-item{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid #f1f5f9;cursor:pointer}
+.ntf-item:hover{background:#f8fafc}
+.ntf-item.ntf-unread{background:#eff6ff}
+.ntf-item.ntf-unread:hover{background:#e0edff}
+.ntf-icon{font-size:15px;line-height:1.3}
+.ntf-body{flex:1;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.ntf-body b{font-weight:600;line-height:1.35}
+.ntf-time{font-size:11px}
+.ntf-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;margin-top:5px;flex-shrink:0}
+.ntf-loading{padding:24px;text-align:center;font-size:13px}
+@media(max-width:576px){.ntf-panel{width:calc(100vw - 24px);right:12px}}
