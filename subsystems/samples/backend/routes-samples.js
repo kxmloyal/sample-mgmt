@@ -12,21 +12,37 @@ function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
 
+  // sort 白名单：旧值 created_at/sample_no + 2026-09-07 角色范围档新增 mine/inspect/status
+  const SAMPLE_SORTS = ['', 'created_at', '-created_at', 'sample_no', '-sample_no', 'mine', 'inspect', 'status'];
+
+  // 列表筛选参数解析（列表与导出共用，保持两端口径一致）
+  // 2026-09-07 角色相关数据范围：scope=role 时由服务端按会话身份派生范围条件（uid/role 不可客户端伪造）
+  function _sampleFilterOpts(query, user) {
+    return {
+      status: query.status || undefined,
+      dept: query.dept || undefined,
+      search: query.q || undefined,
+      sort: SAMPLE_SORTS.includes(query.sort) ? (query.sort || undefined) : undefined,
+      overdue: query.overdue || undefined,
+      sample_type: query.sample_type || undefined,
+      limit_item: query.limit_item || undefined,
+      source_type: query.source_type || undefined,
+      model: query.model || undefined,
+      // mine=1 → 仅我创建的
+      mine_uid: (query.mine === '1' && user && user.id) ? user.id : undefined,
+      checkout_overdue: query.checkout_overdue || undefined,
+      // scope=role → 按角色优先显示相关数据（ADMIN/未知角色不注入=全量；无 scope 参数行为与旧版完全一致）
+      role_scope_role: query.scope === 'role' && user && user.role && user.role !== 'ADMIN' ? user.role : undefined,
+      role_scope_uid: user && user.id
+    };
+  }
+
   app.get('/api/samples', requireAuth, asyncHandler(async (req, res) => {
-    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model, limit, offset } = req.query;
+    const { limit, offset } = req.query;
     const pageLimit = Math.min(parseInt(limit || '20', 10) || 20, 200);
     const pageOffset = Math.max(parseInt(offset || '0', 10) || 0, 0);
-    const filterOpts = {
-      status: status || undefined,
-      dept: dept || undefined,
-      search: q || undefined,
-      sort: sort || undefined,
-      overdue: overdue || undefined,
-      sample_type: sample_type || undefined,
-      limit_item: limit_item || undefined,
-      source_type: source_type || undefined,
-      model: model || undefined
-    };
+    const u = await currentUser(req);
+    const filterOpts = _sampleFilterOpts(req.query, u);
     const [samples, total] = await Promise.all([
       D.listSamples({ ...filterOpts, limit: pageLimit, offset: pageOffset }),
       D.countAllSamples(filterOpts)
@@ -56,13 +72,8 @@ function register(app) {
   }
 
   app.get('/api/samples/export', requireAuth, asyncHandler(async (req, res) => {
-    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model } = req.query;
-    const filterOpts = {
-      status: status || undefined, dept: dept || undefined, search: q || undefined,
-      sort: sort || undefined, overdue: overdue || undefined,
-      sample_type: sample_type || undefined, limit_item: limit_item || undefined,
-      source_type: source_type || undefined, model: model || undefined
-    };
+    const u = await currentUser(req);
+    const filterOpts = _sampleFilterOpts(req.query, u); // 复用列表筛选口径（scope 随当前筛选，导出与列表一致）
     const samples = await D.listSamples(filterOpts); // 不传 limit/offset → 全量（与列表同排序）
     const cols = [
       { key: 'sample_no', label: '编号' },
