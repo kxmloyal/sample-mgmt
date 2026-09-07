@@ -1,4 +1,4 @@
-/** BUNDLE vbmtr0xaca — 27 files */
+/** BUNDLE vbmtr1qx1o — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -632,6 +632,7 @@ function _getTodoInfo(s) {
 // 创建成功出结果面板，用 cards/print 批量单页打印（T17/T18 已有能力，一次 window.open 可靠）
 var _nbMode = 'single';   // 当前模式：single | batch
 var _nbRows = [];         // 批量行数据 [{name,source,station,notes}]
+var _nbModelCode = '';    // 批次机型编码（公共设置选择后记录，提交与预览共用）
 
 async function viewNew(){
   const v=$('#view');
@@ -676,15 +677,16 @@ async function viewNew(){
     // ═══ 批量模式（对齐治具新建申请：① 公共设置 → ② 行式清单） ═══
     '<div id="n-batch-wrap" style="display:none"><div class="card" style="max-width:960px">'+
     '<h3 style="margin:0 0 14px">批量新建样品 <span class="muted" style="font-size:12px;font-weight:400">（一次最多 50 条；任一行非法则整批不创建）</span></h3>'+
-    '<div style="border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:16px">'+
+    '<div class="sec nb-sec">'+
     '<div style="font-weight:600;font-size:13px;margin-bottom:10px">① 公共设置 <span class="muted" style="font-weight:400">（机型与版次整批共用——样品编号的机型段必须一致才成批）</span></div>'+
-    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'+
-    '<div><label style="font-size:12px">规格/型号 *</label><br><fluent-select id="n-b-spec" style="min-width:220px"><fluent-option value="">请选择机型</fluent-option></fluent-select></div>'+
-    '<div><label style="font-size:12px">机型编码</label><br><fluent-text-field id="n-b-model" disabled placeholder="选择机型后自动填入"></fluent-text-field></div>'+
-    '<div><label style="font-size:12px">版次（01~99）</label><br><fluent-text-field id="n-b-version" value="01" maxlength="2" style="width:90px"></fluent-text-field></div>'+
-    '<span id="n-b-preview" class="muted" style="font-size:12px"></span>'+
-    '</div></div>'+
-    '<div style="border:1px solid var(--line);border-radius:8px;padding:14px 16px">'+
+    '<div class="nf-grid">'+
+    '<div><label>规格/型号 *</label><fluent-select id="n-b-spec"><fluent-option value="">请选择机型</fluent-option></fluent-select></div>'+
+    '<div><label>版次（01~99，默认01）</label><fluent-text-field id="n-b-version" value="01" maxlength="2"></fluent-text-field></div>'+
+    '<div class="nf-full"><label>机型编码</label><span id="n-b-model-badge" class="nb-model-badge muted">选择机型后自动识别</span></div>'+
+    '</div>'+
+    '<div id="n-b-preview" class="muted nb-preview"></div>'+
+    '</div>'+
+    '<div class="sec nb-sec">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<div style="font-weight:600;font-size:13px">② 样品清单 <span class="muted" style="font-weight:400">（同机型批量创建）</span></div>'+
     '<fluent-button appearance="lightweight" size="small" onclick="nbAddRow()">＋ 添加一行</fluent-button>'+
@@ -714,7 +716,9 @@ async function viewNew(){
         _schedulePreview();
       });
       bsel.addEventListener('change', function () {
-        $('#n-b-model').value = bsel.value;
+        _nbModelCode = bsel.value;
+        const badge = $('#n-b-model-badge');
+        if (badge) badge.textContent = _nbModelCode || '选择机型后自动识别';
         _nbSchedulePreview();
       });
     }
@@ -742,7 +746,7 @@ function _nbSchedulePreview(){
 async function _nbRefreshPreview(){
   const box=$('#n-b-preview');
   if(!box) return;
-  const model=$('#n-b-model').value, ver=($('#n-b-version').value||'01');
+  const model=_nbModelCode, ver=($('#n-b-version').value||'01');
   const first=_nbRows.find(r=>r.source&&r.station);
   if(!model||model.length<6||!first){ box.textContent=''; return; }
   try{
@@ -750,36 +754,35 @@ async function _nbRefreshPreview(){
     box.textContent='编号预览（按第1条口径）：'+r.sample_no+' 起';
   }catch(e){ box.textContent=''; }
 }
-// 行式渲染（对齐治具 fnRenderRows：名称行首 flex:2，删除按钮仅剩 1 行时禁用）
+// 行式渲染（nb-* 样式体系见 module.css：桌面 flex 对齐、<768px 卡片堆叠、表头隐藏）
 function _nbRenderRows(){
   const box=$('#n-b-rows');
   if(!box) return;
-  const groupOpts=STATIONS.map(x=>'<option value="'+x+'">'+x+'</option>').join('');
-  const sourceOpts='<option value="">提供处*</option><option value="C">客供(C)</option><option value="T">元山(T)</option><option value="G">塔岗(G)</option></option>'.replace('</option></option>','</option>');
-  const head='<div class="fn-row fn-head">'+
-    '<span class="fn-cell fn-name">样品名称 <em style="color:var(--bad);font-style:normal">*</em></span>'+
-    '<span class="fn-cell">提供处</span>'+
-    '<span class="fn-cell">组别</span>'+
-    '<span class="fn-cell">备注</span>'+
-    '<span class="fn-head-del">删除</span>'+
+  const head='<div class="nb-row nb-head">'+
+    '<span class="nb-cell nb-name">样品名称 <em style="color:var(--bad);font-style:normal">*</em></span>'+
+    '<span class="nb-cell nb-src">提供处</span>'+
+    '<span class="nb-cell nb-sta">组别</span>'+
+    '<span class="nb-cell nb-note">备注</span>'+
+    '<span class="nb-head-del">删除</span>'+
     '</div>';
   box.innerHTML=head+_nbRows.map(function(r,i){
-    return '<div class="fn-row" data-i="'+i+'">'+
-      '<input class="fn-cell fn-name" value="'+e(r.name)+'" placeholder="样品名称*" oninput="nbRowCell('+i+',\'name\',this.value)" onblur="nbRowCell('+i+',\'mark\')"/>'+
-      '<select class="fn-cell" onchange="nbRowCell('+i+',\'source\',this.value)">'+
-        '<option value="">提供处*</option><option value="C"'+(r.source==='C'?' selected':'')+'>客供(C)</option><option value="T"'+(r.source==='T'?' selected':'')+'>元山(T)</option><option value="G"'+(r.source==='G'?' selected':'')+'>塔岗(G)</option>'+
+    return '<div class="nb-row" data-i="'+i+'">'+
+      '<div class="nb-idx muted">'+(i+1)+'</div>'+
+      '<input class="nb-cell nb-name" value="'+e(r.name)+'" placeholder="样品名称*" oninput="nbRowCell('+i+',\'name\',this.value)" onblur="nbRowCell('+i+',\'mark\')"/>'+
+      '<select class="nb-cell nb-src" onchange="nbRowCell('+i+',\'source\',this.value)">'+
+        '<option value=""'+(r.source?'':' selected')+'>提供处*</option><option value="C"'+(r.source==='C'?' selected':'')+'>客供(C)</option><option value="T"'+(r.source==='T'?' selected':'')+'>元山(T)</option><option value="G"'+(r.source==='G'?' selected':'')+'>塔岗(G)</option>'+
       '</select>'+
-      '<select class="fn-cell" onchange="nbRowCell('+i+',\'station\',this.value)">'+
-        '<option value="">组别*</option>'+STATIONS.map(function(x){return '<option value="'+x+'"'+(r.station===x?' selected':'')+'>'+e(x)+'</option>';}).join('')+
+      '<select class="nb-cell nb-sta" onchange="nbRowCell('+i+',\'station\',this.value)">'+
+        '<option value=""'+(r.station?'':' selected')+'>组别*</option>'+STATIONS.map(function(x){return '<option value="'+x+'"'+(r.station===x?' selected':'')+'>'+e(x)+'</option>';}).join('')+
       '</select>'+
-      '<input class="fn-cell" value="'+e(r.notes||'')+'" placeholder="备注" oninput="nbRowCell('+i+',\'notes\',this.value)"/>'+
-      '<button type="button" class="fn-del" onclick="nbDelRow('+i+')" '+(_nbRows.length<=1?'disabled':'')+'>删除</button>'+
+      '<input class="nb-cell nb-note" value="'+e(r.notes||'')+'" placeholder="备注" oninput="nbRowCell('+i+',\'notes\',this.value)"/>'+
+      '<button type="button" class="nb-del" onclick="nbDelRow('+i+')" title="删除本行" '+(_nbRows.length<=1?'disabled':'')+'>✕</button>'+
       '</div>';
   }).join('');
 }
 function nbRowCell(i,key,val){
   if(key==='mark'){
-    const el=document.querySelector('.n-b-rows .fn-row[data-i="'+i+'"] .fn-name, #n-b-rows .fn-row[data-i="'+i+'"] .fn-name');
+    const el=document.querySelector('#n-b-rows .nb-row[data-i="'+i+'"] .nb-name');
     if(el) el.style.borderColor=(_nbRows[i]&&_nbRows[i].name&&_nbRows[i].name.trim())?'':'var(--bad)';
     return;
   }
@@ -798,7 +801,7 @@ function nbDelRow(i){
 async function submitBatchNew(){
   await withSubmitLock($('#n-b-submit'),async function(){
     const msg=$('#n-b-msg'); msg.textContent='';
-    const model=$('#n-b-model').value;
+    const model=_nbModelCode;
     const version=($('#n-b-version').value||'01').trim();
     if(!model||model.length<6){ msg.textContent='请先在「① 公共设置」选择机型'; return; }
     let valid=true;

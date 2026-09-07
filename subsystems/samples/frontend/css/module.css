@@ -47,3 +47,39 @@
 .smw-flag{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;font-size:11px;background:#fee2e2;color:#b91c1c;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .smw-flag-inline{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;background:#ffedd5;color:#c2410c;font-weight:600;vertical-align:1px}
 .smw-card.has-overdue{border-color:#fecaca}
+
+/* ═══ 批量创建样品行式录入（2026-09-07 nb-* 体系；与治具 fn-* 无关，避免跨子系统样式耦合） ═══ */
+/* 行容器：桌面 flex 横排，控件同轴对齐；<768px 转纵向堆叠（placeholder 已语义化） */
+.nb-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.nb-row .nb-cell{box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:13px;background:#fff;color:inherit}
+.nb-row select.nb-cell{height:34px}
+/* 列宽体系：名称弹性为主、提供处/组别定宽、备注次弹性、删除固定（表头与行共用保证对齐） */
+.nb-row .nb-name{flex:2;min-width:0}
+.nb-row .nb-src{flex:0 0 108px}
+.nb-row .nb-sta{flex:0 0 108px}
+.nb-row .nb-note{flex:1.5;min-width:0}
+/* 行号（堆叠态显示来源，桌面隐藏占位） */
+.nb-row .nb-idx{display:none}
+/* 删除：红色描边幽灵钮，定宽与其他行元素轴对齐 */
+.nb-row .nb-del{flex:0 0 34px;height:34px;border:1px solid #fecaca;border-radius:6px;background:transparent;color:var(--bad);cursor:pointer;font-size:13px;line-height:1;padding:0}
+.nb-row .nb-del:hover{background:#fef2f2}
+.nb-row .nb-del:disabled{color:#cbd5e1;border-color:#e2e8f0;cursor:not-allowed;background:transparent}
+/* 表头行：文字列，与数据行同列宽体系 */
+.nb-row.nb-head{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:4px}
+.nb-row.nb-head .nb-cell{border:none;background:transparent;padding:2px 9px}
+.nb-head-del{flex:0 0 34px;text-align:center}
+/* 公共设置区容器（与清单区一致的浅框分区） */
+.nb-sec{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px}
+/* 机型编码徽标（替代 disabled 输入框：更窄、语义更清晰） */
+.nb-model-badge{display:inline-block;min-height:20px;padding:4px 12px;border:1px dashed var(--line);border-radius:6px;font-size:13px;letter-spacing:.5px}
+/* 编号预览行（有内容时给点呼吸感） */
+.nb-preview{margin-top:10px;font-size:12px;min-height:16px}
+/* 移动端：行转卡片堆叠，行号作卡片标题，表头隐藏 */
+@media(max-width:767px){
+  .nb-row{flex-direction:column;align-items:stretch;position:relative;border:1px solid var(--line);border-radius:8px;padding:10px 10px 10px 34px;margin-bottom:10px}
+  .nb-row .nb-cell{max-width:none;width:100%;flex:none}
+  .nb-row .nb-name{flex:none}
+  .nb-row .nb-idx{display:block;position:absolute;left:12px;top:12px;font-size:12px;font-weight:600}
+  .nb-row .nb-del{position:absolute;right:10px;top:10px;flex:none;width:30px;height:28px}
+  .nb-row.nb-head{display:none}
+}
