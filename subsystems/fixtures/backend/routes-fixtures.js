@@ -17,8 +17,10 @@ function register(app) {
   var requireAuth = app.locals.requireAuth;
   var currentUser = app.locals.currentUser;
   MD.setPool(D.pool());
-  // 启动即执行存量机型迁移（幂等 INSERT IGNORE，重复执行无副作用）
-  MD.migrateFixtureModels().catch(function () { /* 迁移失败不影响启动，models 路由首次调用会重试 */ });
+  // 存量机型迁移迁移（migrateFixtureModels）2026-09-07 起不再于启动链自动执行——
+  // 它会把 fixtures.model 的所有取值无差别补插进 sample_models，导致清理掉的演示机型
+  // 在每次重启时"复活"（2026-09-07 16:43 复活 17 条事故根因）。存量迁移已完成（真实机型
+  // 均已有主数据），如需再执行请临时调用 node -e 或恢复此钩子，正常运维不需要。
 
   // 治具解析（供扫码台查询）
   app.get('/api/fixtures/scan', requireAuth, async function(req, res) {
