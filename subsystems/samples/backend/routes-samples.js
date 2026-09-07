@@ -186,6 +186,66 @@ function register(app) {
     }
   });
 
+  // 批量新建样品（2026-09-07 对齐治具批量申请模式）：RD/ADMIN、1~50 条、单事务整体回滚
+  // items 每行 {name*, source_type*, station*, notes?}；model/card_version 批次级共用（样品编号机型段一致才成批）
+  // 注意：必须注册在 /api/samples/:id 类路由语义之前；createSample 内部含 SAVEPOINT 重试，事务内逐条复用安全
+  app.post('/api/samples/batch', requireAuth, async (req, res) => {
+    let conn;
+    try {
+      const u = await currentUser(req);
+      if (!['RD', 'ADMIN'].includes(u.role))
+        return res.status(403).json({ error: '无权限：仅研发可新建样品' });
+      const _b = req.body || {};
+      const model = (_b.model || '').trim();
+      const cardVersion = (_b.card_version || '').trim() || '01';
+      const items = Array.isArray(_b.items) ? _b.items : [];
+      if (!model || model.length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
+      if (!items.length) return res.status(400).json({ error: '请至少填写一条样品' });
+      if (items.length > 50) return res.status(400).json({ error: '单次最多创建 50 条样品' });
+      const m = await D.getModelByCode(model);
+      if (!m) return res.status(400).json({ error: '机型不存在，请先在机型列表添加该机型' });
+      const cleaned = items.map((it, idx) => {
+        const name = ((it || {}).name || '').trim();
+        if (!name) { const e = new Error('第 ' + (idx + 1) + ' 行：样品名称必填'); e.status = 400; throw e; }
+        const src = (((it || {}).source_type) || '').toUpperCase();
+        if (!['C', 'T', 'G'].includes(src)) { const e = new Error('第 ' + (idx + 1) + ' 行：请选择有效的提供处（C/T/G）'); e.status = 400; throw e; }
+        const station = ((it || {}).station || '').trim();
+        if (!STATION_GROUPS.includes(station)) { const e = new Error('第 ' + (idx + 1) + ' 行：请选择有效的组别'); e.status = 400; throw e; }
+        return {
+          name, source_type: src, station,
+          notes: ((it || {}).notes || '').trim(),
+          sample_type: ((it || {}).sample_type || '').trim(),
+          limit_item: ((it || {}).limit_item || '').trim(),
+          test_standard: ((it || {}).test_standard || '').trim()
+        };
+      });
+      const created = await D.withTransaction(async conn => {
+        const out = [];
+        for (let i = 0; i < cleaned.length; i++) {
+          const ns = await D.createSample({
+            name: cleaned[i].name, spec: m.full_name || '', model,
+            station: cleaned[i].station, notes: cleaned[i].notes, image: '',
+            created_by: u.id,
+            sample_type: cleaned[i].sample_type, limit_item: cleaned[i].limit_item,
+            source_type: cleaned[i].source_type,
+            card_version: cardVersion, test_standard: cleaned[i].test_standard,
+            test_data: '',
+            signed_by_rd: u.display_name || u.username,
+            signed_by_qa: ''
+          }, conn);
+          await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '批量新建样品（第' + (i + 1) + '条/共' + cleaned.length + '条）' }, conn);
+          out.push({ id: ns.id, sample_no: ns.sample_no, name: ns.name });
+        }
+        return out;
+      });
+      res.json({ created: created.length, samples: created });
+    } catch (err) {
+      const status = err.status || ((err.message && err.message.includes('上限')) ? 400 : 500);
+      if (status >= 500) logger.error('批量新建样品失败: ' + (err.message || String(err)));
+      res.status(status).json({ error: err.message || '批量创建失败' });
+    }
+  });
+
   // 删除样品=软删除 deleted_at 置位（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行；T13 起日志保留、编号不复用）
   app.delete('/api/samples/:id', requireAuth, asyncHandler(async (req, res) => {
     const u = await currentUser(req);
