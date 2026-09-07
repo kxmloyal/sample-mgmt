@@ -1,4 +1,5 @@
 // sample-filter.js — 样品筛选、chips、快捷过滤
+// 2026-09-05 角色化：新增快捷筛选 保管中(custody)/超时未还(checkout_overdue)/我建的(mine)/本部门(dept)；ADMIN 待处理改真实口径
 // 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
@@ -28,9 +29,32 @@ function loadSamplesWithStatus(statusStr) {
 function quickFilter(type) {
   _quickFilterType = type;
   if (type === 'pending') {
-    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
+    // ADMIN 真实口径：全部待办态（2026-09-05 修正，原为空串=全量误导）
+    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : 'NEW,PRODUCED,RELEASED,RETURNING';
     $('#f-status').value = ''; $('#f-dept').value = '';
     loadSamplesWithStatus(st);
+    return;
+  }
+  if (type === 'custody') { $('#f-status').value = 'IN_CUSTODY'; loadSamplesWithStatus('IN_CUSTODY'); return; }
+  if (type === 'checkout_overdue') {
+    _sampleIsOverdue = false;
+    $('#f-status').value = ''; $('#f-dept').value = '';
+    _sampleBuildParams = function() { return _buildQueryParams('checkout_overdue=1'); };
+    _fetchSamplePage(true);
+    return;
+  }
+  if (type === 'mine') {
+    _sampleIsOverdue = false;
+    _sampleBuildParams = function() { return _buildQueryParams('mine=1&sort=mine'); };
+    _fetchSamplePage(true);
+    return;
+  }
+  if (type === 'dept') {
+    if (!me.dept) { toast('当前账号未配置部门', 'err'); return; }
+    $('#f-dept').value = me.dept; $('#f-status').value = '';
+    _sampleIsOverdue = false;
+    _sampleBuildParams = function() { return _buildQueryParams('dept=' + encodeURIComponent(me.dept)); };
+    _fetchSamplePage(true);
     return;
   }
   if (type === 'overdue') { loadSamplesOverdue('1'); return; }
@@ -57,10 +81,9 @@ function renderChips() {
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
   if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + e(srcLabel) + ' ✕</span>'; }
   if (mo) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-model\').value=\'\';loadSamples()">机型 ' + e(mo) + ' ✕</span>';
-  if (sort) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
-  if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
-  if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
-  if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
+  if (sort && sort !== 'mine' && sort !== 'inspect' && sort !== 'status') html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
+  var quickLabels = { pending: '待处理', overdue: '逾期', soon: '近7天', custody: '保管中', checkout_overdue: '超时未还', mine: '我建的', dept: '本部门' };
+  if (_quickFilterType && quickLabels[_quickFilterType]) html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">' + quickLabels[_quickFilterType] + ' ✕</span>';
   chips.innerHTML = html;
 }
 
