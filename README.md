@@ -299,6 +299,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
 | `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
+| `/api/samples/batch` | POST | 是 | 批量新建样品（2026-09-07，对齐治具批量申请：RD/ADMIN、1~50 条、行级校验带行号、单事务整体回滚；机型/版次批次级共用，返回 id+编号清单供 `cards/print` 批量单页打印）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
 | `/api/samples/:id` | DELETE | 是 | 删除样品=**软删除**（deleted_at 置位；仅 NEW/PRODUCED，仅创建者或管理员；操作日志保留、编号不复用）|
