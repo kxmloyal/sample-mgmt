@@ -4,9 +4,8 @@
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
-/** 角色默认数据范围（2026-09-07 服务端 scope）：打开列表按角色优先显示相关数据；深链与用户主动筛选优先 */
-var ROLE_SCOPE_LABELS = { RD: '我创建的样品', QA: '待发行/退回审核 + 复检临期', CUSTODY: '在库/借出/归还中', ME: '在库/借出/归还中' };
-var _roleScopeApplied = false; // 本次进入列表是否应用了角色范围（用于提示芯片；用户清除/深链后为 false）
+/** 角色相关置顶（2026-09-07 排序版）：scope=role 时后端按会话角色把相关样品排前（数据全可见、无空态），默认即全量无需提示/清除 */
+var _roleScopeApplied = false; // 兼容保留：标记本次进入是否带 scope（无 UI 含义）
 
 var _debounceTimer = null;
 var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
@@ -26,7 +25,7 @@ async function viewSamples() {
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="_roleScopeApplied=false;loadSamples()">' + stOpts + '</fluent-select>' +
+    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -59,14 +58,14 @@ async function viewSamples() {
     })();
   }
   else if (me.role !== 'ADMIN') {
-    // 角色相关数据范围（2026-09-07 服务端 scope=role）：无深链时按会话角色由后端派生范围，芯片区显示提示、点 ✕ 看全量
+    // 角色相关置顶（2026-09-07 排序版）：scope=role 由后端按会话角色把相关样品排前，其余最新跟后（数据全可见）
     _roleScopeApplied = true;
     loadSamplesWithScope();
   }
   else loadSamples();
 }
 
-/** 角色范围加载：scope=role 交由服务端按会话身份派生条件（RD→我创建的 / QA→待办+复检临期 / 保管生技→在库借出归还中） */
+/** 角色置顶加载：scope=role 交由服务端按会话角色派生排序（RD→我建的 / QA→待办+复检临期 / 保管生技→在库借出归还中 置顶） */
 function loadSamplesWithScope() {
   _sampleIsOverdue = false;
   _sampleBuildParams = function() { return _buildQueryParams('scope=role'); };
@@ -75,18 +74,10 @@ function loadSamplesWithScope() {
 
 async function loadSamples() {
   _quickFilterType = null;
+  _roleScopeApplied = false; // 用户主动加载 = 回默认最新优先（排序置顶仅进入列表首次生效）
   _sampleIsOverdue = false;
-  // 角色范围粘性（2026-09-07）：已应用且未被用户清除时，搜索/翻页/其它筛选变更仍保持范围；
-  // 清除途径仅三条：角色提示芯片 ✕（clearRoleScope）、状态下拉主动选择（onchange 置 false）、快捷筛选
-  var base = _roleScopeApplied ? 'scope=role' : '';
-  _sampleBuildParams = function() { return _buildQueryParams(base); };
+  _sampleBuildParams = function() { return _buildQueryParams(''); };
   _fetchSamplePage(true);
-}
-
-/** 清除角色相关范围 → 回全量（角色提示芯片 ✕ 入口） */
-function clearRoleScope() {
-  _roleScopeApplied = false;
-  loadSamples();
 }
 
 async function deleteSample(id) {

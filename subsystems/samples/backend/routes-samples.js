@@ -31,7 +31,7 @@ function register(app) {
       // mine=1 → 仅我创建的
       mine_uid: (query.mine === '1' && user && user.id) ? user.id : undefined,
       checkout_overdue: query.checkout_overdue || undefined,
-      // scope=role → 按角色优先显示相关数据（ADMIN/未知角色不注入=全量；无 scope 参数行为与旧版完全一致）
+      // scope=role → 角色相关置顶排序（2026-09-07 排序版：相关排前、全量可见；ADMIN/未知角色不注入；无 scope 参数行为与旧版完全一致）
       role_scope_role: query.scope === 'role' && user && user.role && user.role !== 'ADMIN' ? user.role : undefined,
       role_scope_uid: user && user.id
     };

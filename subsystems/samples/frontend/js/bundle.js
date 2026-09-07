@@ -1,4 +1,4 @@
-/** BUNDLE vbmtqo2sdc — 27 files */
+/** BUNDLE vbmtqt4ot2 — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -760,9 +760,8 @@ function downloadQR(id){
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
-/** 角色默认数据范围（2026-09-07 服务端 scope）：打开列表按角色优先显示相关数据；深链与用户主动筛选优先 */
-var ROLE_SCOPE_LABELS = { RD: '我创建的样品', QA: '待发行/退回审核 + 复检临期', CUSTODY: '在库/借出/归还中', ME: '在库/借出/归还中' };
-var _roleScopeApplied = false; // 本次进入列表是否应用了角色范围（用于提示芯片；用户清除/深链后为 false）
+/** 角色相关置顶（2026-09-07 排序版）：scope=role 时后端按会话角色把相关样品排前（数据全可见、无空态），默认即全量无需提示/清除 */
+var _roleScopeApplied = false; // 兼容保留：标记本次进入是否带 scope（无 UI 含义）
 
 var _debounceTimer = null;
 var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
@@ -782,7 +781,7 @@ async function viewSamples() {
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="_roleScopeApplied=false;loadSamples()">' + stOpts + '</fluent-select>' +
+    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -815,14 +814,14 @@ async function viewSamples() {
     })();
   }
   else if (me.role !== 'ADMIN') {
-    // 角色相关数据范围（2026-09-07 服务端 scope=role）：无深链时按会话角色由后端派生范围，芯片区显示提示、点 ✕ 看全量
+    // 角色相关置顶（2026-09-07 排序版）：scope=role 由后端按会话角色把相关样品排前，其余最新跟后（数据全可见）
     _roleScopeApplied = true;
     loadSamplesWithScope();
   }
   else loadSamples();
 }
 
-/** 角色范围加载：scope=role 交由服务端按会话身份派生条件（RD→我创建的 / QA→待办+复检临期 / 保管生技→在库借出归还中） */
+/** 角色置顶加载：scope=role 交由服务端按会话角色派生排序（RD→我建的 / QA→待办+复检临期 / 保管生技→在库借出归还中 置顶） */
 function loadSamplesWithScope() {
   _sampleIsOverdue = false;
   _sampleBuildParams = function() { return _buildQueryParams('scope=role'); };
@@ -831,18 +830,10 @@ function loadSamplesWithScope() {
 
 async function loadSamples() {
   _quickFilterType = null;
+  _roleScopeApplied = false; // 用户主动加载 = 回默认最新优先（排序置顶仅进入列表首次生效）
   _sampleIsOverdue = false;
-  // 角色范围粘性（2026-09-07）：已应用且未被用户清除时，搜索/翻页/其它筛选变更仍保持范围；
-  // 清除途径仅三条：角色提示芯片 ✕（clearRoleScope）、状态下拉主动选择（onchange 置 false）、快捷筛选
-  var base = _roleScopeApplied ? 'scope=role' : '';
-  _sampleBuildParams = function() { return _buildQueryParams(base); };
+  _sampleBuildParams = function() { return _buildQueryParams(''); };
   _fetchSamplePage(true);
-}
-
-/** 清除角色相关范围 → 回全量（角色提示芯片 ✕ 入口） */
-function clearRoleScope() {
-  _roleScopeApplied = false;
-  loadSamples();
 }
 
 async function deleteSample(id) {
@@ -863,7 +854,8 @@ function exportSamplesCsv() {
 
 /* --- subsystems/samples/frontend/js/views/list-filter.js --- */
 // sample-filter.js — 样品筛选、chips、快捷过滤
-// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams/_roleScopeApplied/clearRoleScope (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 2026-09-07 排序版：角色置顶由后端 scope=role 派生排序实现，本文件无角色范围逻辑（仅保留 _roleStatusLabel 供多状态芯片显示）
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
 function _buildQueryParams(baseParams) {
@@ -923,9 +915,6 @@ function renderChips() {
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  // 角色相关范围提示芯片（橙色，区别于普通筛选芯片；点 ✕ 回全量）
-  if (_roleScopeApplied && me.role !== 'ADMIN')
-    html += '<span class="chip done" style="cursor:pointer;background:#fff7ed;color:#9a3412;border-color:#fdba74" onclick="clearRoleScope()">已按角色优先显示：' + e(ROLE_SCOPE_LABELS[me.role] || '相关样品') + ' ✕</span>';
   if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';

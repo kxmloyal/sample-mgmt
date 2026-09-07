@@ -27,15 +27,6 @@ module.exports = function createDaoList(deps) {
     if (opts.mine_uid) { where.push('created_by = ?'); params.push(opts.mine_uid); }
     // 领出超时未归还（口径与 listCheckoutOverdue 一致）
     if (opts.checkout_overdue === '1') { where.push("status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO_RET + " < " + NOW_UTC); }
-    // 角色相关数据范围（2026-09-07）：scope=role 时按会话角色（路由层派生 role_scope_uid/role_scope_role）注入 OR 组合条件
-    // 口径：RD→我创建的（全状态）；QA→待发行/退回审核 或 在库复检已到期/近7天临期；CUSTODY/ME→在库/借出/归还中；ADMIN→不限
-    if (opts.role_scope_role) {
-      var scopeCond = '';
-      if (opts.role_scope_role === 'RD') { scopeCond = 'created_by = ?'; params.push(opts.role_scope_uid); }
-      else if (opts.role_scope_role === 'QA') { scopeCond = "(status IN ('PRODUCED','RETURNING') OR (status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC_7D + "))"; }
-      else if (opts.role_scope_role === 'CUSTODY' || opts.role_scope_role === 'ME') { scopeCond = "status IN ('IN_CUSTODY','CHECKED_OUT','RETURNING')"; }
-      if (scopeCond) { where.push('(' + scopeCond + ')'); }
-    }
     return { where: where, params: params };
   }
 
@@ -51,6 +42,13 @@ module.exports = function createDaoList(deps) {
     if (opts.sort === 'inspect') return 'ORDER BY (next_inspect_at IS NULL) ASC, next_inspect_at ASC, id DESC';
     // 状态优先（生命周期序：待制作→制作完成→已发行→保管中→领用中→退回审核→已作废）
     if (opts.sort === 'status') return "ORDER BY FIELD(status,'NEW','PRODUCED','RELEASED','IN_CUSTODY','CHECKED_OUT','RETURNING','RETIRED'), id DESC";
+    // 角色相关置顶（2026-09-07 排序版，scope=role）：相关样品排前、其余按最新跟后，数据不隐藏无空态
+    // 口径：RD→我建的置顶；QA→待发行/退回审核 或 在库复检7天内临期置顶；CUSTODY/ME→在库/借出/归还中置顶；ADMIN→不加
+    if (opts.role_scope_role) {
+      if (opts.role_scope_role === 'RD' && opts.role_scope_uid) return 'ORDER BY (created_by = ' + parseInt(opts.role_scope_uid, 10) + ') DESC, id DESC';
+      if (opts.role_scope_role === 'QA') return "ORDER BY (status IN ('PRODUCED','RETURNING') OR (status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC_7D + ")) DESC, id DESC";
+      if (opts.role_scope_role === 'CUSTODY' || opts.role_scope_role === 'ME') return "ORDER BY (status IN ('IN_CUSTODY','CHECKED_OUT','RETURNING')) DESC, id DESC";
+    }
     return 'ORDER BY id DESC';
   }
 

@@ -1,34 +1,28 @@
-# 样品列表角色默认筛选（2026-09-07）
+# 样品列表角色相关置顶（2026-09-07，排序版 v3）
 
-## 需求（用户原话口径）
+## 演进
 
-不同角色打开样品列表时，**数据本身按角色优先显示**（如保管部门优先显示「保管中」），而非全员同一视图。已确认三点：
+1. v1（方案A+B 角色列集，c10b0af）：全员全量仅呈现差异化 → 用户指出理解偏差，revert（8713175）。
+2. v2（scope=role 服务端筛选，429f1d1）：角色相关数据 WHERE 过滤 → 用户反馈**空态问题**（QA/新研发打开列表空白但实际有待办），不符合"优先显示"本意。
+3. **v3（当前，排序置顶版）**：scope 条件从 WHERE 挪到 ORDER BY——相关样品置顶、其余最新跟后，**数据全可见、空态不可能**。用户确认去掉提示芯片（更简洁）。
 
-1. **优先显示 + 可看全部**：默认按角色状态过滤，一键清除看全量，数据不隐藏；
-2. **角色映射**：RD→NEW；QA→PRODUCED,RETURNING；CUSTODY/ME→IN_CUSTODY；ADMIN→不过滤（全量最新优先）；
-3. 部署：纯前端即可（复用既有 status 多值参数），后端零改动；交付时提醒重启与否（本次无需）。
+## 最终口径（ORDER BY 置顶表达式）
 
-## 设计（最小改动）
-
-- **list.js** `viewSamples()` 无深链时不再 `loadSamples()`，改调 `loadSamplesWithStatus(ROLE_DEFAULT_STATUS[me.role])`；深链 `?status=`/`?model=` 优先（用户意图优先于角色默认）。新增全局 `ROLE_DEFAULT_STATUS` 映射 + `_roleDefaultApplied` 标记（本次会话内角色默认已应用/已清除状态，用于芯片渲染）。
-- **list-filter.js**：
-  - 新增 `_roleStatusLabel()`（多状态映射中文，逗号串拆开逐个翻译）；
-  - `renderChips()`：`_roleDefaultApplied` 时渲染「已按角色优先显示：保管中 ✕」橙色提示芯片（点击清除回全量）；状态下拉多值（如 PRODUCED,RETURNING）时同样拆开翻译显示；普通状态下拉芯片逻辑不变；
-  - `quickFilter('pending')` 保持角色映射，但加 `_roleDefaultApplied=false`（用户主动点击=明确意图，覆盖角色默认提示）。
-- 深链进入（带 status= 或 model=）时 `_roleDefaultApplied=false`（用户意图优先，不显示角色默认芯片）。
-- **不改动**：后端路由/DAO、列渲染（list-render.js）、CSV 导出、其它视图。
-
-## 角色映射表
-
-| 角色 | 默认状态过滤 | 语义 |
+| 角色 | 置顶条件 | 其余 |
 |---|---|---|
-| RD | NEW | 研发优先处理待制作 |
-| QA | PRODUCED,RETURNING | 品保优先处理待发行与退回审核 |
-| CUSTODY / ME | IN_CUSTODY | 保管/生技优先看在库样品 |
-| ADMIN / 未知 | （不过滤） | 全量最新优先 |
+| RD | `created_by = uid DESC` | 最新优先 |
+| QA | `status IN (PRODUCED,RETURNING) OR (IN_CUSTODY 且复检<7天) DESC` | 最新优先 |
+| CUSTODY / ME | `status IN (IN_CUSTODY,CHECKED_OUT,RETURNING) DESC` | 最新优先 |
+| ADMIN / 未知 | 不加 | 最新优先 |
 
-## 风险与验证
+## 设计
 
-- 风险：多状态值含逗号需 encodeURIComponent（loadSamplesWithStatus 基础上不变——现有深链 status 已按逗号串透传，后端 IN 支持多值）。
-- 验证：node --check；4 角色分支逻辑审查（含深链覆盖）；服务器真实请求只读验证；bundle 重建部署；移动端芯片换行不破版。
-- 回滚：单 commit revert + 重建 bundle（无 DB/后端变更）。
+- **dao-list.js**：`role_scope_role/role_scope_uid` 从 `_listWhere`（已移除）迁至 `_listOrderBy`，表达式内联安全值（uid parseInt 强转，其余为常量字符串），`_listWhere`/`countAllSamples` 恢复与拆分前一致（计数口径=全量）。
+- **routes-samples.js**：`_sampleFilterOpts` 照旧注入 `role_scope_*`（仅注释更新语义）；无 scope 参数行为与旧版完全一致；导出同口径。
+- **前端**：list.js 进入列表（非 ADMIN、无深链）发 `scope=role` 一次；不再有芯片/粘性/清除逻辑（`loadSamples()` 主动加载即回默认最新优先）；list-filter.js 删除角色芯片块，保留 `_roleStatusLabel` 供多状态芯片显示。
+
+## 验证
+
+- E2E（真实 DB 只读）：五角色 total 恒=全量 60（数据不隐藏）、置顶前缀断言全过、无 scope 回归通过。
+- 上线：前端 bundle v=bmtqt4ot2 硬刷新生效；后端需宝塔重启。
+- 回滚：单 commit revert + 重建 bundle；或 git revert 429f1d1 退回筛选版（保留在历史）。

@@ -1,5 +1,6 @@
 // sample-filter.js — 样品筛选、chips、快捷过滤
-// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams/_roleScopeApplied/clearRoleScope (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
+// 2026-09-07 排序版：角色置顶由后端 scope=role 派生排序实现，本文件无角色范围逻辑（仅保留 _roleStatusLabel 供多状态芯片显示）
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
 function _buildQueryParams(baseParams) {
@@ -59,9 +60,6 @@ function renderChips() {
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  // 角色相关范围提示芯片（橙色，区别于普通筛选芯片；点 ✕ 回全量）
-  if (_roleScopeApplied && me.role !== 'ADMIN')
-    html += '<span class="chip done" style="cursor:pointer;background:#fff7ed;color:#9a3412;border-color:#fdba74" onclick="clearRoleScope()">已按角色优先显示：' + e(ROLE_SCOPE_LABELS[me.role] || '相关样品') + ' ✕</span>';
   if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
