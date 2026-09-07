@@ -60,13 +60,15 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 | RETURNING(退回审核中) | 管理员(ADMIN) | 兜底：强制改派 FORCE_REASSIGN / 强制作废 FORCE_RETIRE | 卡死兜底：改派须选启用状态 RD；作废须填原因（2026-09-01 批次 2）|
 | RETURNING(被指派) | 研发(RD) | 创建替代品 | 自动复制原样品信息 |
 
-### 样品列表
+### 样品列表（角色化呈现，2026-09-05）
 
 - 多维度组合筛选（状态/部门/类型/限度项目/来源/机型 + 关键词搜索；支持 `#/samples?model=机型码` 深链预选机型）
-- 快捷筛选（待处理/逾期/近7天到期）+ 芯片可视化
-- 响应式表格（table-layout:fixed + colgroup）+ 列宽拖拽
-- 移动端 data-label 卡片式布局
-- 分页（默认 20 条/页）
+- **角色档位**：不同角色默认看到不同列集与排序（数据范围不变，全员全量可见）——RD「我建的优先」精简列 / QA 复检到期排序 / 保管与生技含储位+领用信息列 / ADMIN 完整 14 列；右上「完整视图」开关一键切全列（sessionStorage 记忆）
+- 快捷筛选按角色显示：保管中 / 超时未还 / 待处理 / 我建的 / 本部门 / 逾期 / 近7天（ADMIN「待处理」= 全部待办态真实口径）
+- CHECKED_OUT 行的「领用人/应还」列显示领用人 + 应还日期（超时橙标）
+- 响应式表格（table-layout:fixed + colgroup）+ 列宽拖拽；移动端 data-label 卡片式布局随列集联动
+- 分页（默认 20 条/页）；CSV 导出保持全列（导出口径 ≠ 屏幕口径）
+- 后端参数：`mine=1`（仅我创建的，uid 服务端派生）、`checkout_overdue=1`（领出超时未还）、`sort=mine|inspect|status`（白名单）
 
 ### 机型视图（模型墙，2026-09-05）
 
@@ -294,7 +296,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/me` | GET | 是 | 当前用户信息 |
 | `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
 | `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
-| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT）|
+| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT；2026-09-05 新增 mine=1 / checkout_overdue=1 / sort=mine·inspect·status）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|

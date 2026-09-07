@@ -338,7 +338,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
 - `db/migrations.js` 顶层函数 11 个（批次 2 新增 deleted_at 迁移后突破 §7.2 ≤10 上限，2026-09-01 记录），建议下批次拆分为 `db/migrations/` 目录按域分文件
 - `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
-- `subsystems/samples/db/dao.js` 2026-09-05（领用功能 + 机型墙聚合）后达 234 行 / 18044 字符（≈90% 字符红线），已达 90% 阈值——后续 samples 迭代**仅允许精简/重构**（建议按 建样序号/列表查询/机型 三个域拆分 dao 文件），禁止直接追加新查询函数
+- `subsystems/samples/db/dao.js` 已按域拆分（2026-09-05 角色化列表迭代）：查询域（列表筛选/看板预警/待办/机型墙聚合）拆至 `dao-list.js`（9630 字符），主文件降至 9746 字符（原 18044 ≈90% 红线），均回健康区；拆分方式 = dao.js require dao-list 并合并导出，调用方（D.listSamples 等）零改动。后续新增查询函数放 dao-list.js、写入函数放 dao.js
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
 
