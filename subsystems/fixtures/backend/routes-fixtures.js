@@ -167,20 +167,20 @@ function register(app) {
     var conn;
     try {
       var u = await currentUser(req);
-      var _b = req.body || {}, model = (_b.model || '').trim(), items = Array.isArray(_b.items) ? _b.items : [];
+      var _b = req.body || {}, model = (_b.model || '').trim(), items = Array.isArray(_b.items) ? _b.items : [], batch_note = ((_b.request_note) || '').trim();
       if (!model) return res.status(400).json({ error: '请选择机型' });
       if (!items.length) return res.status(400).json({ error: '请至少填写一条治具' });
       if (items.length > 50) return res.status(400).json({ error: '单次最多创建 50 条治具' });
       var cleaned = items.map(function(it, idx) {
         var name = ((it || {}).name || '').trim();
         if (!name) { var e = new Error('第 ' + (idx + 1) + ' 行：治具名称必填'); e.status = 400; throw e; }
-        return { name: name, spec: ((it.spec) || '').trim(), station: ((it.station) || '').trim(), category: ((it.category) || '').trim(), maintenance_cycle_days: it.maintenance_cycle_days };
+        return { name: name, spec: ((it.spec) || '').trim(), station: ((it.station) || '').trim(), category: ((it.category) || '').trim(), maintenance_cycle_days: it.maintenance_cycle_days, notes: (((it || {}).notes) || '').trim() || undefined, request_note: (((it || {}).request_note) || '').trim() || undefined };
       });
       conn = await D.pool().getConnection();
       await conn.beginTransaction();
       var fixtures = [];
       for (var i = 0; i < cleaned.length; i++) {
-        var f = await D.createFixture(Object.assign({ model: model, requested_by: u.id, requested_dept: u.dept }, cleaned[i]), conn);
+        var f = await D.createFixture(Object.assign({ model: model, requested_by: u.id, requested_dept: u.dept, request_note: cleaned[i].request_note || batch_note || undefined }, cleaned[i]), conn);
         await D.addFixtureLog({ fixture_id: f.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '批量新建申请' }, conn);
         fixtures.push(f);
       }

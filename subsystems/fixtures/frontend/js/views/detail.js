@@ -61,6 +61,7 @@ function _cardInfo(f) {
   html += kv('名称', e(f.name)) + kv('规格', e(f.spec)) + kv('型号', e(f.model));
   html += kv('工站', e(f.station)) + kv('分类', e(f.category)) + kv('申请部门', e(f.requested_dept));
   if (f.request_note) html += kv('申请说明', e(f.request_note));
+  if (f.notes) html += kv('备注', e(f.notes));
   if (f.storage_location) html += kv('存放位置', e(f.storage_location));
   if (f.maintenance_cycle_days > 0) {
     html += kv('保养周期', f.maintenance_cycle_days + ' 天');

@@ -2,13 +2,14 @@
 var _fnModel = '';        // 当前选中机型 code
 var _fnModelFull = '';    // 当前选中机型全称（显示用）
 var _fnModels = [];       // 机型下拉数据
-var _fnRows = [];         // 治具清单行 [{name,spec,station,category,cycle}]
+var _fnRows = [];         // 治具清单行 [{name,spec,station,category,cycle,note}]
+var _fnRequestNote = '';  // 整批申请说明（request_note，对该批全部治具生效）
 var _fnSubmitting = false; // 提交防抖（双击/连点防护）
 
 // 入口视图：渲染「① 选择机型 → ② 行式清单」，加载机型下拉并渲染首行
 async function renderFixtureNew() {
-  _fnModel = ''; _fnModelFull = ''; _fnModels = []; _fnRows = []; _fnSubmitting = false;
-  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90 });
+  _fnModel = ''; _fnModelFull = ''; _fnModels = []; _fnRows = []; _fnSubmitting = false; _fnRequestNote = '';
+  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90, note: '' });
   var html = '<div class="card fn-card">';
   html += '<h3 style="margin:0 0 16px">新建治具申请（批量）</h3>';
 
@@ -34,6 +35,11 @@ async function renderFixtureNew() {
   html += '<fluent-button appearance="lightweight" size="small" onclick="fnAddRow()">＋ 添加一行</fluent-button>';
   html += '</div>';
   html += '<div id="fn-rows"></div>';
+  // 整批申请说明（request_note：对该批全部治具生效，选填；单条治具特有说明写行内备注）
+  html += '<div style="margin-top:14px">';
+  html += '<div style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px">申请说明 <span style="font-weight:400">（选填，对该批全部治具生效；单条治具的特有说明请写在行内「备注」）</span></div>';
+  html += '<textarea id="fn-request-note" rows="2" maxlength="500" placeholder="如：配套 BD7620D 试产验证用 / 关联工单号…" oninput="fnRequestNote(this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical"></textarea>';
+  html += '</div>';
   html += '<div style="margin-top:14px">';
   html += '<fluent-button id="fn-submit" appearance="accent" onclick="submitFixtureBatch(event)">提交申请</fluent-button>';
   html += '</div></div></div>';
@@ -109,6 +115,7 @@ function fnRenderRows() {
     '<span class="fn-cell">规格</span>' +
     '<span class="fn-cell">工站</span>' +
     '<span class="fn-cell">分类</span>' +
+    '<span class="fn-cell">备注</span>' +
     '<span class="fn-cell fn-cycle">保养(天)</span>' +
     '<span class="fn-head-del">删除</span>' +
     '</div>';
@@ -118,11 +125,15 @@ function fnRenderRows() {
       '<input class="fn-cell" value="' + e(r.spec) + '" placeholder="规格" oninput="fnRowCell(' + i + ',\'spec\',this.value)"/>' +
       '<input class="fn-cell" value="' + e(r.station) + '" placeholder="工站" oninput="fnRowCell(' + i + ',\'station\',this.value)"/>' +
       '<input class="fn-cell" value="' + e(r.category) + '" placeholder="分类" oninput="fnRowCell(' + i + ',\'category\',this.value)"/>' +
+      '<input class="fn-cell" value="' + e(r.note || '') + '" placeholder="备注" oninput="fnRowCell(' + i + ',\'note\',this.value)"/>' +
       '<input class="fn-cell fn-cycle" type="number" min="0" value="' + (r.cycle != null ? r.cycle : '') + '" placeholder="保养(天)" oninput="fnRowCell(' + i + ',\'cycle\',this.value)"/>' +
       '<button type="button" class="fn-del" onclick="fnDelRow(' + i + ')" ' + (_fnRows.length <= 1 ? 'disabled' : '') + '>删除</button>' +
       '</div>';
   }).join('');
 }
+
+// 整批申请说明输入回调
+function fnRequestNote(v) { _fnRequestNote = v || ''; }
 
 // 行单元格回调：key='mark' 仅刷新名称红框；其余写入行数据，名称变化时同步标记
 function fnRowCell(i, key, val) {
@@ -138,7 +149,7 @@ function fnRowCell(i, key, val) {
 // 添加一行（上限 50）
 function fnAddRow() {
   if (_fnRows.length >= 50) { showToast('单次最多 50 条'); return; }
-  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90 });
+  _fnRows.push({ name: '', spec: '', station: '', category: '', cycle: 90, note: '' });
   fnRenderRows();
 }
 
@@ -163,13 +174,18 @@ async function submitFixtureBatch(e) {
   var items = _fnRows.map(function(r) {
     var it = { name: r.name.trim(), spec: r.spec, station: r.station, category: r.category };
     if (r.cycle != null && r.cycle !== '') it.maintenance_cycle_days = parseInt(r.cycle, 10);
+    var note = (r.note || '').trim();
+    if (note) it.notes = note; // 行级备注（fixtures.notes，详情「备注」展示）
     return it;
   });
   _fnSubmitting = true;
   var btn = document.getElementById('fn-submit');
   if (btn) btn.setAttribute('disabled', '');
   try {
-    var res = await api('POST', '/api/fixtures/batch', { model: model, items: items });
+    var req = { model: model, items: items };
+    var rn = (_fnRequestNote || '').trim();
+    if (rn) req.request_note = rn; // 整批申请说明（逐行落 request_note）
+    var res = await api('POST', '/api/fixtures/batch', req);
     showToast('成功创建 ' + res.created + ' 条治具');
     location.hash = '#/list';
   } catch (err) {
