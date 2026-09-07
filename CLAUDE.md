@@ -226,7 +226,7 @@
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06），建议门户块拆独立样式文件（需三系统回归）
-- `subsystems/samples/db/dao.js` 已拆分（2026-09-05）：查询域在 `dao-list.js`（dao.js require 合并导出，接口零变化），两文件均回健康容量；后续新增查询函数放 dao-list.js、写入函数放 dao.js
+- `subsystems/samples/db/dao.js` 达 ≈90% 字符红线（18044/20000，2026-09-05 领用+机型墙聚合后），后续 samples 迭代仅允许精简/重构，建议按域拆分 dao 文件
 - 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
 ## 12. 验证清单(提交前自检)

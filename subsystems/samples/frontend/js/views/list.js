@@ -1,11 +1,11 @@
 // samples.js — 样品列表：状态管理、导航、删除
-// 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js | 角色档位 → list-role.js
+// 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js
 
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
 var _debounceTimer = null;
-var _quickFilterType = null;  // pending|overdue|soon|custody|checkout_overdue|mine|dept，快捷筛选状态
+var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
 var samplePager = { limit: 20, offset: 0, total: 0 };
 var _sampleBuildParams = null;
 var _sampleIsOverdue = false;
@@ -20,9 +20,7 @@ async function viewSamples() {
   } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
-  var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>' +
-    // 2026-09-05 角色档排序（下拉新增三项；各角色默认值不同，见 list-role.js）
-    '<fluent-option value="mine">我建的优先</fluent-option><fluent-option value="inspect">复检到期</fluent-option><fluent-option value="status">状态优先</fluent-option>';
+  var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
@@ -37,10 +35,10 @@ async function viewSamples() {
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
-    '<span id="quick-links">' + quickLinksHtml() + '</span>' +
-    '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span>' +
-    // 2026-09-05 完整视图开关（sessionStorage 保持；关=角色档精简列，开=全列）
-    '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">完整视图 <fluent-switch id="f-fullview" ' + (_listFullView() ? 'checked' : '') + ' onchange="toggleListFullView(this)"></fluent-switch></span></div>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'overdue\')">逾期</a>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'soon\')">近7天</a>' +
+    '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span></div>' +
     '<div id="s-list"></div>';
   var stMatch = location.hash.match(/[?&]status=([^&]+)/);
   var moMatch = location.hash.match(/[?&]model=([^&]+)/);
@@ -56,12 +54,7 @@ async function viewSamples() {
       else setTimeout(attempt, 60);
     })();
   }
-  else {
-    // 无深链时应用角色默认排序（2026-09-05 角色档；用户手动改排序后以用户为准，不持久化）
-    var defSort = listRoleProfile().sort;
-    if (defSort) { var so = $('#f-sort'); if (so) so.value = defSort; }
-    loadSamples();
-  }
+  else loadSamples();
 }
 
 async function loadSamples() {

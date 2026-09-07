@@ -1,9 +1,6 @@
 // subsystems/samples/db/dao.js — 样品数据访问层（工厂模式）
-// 2026-09-05 按域拆分：查询域（列表筛选/看板预警/待办/机型墙聚合）迁至 dao-list.js，本文件保留写入域（建样/状态机更新/软删/日志/机型主数据）
-// 对外接口不变：db.js scanDao 只加载本文件，本文件合并导出 dao-list 的全部查询函数（调用方 D.listSamples 等无需改动）
 const crypto = require('crypto');
 const { generateSampleCode } = require('./sample-code');
-const createDaoList = require('./dao-list');
 
 module.exports = function createDao(deps) {
   var q = deps.q, one = deps.one, run = deps.run, nowISO = deps.nowISO;
@@ -69,6 +66,51 @@ module.exports = function createDao(deps) {
   function getSampleByNo(sample_no) { return one('SELECT * FROM samples WHERE sample_no = ? AND deleted_at IS NULL', [sample_no]); }
   function getSampleByToken(qr_token) { return one('SELECT * FROM samples WHERE qr_token = ? AND deleted_at IS NULL', [qr_token]); }
 
+  // 时区统一：next_inspect_at/valid_until 存 ISO UTC 字符串（如 2026-09-05T04:00:00.000Z）
+  // 与 UTC_TIMESTAMP() 规范化后比较，修复旧逻辑用本地 NOW() 比较导致逾期判定差 8 小时
+  var ISO_UTC = "LEFT(REPLACE(REPLACE(next_inspect_at,'T',' '),'Z',''),19)";
+  var NOW_UTC = "LEFT(UTC_TIMESTAMP(),19)";
+  var NOW_UTC_7D = "LEFT(DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 DAY),19)";
+
+  function listSamples(opts) {
+    opts = opts || {};
+    var where = ['deleted_at IS NULL'], params = [];
+    if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
+    if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
+    if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
+    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
+    if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
+    if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
+    if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
+    if (opts.model) { where.push('model = ?'); params.push(opts.model); }
+    var orderBy = 'ORDER BY id DESC';
+    if (opts.sort === 'created_at') orderBy = 'ORDER BY created_at ASC';
+    else if (opts.sort === '-created_at') orderBy = 'ORDER BY created_at DESC';
+    else if (opts.sort === 'sample_no') orderBy = 'ORDER BY sample_no ASC';
+    else if (opts.sort === '-sample_no') orderBy = 'ORDER BY sample_no DESC';
+    var sql = 'SELECT * FROM samples' + (where.length ? ' WHERE ' + where.join(' AND ') : '') + ' ' + orderBy;
+    if (opts.limit != null) { sql += ' LIMIT ' + parseInt(opts.limit, 10); }
+    if (opts.offset != null) { sql += ' OFFSET ' + parseInt(opts.offset, 10); }
+    return q(sql, params);
+  }
+
+  function countAllSamples(opts) {
+    opts = opts || {};
+    var where = ['deleted_at IS NULL'], params = [];
+    if (opts.status) { var statuses = opts.status.split(',').filter(function(s){return s;}); if (statuses.length === 1) { where.push('status = ?'); params.push(statuses[0]); } else { where.push('status IN (' + statuses.map(function(){return '?';}).join(',') + ')'); params.push.apply(params, statuses); } }
+    if (opts.dept) { where.push('custody_dept = ?'); params.push(opts.dept); }
+    if (opts.search) { where.push('(sample_no LIKE ? OR name LIKE ? OR spec LIKE ?)'); params.push('%' + opts.search + '%', '%' + opts.search + '%', '%' + opts.search + '%'); }
+    if (opts.overdue === '1') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+    else if (opts.overdue === '7') { where.push("status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
+    if (opts.sample_type) { where.push('sample_type = ?'); params.push(opts.sample_type); }
+    if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
+    if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
+    if (opts.model) { where.push('model = ?'); params.push(opts.model); }
+    var sql = 'SELECT COUNT(*) as total FROM samples' + (where.length ? ' WHERE ' + where.join(' AND ') : '');
+    return q(sql, params).then(function(rows) { return rows[0].total; });
+  }
+
   // updateSample(s, conn, expectedVersion)：全量字段覆盖更新，返回更新后的行
   // expectedVersion（可选，乐观锁 CAS 版本号）：
   //   - 传入时 SET 子句追加 version=version+1，WHERE 条件变为 id=? AND version=?；
@@ -110,17 +152,42 @@ module.exports = function createDao(deps) {
     await run('UPDATE samples SET deleted_at=UTC_TIMESTAMP(), version=version+1 WHERE id=?', [id]);
   }
 
+  function countSamplesByStatus() { return q('SELECT status, COUNT(*) AS cnt FROM samples WHERE deleted_at IS NULL GROUP BY status'); }
+  function listOverdueSamples() { return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " < " + NOW_UTC); }
+  function listDueSoonSamples() { return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
+  // T12.4: RETURNING 停留超时（默认 72 小时）待办查询——供 QA/ADMIN 看板/工作台挂载兜底提醒
+  // 口径：status=RETURNING 且 updated_at 早于 N 小时前（RETURNING 期间无其他写操作，updated_at 近似进入退回审核的时刻）
+  function listReturningOverdue(hours) {
+    var h = Math.floor(Number(hours));
+    if (!h || h <= 0) h = 72;
+    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
+  }
+
+  // 领用/归还（2026-09-05）：领出超时未归还清单——纯查询计算，无定时任务
+  // 口径：status=CHECKED_OUT 且 expected_return_at（ISO UTC 字符串，与复检字段同 ISO_UTC 规范化）早于当前 UTC 时间
+  function listCheckoutOverdue() {
+    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO_UTC.replace(/next_inspect_at/g, 'expected_return_at') + " < " + NOW_UTC + " ORDER BY expected_return_at ASC LIMIT 50");
+  }
+
+  function listMyPendingSamples(role, userId) {
+    // 2026-09-04：上限 50→200（评审问题2：NEW 积压 57 条被静默截断 7 条；workbench 我的待办与样品看板共用本 DAO）
+    if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 200", [userId]);
+    if (role === 'QA') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 200");
+    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RELEASED' ORDER BY id DESC LIMIT 200");
+    return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 200');
+  }
+
   // 日志
   async function addLog(log, conn) {
     var sql = 'INSERT INTO scan_logs (sample_id,action,role,user_id,dept,location,note) VALUES (?,?,?,?,?,?,?)';
-    var params = [log.sample_id, log.action || null, log.role || null, log.user_id || null, log.dept || null, log.location || null, log.note || null];
+    var params = [log.sample_id, log.action, log.role || null, log.user_id || null, log.dept || null, log.location || null, log.note || null];
     if (conn) await conn.execute(sql, params);
     else await run(sql, params);
   }
 
   function listLogsBySample(sample_id) { return q('SELECT * FROM scan_logs WHERE sample_id = ? ORDER BY id DESC LIMIT 100', [sample_id]); }
   function listLogs() {
-    return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON l.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
+    return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
   }
 
   // 机型主数据
@@ -132,12 +199,36 @@ module.exports = function createDao(deps) {
   function countSamplesByModel(code) { return q('SELECT COUNT(*) as c FROM samples WHERE deleted_at IS NULL AND model = ?', [code]).then(function (rows) { return rows[0].c; }); }
   function listLegacyModels() { return q("SELECT DISTINCT model AS code FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' ORDER BY model ASC").then(function (rows) { return rows.map(function (r) { return r.code; }); }); }
 
-  // 查询域（dao-list.js）合并导出：接口与拆分前完全一致
-  var daoList = createDaoList(deps);
+  // 机型视图聚合（2026-09-05 二期，只读）：每机型样品总数/复检逾期/领用超时/状态分布/封面图
+  // 逾期口径与 listOverdueSamples / listCheckoutOverdue 一致：ISO UTC 字符串规范化后与当前 UTC 比较
+  // 封面图取该机型最早样品的制作图（produced_image 优先，退 image——与前端列表缩略图取值口径相同），存完整 URL 路径可直接作 img src
+  function aggregateModelsWall() {
+    var ISO = function (col) { return "LEFT(REPLACE(REPLACE(" + col + ",'T',' '),'Z',''),19)"; };
+    var NOW = "LEFT(UTC_TIMESTAMP(),19)";
+    return Promise.all([
+      q("SELECT model AS code, COUNT(*) AS sample_count, " +
+        "SUM(CASE WHEN status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO('next_inspect_at') + " < " + NOW + " THEN 1 ELSE 0 END) AS overdue_count, " +
+        "SUM(CASE WHEN status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO('expected_return_at') + " < " + NOW + " THEN 1 ELSE 0 END) AS checkout_overdue_count, " +
+        "MIN(CASE WHEN produced_image IS NOT NULL AND produced_image != '' THEN CONCAT(id,'|',produced_image) WHEN image IS NOT NULL AND image != '' THEN CONCAT(id,'|',image) END) AS cover_raw " +
+        "FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' GROUP BY model"),
+      q("SELECT model AS code, status, COUNT(*) AS cnt FROM samples WHERE deleted_at IS NULL AND model IS NOT NULL AND model != '' GROUP BY model, status")
+    ]).then(function (rs) {
+      var byCode = {};
+      (rs[0] || []).forEach(function (r) {
+        var cover = null;
+        if (r.cover_raw) { var p = String(r.cover_raw).split('|'); cover = { id: Number(p[0]) || 0, photo: p.slice(1).join('|') }; }
+        byCode[r.code] = { sample_count: Number(r.sample_count) || 0, overdue_count: Number(r.overdue_count) || 0, checkout_overdue_count: Number(r.checkout_overdue_count) || 0, cover: cover };
+      });
+      var statusStats = {};
+      (rs[1] || []).forEach(function (r) {
+        if (!statusStats[r.code]) statusStats[r.code] = {};
+        statusStats[r.code][r.status] = Number(r.cnt) || 0;
+      });
+      return Object.keys(byCode).map(function (code) {
+        return Object.assign({ code: code, status_stats: statusStats[code] || {} }, byCode[code]);
+      });
+    });
+  }
 
-  return Object.assign({
-    nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, updateSample, deleteSample,
-    addLog, listLogsBySample, listLogs,
-    listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels
-  }, daoList);
+  return { nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, listSamples, countAllSamples, updateSample, deleteSample, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, addLog, listLogsBySample, listLogs, listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels, aggregateModelsWall };
 };

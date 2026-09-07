@@ -12,33 +12,21 @@ function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
 
-  // sort 白名单：旧值 created_at/sample_no + 2026-09-05 角色档新增 mine/inspect/status
-  const SAMPLE_SORTS = ['', 'created_at', '-created_at', 'sample_no', '-sample_no', 'mine', 'inspect', 'status'];
-
-  // 列表筛选参数解析（列表与导出共用，保持两端口径一致；2026-09-05 新增 mine/checkout_overdue）
-  function _sampleFilterOpts(query, mineUid) {
-    return {
-      status: query.status || undefined,
-      dept: query.dept || undefined,
-      search: query.q || undefined,
-      sort: SAMPLE_SORTS.includes(query.sort) ? (query.sort || undefined) : undefined,
-      overdue: query.overdue || undefined,
-      sample_type: query.sample_type || undefined,
-      limit_item: query.limit_item || undefined,
-      source_type: query.source_type || undefined,
-      model: query.model || undefined,
-      // mine=1 → 仅我创建的（uid 服务端派生自会话，客户端不可伪造他人）
-      mine_uid: (query.mine === '1' && mineUid) ? mineUid : undefined,
-      checkout_overdue: query.checkout_overdue || undefined
-    };
-  }
-
   app.get('/api/samples', requireAuth, asyncHandler(async (req, res) => {
-    const { limit, offset } = req.query;
+    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model, limit, offset } = req.query;
     const pageLimit = Math.min(parseInt(limit || '20', 10) || 20, 200);
     const pageOffset = Math.max(parseInt(offset || '0', 10) || 0, 0);
-    const u = await currentUser(req);
-    const filterOpts = _sampleFilterOpts(req.query, u && u.id);
+    const filterOpts = {
+      status: status || undefined,
+      dept: dept || undefined,
+      search: q || undefined,
+      sort: sort || undefined,
+      overdue: overdue || undefined,
+      sample_type: sample_type || undefined,
+      limit_item: limit_item || undefined,
+      source_type: source_type || undefined,
+      model: model || undefined
+    };
     const [samples, total] = await Promise.all([
       D.listSamples({ ...filterOpts, limit: pageLimit, offset: pageOffset }),
       D.countAllSamples(filterOpts)
@@ -68,8 +56,13 @@ function register(app) {
   }
 
   app.get('/api/samples/export', requireAuth, asyncHandler(async (req, res) => {
-    const u = await currentUser(req);
-    const filterOpts = _sampleFilterOpts(req.query, u && u.id); // 复用列表筛选口径（含 mine/checkout_overdue，导出随当前筛选）
+    const { status, dept, q, sort, overdue, sample_type, limit_item, source_type, model } = req.query;
+    const filterOpts = {
+      status: status || undefined, dept: dept || undefined, search: q || undefined,
+      sort: sort || undefined, overdue: overdue || undefined,
+      sample_type: sample_type || undefined, limit_item: limit_item || undefined,
+      source_type: source_type || undefined, model: model || undefined
+    };
     const samples = await D.listSamples(filterOpts); // 不传 limit/offset → 全量（与列表同排序）
     const cols = [
       { key: 'sample_no', label: '编号' },

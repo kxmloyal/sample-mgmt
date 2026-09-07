@@ -1,4 +1,4 @@
-/** BUNDLE vbmtqk1u0j — 28 files */
+/** BUNDLE vbmtmsy36n — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -753,117 +753,15 @@ function downloadQR(id){
 }
 
 
-/* --- subsystems/samples/frontend/js/views/list-role.js --- */
-// list-role.js — 样品列表角色化呈现配置（2026-09-05 方案A+B）
-// 职责：全列定义（key 驱动）、角色档位（默认列集/默认排序/快捷入口）、完整视图开关状态
-// 依赖：sampleTypeLabel/inspectBadge/statusBadge/e/fmt（定义于同 bundle 的 list.js/list-inspect.js 等）
-// 设计：docs/superpowers/specs/2026-09-05-samples-list-role-view-design.md
-
-/** 全列定义（顺序 = 完整视图列序；label/width/dataLabel/cell 四联动） */
-var LIST_COL_DEFS = {
-  idx:      { label: '#',            width: 42,  dataLabel: '序号',      cell: function (s, i) { return '<td data-label="序号" class="muted">' + (typeof i !== 'undefined' ? (samplePager.offset + i + 1) : '') + '</td>'; } },
-  no:       { label: '编号',         width: 100, dataLabel: '编号',      cell: function (s) { return '<td data-label="编号">' + e(s.sample_no) + '</td>'; } },
-  name:     { label: '名称',         width: 130, dataLabel: '名称',      cell: function (s) { return '<td data-label="名称">' + e(s.name || '—') + '</td>'; } },
-  model:    { label: '机型/站别',    width: 90,  dataLabel: '机型/站别', cell: function (s) { return '<td data-label="机型/站别" class="muted">' + e(s.model || '—') + (s.station ? ' · ' + e(s.station) : '') + '</td>'; } },
-  img:      { label: '图片',         width: 52,  dataLabel: '图片',      cell: function (s) { var im = s.produced_image || s.image ? '<img src="' + e(s.produced_image || s.image) + '" width="40" style="border-radius:4px"/>' : '—'; return '<td data-label="图片">' + im + '</td>'; } },
-  spec:     { label: '规格',         width: 80,  dataLabel: '规格',      cell: function (s) { return '<td data-label="规格" class="muted">' + e(s.spec || '—') + '</td>'; } },
-  type:     { label: '类型',         width: 70,  dataLabel: '类型',      cell: function (s) { var c = s.sample_type ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + sampleTypeLabel(s.sample_type) + '</span>' : '—'; return '<td data-label="类型">' + c + '</td>'; } },
-  status:   { label: '状态',         width: 84,  dataLabel: '状态',      cell: function (s) { return '<td data-label="状态">' + statusBadge(s) + '</td>'; } },
-  inspect:  { label: '复检状态',     width: 84,  dataLabel: '复检状态',  cell: function (s) { return '<td data-label="复检状态">' + inspectBadge(s) + '</td>'; } },
-  produced: { label: '制作',         width: 78,  dataLabel: '制作',      cell: function (s) { return '<td data-label="制作" class="muted">' + fmt(s.produced_at) + '</td>'; } },
-  released: { label: '发行',         width: 78,  dataLabel: '发行',      cell: function (s) { return '<td data-label="发行" class="muted">' + fmt(s.released_at) + '</td>'; } },
-  custody:  { label: '保管部门/储位', width: 110, dataLabel: '保管/储位', cell: function (s) { return '<td data-label="保管/储位" class="muted">' + e(s.custody_dept || '—') + '/' + e(s.storage_location || '—') + '</td>'; } },
-  // 2026-09-05 方案A：CHECKED_OUT 行「保管部门/储位」列临时改显领用人 + 应还（数据本就在 samples 表行内，零后端改动）
-  checkout: { label: '领用人/应还',  width: 110, dataLabel: '领用/应还', cell: function (s) {
-    if (s.status !== 'CHECKED_OUT') return '<td data-label="领用/应还" class="muted">—</td>';
-    var late = s.expected_return_at && new Date(s.expected_return_at).getTime() < Date.now();
-    var ret = late
-      ? '<span class="b-overdue" style="font-weight:700">' + _fmtShort(s.expected_return_at) + '超时</span>'
-      : '<span class="muted">' + _fmtShort(s.expected_return_at) + '</span>';
-    return '<td data-label="领用/应还">' + e(s.checkout_user || '—') + ' / ' + ret + '</td>';
-  } },
-  due:      { label: '复检到期',     width: 84,  dataLabel: '复检到期',  cell: function (s) { var ov = s.next_inspect_at && new Date(s.next_inspect_at).getTime() < Date.now(); return '<td data-label="复检到期" class="' + (ov ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>'; } },
-  actions:  { label: '操作',         width: 120, dataLabel: '操作',      cell: function (s) { return '<td data-label="操作" style="white-space:nowrap">' + _sampleActions(s) + '</td>'; } }
-};
-
-/** 完整视图列序（与旧版 13 列一致；due 列仅在逾期视图插入到 actions 前） */
-var LIST_ALL_COLS = ['idx', 'no', 'name', 'model', 'img', 'spec', 'type', 'status', 'inspect', 'produced', 'released', 'custody', 'checkout', 'actions'];
-
-/** 短日期（MM-DD）——应还列用，减少列宽压力 */
-function _fmtShort(v) { if (!v) return '—'; var d = new Date(v); return (d.getMonth() + 1) + '-' + d.getDate(); }
-
-/** 行内操作（自 list-render.js 原 _sampleRowHtml 内联逻辑抽出，行为不变） */
-function _sampleActions(s) {
-  var actions = '<a class="link" onclick="viewDetail(' + s.id + ')">详情</a>';
-  if (s.status === 'NEW')
-    actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();printSampleLabel(' + s.id + ')">打印</a>' + actions;
-  actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();downloadQR(' + s.id + ')">下载QR</a>' + actions;
-  if ((s.status === 'NEW' || s.status === 'PRODUCED') && (me.role === 'ADMIN' || s.created_by === me.id))
-    actions = '<a class="link" style="margin-right:8px;color:var(--bad)" onclick="event.stopPropagation();deleteSample(' + s.id + ')">取消</a>' + actions;
-  return actions;
-}
-
-/** 角色档位：默认列集（完整视图的子集）/ 默认排序 / 快捷入口（quickFilter 键序） */
-var LIST_ROLE_PROFILES = {
-  RD:      { cols: ['idx', 'no', 'name', 'model', 'type', 'status', 'produced', 'actions'], sort: 'mine',    quick: ['pending', 'mine'] },
-  QA:      { cols: ['idx', 'no', 'name', 'status', 'inspect', 'released', 'actions'],      sort: 'inspect', quick: ['pending', 'overdue', 'soon'] },
-  CUSTODY: { cols: ['idx', 'no', 'name', 'status', 'custody', 'checkout', 'actions'],      sort: 'status',  quick: ['custody', 'checkout_overdue', 'pending', 'dept'] },
-  ME:      { cols: ['idx', 'no', 'name', 'status', 'custody', 'checkout', 'actions'],      sort: 'status',  quick: ['custody', 'checkout_overdue', 'pending', 'dept'] },
-  ADMIN:   { cols: null, sort: '', quick: ['pending', 'custody', 'checkout_overdue', 'overdue', 'soon'] } // null = 完整 14 列（现状）
-};
-
-/** 当前用户档位（多角色取主角色 me.role；未知角色兜底 ADMIN 全列） */
-function listRoleProfile() {
-  return LIST_ROLE_PROFILES[me.role] || LIST_ROLE_PROFILES.ADMIN;
-}
-
-/** 当前生效列集：完整视图开关 → 全列；否则角色档位列（无档位=全列） */
-function listActiveCols() {
-  if (_listFullView()) return LIST_ALL_COLS;
-  var p = listRoleProfile();
-  return p.cols || LIST_ALL_COLS;
-}
-
-/** 完整视图开关状态（sessionStorage：刷新保持、不跨会话；默认关=角色档） */
-function _listFullView() {
-  try { return sessionStorage.getItem('samples_list_full_view') === '1'; } catch (_) { return false; }
-}
-function toggleListFullView(cb) {
-  try {
-    if (cb && cb.checked) sessionStorage.setItem('samples_list_full_view', '1');
-    else sessionStorage.removeItem('samples_list_full_view');
-  } catch (_) {}
-  loadSamples(); // 重新渲染表格（列集变更）
-}
-
-/** 快捷入口渲染：按档位 quick 键序生成（完整视图时展示全部入口） */
-var QUICK_FILTER_DEFS = {
-  pending:          { label: '待处理',   fn: function () { quickFilter('pending'); } },
-  custody:          { label: '保管中',   fn: function () { quickFilter('custody'); } },
-  checkout_overdue: { label: '超时未还', fn: function () { quickFilter('checkout_overdue'); } },
-  overdue:          { label: '逾期',     fn: function () { quickFilter('overdue'); } },
-  soon:             { label: '近7天',    fn: function () { quickFilter('soon'); } },
-  mine:             { label: '我建的',   fn: function () { quickFilter('mine'); } },
-  dept:             { label: '本部门',   fn: function () { quickFilter('dept'); } }
-};
-function quickLinksHtml() {
-  var keys = _listFullView() ? ['pending', 'custody', 'checkout_overdue', 'overdue', 'soon'] : listRoleProfile().quick;
-  return keys.map(function (k) {
-    var d = QUICK_FILTER_DEFS[k];
-    return d ? '<a class="link" style="font-size:12px" onclick="quickFilter(\'' + k + '\')">' + d.label + '</a>' : '';
-  }).join('');
-}
-
-
 /* --- subsystems/samples/frontend/js/views/list.js --- */
 // samples.js — 样品列表：状态管理、导航、删除
-// 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js | 角色档位 → list-role.js
+// 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js
 
 /** 样品类型标签（OK/NG） */
 function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
 
 var _debounceTimer = null;
-var _quickFilterType = null;  // pending|overdue|soon|custody|checkout_overdue|mine|dept，快捷筛选状态
+var _quickFilterType = null;  // pending|overdue|soon，快捷筛选状态
 var samplePager = { limit: 20, offset: 0, total: 0 };
 var _sampleBuildParams = null;
 var _sampleIsOverdue = false;
@@ -878,9 +776,7 @@ async function viewSamples() {
   } catch (_) {}
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
-  var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>' +
-    // 2026-09-05 角色档排序（下拉新增三项；各角色默认值不同，见 list-role.js）
-    '<fluent-option value="mine">我建的优先</fluent-option><fluent-option value="inspect">复检到期</fluent-option><fluent-option value="status">状态优先</fluent-option>';
+  var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
@@ -895,10 +791,10 @@ async function viewSamples() {
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
-    '<span id="quick-links">' + quickLinksHtml() + '</span>' +
-    '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span>' +
-    // 2026-09-05 完整视图开关（sessionStorage 保持；关=角色档精简列，开=全列）
-    '<span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">完整视图 <fluent-switch id="f-fullview" ' + (_listFullView() ? 'checked' : '') + ' onchange="toggleListFullView(this)"></fluent-switch></span></div>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'overdue\')">逾期</a>' +
+    '<a class="link" style="font-size:12px" onclick="quickFilter(\'soon\')">近7天</a>' +
+    '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span></div>' +
     '<div id="s-list"></div>';
   var stMatch = location.hash.match(/[?&]status=([^&]+)/);
   var moMatch = location.hash.match(/[?&]model=([^&]+)/);
@@ -914,12 +810,7 @@ async function viewSamples() {
       else setTimeout(attempt, 60);
     })();
   }
-  else {
-    // 无深链时应用角色默认排序（2026-09-05 角色档；用户手动改排序后以用户为准，不持久化）
-    var defSort = listRoleProfile().sort;
-    if (defSort) { var so = $('#f-sort'); if (so) so.value = defSort; }
-    loadSamples();
-  }
+  else loadSamples();
 }
 
 async function loadSamples() {
@@ -947,7 +838,6 @@ function exportSamplesCsv() {
 
 /* --- subsystems/samples/frontend/js/views/list-filter.js --- */
 // sample-filter.js — 样品筛选、chips、快捷过滤
-// 2026-09-05 角色化：新增快捷筛选 保管中(custody)/超时未还(checkout_overdue)/我建的(mine)/本部门(dept)；ADMIN 待处理改真实口径
 // 依赖：_quickFilterType/_sampleIsOverdue/_sampleBuildParams (samples.js), _fetchSamplePage/goSamplePage (sample-list-render.js)
 
 /** 从当前筛选控件值构建查询参数字符串（含状态 f-status；修复状态下拉筛选/导出不携带 status 的既有缺陷） */
@@ -977,32 +867,9 @@ function loadSamplesWithStatus(statusStr) {
 function quickFilter(type) {
   _quickFilterType = type;
   if (type === 'pending') {
-    // ADMIN 真实口径：全部待办态（2026-09-05 修正，原为空串=全量误导）
-    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : 'NEW,PRODUCED,RELEASED,RETURNING';
+    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
     $('#f-status').value = ''; $('#f-dept').value = '';
     loadSamplesWithStatus(st);
-    return;
-  }
-  if (type === 'custody') { $('#f-status').value = 'IN_CUSTODY'; loadSamplesWithStatus('IN_CUSTODY'); return; }
-  if (type === 'checkout_overdue') {
-    _sampleIsOverdue = false;
-    $('#f-status').value = ''; $('#f-dept').value = '';
-    _sampleBuildParams = function() { return _buildQueryParams('checkout_overdue=1'); };
-    _fetchSamplePage(true);
-    return;
-  }
-  if (type === 'mine') {
-    _sampleIsOverdue = false;
-    _sampleBuildParams = function() { return _buildQueryParams('mine=1&sort=mine'); };
-    _fetchSamplePage(true);
-    return;
-  }
-  if (type === 'dept') {
-    if (!me.dept) { toast('当前账号未配置部门', 'err'); return; }
-    $('#f-dept').value = me.dept; $('#f-status').value = '';
-    _sampleIsOverdue = false;
-    _sampleBuildParams = function() { return _buildQueryParams('dept=' + encodeURIComponent(me.dept)); };
-    _fetchSamplePage(true);
     return;
   }
   if (type === 'overdue') { loadSamplesOverdue('1'); return; }
@@ -1029,9 +896,10 @@ function renderChips() {
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
   if (src) { var srcLabel = { C: '客供', T: '元山', G: '塔岗' }[src] || src; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-source\').value=\'\';loadSamples()">' + e(srcLabel) + ' ✕</span>'; }
   if (mo) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-model\').value=\'\';loadSamples()">机型 ' + e(mo) + ' ✕</span>';
-  if (sort && sort !== 'mine' && sort !== 'inspect' && sort !== 'status') html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
-  var quickLabels = { pending: '待处理', overdue: '逾期', soon: '近7天', custody: '保管中', checkout_overdue: '超时未还', mine: '我建的', dept: '本部门' };
-  if (_quickFilterType && quickLabels[_quickFilterType]) html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">' + quickLabels[_quickFilterType] + ' ✕</span>';
+  if (sort) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-sort\').value=\'\';loadSamples()">排序 ✕</span>';
+  if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
+  if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
+  if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
   chips.innerHTML = html;
 }
 
@@ -1044,23 +912,59 @@ function clearQuickFilter() {
 
 /* --- subsystems/samples/frontend/js/views/list-render.js --- */
 // sample-list-render.js — 样品列表渲染（表头、行、分页、列宽拖拽）
-// 2026-09-05 角色化：列集由 list-role.js 的 listActiveCols() 驱动（角色档/完整视图），列定义见 LIST_COL_DEFS
-// 依赖：samplePager/_sampleBuildParams/_sampleIsOverdue (samples.js), renderChips/statusBadge/e/fmt/sampleTypeLabel/inspectBadge/list-role.js
+// 依赖：samplePager/_sampleBuildParams/_sampleIsOverdue (samples.js), renderChips/statusBadge/e/fmt/sampleTypeLabel/inspectBadge
 
-/** 构建样品列表表头 HTML（列 key 驱动；逾期视图在 actions 前插入 due 列） */
+/** 构建样品列表表头 HTML（含 colgroup 列宽定义） */
 function _sampleHeaderCols(isOverdue) {
-  var cols = listActiveCols().slice();
-  if (isOverdue && cols.indexOf('due') === -1) cols.splice(cols.indexOf('actions'), 0, 'due');
-  var ths = cols.map(function (k) { return '<th>' + LIST_COL_DEFS[k].label + '<span class="col-rsz"></span></th>'; }).join('');
-  var cg = '<colgroup>' + cols.map(function (k) { return '<col style="width:' + LIST_COL_DEFS[k].width + 'px">'; }).join('') + '</colgroup>';
+  var cols = ['#','编号', '名称', '机型/站别', '图片', '规格', '类型', '状态', '复检状态', '制作', '发行', '保管部门/储位'];
+  if (isOverdue) cols.push('复检到期');
+  cols.push('操作');
+  var ths = cols.map(function(c) { return '<th>' + c + '<span class="col-rsz"></span></th>'; }).join('');
+  var cg = '<colgroup>' +
+    '<col style="width:42px">' +
+    '<col style="width:100px">' + '<col style="width:130px">' + '<col style="width:90px">' +
+    '<col style="width:52px">' + '<col style="width:80px">' + '<col style="width:70px">' +
+    '<col style="width:84px">' + '<col style="width:84px">' +
+    '<col style="width:78px">' + '<col style="width:78px">' +
+    '<col style="width:110px">' + (isOverdue ? '<col style="width:84px">' : '') +
+    '<col style="width:120px">' + '</colgroup>';
   return cg + '<thead><tr>' + ths + '</tr></thead>';
 }
 
-/** 构建单行数据 HTML（列 key 驱动） */
+/** 构建单行数据 HTML */
 function _sampleRowHtml(s, isOverdue, i) {
-  var cols = listActiveCols().slice();
-  if (isOverdue && cols.indexOf('due') === -1) cols.splice(cols.indexOf('actions'), 0, 'due');
-  return '<tr>' + cols.map(function (k) { return LIST_COL_DEFS[k].cell(s, i); }).join('') + '</tr>';
+  var img = s.produced_image || s.image
+    ? '<img src="' + e(s.produced_image || s.image) + '" width="40" style="border-radius:4px"/>' : '—';
+  var typeCell = s.sample_type
+    ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + sampleTypeLabel(s.sample_type) + '</span>'
+    : '—';
+  var actions = '<a class="link" onclick="viewDetail(' + s.id + ')">详情</a>';
+  if (s.status === 'NEW')
+    actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();printSampleLabel(' + s.id + ')">打印</a>' + actions;
+  actions = '<a class="link" style="margin-right:8px" onclick="event.stopPropagation();downloadQR(' + s.id + ')">下载QR</a>' + actions;
+  if ((s.status === 'NEW' || s.status === 'PRODUCED') && (me.role === 'ADMIN' || s.created_by === me.id))
+    actions = '<a class="link" style="margin-right:8px;color:var(--bad)" onclick="event.stopPropagation();deleteSample(' + s.id + ')">取消</a>' + actions;
+  var overdueCell = '';
+  if (isOverdue) {
+    var overdue = s.next_inspect_at && new Date(s.next_inspect_at).getTime() < Date.now();
+    overdueCell = '<td data-label="复检到期" class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>';
+  }
+  return '<tr>' +
+    '<td data-label="序号" class="muted">' + (typeof i !== 'undefined' ? (samplePager.offset + i + 1) : '') + '</td>' +
+    '<td data-label="编号">' + e(s.sample_no) + '</td>' +
+    '<td data-label="名称">' + e(s.name || '—') + '</td>' +
+    '<td data-label="机型/站别" class="muted">' + e(s.model || '—') + (s.station ? ' · ' + e(s.station) : '') + '</td>' +
+    '<td data-label="图片">' + img + '</td>' +
+    '<td data-label="规格" class="muted">' + e(s.spec || '—') + '</td>' +
+    '<td data-label="类型">' + typeCell + '</td>' +
+    '<td data-label="状态">' + statusBadge(s) + '</td>' +
+    '<td data-label="复检状态">' + inspectBadge(s) + '</td>' +
+    '<td data-label="制作" class="muted">' + fmt(s.produced_at) + '</td>' +
+    '<td data-label="发行" class="muted">' + fmt(s.released_at) + '</td>' +
+    '<td data-label="保管/储位" class="muted">' + e(s.custody_dept || '—') + '/' + e(s.storage_location || '—') + '</td>' +
+    overdueCell +
+    '<td data-label="操作" style="white-space:nowrap">' + actions + '</td>' +
+    '</tr>';
 }
 
 /** 拉取一页样品数据 */
@@ -1087,9 +991,7 @@ function _renderSampleList(list, isOverdue, pager) {
   if (!list.length) { box.innerHTML = '<div class="empty">' + (isOverdue ? '无逾期/即将到期样品' : '无样品') + '</div>'; return; }
   var cols = _sampleHeaderCols(isOverdue);
   var rows = list.map(function(s, i) { return _sampleRowHtml(s, isOverdue, i); }).join('');
-  var active = listActiveCols();
-  var extra = isOverdue && active.indexOf('due') === -1 ? 1 : 0;
-  var minWidth = active.reduce(function (w, k) { return w + LIST_COL_DEFS[k].width; }, 0) + extra * 84;
+  var minWidth = isOverdue ? 1150 : 1050;
   var html = '<div class="card" style="padding:0"><table class="samples-table" style="min-width:' + minWidth + 'px">' + cols + '<tbody>' + rows + '</tbody></table></div>';
   if (pager && pager.total > pager.limit) {
     var totalPages = Math.ceil(pager.total / pager.limit);
