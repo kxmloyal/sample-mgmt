@@ -1,0 +1,14 @@
+/* task-detail-ux.css — 方案A 任务详情交互强化样式（项目子系统内自治） */
+.td-quick{display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0}
+.td-quick-hint{font-size:11px;margin-left:auto}
+.td-sub-row{gap:8px;cursor:default}
+.td-sub-row .td-drag-handle{cursor:grab;color:#94a3b8;font-weight:700;letter-spacing:-1px;user-select:none}
+.td-sub-row.dragging{opacity:.4}
+.td-sub-row.drag-over{background:#eff6ff;outline:1px dashed #93c5fd}
+.td-badge{display:inline-block;min-width:16px;padding:0 5px;margin-left:2px;background:rgba(255,255,255,.28);border-radius:8px;font-size:11px;font-weight:700;text-align:center}
+.td-at-box{display:none;position:absolute;z-index:1300;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);min-width:180px}
+.td-at-item{padding:7px 12px;font-size:13px;cursor:pointer}
+.td-at-item:hover,.td-at-item.sel{background:#eff6ff}
+.td-mention{color:#2563eb;font-weight:600;background:#eff6ff;border-radius:3px;padding:0 2px}
+.td-thumb{height:44px;max-width:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;cursor:zoom-in}
+.td-thumb:hover{border-color:#93c5fd}

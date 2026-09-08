@@ -87,6 +87,7 @@
     "subsystems/projects/frontend/js/views/notifications.js",
     "subsystems/projects/frontend/js/views/task-detail.js",
     "subsystems/projects/frontend/js/views/task-detail-actions.js",
+    "subsystems/projects/frontend/js/views/task-detail-ux.js",
     "subsystems/projects/frontend/js/views/workflow.js",
     "subsystems/projects/frontend/js/router.js"
   ],

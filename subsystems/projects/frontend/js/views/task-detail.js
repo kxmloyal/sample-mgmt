@@ -16,14 +16,21 @@ async function renderTaskDetail(tid) {
     '<div class="pk-panel" id="td-info">加载中…</div>' +
     '<div class="pk-panel" style="margin-top:14px">' +
     '<div class="pk-tabs" id="td-tabs"></div>' +
-    '<div id="td-body"></div></div>';
+    '<div id="td-body"></div></div>' +
+    '<div class="td-at-box" id="td-at-box" style="display:none"></div>'; // @提及候选浮层
+  // @补全成员缓存（进详情拉一次；失败静默退化为无补全）
+  _tdUsers = await api('GET', '/api/projects/users').catch(function () { return null; });
   await tdLoadSection('info');
   tdSwitchTab('subs');
 }
 function tdSwitchTab(k) {
   _tdTab = k;
+  // 方案A-④：tabs 计数徽章（从缓存取数；无缓存时先无徽章渲染，加载后刷新）
+  const d = (_tdCache.tid === _tid) ? _tdCache.data : null;
+  const badge = function (n) { return n != null ? ' <span class="td-badge">' + n + '</span>' : ''; };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
-    return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + '</fluent-button>';
+    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length }[x.k] : null;
+    return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(n) + '</fluent-button>';
   }).join('');
   tdLoadSection(k);
 }
@@ -46,7 +53,18 @@ async function tdLoadSection(kind) {
     else if (kind === 'files') body.innerHTML = renderTdFiles(d);
     else if (kind === 'links') body.innerHTML = renderTdLinks(d);
     else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+    // 方案A-④：数据到手后刷新 tabs 徽章
+    if (kind !== 'info') tdSwitchTabBadges(d);
   } catch (e) { showToast(e.message, 'err'); }
+}
+// 方案A-④：仅刷新 tabs 徽章（不触发子分区重载）
+function tdSwitchTabBadges(d) {
+  if (!d || !$('#td-tabs')) return;
+  const badge = function (n) { return ' <span class="td-badge">' + n + '</span>'; };
+  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length };
+  $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
+    return '<fluent-button appearance="' + (x.k === _tdTab ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(counts[x.k]) + '</fluent-button>';
+  }).join('');
 }
 // v2：详情局部刷新（清缓存 → info 主卡 + 当前 tab，替代全量重渲染）
 function tdRefresh() { _tdCache.tid = 0; _tdCache.ts = 0; tdLoadSection('info'); tdSwitchTab(_tdTab); }
@@ -75,31 +93,42 @@ function renderTdInfo(d) {
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button>' +
-      '<fluent-button appearance="neutral" size="small" onclick="pConfirm(\'确认删除该任务？（子任务/评论/附件/日志将一并删除）\',\'tdDel()\')">删除任务</fluent-button></div>' : '');
+      '<fluent-button appearance="neutral" size="small" onclick="pConfirm(\'确认删除该任务？（子任务/评论/附件/日志将一并删除）\',\'tdDel()\')">删除任务</fluent-button></div>' : '') +
+    // 方案A-①：快捷流转条（状态驱动按钮组，替代进编辑才能流转）
+    tduxQuickActions(t, canEdit);
 }
-// v2：子任务分区（三态 + CAS 流转按钮：START/COMPLETE）
+// v2：子任务分区（三态 + CAS 流转按钮：START/COMPLETE）+ 方案A-② 拖拽排序 + 指派人/日期展示
 function renderTdSubs(d) {
-  return d.subtasks.map(s =>
-    '<div class="pk-row"><span class="pk-name">' + esc(s.title) + '</span>' +
+  const rows = d.subtasks.map(s =>
+    '<div class="pk-row td-sub-row" draggable="true" data-sid="' + s.id + '" ' +
+    'ondragstart="tduxSubDragStart(event)" ondragend="tduxSubDragEnd(event)" ondragover="tduxSubDragOver(event)" ondrop="tduxSubDrop(event)">' +
+    '<span class="td-drag-handle" title="拖拽排序">⋮⋮</span>' +
+    '<span class="pk-name">' + esc(s.title) + '</span>' +
+    '<span class="muted">' + (s.assignee_name ? '@' + esc(s.assignee_name) : '') + (s.planned_date ? ' · ' + fmt(s.planned_date) : '') + '</span>' +
     '<span>' + (SUBTASK_STATUS_CN[s.status] || s.status) + '</span>' +
     (s.status === 'NOT_STARTED' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'START\')">开始</fluent-button>' : '') +
     (s.status === 'IN_PROGRESS' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
     '<fluent-button size="small" appearance="neutral" onclick="tdSubEdit(' + s.id + ')">编辑</fluent-button>' +
     '<fluent-button size="small" appearance="neutral" onclick="pConfirm(\'确认删除该子任务？\',\'tdSubDel(' + s.id + ')\')">删除</fluent-button>' +
-    '</div>').join('') || '<span class="pk-name">无子任务</span>';
+    '</div>').join('');
+  return (rows ? '<div class="muted" style="font-size:11px;margin-bottom:6px">拖「⋮⋮」调整执行顺序（自动保存）</div>' : '') +
+    '<div id="td-subs-list">' + (rows || '<span class="pk-name">无子任务</span>') + '</div>';
 }
-// v2：评论分区（输入框 + 列表，含删除按钮）
+// v2：评论分区（输入框 + 列表，含删除按钮）+ 方案A-③ @提及（oninput 触发候选浮层；提交时解析提及发通知）
 function renderTdComments(d) {
-  return '<div class="pk-filters"><input id="td-cmt" placeholder="写评论…" style="flex:1;min-width:180px">' +
+  return '<div class="td-cmt-wrap"><div class="pk-filters"><input id="td-cmt" placeholder="写评论… 输入 @ 提及同事" style="flex:1;min-width:180px" oninput="tduxCmtInput()" onkeydown="if(event.key===\'Escape\')document.getElementById(\'td-at-box\').style.display=\'none\'">' +
     '<fluent-button appearance="accent" size="small" onclick="tdAddComment()">发送</fluent-button></div>' +
-    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + esc(c.content) + '</span>' +
+    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' +
+      // @名字 高亮渲染（服务端 mentions 存在时把被提名人名字染色；简单实现：只高亮 @xxx 文本）
+      esc(c.content).replace(/@([^\s@，。；,;]{1,20})/g, '<span class="td-mention">@$1</span>') + '</span>' +
       (c.operator_id === me.id || me.role === 'ADMIN' || me.role === 'PM'
-        ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('');
+        ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('') + '</div>';
 }
-// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）
+// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）+ 方案A-⑤ 图片缩略图
 function renderTdFiles(d) {
   return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
+    d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
+      '<span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
       '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('');
 }
 // v2：关联分区（样品/治具）

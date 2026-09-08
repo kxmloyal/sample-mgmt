@@ -9,6 +9,7 @@ function register(app) {
   require('./routes-stats').register(app);        // 静态路径（/workflow /stats /tasks/export /tasks）最先，避免被 :tid 抢占
   require('./routes-tasks').register(app);        // 含 /tasks/:tid 参数路由
   require('./routes-task-extras').register(app);  // 子路径路由
+  require('./routes-tdux').register(app);         // 任务详情交互强化（方案A）：子任务排序 + 评论@提及通知
   require('./routes-milestones').register(app);   // OA 移植：里程碑（/milestones 静态前缀 + /:id/milestones 列表）
   require('./routes-risks').register(app);        // OA 移植：风险（/risks 静态前缀 + /:id/risks 列表）
   require('./routes-modelrefs').register(app);    // OA 移植二期：机型引用（/model-options 静态 + /:id/models）

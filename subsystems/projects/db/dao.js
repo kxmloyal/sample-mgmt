@@ -98,6 +98,8 @@ module.exports = function createDao(deps) {
   const oaDao = require('./dao-oa')({ q, one, run, nowISO, fetchOne, fetchAll });
   // ===== 站内通知（方案B-②：独立文件防容量超限；子系统内自治不碰 workbench）=====
   const notifDao = require('./dao-notif')({ q, one, run, nowISO, fetchOne, fetchAll });
+  // ===== 任务详情交互强化（方案A：子任务排序/评论提及；独立文件防容量超限）=====
+  const tduxDao = require('./dao-tdux')({ q, one, run, nowISO, fetchOne, fetchAll });
 
   // ===== 留痕（全 Task 共用）=====
   async function addProjectLog(conn, entityType, entityId, action, detail, operatorId) {
@@ -108,5 +110,5 @@ module.exports = function createDao(deps) {
   }
 
   return Object.assign({ fetchOne, fetchAll, createProject, listProjects, getProject, updateProject,
-    deleteProject, countProjectTasks, listMembers, addMember, setOwner, removeMember, addProjectLog }, taskDao, extraDao, statsDao, oaDao, notifDao);
+    deleteProject, countProjectTasks, listMembers, addMember, setOwner, removeMember, addProjectLog }, taskDao, extraDao, statsDao, oaDao, notifDao, tduxDao);
 };

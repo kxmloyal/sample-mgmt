@@ -1,4 +1,4 @@
-/** BUNDLE vbmtrh8wk4 — 26 files */
+/** BUNDLE vbmtryjtpz — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2311,14 +2311,21 @@ async function renderTaskDetail(tid) {
     '<div class="pk-panel" id="td-info">加载中…</div>' +
     '<div class="pk-panel" style="margin-top:14px">' +
     '<div class="pk-tabs" id="td-tabs"></div>' +
-    '<div id="td-body"></div></div>';
+    '<div id="td-body"></div></div>' +
+    '<div class="td-at-box" id="td-at-box" style="display:none"></div>'; // @提及候选浮层
+  // @补全成员缓存（进详情拉一次；失败静默退化为无补全）
+  _tdUsers = await api('GET', '/api/projects/users').catch(function () { return null; });
   await tdLoadSection('info');
   tdSwitchTab('subs');
 }
 function tdSwitchTab(k) {
   _tdTab = k;
+  // 方案A-④：tabs 计数徽章（从缓存取数；无缓存时先无徽章渲染，加载后刷新）
+  const d = (_tdCache.tid === _tid) ? _tdCache.data : null;
+  const badge = function (n) { return n != null ? ' <span class="td-badge">' + n + '</span>' : ''; };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
-    return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + '</fluent-button>';
+    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length }[x.k] : null;
+    return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(n) + '</fluent-button>';
   }).join('');
   tdLoadSection(k);
 }
@@ -2341,7 +2348,18 @@ async function tdLoadSection(kind) {
     else if (kind === 'files') body.innerHTML = renderTdFiles(d);
     else if (kind === 'links') body.innerHTML = renderTdLinks(d);
     else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
+    // 方案A-④：数据到手后刷新 tabs 徽章
+    if (kind !== 'info') tdSwitchTabBadges(d);
   } catch (e) { showToast(e.message, 'err'); }
+}
+// 方案A-④：仅刷新 tabs 徽章（不触发子分区重载）
+function tdSwitchTabBadges(d) {
+  if (!d || !$('#td-tabs')) return;
+  const badge = function (n) { return ' <span class="td-badge">' + n + '</span>'; };
+  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length };
+  $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
+    return '<fluent-button appearance="' + (x.k === _tdTab ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(counts[x.k]) + '</fluent-button>';
+  }).join('');
 }
 // v2：详情局部刷新（清缓存 → info 主卡 + 当前 tab，替代全量重渲染）
 function tdRefresh() { _tdCache.tid = 0; _tdCache.ts = 0; tdLoadSection('info'); tdSwitchTab(_tdTab); }
@@ -2370,31 +2388,42 @@ function renderTdInfo(d) {
       '<fluent-button appearance="secondary" size="small" onclick="tdAddSub()">加子任务</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddDep()">加依赖</fluent-button>' +
       '<fluent-button appearance="secondary" size="small" onclick="tdAddLink()">关联样品/治具</fluent-button>' +
-      '<fluent-button appearance="neutral" size="small" onclick="pConfirm(\'确认删除该任务？（子任务/评论/附件/日志将一并删除）\',\'tdDel()\')">删除任务</fluent-button></div>' : '');
+      '<fluent-button appearance="neutral" size="small" onclick="pConfirm(\'确认删除该任务？（子任务/评论/附件/日志将一并删除）\',\'tdDel()\')">删除任务</fluent-button></div>' : '') +
+    // 方案A-①：快捷流转条（状态驱动按钮组，替代进编辑才能流转）
+    tduxQuickActions(t, canEdit);
 }
-// v2：子任务分区（三态 + CAS 流转按钮：START/COMPLETE）
+// v2：子任务分区（三态 + CAS 流转按钮：START/COMPLETE）+ 方案A-② 拖拽排序 + 指派人/日期展示
 function renderTdSubs(d) {
-  return d.subtasks.map(s =>
-    '<div class="pk-row"><span class="pk-name">' + esc(s.title) + '</span>' +
+  const rows = d.subtasks.map(s =>
+    '<div class="pk-row td-sub-row" draggable="true" data-sid="' + s.id + '" ' +
+    'ondragstart="tduxSubDragStart(event)" ondragend="tduxSubDragEnd(event)" ondragover="tduxSubDragOver(event)" ondrop="tduxSubDrop(event)">' +
+    '<span class="td-drag-handle" title="拖拽排序">⋮⋮</span>' +
+    '<span class="pk-name">' + esc(s.title) + '</span>' +
+    '<span class="muted">' + (s.assignee_name ? '@' + esc(s.assignee_name) : '') + (s.planned_date ? ' · ' + fmt(s.planned_date) : '') + '</span>' +
     '<span>' + (SUBTASK_STATUS_CN[s.status] || s.status) + '</span>' +
     (s.status === 'NOT_STARTED' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'START\')">开始</fluent-button>' : '') +
     (s.status === 'IN_PROGRESS' ? '<fluent-button size="small" onclick="tdSubAction(' + s.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
     '<fluent-button size="small" appearance="neutral" onclick="tdSubEdit(' + s.id + ')">编辑</fluent-button>' +
     '<fluent-button size="small" appearance="neutral" onclick="pConfirm(\'确认删除该子任务？\',\'tdSubDel(' + s.id + ')\')">删除</fluent-button>' +
-    '</div>').join('') || '<span class="pk-name">无子任务</span>';
+    '</div>').join('');
+  return (rows ? '<div class="muted" style="font-size:11px;margin-bottom:6px">拖「⋮⋮」调整执行顺序（自动保存）</div>' : '') +
+    '<div id="td-subs-list">' + (rows || '<span class="pk-name">无子任务</span>') + '</div>';
 }
-// v2：评论分区（输入框 + 列表，含删除按钮）
+// v2：评论分区（输入框 + 列表，含删除按钮）+ 方案A-③ @提及（oninput 触发候选浮层；提交时解析提及发通知）
 function renderTdComments(d) {
-  return '<div class="pk-filters"><input id="td-cmt" placeholder="写评论…" style="flex:1;min-width:180px">' +
+  return '<div class="td-cmt-wrap"><div class="pk-filters"><input id="td-cmt" placeholder="写评论… 输入 @ 提及同事" style="flex:1;min-width:180px" oninput="tduxCmtInput()" onkeydown="if(event.key===\'Escape\')document.getElementById(\'td-at-box\').style.display=\'none\'">' +
     '<fluent-button appearance="accent" size="small" onclick="tdAddComment()">发送</fluent-button></div>' +
-    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' + esc(c.content) + '</span>' +
+    d.comments.map(c => '<div class="pk-row"><span class="pk-name">' + (c.operator_name || '—') + '</span><span>' +
+      // @名字 高亮渲染（服务端 mentions 存在时把被提名人名字染色；简单实现：只高亮 @xxx 文本）
+      esc(c.content).replace(/@([^\s@，。；,;]{1,20})/g, '<span class="td-mention">@$1</span>') + '</span>' +
       (c.operator_id === me.id || me.role === 'ADMIN' || me.role === 'PM'
-        ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('');
+        ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('') + '</div>';
 }
-// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）
+// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）+ 方案A-⑤ 图片缩略图
 function renderTdFiles(d) {
   return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row"><span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
+    d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
+      '<span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
       '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('');
 }
 // v2：关联分区（样品/治具）
@@ -2581,10 +2610,19 @@ async function tdFileDel(fid) {
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdAddComment() {
-  const content = $('#td-cmt').value.trim();
+  const inp = $('#td-cmt');
+  const content = inp.value.trim();
   if (!content) return;
-  try { await api('POST', PApi.taskComments(_tid), { content }); $('#td-cmt').value = ''; tdRefresh(); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    const r = await api('POST', PApi.taskComments(_tid), { content });
+    // 方案A-③：@提及通知（前端把选中的 user_ids 交给 mention-notify；comment_id 用于落 mentions 列）
+    const picked = (inp.dataset.picked || '').split(',').map(Number).filter(Boolean);
+    if (picked.length) {
+      try { await api('POST', PApi.task(_tid) + '/mention-notify', { user_ids: picked, comment_id: (r && r.id) || null }); } catch (e2) { /* 通知失败不阻塞评论 */ }
+      delete inp.dataset.picked;
+    }
+    inp.value = ''; tdRefresh();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 // 附件上传：FormData + fetch（credentials 带 session cookie），校验响应状态码
 async function tdUploadFile() {
@@ -2605,6 +2643,116 @@ async function tdDel() {
     showToast('已删除');
     location.hash = '#/kanban';
   } catch (e) { showToast(e.message, 'err'); }
+}
+
+
+/* --- subsystems/projects/frontend/js/views/task-detail-ux.js --- */
+// views/task-detail-ux.js — 任务详情交互强化（2026-09-08 方案A 前端）
+// ① 主卡快捷流转条（状态驱动按钮组，替代进编辑页才能流转）
+// ② 子任务拖拽排序（HTML5 dnd + 落定批量持久化）
+// ③ 评论@提及（输入 @ 弹成员选择，提交后调 mention-notify）
+// ④ 计数徽章（tabs 上显示子任务/评论/附件数）
+// ⑤ 附件图片缩略图预览
+var _tdUsers = null; // 成员缓存（@补全用，进详情时拉一次）
+
+// === ① 快捷流转条：状态→可用动作映射（与状态机 ACTION 对齐；canEdit 由主渲染器传入） ===
+function tduxQuickActions(t, canEdit) {
+  if (!canEdit) return '';
+  const MAP = {
+    'NOT_STARTED': [{ a: 'START', t: '▶ 开始', cls: 'accent' }],
+    'IN_PROGRESS': [{ a: 'COMPLETE', t: '✔ 完成', cls: 'accent' }, { a: 'BACK', t: '↩ 退回', cls: 'neutral' }],
+    'OVERDUE': [{ a: 'START', t: '▶ 开始', cls: 'accent' }, { a: 'COMPLETE', t: '✔ 完成', cls: 'accent' }],
+    'DONE': [{ a: 'REOPEN', t: '↩ 重新打开', cls: 'neutral' }]
+  };
+  const acts = MAP[t.status] || [];
+  if (!acts.length) return '';
+  return '<div class="td-quick">' + acts.map(x =>
+    '<fluent-button appearance="' + x.cls + '" size="small" onclick="tduxTransition(' + t.id + ',\'' + x.a + '\')">' + x.t + '</fluent-button>').join('') +
+    '<span class="td-quick-hint muted">快捷流转</span></div>';
+}
+
+// 快捷流转执行（成功后走 tdRefresh 清缓存强刷 + 通知由后端触发点③自动发）
+async function tduxTransition(tid, action) {
+  try {
+    const r = await api('POST', PApi.task(tid) + '/status', { action: action });
+    showToast(r.message || '流转成功');
+  } catch (e) { showToast(e.message, 'err'); }
+  tdRefresh();
+}
+
+// === ② 子任务拖拽排序 ===
+function tduxSubDragStart(e) {
+  const row = e.target.closest('.td-sub-row');
+  if (!row) return;
+  e.dataTransfer.setData('text/plain', row.dataset.sid);
+  row.classList.add('dragging');
+}
+function tduxSubDragEnd(e) {
+  const row = e.target.closest('.td-sub-row');
+  if (row) row.classList.remove('dragging');
+  document.querySelectorAll('.td-sub-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+}
+function tduxSubDragOver(e) {
+  e.preventDefault();
+  const row = e.target.closest('.td-sub-row');
+  if (row && !row.classList.contains('dragging')) {
+    document.querySelectorAll('.td-sub-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+    row.classList.add('drag-over');
+  }
+}
+async function tduxSubDrop(e) {
+  e.preventDefault();
+  const sid = Number(e.dataTransfer.getData('text/plain'));
+  const target = e.target.closest('.td-sub-row');
+  if (!sid || !target || Number(target.dataset.sid) === sid) return;
+  // 重排 DOM：拖到目标行位置
+  const rows = Array.from(document.querySelectorAll('#td-subs-list .td-sub-row'));
+  const fromEl = rows.find(r => Number(r.dataset.sid) === sid);
+  if (!fromEl) return;
+  rows.splice(rows.indexOf(fromEl), 1);
+  rows.splice(rows.indexOf(target), 0, fromEl);
+  const list = $('#td-subs-list');
+  rows.forEach(r => list.appendChild(r));
+  document.querySelectorAll('.td-sub-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  // 持久化
+  try {
+    await api('PUT', PApi.task(_tid) + '/subtasks-order', { ids: rows.map(r => Number(r.dataset.sid)) });
+    showToast('排序已保存');
+  } catch (err) { showToast(err.message, 'err'); tdRefresh(); }
+}
+
+// === ③ 评论 @提及：光标处检测 @ 触发成员浮层 ===
+function tduxCmtInput() {
+  const inp = $('#td-cmt');
+  if (!inp) return;
+  const pos = inp.selectionStart;
+  const before = inp.value.slice(0, pos);
+  const m = before.match(/@([^\s@]*)$/);
+  const box = $('#td-at-box');
+  if (!m || !_tdUsers) { if (box) box.style.display = 'none'; return; }
+  const kw = m[1].toLowerCase();
+  const hits = _tdUsers.filter(u => !kw || (u.display_name || '').toLowerCase().includes(kw)).slice(0, 6);
+  if (!hits.length) { box.style.display = 'none'; return; }
+  box.innerHTML = hits.map((u, i) =>
+    '<div class="td-at-item' + (i === 0 ? ' sel' : '') + '" onclick="tduxAtPick(' + u.id + ',\'' + esc(u.display_name || ('#' + u.id)).replace(/'/g, '') + '\')">@' + esc(u.display_name || ('#' + u.id)) + '</div>').join('');
+  box.style.display = 'block';
+}
+// 选中候选：替换 @kw 为 @名字 （发送时前端把名字映射回 id 提交 user_ids）
+function tduxAtPick(uid, name) {
+  const inp = $('#td-cmt');
+  const pos = inp.selectionStart;
+  const before = inp.value.slice(0, pos).replace(/@([^\s@]*)$/, '@' + name + ' ');
+  inp.value = before + inp.value.slice(pos);
+  inp.dataset.picked = (inp.dataset.picked ? inp.dataset.picked.split(',').map(Number) : []).concat(uid).join(',');
+  $('#td-at-box').style.display = 'none';
+  inp.focus();
+}
+
+// === ⑤ 附件缩略图（图片类内联预览） ===
+function tduxFileThumb(f) {
+  const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.file_name || '');
+  if (!isImg) return '';
+  return '<a href="/uploads/projects/' + f.file_path + '" target="_blank"><img class="td-thumb" src="/uploads/projects/' + f.file_path + '" alt="' + esc(f.file_name) + '" loading="lazy"></a>';
 }
 
 

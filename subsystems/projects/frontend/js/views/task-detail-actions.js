@@ -167,10 +167,19 @@ async function tdFileDel(fid) {
   catch (e) { showToast(e.message, 'err'); }
 }
 async function tdAddComment() {
-  const content = $('#td-cmt').value.trim();
+  const inp = $('#td-cmt');
+  const content = inp.value.trim();
   if (!content) return;
-  try { await api('POST', PApi.taskComments(_tid), { content }); $('#td-cmt').value = ''; tdRefresh(); }
-  catch (e) { showToast(e.message, 'err'); }
+  try {
+    const r = await api('POST', PApi.taskComments(_tid), { content });
+    // 方案A-③：@提及通知（前端把选中的 user_ids 交给 mention-notify；comment_id 用于落 mentions 列）
+    const picked = (inp.dataset.picked || '').split(',').map(Number).filter(Boolean);
+    if (picked.length) {
+      try { await api('POST', PApi.task(_tid) + '/mention-notify', { user_ids: picked, comment_id: (r && r.id) || null }); } catch (e2) { /* 通知失败不阻塞评论 */ }
+      delete inp.dataset.picked;
+    }
+    inp.value = ''; tdRefresh();
+  } catch (e) { showToast(e.message, 'err'); }
 }
 // 附件上传：FormData + fetch（credentials 带 session cookie），校验响应状态码
 async function tdUploadFile() {
