@@ -1,4 +1,4 @@
-/** BUNDLE vbmtrzn8rs — 27 files */
+/** BUNDLE vbmts208f8 — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -943,9 +943,9 @@ async function renderProjects() {
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ')">删除</fluent-button></span>'
       : '') +
     '</fluent-card>').join('');
-  // 单击项目卡 → 跳任务列表并筛选该项目
+  // 单击项目卡 → 项目详情弹窗（2026-09-08 借共享 detail-modal 架构）；原「跳任务列表」收进弹窗内「查看任务列表」按钮
   document.querySelectorAll('#proj-list .kb-stat').forEach(el => {
-    el.onclick = () => location.hash = '#/list?project=' + el.dataset.k;
+    el.onclick = () => openProjectDetail(Number(el.dataset.k));
   });
 }
 
@@ -1102,6 +1102,98 @@ async function pmRemoveOk(mid) {
     $('#pm-ref-list').innerHTML = pmRefRows(refs, true);
   } catch (e) { showToast(e.message, 'err'); }
 }
+
+
+/* --- subsystems/projects/frontend/js/views/project-detail-modal.js --- */
+// views/project-detail-modal.js — 项目详情弹窗（2026-09-08 借共享 detail-modal.js 架构，方案B）
+// 入口：项目列表卡片点击（原跳列表行为保留：点「任务」按钮跳，点卡片其它区域出弹窗）
+// 内容：信息/成员/任务统计 三 Tab；复用 DENSITY/dirty/骨架 屏（detail-modal.js 内建）
+var _pjd = null; // 当前弹窗实例
+
+function openProjectDetail(pid) {
+  _pjd = openDetailModal({
+    id: 'project-' + pid,
+    fetchData: async function () {
+      // 并行拉：项目主数据 + 成员 + 项目任务（详情弹窗一次取齐，弹窗内免二次请求）
+      const [p, members, tasks] = await Promise.all([
+        api('GET', PApi.projects(pid)),
+        api('GET', PApi.projects(pid) + '/members').catch(function () { return []; }),
+        api('GET', PApi.projectTasks(pid)).catch(function () { return []; })
+      ]);
+      return { project: p, members: members, tasks: tasks };
+    },
+    buildHead: function (d) {
+      const p = d.project;
+      const st = p.status === 'DONE' ? '<span class="pk-tag done">已完成</span>' : '<span class="pk-tag active">进行中</span>';
+      return '<b>' + esc(p.name) + '</b> ' + st;
+    },
+    tabs: function (d) {
+      return [
+        { key: 'info', label: '信息', enabled: true },
+        { key: 'members', label: '成员', enabled: true },
+        { key: 'tasks', label: '任务统计', enabled: true }
+      ];
+    },
+    density: function (key) { return key === 'info' ? 'd-high' : 'd-mid'; },
+    buildTabContent: function (d, key) {
+      const p = d.project;
+      if (key === 'info') {
+        return '<div class="overview-cards">' +
+          '<div class="overview-card"><div class="title">任务进度</div><div style="font-size:20px;font-weight:700">' + p.done_count + '<span style="font-size:13px;color:#64748b">/' + p.task_count + '</span></div>' +
+          '<div class="pk-progress" style="margin-top:6px"><span class="pk-progress-bar" style="width:' + (p.task_count ? Math.round(p.done_count / p.task_count * 100) : 0) + '%"></span></div></div>' +
+          '<div class="overview-card"><div class="title">描述</div><div style="font-size:13px;min-height:36px">' + esc(p.description || '—') + '</div></div>' +
+          '<div class="overview-card"><div class="title">创建时间</div><div style="font-size:13px">' + fmt(p.created_at) + '</div></div>' +
+          '</div>' +
+          '<div class="pk-filters" style="margin-top:12px">' +
+          '<fluent-button appearance="secondary" size="small" onclick="_pjdGoTasks(' + p.id + ')">查看任务列表</fluent-button>' +
+          '<fluent-button appearance="secondary" size="small" onclick="_pjdGoKanban(' + p.id + ')">打开任务看板</fluent-button>' +
+          '<fluent-button appearance="secondary" size="small" onclick="projEdit(' + p.id + ')">编辑项目</fluent-button>' +
+          '<fluent-button appearance="secondary" size="small" onclick="projMembers(' + p.id + ')">管理成员</fluent-button></div>';
+      }
+      if (key === 'members') {
+        const ms = d.members || [];
+        if (!ms.length) return '<div class="muted" style="padding:16px 0">暂无成员</div>';
+        return '<div class="pk-row" style="font-weight:600;border-bottom:1px solid #f1f5f9"><span class="pk-name">姓名</span><span>部门</span><span>角色</span></div>' +
+          ms.map(m => '<div class="pk-row"><span class="pk-name">' + esc(m.display_name || ('#' + m.user_id)) + (m.is_owner ? ' <span class="pk-tag done">owner</span>' : '') + '</span>' +
+          '<span>' + esc(m.dept || '—') + '</span><span class="muted">' + esc(ROLE_CN[m.role] || m.role || '—') + '</span></div>').join('');
+      }
+      if (key === 'tasks') {
+        const ts = d.tasks || [];
+        if (!ts.length) return '<div class="muted" style="padding:16px 0">暂无任务</div>';
+        const by = {};
+        ts.forEach(t => { const k = t.status_eff || t.status; (by[k] = by[k] || []).push(t); });
+        const heads = '<div class="pk-row" style="font-weight:600;border-bottom:1px solid #f1f5f9"><span class="pk-name">任务</span><span>责任人</span><span>状态</span><span>计划日</span></div>';
+        // 超过 30 条只统计 + 提示去列表看全量（弹窗内不做长列表）
+        if (ts.length > 30) {
+          return '<div style="margin-bottom:10px">' + Object.keys(by).map(k =>
+            '<span class="pk-tag ' + (k === 'DONE' ? 'done' : k === 'OVERDUE' ? 'overdue' : 'active') + '" style="margin-right:6px">' + (TASK_STATUS_CN[k] || k) + ' ' + by[k].length + '</span>').join(' ') + '</div>' +
+            '<div class="muted">任务较多（' + ts.length + ' 条），<a class="link" onclick="_pjdGoTasks(' + p.id + ')" style="cursor:pointer">去任务列表查看全量 →</a></div>' +
+            heads + ts.slice(0, 10).map(t => _pjdTaskRow(t)).join('');
+        }
+        return heads + ts.map(t => _pjdTaskRow(t)).join('');
+      }
+      return '';
+    },
+    footer: function (d) {
+      return '<fluent-button appearance="neutral" size="small" onclick="_pjd.close()">关闭</fluent-button>';
+    },
+    toast: showToast
+  });
+  _pjd.open(pid);
+}
+// 任务行渲染（弹窗内复用）
+function _pjdTaskRow(t) {
+  const st = t.status_eff || t.status;
+  const cls = st === 'DONE' ? 'done' : st === 'OVERDUE' ? 'overdue' : st === 'IN_PROGRESS' ? 'active' : '';
+  return '<div class="pk-row"><span class="pk-name" style="cursor:pointer" onclick="_pjdGoTask(' + t.id + ')">' + esc(t.title.length > 18 ? t.title.slice(0, 18) + '…' : t.title) + '</span>' +
+    '<span>' + esc(t.assignee_name || '未指派') + '</span>' +
+    '<span><span class="pk-tag ' + cls + '">' + (TASK_STATUS_CN[st] || st) + '</span></span>' +
+    '<span class="muted">' + fmt(t.planned_date) + '</span></div>';
+}
+// 弹窗内跳转（关弹窗 + 深链）
+function _pjdGoTasks(pid) { if (_pjd) _pjd.close(); location.hash = '#/list?project=' + pid; }
+function _pjdGoKanban(pid) { if (_pjd) _pjd.close(); location.hash = '#/kanban?project=' + pid; }
+function _pjdGoTask(tid) { if (_pjd) _pjd.close(); location.hash = '#/tasks/' + tid; }
 
 
 /* --- subsystems/projects/frontend/js/views/milestones.js --- */

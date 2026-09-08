@@ -1,0 +1,4 @@
+/* project-detail-modal.css — 项目详情弹窗微调（项目子系统内自治；.sk/.overview-card/detail-tabs-top 样式已由共享 app.css 提供） */
+/* 项目详情弹窗内 pk-row 行距更紧凑（弹窗内密度） */
+#fluent-modal.dm-modal .pk-row{padding:6px 0}
+#fluent-modal.dm-modal .pk-tag{font-size:11px;padding:1px 8px}

@@ -18,9 +18,9 @@ async function renderProjects() {
         '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();projDel(' + p.id + ')">删除</fluent-button></span>'
       : '') +
     '</fluent-card>').join('');
-  // 单击项目卡 → 跳任务列表并筛选该项目
+  // 单击项目卡 → 项目详情弹窗（2026-09-08 借共享 detail-modal 架构）；原「跳任务列表」收进弹窗内「查看任务列表」按钮
   document.querySelectorAll('#proj-list .kb-stat').forEach(el => {
-    el.onclick = () => location.hash = '#/list?project=' + el.dataset.k;
+    el.onclick = () => openProjectDetail(Number(el.dataset.k));
   });
 }
 
