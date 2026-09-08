@@ -66,19 +66,38 @@ describe('GET /api/subsystems', () => {
     expect(typeof sub.navCount).toBe('number');
   });
 
-  // 2026-09-08 上线可见性过滤：默认列表仅含 deployed:true 子系统（当前线上= samples/fixtures）
-  it('默认列表应仅返回已上线子系统（deployed:true），不含 control/workbench/projects', async () => {
-    const { agent } = await login('admin', 'admin123');
+  // 2026-09-08 上线可见性过滤（数据驱动断言：以 ?all=1 全量清单的 deployed 标记为期望，避免硬编码在线清单随管理面板切换而失效）
+  it('普通用户（RD）默认列表应仅返回已上线子系统（deployed:true）', async () => {
+    // 先取 ADMIN 全量清单作为期望基准
+    const { agent: adminAgent } = await login('admin', 'admin123');
+    const full = (await adminAgent.get('/api/subsystems?all=1')).body;
+    const notDeployedIds = full.filter(function (s) { return !s.deployed; }).map(function (s) { return s.id; });
+    const { agent } = await login('rd01', 'rd123');
     const res = await agent.get('/api/subsystems');
     expect(res.status).toBe(200);
     const ids = res.body.map(function (s) { return s.id; });
+    // 返回项均应标记已上线，且不含任何未上线子系统
+    res.body.forEach(function (s) { expect(s.deployed).toBe(true); });
+    notDeployedIds.forEach(function (id) { expect(ids).not.toContain(id); });
+    // 已上线的样品/治具应可见
     expect(ids).toContain('samples');
     expect(ids).toContain('fixtures');
-    expect(ids).not.toContain('control');
-    expect(ids).not.toContain('workbench');
-    expect(ids).not.toContain('projects');
-    // 返回项均应标记已上线
-    res.body.forEach(function (s) { expect(s.deployed).toBe(true); });
+  });
+
+  // 2026-09-08 二次调整：ADMIN 管理需要，默认即返回全量（含未上线，前端以 deployed 标记渲染半透明入口）
+  it('ADMIN 默认列表应返回全量（与 ?all=1 一致，未上线项带 deployed:false 标记）', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const def = (await agent.get('/api/subsystems')).body;
+    const full = (await agent.get('/api/subsystems?all=1')).body;
+    expect(def.length).toBe(full.length);
+    const defIds = def.map(function (s) { return s.id; }).sort();
+    const fullIds = full.map(function (s) { return s.id; }).sort();
+    expect(defIds).toEqual(fullIds);
+    // 稳定锚点：samples 恒已上线；projects 恒未上线且仅 ADMIN 可见
+    const samples = full.find(function (s) { return s.id === 'samples'; });
+    expect(samples.deployed).toBe(true);
+    const projects = full.find(function (s) { return s.id === 'projects'; });
+    expect(projects).toBeDefined();
   });
 
   it('应包含样品管理子系统（登录后）', async () => {
@@ -97,7 +116,7 @@ describe('GET /api/subsystems', () => {
     expect(fixtures.name).toBe('治具管理');
   });
 
-  // ?all=1 全量清单：仅 ADMIN 生效（管理页使用）
+  // ?all=1 全量清单（2026-09-08 起与 ADMIN 默认列表等效，参数向后兼容保留）
   it('ADMIN 传 ?all=1 应看到全量（含未上线 control/workbench/projects）', async () => {
     const { agent } = await login('admin', 'admin123');
     const res = await agent.get('/api/subsystems?all=1');
@@ -110,17 +129,17 @@ describe('GET /api/subsystems', () => {
     expect(ids).toContain('projects');
   });
 
-  // 2026-09-08：非 ADMIN 传 all=1 静默降级为过滤列表（不报错、不泄露未上线清单）
-  it('非 ADMIN（RD）传 ?all=1 应静默降级，仍只看到已上线子系统', async () => {
+  // 2026-09-08：普通用户传 all=1 不扩权（数据驱动断言，不泄露任何未上线清单）
+  it('非 ADMIN（RD）传 ?all=1 应不扩权，仍只看到已上线子系统', async () => {
+    const { agent: adminAgent } = await login('admin', 'admin123');
+    const full = (await adminAgent.get('/api/subsystems?all=1')).body;
+    const notDeployedIds = full.filter(function (s) { return !s.deployed; }).map(function (s) { return s.id; });
     const { agent } = await login('rd01', 'rd123');
     const res = await agent.get('/api/subsystems?all=1');
     expect(res.status).toBe(200);
     const ids = res.body.map(function (s) { return s.id; });
-    expect(ids).toContain('samples');
-    expect(ids).toContain('fixtures');
-    expect(ids).not.toContain('control');
-    expect(ids).not.toContain('workbench');
-    expect(ids).not.toContain('projects');
+    res.body.forEach(function (s) { expect(s.deployed).toBe(true); });
+    notDeployedIds.forEach(function (id) { expect(ids).not.toContain(id); });
   });
 
   // 2026-08-07 角色过滤（未上线子系统的角色断言改走 ?all=1 全量接口）

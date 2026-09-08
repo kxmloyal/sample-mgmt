@@ -347,7 +347,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/dashboard` | GET | 是 | 样品看板数据 |
 | `/api/workbench` | GET | 是 | 工作台合并数据（样品+治具积压）；筛选 type/level/dept/apply_dept/keyword/stage/dormant/min_hours/max_hours（兼容旧参数 item_type）+ 分页 limit/offset（≤500）；返回 items/total/limit/offset/summary/deptStats/applyDepts |
 | `/api/workbench/settings` | GET/PUT | 是(ADMIN 写) | 工作台积压阈值 |
-| `/api/subsystems` | GET | 登录 | 已注册子系统清单（门户渲染；2026-09-08 起默认仅返回 deployed:true 已上线子系统；`?all=1` 仅 ADMIN 可看全量含未上线；登录按 roles.use 过滤，未登录返回空数组）|
+| `/api/subsystems` | GET | 登录 | 已注册子系统清单（门户渲染；2026-09-08 起普通用户仅返回 deployed:true 已上线子系统；ADMIN 返回全量含未上线（门户半透明展示）；`?all=1` 兼容保留效果等同 ADMIN 默认；未登录返回空数组）|
 | `/api/subsystems/:id/deployed` | PUT | 是(ADMIN) | 子系统上线开关（双向切换 deployed，切换即生效门户显隐 + seed/jest 护栏，门户刷新即生效无需重启）|
 | `/api/portal/prefs` | GET | 是 | 当前用户门户卡片排序偏好（无记录返回空数组）|
 | `/api/portal/prefs` | PUT | 是 | 保存/清除排序偏好（order=[] 或 null 清除）|

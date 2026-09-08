@@ -673,8 +673,8 @@ module.exports = { register, initDB, seed };
 
 | 端点 | 用途 |
 |---|---|
-| `GET /api/subsystems` | 获取已注册子系统的 manifest 列表（门户卡片渲染）；2026-09-08 起默认仅返回 `deployed:true` 已上线子系统（未上线不在门户展示，见 §20）|
-| `GET /api/subsystems?all=1` | 全量清单（含未上线），仅 ADMIN 生效（子系统管理面板使用）；非 ADMIN 传 `all=1` 静默降级为过滤列表 |
+| `GET /api/subsystems` | 获取已注册子系统的 manifest 列表（门户卡片渲染）；2026-09-08 起普通用户仅返回 `deployed:true` 已上线子系统；**ADMIN 返回全量（含未上线，门户以半透明+「未上线」角标渲染）**，见 §20 |
+| `GET /api/subsystems?all=1` | 全量清单（2026-09-08 二次调整后与 ADMIN 默认列表等效，参数向后兼容保留；普通用户传 `all=1` 不扩权仍为过滤列表） |
 | `GET /api/subsystems/:id` | 获取单个子系统的 manifest |
 | `PUT /api/subsystems/:id/manifest` | 更新 manifest.json（ADMIN 专属，子系统管理面板使用） |
 
@@ -929,7 +929,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 
 - 子系统的 `manifest.json` 顶层字段 `"deployed": true` 即代表该子系统**已正式上线**（单一事实来源，见 §17.3）。
 - 未设置或 `false` = 未上线（开发中），可自由注入测试数据。
-- **门户可见性（2026-09-08）**：`GET /api/subsystems` 默认仅返回 `deployed:true` 子系统——未上线子系统不在门户首页展示入口（管理页 `?all=1` 可看全量）。在管理面板切换上线/下线后门户刷新即生效，无需重启服务。
+- **门户可见性（2026-09-08，二次调整）**：`GET /api/subsystems` 普通用户仅返回 `deployed:true` 已上线子系统（未上线不在门户展示入口）；**ADMIN 返回全量**（含未上线，门户以半透明+「未上线」角标渲染，仍可点击进入），保证管理入口不被过滤误伤。管理面板切换上线/下线后门户刷新即生效，无需重启服务。
 - 上线/下线标记变更 MUST 经用户明确授权，不得擅自修改。
 
 ### 20.2 已上线子系统的硬性禁令（MUST）

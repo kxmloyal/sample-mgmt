@@ -26,6 +26,10 @@ body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helv
 .login-row button:disabled{opacity:.6;cursor:not-allowed}
 .login-err{color:#dc2626;font-size:12px;text-align:center;min-height:16px}
 #user-info{font-size:13px}
+/* 未上线子系统卡片（仅 ADMIN 可见）：半透明 + 角标，仍可点击进入（2026-09-08） */
+.portal-card.draft{position:relative;opacity:.55}
+.portal-card.draft:hover{opacity:.9}
+.card-draft-tag{position:absolute;top:10px;right:12px;font-size:11px;line-height:1.4;color:#92400e;background:#fef3c7;border:1px solid #f59e0b;border-radius:999px;padding:0 8px}
 </style>
 <link rel="stylesheet" href="/css/app.css?v=20260805b">
 </head>
@@ -90,8 +94,12 @@ function mergeOrder(list, prefs) {
 function cardHtml(m) {
   var icon = ICONS[m.icon] || ICONS._default;
   var href = state.editMode ? 'javascript:void(0)' : m.route.entry;
-  return '<a class="portal-card" draggable="' + state.editMode + '" data-id="' + m.id + '" href="' + href + '">' +
+  // 未上线子系统（仅 ADMIN 可见）：半透明入口 + 角标提示，仍可点击进入（2026-09-08）
+  var draft = m.deployed ? '' : ' draft';
+  var badge = m.deployed ? '' : '<span class="card-draft-tag">未上线</span>';
+  return '<a class="portal-card' + draft + '" draggable="' + state.editMode + '" data-id="' + m.id + '" href="' + href + '">' +
     (state.editMode ? '<span class="card-grip" title="拖动排序">⋮⋮</span>' : '') +
+    badge +
     '<span class="card-icon">' + icon + '</span>' +
     '<h3>' + m.name + '</h3>' +
     '<span class="card-desc">' + (m.description || '') + '</span>' +

@@ -41,17 +41,17 @@ function register(app) {
   // 获取所有子系统（门户渲染用）— 每次请求实时扫描，确保 server.js 后加载的子系统也能被发现
   // 2026-08-07 角色过滤：已登录用户仅返回 manifest.roles.use 中允许其角色进入的子系统（projects 未完成仅 ADMIN 可见）；
   // 未登录返回空数组（不向匿名访问暴露子系统清单）
-  // 2026-09-08 上线可见性过滤（AGENTS.md §20）：默认仅返回 deployed:true 的已上线子系统（未上线不在门户展示入口）；
-  // 管理页传 ?all=1（ADMIN 专属）可获取全量清单；非 ADMIN 传 all=1 静默降级为过滤列表（不报错、不泄露未上线清单）
+  // 2026-09-08 上线可见性过滤（AGENTS.md §20）：普通用户仅返回 deployed:true 的已上线子系统（未上线不在门户展示入口）；
+  // ADMIN 管理需要：默认即返回全量清单（含未上线，前端以 deployed 标记渲染「未上线」样式），?all=1 参数向后兼容保留（效果等同默认）
   app.get('/api/subsystems', async function (req, res) {
     // 每次请求以磁盘为准重建 registry（PUT 已同步写磁盘，不会丢数据）
     registry = scanSubsystems();
     var u = await currentUser(req);
     if (!u) return res.json([]);
-    // ?all=1 请求全量（含未上线）：仅 ADMIN 生效；manifest 未写 deployed 视为未上线（默认隐藏）
-    var wantAll = req.query.all === '1' && u.role === 'ADMIN';
+    // ADMIN 返回全量（含未上线，?all=1 兼容保留）；普通用户仅返回已上线（manifest 未写 deployed 视为未上线）
+    var wantAll = u.role === 'ADMIN';
     var list = Object.values(registry).filter(function (m) {
-      if (!wantAll && m.deployed !== true) return false; // 未上线子系统默认不返回（门户隐藏）
+      if (!wantAll && m.deployed !== true) return false; // 未上线子系统对普通用户隐藏
       var use = m.roles && m.roles.use;
       if (!use || !use.length) return true; // 未声明 roles.use 视为所有人可见
       return use.indexOf(u.role) !== -1;
