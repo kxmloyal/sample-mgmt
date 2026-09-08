@@ -70,12 +70,13 @@ function ctlFieldGrid(o) {
 
 /** 主卡：单号/状态 + 字段 + 5阶段时间轴（11步明细折叠）+ 操作按钮
  *  2026-09-08 方案三：原「11步进度条 + 5阶段卡」双呈现合并——首屏仅 5 阶段卡 + 当前步提示，
- *  11 步明细收进 <details> 折叠（零 JS，原生展开），消除同信息三处重复、缩短首屏 */
+ *  11 步明细收进 <details> 折叠（零 JS，原生展开），消除同信息三处重复、缩短首屏；
+ *  同日回调：阶段卡恢复并列网格呈现（ctl-stage-grid），纵向堆叠占屏过高 */
 function ctlCardHtml(agg) {
   var o = agg.order;
   return '<div class="card"><div class="ctl-carat"><span class="mono">' + e(o.order_no) + '</span> '
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
-    + '<div class="ctl-sec">阶段进度</div>' + controlRenderStageCards(agg) + ctlStepsFold(agg)
+    + '<div class="ctl-sec">阶段进度</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>' + ctlStepsFold(agg)
     + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(agg) + '</div>'
     + ctlLabelBtn(o) + '</div>';
 }
