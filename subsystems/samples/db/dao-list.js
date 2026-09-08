@@ -27,6 +27,8 @@ module.exports = function createDaoList(deps) {
     if (opts.mine_uid) { where.push('created_by = ?'); params.push(opts.mine_uid); }
     // 领出超时未归还（口径与 listCheckoutOverdue 一致）
     if (opts.checkout_overdue === '1') { where.push("status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO_RET + " < " + NOW_UTC); }
+    // 角色待办（2026-09-08）：pending=role 由路由层注入，与看板「我的待办」同一 _roleTodoWhere 片段（uid 取会话不可伪造）
+    if (opts.pending_role) { var todo = _roleTodoWhere(opts.pending_role, opts.pending_uid); if (todo) { where.push(todo.sql); params.push.apply(params, todo.params); } }
     return { where: where, params: params };
   }
 
@@ -85,12 +87,22 @@ module.exports = function createDaoList(deps) {
     return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='CHECKED_OUT' AND expected_return_at IS NOT NULL AND " + ISO_RET + " < " + NOW_UTC + " ORDER BY expected_return_at ASC LIMIT 50");
   }
 
+  // 角色待办 WHERE 片段（2026-09-08 抽取共用）：看板「我的待办」(listMyPendingSamples) 与列表「待处理」快捷筛选
+  // (pending=role，经 routes-samples.js 注入，uid 取会话不可伪造) 同一事实来源，消除两端口径漂移（历史缺陷：RD 列表待处理漏「指派给我的退回重做」）
+  // 返回 {sql:'', params:[]}；ADMIN/未知角色返回 null（无角色待办语义，调用方自行决定降级行为）
+  function _roleTodoWhere(role, userId) {
+    if (role === 'RD') return { sql: "(status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?))", params: [userId] };
+    if (role === 'QA') return { sql: "status IN ('PRODUCED','RETURNING')", params: [] };
+    if (role === 'CUSTODY' || role === 'ME') return { sql: "status='RELEASED'", params: [] };
+    return null;
+  }
+
   function listMyPendingSamples(role, userId) {
     // 2026-09-04：上限 50→200（评审问题2：NEW 积压 57 条被静默截断 7 条；workbench 我的待办与样品看板共用本 DAO）
-    if (role === 'RD') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND (status='NEW' OR (status='RETURNING' AND retire_assigned_rd=?)) ORDER BY id DESC LIMIT 200", [userId]);
-    if (role === 'QA') return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status IN ('PRODUCED','RETURNING') ORDER BY id DESC LIMIT 200");
-    if (['CUSTODY','ME'].includes(role)) return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RELEASED' ORDER BY id DESC LIMIT 200");
-    return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 200');
+    // 2026-09-08：WHERE 抽取为 _roleTodoWhere 共用片段（列表待处理快捷筛选同口径）；ADMIN 原语义保留（全部样品前 200，前端已改提示文案）
+    var todo = _roleTodoWhere(role, userId);
+    if (!todo) return q('SELECT * FROM samples WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 200');
+    return q('SELECT * FROM samples WHERE deleted_at IS NULL AND ' + todo.sql + ' ORDER BY id DESC LIMIT 200', todo.params);
   }
 
   // 机型视图聚合（2026-09-05 二期，只读）：每机型样品总数/复检逾期/领用超时/状态分布/封面图
@@ -124,5 +136,5 @@ module.exports = function createDaoList(deps) {
     });
   }
 
-  return { listSamples, countAllSamples, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, aggregateModelsWall };
+  return { listSamples, countAllSamples, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, roleTodoWhere: _roleTodoWhere, aggregateModelsWall };
 };

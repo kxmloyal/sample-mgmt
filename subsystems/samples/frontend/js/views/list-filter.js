@@ -36,9 +36,12 @@ function quickFilter(type) {
   _quickFilterType = type;
   _roleScopeApplied = false; // 用户主动点快捷筛选 = 明确意图，覆盖角色范围
   if (type === 'pending') {
-    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
-    $('#f-status').value = ''; $('#f-dept').value = '';
-    loadSamplesWithStatus(st);
+    // 2026-09-08：pending=role 交由服务端按会话角色派生待办条件（与看板「我的待办」同口径，单一事实来源）；
+    // 修复历史缺陷：RD 旧实现仅 status=NEW，漏掉「指派给我的退回重做」；ADMIN 无角色待办语义（入口已隐藏，防御性回退全量）
+    if (me.role === 'ADMIN') { loadSamples(); return; }
+    _sampleIsOverdue = false;
+    _sampleBuildParams = function() { return _buildQueryParams('pending=role'); };
+    _fetchSamplePage(true);
     return;
   }
   if (type === 'overdue') { loadSamplesOverdue('1'); return; }

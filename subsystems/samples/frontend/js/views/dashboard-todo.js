@@ -28,7 +28,10 @@ function _renderTodoTable() {
   if (!box) return;
   var filterKey = _kbStats[_kbFilter] ? _kbStats[_kbFilter][2] : '';
   if (filterKey === 'total') filterKey = '';
-  var title = '我的待办（' + (ROLE[me.role] || me.role) + '）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '');
+  // 2026-09-08：ADMIN 无角色待办语义（DAO 返回全部样品前 200），标题改「最新样品」如实呈现，避免误导
+  var title = me.role === 'ADMIN'
+    ? '最新样品（管理员无角色待办，可经列表筛选查看各状态）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '')
+    : '我的待办（' + (ROLE[me.role] || me.role) + '）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '');
   var filtered = filterKey ? _todoData.filter(function(s){ return s.status === filterKey; }) : _todoData;
   _todoPager.total = filtered.length;
   if (!filtered.length) {

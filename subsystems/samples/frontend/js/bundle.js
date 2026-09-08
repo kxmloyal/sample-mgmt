@@ -1,4 +1,4 @@
-/** BUNDLE vbmtr2ubyv — 27 files */
+/** BUNDLE vbmtsjkv19 — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -587,7 +587,10 @@ function _renderTodoTable() {
   if (!box) return;
   var filterKey = _kbStats[_kbFilter] ? _kbStats[_kbFilter][2] : '';
   if (filterKey === 'total') filterKey = '';
-  var title = '我的待办（' + (ROLE[me.role] || me.role) + '）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '');
+  // 2026-09-08：ADMIN 无角色待办语义（DAO 返回全部样品前 200），标题改「最新样品」如实呈现，避免误导
+  var title = me.role === 'ADMIN'
+    ? '最新样品（管理员无角色待办，可经列表筛选查看各状态）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '')
+    : '我的待办（' + (ROLE[me.role] || me.role) + '）' + (filterKey ? ' · ' + (STAT_LABELS[filterKey] || filterKey) : '');
   var filtered = filterKey ? _todoData.filter(function(s){ return s.status === filterKey; }) : _todoData;
   _todoPager.total = filtered.length;
   if (!filtered.length) {
@@ -960,21 +963,24 @@ async function viewSamples() {
   var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
+  // 2026-09-08 方案C：保管/生技日常以「看板待接收 + 列表查找」为主，高级筛选（类型/项目/来源/机型/排序）默认隐藏精简首屏（保留 DOM 仅折叠，避免 chips/参数构建空引用；devtools 可展开无副作用）
+  var hideAdv = (me.role === 'CUSTODY' || me.role === 'ME') ? ' style="display:none"' : '';
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
-    '<fluent-select id="f-type" onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
-    '<fluent-select id="f-limit-item" onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
-    '<fluent-select id="f-source" onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
-    '<fluent-select id="f-model" onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
-    '<fluent-select id="f-sort" onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
+    '<fluent-select id="f-type"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
+    '<fluent-select id="f-limit-item"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<fluent-select id="f-source"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
+    '<fluent-select id="f-model"' + hideAdv + ' onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
+    '<fluent-select id="f-sort"' + hideAdv + ' onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button>' +
     // 机型视图切换入口（hash 路由切换；勿直调 viewSampleModelWall——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
-    '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>' +
+    // 2026-09-08：待处理=角色待办（与看板同口径）；ADMIN 无角色待办语义，隐藏入口（列表回归全量档案角色）
+    (me.role === 'ADMIN' ? '' : '<a class="link" style="font-size:12px" onclick="quickFilter(\'pending\')">待处理</a>') +
     '<a class="link" style="font-size:12px" onclick="quickFilter(\'overdue\')">逾期</a>' +
     '<a class="link" style="font-size:12px" onclick="quickFilter(\'soon\')">近7天</a>' +
     '<span id="f-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:10px"></span></div>' +
@@ -1071,9 +1077,12 @@ function quickFilter(type) {
   _quickFilterType = type;
   _roleScopeApplied = false; // 用户主动点快捷筛选 = 明确意图，覆盖角色范围
   if (type === 'pending') {
-    var st = me.role === 'RD' ? 'NEW' : me.role === 'QA' ? 'PRODUCED,RETURNING' : (me.role === 'CUSTODY' || me.role === 'ME') ? 'RELEASED' : '';
-    $('#f-status').value = ''; $('#f-dept').value = '';
-    loadSamplesWithStatus(st);
+    // 2026-09-08：pending=role 交由服务端按会话角色派生待办条件（与看板「我的待办」同口径，单一事实来源）；
+    // 修复历史缺陷：RD 旧实现仅 status=NEW，漏掉「指派给我的退回重做」；ADMIN 无角色待办语义（入口已隐藏，防御性回退全量）
+    if (me.role === 'ADMIN') { loadSamples(); return; }
+    _sampleIsOverdue = false;
+    _sampleBuildParams = function() { return _buildQueryParams('pending=role'); };
+    _fetchSamplePage(true);
     return;
   }
   if (type === 'overdue') { loadSamplesOverdue('1'); return; }

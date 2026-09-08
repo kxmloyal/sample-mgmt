@@ -17,6 +17,7 @@ function register(app) {
 
   // 列表筛选参数解析（列表与导出共用，保持两端口径一致）
   // 2026-09-07 角色相关数据范围：scope=role 时由服务端按会话身份派生范围条件（uid/role 不可客户端伪造）
+  // 2026-09-08 pending=role → 角色待办筛选（看板「我的待办」同口径，DAO roleTodoWhere 单一事实来源；uid 取会话不可伪造；ADMIN 无角色待办语义不注入）
   function _sampleFilterOpts(query, user) {
     return {
       status: query.status || undefined,
@@ -31,6 +32,9 @@ function register(app) {
       // mine=1 → 仅我创建的
       mine_uid: (query.mine === '1' && user && user.id) ? user.id : undefined,
       checkout_overdue: query.checkout_overdue || undefined,
+      // pending=role → 角色待办（与看板我的待办同源；仅非 ADMIN 生效）
+      pending_role: (query.pending === 'role' && user && user.role && user.role !== 'ADMIN') ? user.role : undefined,
+      pending_uid: user && user.id,
       // scope=role → 角色相关置顶排序（2026-09-07 排序版：相关排前、全量可见；ADMIN/未知角色不注入；无 scope 参数行为与旧版完全一致）
       role_scope_role: query.scope === 'role' && user && user.role && user.role !== 'ADMIN' ? user.role : undefined,
       role_scope_uid: user && user.id

@@ -64,7 +64,7 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 - **角色相关置顶（2026-09-07，排序版）**：不同角色打开列表时相关样品自动排最前（服务端按会话身份派生 `scope=role` 排序，客户端不可伪造）——研发→**我创建的**置顶、品保→待发行/退回审核/复检临期置顶、保管/生技→在库/借出/归还中置顶、管理员→最新优先；**其余样品按最新跟在后面，数据全可见、无空态**；用户主动查询/筛选/换排序即回默认最新优先
 - 多维度组合筛选（状态/部门/类型/限度项目/来源/机型 + 关键词搜索；支持 `#/samples?model=机型码` 深链预选机型）
-- 快捷筛选（待处理/逾期/近7天到期）+ 芯片可视化
+- 快捷筛选（待处理/逾期/近7天到期）+ 芯片可视化；**「待处理」= 角色待办（2026-09-08）**：与看板「我的待办」同一服务端口径（pending=role，DAO 单一事实来源）——研发=待制作+指派给我的退回重做、品保=待发行+待审核退回、保管/生技=待接收；管理员无角色待办语义，隐藏该快捷入口
 - 响应式表格（table-layout:fixed + colgroup）+ 列宽拖拽
 - 移动端 data-label 卡片式布局
 - 分页（默认 20 条/页）
@@ -297,7 +297,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/me` | GET | 是 | 当前用户信息 |
 | `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
 | `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
-| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT）|
+| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT、`pending=role` 角色待办——与看板我的待办同口径，仅非 ADMIN 生效）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
 | `/api/samples/batch` | POST | 是 | 批量新建样品（2026-09-07，对齐治具批量申请：RD/ADMIN、1~50 条、单事务整体回滚；批次级 model/source_type/station/card_version 共用，行级 name/notes/sample_type/limit_item/test_standard——限度样品信息按行填写；返回 id+编号清单供 `cards/print` 批量单页打印）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
