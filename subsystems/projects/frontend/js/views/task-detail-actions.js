@@ -35,7 +35,14 @@ async function tdEdit() {
     '<label>备注</label><fluent-text-area id="te-notes">' + esc(t.notes || '') + '</fluent-text-area>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdEditSave(' + t.version + ')">保存</fluent-button>' +
-            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+            '<fluent-button appearance="neutral" size="small" onclick="tdCloseDirty()">取消</fluent-button>',
+      head: '<h3>编辑任务</h3>' });
+  _tdDirty = false;
+  // 脏守卫（借鉴样品详情弹窗 D1.5）：任一字段变更置位，保存/关闭时拦截确认
+  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', function () { _tdDirty = true; });
+  });
 }
 async function tdEditSave(version) {
   const title = $('#te-title').value.trim();
@@ -47,8 +54,14 @@ async function tdEditSave(version) {
     description: $('#te-desc').value, solution: $('#te-solution').value, notes: $('#te-notes').value,
     version: version
   };
-  try { await api('PUT', PApi.task(_tid), body); showToast('已保存'); pCloseModal(); tdRefresh(); }
+  try { await api('PUT', PApi.task(_tid), body); _tdDirty = false; showToast('已保存'); pCloseModal(); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
+}
+// 脏守卫关闭（编辑弹窗取消按钮共用）：有未保存修改先确认
+function tdCloseDirty() {
+  if (_tdDirty && !confirm('有未保存的修改，关闭将丢失，继续？')) return;
+  _tdDirty = false;
+  pCloseModal();
 }
 // v2：加子任务弹窗（标题 + 责任人 + 日期）
 async function tdAddSub() {

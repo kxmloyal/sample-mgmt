@@ -1,4 +1,9 @@
 /* task-detail-ux.css — 方案A 任务详情交互强化样式（项目子系统内自治） */
+/* 骨架屏（借鉴样品详情弹窗 .sk 模式；项目子系统内自治同名类） */
+.td-sk-row{display:flex;flex-direction:column;gap:10px;padding:6px 0}
+.sk{position:relative;overflow:hidden;background:#eef2f7;border-radius:6px}
+.sk::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);animation:sk-wave 1.3s infinite}
+@keyframes sk-wave{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .td-quick{display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0}
 .td-quick-hint{font-size:11px;margin-left:auto}
 .td-sub-row{gap:8px;cursor:default}

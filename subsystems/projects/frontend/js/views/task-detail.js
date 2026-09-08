@@ -2,6 +2,9 @@
 let _tid = 0;
 // v2：详情页 = 主信息卡 + 下方 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 // P1-1 修复：详情 payload 前端缓存（_tdCache），切 tab 复用缓存不再重复拉全量；tdRefresh/写操作后清缓存强制刷新。
+// 借鉴样品详情弹窗三模式（2026-09-08）：①骨架屏先行 ②请求序号竞态守卫 ③编辑脏守卫
+let _tdReqSeq = 0;                 // 竞态守卫：快速切换任务时丢弃过期渲染
+var _tdDirty = false;              // 脏守卫：编辑弹窗有未保存修改标记（tdEdit 打开置位，保存/关闭复位）
 var _tdTab = 'subs';
 var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
 var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
@@ -10,17 +13,27 @@ const TD_TABS = [
   { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
 ];
 async function renderTaskDetail(tid) {
+  if (_tdDirty && !confirm('详情有未保存的修改，离开将丢失，继续？')) { // 脏守卫：换任务前拦截
+    location.hash = '#/tasks/' + _tid; return;
+  }
+  const seq = ++_tdReqSeq;
   _tid = tid;
+  _tdDirty = false;
   const v = $('#view');
+  // ① 骨架屏先行（借鉴 samples viewDetail：标题条 + 主卡占位 + tabs 占位），数据到达后替换
   v.innerHTML =
-    '<div class="pk-panel" id="td-info">加载中…</div>' +
+    '<div class="pk-panel" id="td-info"><div class="td-sk-row"><div class="sk" style="height:20px;width:42%"></div>' +
+    '<div class="sk" style="height:12px;width:30%"></div><div class="sk" style="height:12px;width:55%"></div>' +
+    '<div class="sk" style="height:12px;width:38%"></div><div class="sk" style="height:12px;width:50%"></div></div></div>' +
     '<div class="pk-panel" style="margin-top:14px">' +
     '<div class="pk-tabs" id="td-tabs"></div>' +
-    '<div id="td-body"></div></div>' +
+    '<div id="td-body"><div class="sk" style="height:64px;margin-top:8px"></div></div></div>' +
     '<div class="td-at-box" id="td-at-box" style="display:none"></div>'; // @提及候选浮层
   // @补全成员缓存（进详情拉一次；失败静默退化为无补全）
   _tdUsers = await api('GET', '/api/projects/users').catch(function () { return null; });
+  if (seq !== _tdReqSeq) return; // 期间已切走：丢弃
   await tdLoadSection('info');
+  if (seq !== _tdReqSeq) return;
   tdSwitchTab('subs');
 }
 function tdSwitchTab(k) {

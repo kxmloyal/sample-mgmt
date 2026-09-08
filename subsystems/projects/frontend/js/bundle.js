@@ -1,4 +1,4 @@
-/** BUNDLE vbmtryjtpz — 27 files */
+/** BUNDLE vbmtrzn8rs — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2297,6 +2297,9 @@ async function ntfReadAll() {
 let _tid = 0;
 // v2：详情页 = 主信息卡 + 下方 tabs（子任务/评论/附件/关联/日志），分区加载替代全量重渲染
 // P1-1 修复：详情 payload 前端缓存（_tdCache），切 tab 复用缓存不再重复拉全量；tdRefresh/写操作后清缓存强制刷新。
+// 借鉴样品详情弹窗三模式（2026-09-08）：①骨架屏先行 ②请求序号竞态守卫 ③编辑脏守卫
+let _tdReqSeq = 0;                 // 竞态守卫：快速切换任务时丢弃过期渲染
+var _tdDirty = false;              // 脏守卫：编辑弹窗有未保存修改标记（tdEdit 打开置位，保存/关闭复位）
 var _tdTab = 'subs';
 var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
 var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
@@ -2305,17 +2308,27 @@ const TD_TABS = [
   { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
 ];
 async function renderTaskDetail(tid) {
+  if (_tdDirty && !confirm('详情有未保存的修改，离开将丢失，继续？')) { // 脏守卫：换任务前拦截
+    location.hash = '#/tasks/' + _tid; return;
+  }
+  const seq = ++_tdReqSeq;
   _tid = tid;
+  _tdDirty = false;
   const v = $('#view');
+  // ① 骨架屏先行（借鉴 samples viewDetail：标题条 + 主卡占位 + tabs 占位），数据到达后替换
   v.innerHTML =
-    '<div class="pk-panel" id="td-info">加载中…</div>' +
+    '<div class="pk-panel" id="td-info"><div class="td-sk-row"><div class="sk" style="height:20px;width:42%"></div>' +
+    '<div class="sk" style="height:12px;width:30%"></div><div class="sk" style="height:12px;width:55%"></div>' +
+    '<div class="sk" style="height:12px;width:38%"></div><div class="sk" style="height:12px;width:50%"></div></div></div>' +
     '<div class="pk-panel" style="margin-top:14px">' +
     '<div class="pk-tabs" id="td-tabs"></div>' +
-    '<div id="td-body"></div></div>' +
+    '<div id="td-body"><div class="sk" style="height:64px;margin-top:8px"></div></div></div>' +
     '<div class="td-at-box" id="td-at-box" style="display:none"></div>'; // @提及候选浮层
   // @补全成员缓存（进详情拉一次；失败静默退化为无补全）
   _tdUsers = await api('GET', '/api/projects/users').catch(function () { return null; });
+  if (seq !== _tdReqSeq) return; // 期间已切走：丢弃
   await tdLoadSection('info');
+  if (seq !== _tdReqSeq) return;
   tdSwitchTab('subs');
 }
 function tdSwitchTab(k) {
@@ -2478,7 +2491,14 @@ async function tdEdit() {
     '<label>备注</label><fluent-text-area id="te-notes">' + esc(t.notes || '') + '</fluent-text-area>' +
     '</div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="tdEditSave(' + t.version + ')">保存</fluent-button>' +
-            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+            '<fluent-button appearance="neutral" size="small" onclick="tdCloseDirty()">取消</fluent-button>',
+      head: '<h3>编辑任务</h3>' });
+  _tdDirty = false;
+  // 脏守卫（借鉴样品详情弹窗 D1.5）：任一字段变更置位，保存/关闭时拦截确认
+  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', function () { _tdDirty = true; });
+  });
 }
 async function tdEditSave(version) {
   const title = $('#te-title').value.trim();
@@ -2490,8 +2510,14 @@ async function tdEditSave(version) {
     description: $('#te-desc').value, solution: $('#te-solution').value, notes: $('#te-notes').value,
     version: version
   };
-  try { await api('PUT', PApi.task(_tid), body); showToast('已保存'); pCloseModal(); tdRefresh(); }
+  try { await api('PUT', PApi.task(_tid), body); _tdDirty = false; showToast('已保存'); pCloseModal(); tdRefresh(); }
   catch (e) { showToast(e.message, 'err'); }
+}
+// 脏守卫关闭（编辑弹窗取消按钮共用）：有未保存修改先确认
+function tdCloseDirty() {
+  if (_tdDirty && !confirm('有未保存的修改，关闭将丢失，继续？')) return;
+  _tdDirty = false;
+  pCloseModal();
 }
 // v2：加子任务弹窗（标题 + 责任人 + 日期）
 async function tdAddSub() {
