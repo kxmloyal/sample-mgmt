@@ -326,7 +326,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/fixtures/:id/files/:fileId` | DELETE | 是 | 删除治具附件 |
 | `/api/fixtures/:id/files/:fileId/preview` / `download` | GET | 是 | 附件预览/下载 |
 | `/api/control/orders` | GET/POST | 是 | 管制单列表/新建管制申请 |
-| `/api/control/orders/stats` | GET | 是 | 管制看板统计 |
+| `/api/control/orders/stats` | GET | 是 | 管制看板统计（含 `signOverdue` 会签步骤级超时计数，阈值同 overdue_hours；列表支持 `sign_overdue=1` 联动筛选）|
 | `/api/control/orders/export` | GET | 是 | 管制单导出 CSV（复用筛选，忽略分页）|
 | `/api/control/orders/:id` | GET/PUT | 是 | 管制单详情/更新 |
 | `/api/control/orders/:id/transition` | POST | 是 | 管制状态机流转 |

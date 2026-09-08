@@ -3,25 +3,32 @@
 // 读取 route() 写入的 currentStatusFilter 作为初始状态筛选（看板阶段卡单击跳转）。
 
 var _ctlPager = { limit: 20, offset: 0, total: 0 };
-var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '', active: false, today: false, overdue: false };
+var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '', active: false, today: false, overdue: false, sign_overdue: false };
 var _ctlRows = [];            // 当前页已渲染行（委托单行内展开用，免重复请求）
 var _ctlNcrMap = {};          // order_id → ncr[] 聚合映射（委托单号列行内展开数据源）
 var _ctlExpandedOrder = null; // 当前行内展开的管制单 id
+var _ctlSearchTimer = null;   // 关键词防抖（2026-09-08 对齐 samples 300ms 即输即搜）
 
 async function renderList() {
   var view = $('#view');
   view.innerHTML = sendFilterHtml() + '<div id="ctl-sheet" class="ctl-sheet"></div>';
-  $('#ctl-field-q').value = _ctlQuery.q;
+  var qField = $('#ctl-field-q');
+  qField.value = _ctlQuery.q;
+  qField.addEventListener('input', function () {
+    clearTimeout(_ctlSearchTimer);
+    _ctlSearchTimer = setTimeout(function () { ctlFetchList(0); }, 300);
+  });
   var statusSel = $('#ctl-field-status');
   var initStatus = currentStatusFilter || _ctlQuery.status;
   if (initStatus) statusSel.value = initStatus;
   $('#ctl-field-apply_dept').value = _ctlQuery.apply_dept;
   $('#ctl-field-bad_type').value = _ctlQuery.bad_type;
   $('#ctl-field-sort').value = _ctlQuery.sort;
-  // 看板统计卡联动：进行中/今日新增/超期滞留（router.js 写入的哈希 query 筛选）
+  // 看板统计卡联动：进行中/今日新增/超期滞留/会签超时（router.js 写入的哈希 query 筛选）
   _ctlQuery.active = currentActiveFilter;
   _ctlQuery.today = currentTodayFilter;
   _ctlQuery.overdue = currentOverdueFilter;
+  _ctlQuery.sign_overdue = currentSignOverdueFilter;
   await ctlFetchList(0);
 }
 
@@ -60,10 +67,11 @@ function ctlQueryString() {
   var q = [];
   var map = { q: _ctlQuery.q, status: _ctlQuery.status, apply_dept: _ctlQuery.apply_dept, bad_type: _ctlQuery.bad_type, sort: _ctlQuery.sort };
   for (var k in map) { if (map[k] !== '' && map[k] != null) q.push(k + '=' + encodeURIComponent(map[k])); }
-  // 看板统计卡联动 quick filter：为 true 时输出 active=1/today=1/overdue=1
+  // 看板统计卡联动 quick filter：为 true 时输出 active=1/today=1/overdue=1/sign_overdue=1
   if (_ctlQuery.active) q.push('active=1');
   if (_ctlQuery.today) q.push('today=1');
   if (_ctlQuery.overdue) q.push('overdue=1');
+  if (_ctlQuery.sign_overdue) q.push('sign_overdue=1');
   return q.length ? '&' + q.join('&') : '';
 }
 
@@ -155,7 +163,7 @@ function ctlResetFilter() {
   $('#ctl-field-apply_dept').value = '';
   $('#ctl-field-bad_type').value = '';
   $('#ctl-field-sort').value = '';
-  _ctlQuery.active = _ctlQuery.today = _ctlQuery.overdue = false;
-  currentActiveFilter = currentTodayFilter = currentOverdueFilter = false;
+  _ctlQuery.active = _ctlQuery.today = _ctlQuery.overdue = _ctlQuery.sign_overdue = false;
+  currentActiveFilter = currentTodayFilter = currentOverdueFilter = currentSignOverdueFilter = false;
   ctlFetchList(0);
 }

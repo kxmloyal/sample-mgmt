@@ -25,6 +25,8 @@ var _ctlUtil = {
     var m = map[rec.decision] || ['待签', 'muted'];
     return '<span class="sign-state ' + m[1] + '">' + m[0] + (rec.signer_name ? ' · ' + rec.signer_name : '') + '</span>';
   },
+  /** 必填 label（带红星，前置提示而非提交后报错，2026-09-08 交互统一） */
+  reqLabel: function (text) { return '<label class="req">' + text + '</label>'; },
   /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色/部门判定）
    *  2026-09-04 修复与收紧：①并行判定（原顺序首步短路导致非首步角色按钮缺失）；
    *  ②按部门区分（与后端 resolveSignTarget 的 role+dept 双匹配一致）——
@@ -63,7 +65,7 @@ var _ctlUtil = {
       return {
         head: '会签 · ' + (node ? node.node_name : action),
         body: '<div class="ctl-form-grid">'
-          + '<div><label>会签决定</label><select id="cf-decision">' + opts + '</select></div>'
+          + '<div><label class="req">会签决定</label><select id="cf-decision">' + opts + '</select></div>'
           + '<div class="nf-full"><label class="req">会签意见</label><textarea id="cf-comment" rows="2" placeholder="填写意见或原因"></textarea></div></div>',
         foot: _ctlUtil.foot('sign')
       };
@@ -92,14 +94,15 @@ var _ctlUtil = {
       return {
         head: '报工',
         body: '<div class="ctl-form-grid">'
-          + '<div><label>良品数</label><input id="cf-good_qty" type="number" min="0"></div>'
-          + '<div><label>不良数</label><input id="cf-ng_qty" type="number" min="0"></div>'
-          + '<div><label>报废数</label><input id="cf-scrap_qty" type="number" min="0"></div>'
+          + '<div><label class="req">良品数</label><input id="cf-good_qty" type="number" min="0"></div>'
+          + '<div><label class="req">不良数</label><input id="cf-ng_qty" type="number" min="0"></div>'
+          + '<div><label class="req">报废数</label><input id="cf-scrap_qty" type="number" min="0"></div>'
           + '<div><label>报废原因</label><input id="cf-scrap_reason"></div>'
           + '<div><label>批次号</label><input id="cf-batch_no" placeholder="可选"></div>'
           + '<div><label>包装称重记录</label><input id="cf-pack_record" placeholder="可选"></div>'
           + '<div><label>确认人</label><input id="cf-confirm_by" placeholder="可选"></div>'
-          + '<div><label>数量一致</label><select id="cf-qty_consistent"><option value="0">否</option><option value="1">是</option></select></div></div>',
+          + '<div><label>数量一致</label><select id="cf-qty_consistent"><option value="0">否</option><option value="1">是</option></select></div>'
+          + '<div class="nf-full muted" style="font-size:12px">良品/不良/报废至少填一项（合计 &gt; 0）</div></div>',
         foot: _ctlUtil.foot('rework')
       };
     }
@@ -118,21 +121,31 @@ var _ctlUtil = {
   }
 };
 
-/** 打开操作模态：trans 无字段时直接确认提交；有字段 / sign / ncr / rework / void 弹窗收集字段后 ctlSubmit */
+/** 打开操作模态：trans 无字段时走轻量确认弹窗（2026-09-08 与系统弹窗体系统一，替换原生 confirm）；
+ *  有字段 / sign / ncr / rework / void 弹窗收集字段后 ctlSubmit */
 function ctlOpen(kind, action) {
   _ctlModal = { kind: kind, action: kind === 'trans' ? action : null, node: kind === 'sign' ? action : null };
   if (kind === 'trans' && !_ctlUtil.transFields(action).length) {
-    if (confirm('确认执行「' + (CONTROL_ACTION_CN[action] || action) + '」？')) ctlSubmit('trans');
+    var m = {
+      head: '确认操作 · ' + (CONTROL_ACTION_CN[action] || action),
+      body: '<div style="padding:6px 0">确认执行「' + (CONTROL_ACTION_CN[action] || action) + '」？</div>',
+      foot: _ctlUtil.foot('trans')
+    };
+    var mask = openModal(m.head, m.body, { foot: m.foot });
+    if (mask) mask.classList.add('ctl-modal');
     return;
   }
-  var m = _ctlUtil.modalCfg(kind, action);
-  var mask = openModal(m.head, m.body, { foot: m.foot });
-  if (mask) mask.classList.add('ctl-modal');
+  var m2 = _ctlUtil.modalCfg(kind, action);
+  var mask2 = openModal(m2.head, m2.body, { foot: m2.foot });
+  if (mask2) mask2.classList.add('ctl-modal');
 }
 
-/** 统一提交入口：按模态上下文读取字段并调用对应 API */
+/** 统一提交入口：按模态上下文读取字段并调用对应 API。
+ *  2026-09-08 防重：提交期间禁用模态内全部按钮（治具 F17 同款），防慢网络双击造成重复报工/重复签字行 */
 async function ctlSubmit(kind) {
   var m = _ctlModal || {};
+  var btns = document.querySelectorAll('.modal-mask button');
+  btns.forEach(function (b) { b.disabled = true; });
   try {
     if (kind === 'trans') {
       var body = { comment: _ctlUtil.val('#cf-comment') || '' };
@@ -162,5 +175,8 @@ async function ctlSubmit(kind) {
     renderDetailBody();
   } catch (err) {
     toast('操作失败：' + err.message, 'err');
+  } finally {
+    // 成功路径模态已关闭、DOM 已重建（新按钮可用）；失败路径恢复按钮允许重试
+    document.querySelectorAll('.modal-mask button').forEach(function (b) { b.disabled = false; });
   }
 }

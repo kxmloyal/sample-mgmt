@@ -224,6 +224,7 @@
 
 - `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 action helper 拆分后仍偏大），后续治具迭代需关注
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
+- 管制子系统已拆分（2026-09-08）：`routes-orders.js` 薄入口（crud+flow 两域）、`dao.js` 薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；看板新增「会签超时」统计卡（stats.signOverdue + 列表 sign_overdue=1）；manifest 删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边与「单据详情」导航项（深链 #/detail?id= 保留）
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06），建议门户块拆独立样式文件（需三系统回归）
 - `subsystems/samples/db/dao.js` 达 ≈90% 字符红线（18044/20000，2026-09-05 领用+机型墙聚合后），后续 samples 迭代仅允许精简/重构，建议按域拆分 dao 文件
@@ -397,7 +398,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 ### 18.1 核心判断
 
 - `subsystems/<id>/manifest.json` 顶层 `"deployed": true` = 该子系统**已正式上线**，数据受保护；普通用户门户仅展示已上线入口，**ADMIN 门户全量可见（未上线半透明+「未上线」角标）**，`?all=1` 兼容保留（2026-09-08）。
-- 已上线子系统（当前：samples、fixtures〔2026-09-08 用户授权上线〕）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
+- 已上线子系统（当前：samples、fixtures〔2026-09-08 用户授权上线〕、control〔manifest deployed:true〕）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
 - 未上线子系统可自由注入测试数据（seed/造数测试）。
 
 ### 18.2 Claude MUST 遵守

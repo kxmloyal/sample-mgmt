@@ -26,19 +26,20 @@ async function renderDashboard() {
     ]);
     var orders = (pair[0] && pair[0].orders) || [];
     var byStatus = (pair[1] && pair[1].byStatus) || {};
-    wrap.innerHTML = ctlBoardHtml(orders, byStatus);
+    var signOverdue = (pair[1] && pair[1].signOverdue) || 0;
+    wrap.innerHTML = ctlBoardHtml(orders, byStatus, signOverdue);
   } catch (err) {
     wrap.innerHTML = '<div class="empty"><p>看板加载失败：' + e(err.message) + '</p><button class="btn primary" onclick="renderDashboard()">重试</button></div>';
   }
 }
 
 // 列式看板：顶部统计卡 + 5 阶段列（列头计数 = stats 按状态聚合，列内管制单卡片 = 列表概览）
-// 待办已移入独立「我的待办」页，看板仅保留统计卡（待我签发/待我流转点击跳待办页）+ 列板。
-function ctlBoardHtml(orders, byStatus) {
+// 2026-09-08：新增「会签超时」统计卡（激活 listOverdueSigns 口径：闸口内步骤滞留超阈值的待签行数）
+function ctlBoardHtml(orders, byStatus, signOverdue) {
   byStatus = byStatus || {};
   var todo = ctlTodoOf(orders, me.role);
   return '<h3 class="ctl-sec">管制看板</h3>'
-    + ctlStatsHtml(orders, todo, _ctlOverdueHours)
+    + ctlStatsHtml(orders, todo, _ctlOverdueHours, signOverdue)
     + '<div class="ctl-board">' +
     CONTROL_STAGE_DEFS.map(function (def) {
       var items = orders.filter(function (o) { return CONTROL_STAGE_OF_STATUS[o.status] === def.stage; });
@@ -54,17 +55,17 @@ function ctlBoardHtml(orders, byStatus) {
     }).join('') + '</div>';
 }
 
-// 顶部汇总统计卡（.kb-stat 协议）：进行中 / 今日新增 / 待我签核 / 待我流转 / 超期滞留；admin 加阈值入口
-function ctlStatsHtml(orders, todo, overdueHours) {
+// 顶部汇总统计卡（.kb-stat 协议）：进行中 / 待我签核 / 待我流转 / 会签超时 / 超期滞留；admin 加阈值入口
+// 2026-09-08：「今日新增」并入列表快捷筛选保留，统计卡位让给「会签超时」（行动导向优先于信息展示）
+function ctlStatsHtml(orders, todo, overdueHours, signOverdue) {
   var active = orders.filter(ctlNotDone);
-  var today = orders.filter(function (o) { return ctlIsTodayApply(o); }).length;
   var over = active.filter(function (o) { return ctlDwellOf(o) > overdueHours; }).length;
   var cards = [
     { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders?active=1', tip: '前往管制单列表（进行中）' },
-    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders?today=1', tip: '前往管制单列表（今日新增）' },
     { n: todo.signCount, l: '待我签核', c: 'var(--warn)', hash: '#/todo', tip: '前往我的待办' },
     { n: todo.flowCount, l: '待我流转', c: '#065f46', hash: '#/todo', tip: '前往我的待办' },
-    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
+    { n: signOverdue || 0, l: '会签超时', c: '#9a3412', hash: '#/orders?sign_overdue=1', tip: '会签步骤滞留超过阈值（' + overdueHours + 'h）的单据' },
+    { n: over, l: '单据超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
   ];
   var html = '<div class="kb-stats">' + cards.map(function (cd) {
     return '<div class="kb-stat" style="--stat-color:' + cd.c + '" onclick="location.hash=\'' + cd.hash + '\'" title="' + cd.tip + '">'
@@ -78,14 +79,6 @@ function ctlStatsHtml(orders, todo, overdueHours) {
 
 // 否为完结（已出货/已作废）以外的进行中单据
 function ctlNotDone(o) { return o.status !== 'SHIPPED' && o.status !== 'RETIRED'; }
-
-// 今日新增：以 apply_at 为基准（当天零点后）
-function ctlIsTodayApply(o) {
-  var t = o.apply_at ? new Date(o.apply_at).getTime() : NaN;
-  if (isNaN(t)) return false;
-  var d = new Date(t), now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
 
 // 单张管制卡：单号 + 品名 + 状态徽章 + 数量·不良类型 + 滞留时长(超期高亮) + 下一步提示（点击进详情）
 function ctlBoardCardHtml(o) {

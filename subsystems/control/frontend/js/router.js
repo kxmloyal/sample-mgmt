@@ -1,5 +1,7 @@
 // subsystems/control/frontend/js/router.js — 管制子系统导航菜单与哈希路由
 // NAV 与 manifest.navigation 保持一致（单一事实来源见 AGENTS.md §17.3）；
+// 2026-09-08：移除「单据详情」侧边导航项（F3 对齐 samples/fixtures：详情由列表/看板行点击进入，不占导航位；
+// 保留 VIEWS.detail 与 #/detail?id= 深链路由不变）；
 // route() 解析 #/dashboard、#/orders、#/detail?id=3、#/label?id=3，并把 id/status 写入全局供各视图读取。
 
 var NAV = [
@@ -8,7 +10,6 @@ var NAV = [
   { k: 'orders', t: '管制单列表', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'ncr', t: '不良品委托单', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'new', t: '新建管制申请', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
-  { k: 'detail', t: '单据详情', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'label', t: '管制标签打印', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'logs', t: '操作日志', roles: ['ADMIN'] }
 ];
@@ -23,6 +24,7 @@ var currentNcrNoFilter = ''; // 聚合页预过滤：详情卡「在委托单列
 var currentActiveFilter = false;  // 看板统计卡「进行中」联动筛选
 var currentTodayFilter = false;   // 看板统计卡「今日新增」联动筛选
 var currentOverdueFilter = false; // 看板统计卡「超期滞留」联动筛选
+var currentSignOverdueFilter = false; // 看板统计卡「会签超时」联动筛选（2026-09-08 新增）
 
 // 简易元素构造器（自包含，不依赖其它子系统的 helper）
 function ctlEl(tag, cls, html) {
@@ -76,6 +78,7 @@ function route() {
   currentActiveFilter = q.active === '1' || q.active === 'true';
   currentTodayFilter = q.today === '1' || q.today === 'true';
   currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
+  currentSignOverdueFilter = q.sign_overdue === '1' || q.sign_overdue === 'true';
   // 详情需先选中单据；无 id 时引导去列表
   if (k === 'detail' && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');

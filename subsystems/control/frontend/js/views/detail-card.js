@@ -68,15 +68,25 @@ function ctlFieldGrid(o) {
   }).join('') + '</div>';
 }
 
-/** 主卡：单号/状态 + 字段 + 11步进度 + 5阶段卡 + 操作按钮 */
+/** 主卡：单号/状态 + 字段 + 5阶段时间轴（11步明细折叠）+ 操作按钮
+ *  2026-09-08 方案三：原「11步进度条 + 5阶段卡」双呈现合并——首屏仅 5 阶段卡 + 当前步提示，
+ *  11 步明细收进 <details> 折叠（零 JS，原生展开），消除同信息三处重复、缩短首屏 */
 function ctlCardHtml(agg) {
   var o = agg.order;
   return '<div class="card"><div class="ctl-carat"><span class="mono">' + e(o.order_no) + '</span> '
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
-    + '<div class="ctl-sec">流程进度</div>' + controlRenderProgress(agg)
-    + '<div class="ctl-sec">阶段</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>'
+    + '<div class="ctl-sec">阶段进度</div>' + controlRenderStageCards(agg) + ctlStepsFold(agg)
     + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(agg) + '</div>'
     + ctlLabelBtn(o) + '</div>';
+}
+
+/** 11 步明细折叠块（默认收起；展开为原 ctl-progress 步骤条，复用 progress.js 派生） */
+function ctlStepsFold(agg) {
+  var d = controlDeriveProgress(agg);
+  var cur = (d.steps || []).find ? (d.steps.find(function (s) { return s.current; }) || null) : null;
+  var curTip = cur ? '<div class="ctl-cur-step">当前步骤：' + e(cur.label) + '</div>' : '';
+  return curTip + '<details class="ctl-steps-fold"><summary>展开 11 步明细</summary>'
+    + controlRenderProgress(agg) + '</details>';
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；

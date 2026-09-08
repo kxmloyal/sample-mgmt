@@ -1,4 +1,4 @@
-/** BUNDLE vbmtmpf6rz — 24 files */
+/** BUNDLE vbmtsp43f1 — 24 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -614,19 +614,20 @@ async function renderDashboard() {
     ]);
     var orders = (pair[0] && pair[0].orders) || [];
     var byStatus = (pair[1] && pair[1].byStatus) || {};
-    wrap.innerHTML = ctlBoardHtml(orders, byStatus);
+    var signOverdue = (pair[1] && pair[1].signOverdue) || 0;
+    wrap.innerHTML = ctlBoardHtml(orders, byStatus, signOverdue);
   } catch (err) {
     wrap.innerHTML = '<div class="empty"><p>看板加载失败：' + e(err.message) + '</p><button class="btn primary" onclick="renderDashboard()">重试</button></div>';
   }
 }
 
 // 列式看板：顶部统计卡 + 5 阶段列（列头计数 = stats 按状态聚合，列内管制单卡片 = 列表概览）
-// 待办已移入独立「我的待办」页，看板仅保留统计卡（待我签发/待我流转点击跳待办页）+ 列板。
-function ctlBoardHtml(orders, byStatus) {
+// 2026-09-08：新增「会签超时」统计卡（激活 listOverdueSigns 口径：闸口内步骤滞留超阈值的待签行数）
+function ctlBoardHtml(orders, byStatus, signOverdue) {
   byStatus = byStatus || {};
   var todo = ctlTodoOf(orders, me.role);
   return '<h3 class="ctl-sec">管制看板</h3>'
-    + ctlStatsHtml(orders, todo, _ctlOverdueHours)
+    + ctlStatsHtml(orders, todo, _ctlOverdueHours, signOverdue)
     + '<div class="ctl-board">' +
     CONTROL_STAGE_DEFS.map(function (def) {
       var items = orders.filter(function (o) { return CONTROL_STAGE_OF_STATUS[o.status] === def.stage; });
@@ -642,17 +643,17 @@ function ctlBoardHtml(orders, byStatus) {
     }).join('') + '</div>';
 }
 
-// 顶部汇总统计卡（.kb-stat 协议）：进行中 / 今日新增 / 待我签核 / 待我流转 / 超期滞留；admin 加阈值入口
-function ctlStatsHtml(orders, todo, overdueHours) {
+// 顶部汇总统计卡（.kb-stat 协议）：进行中 / 待我签核 / 待我流转 / 会签超时 / 超期滞留；admin 加阈值入口
+// 2026-09-08：「今日新增」并入列表快捷筛选保留，统计卡位让给「会签超时」（行动导向优先于信息展示）
+function ctlStatsHtml(orders, todo, overdueHours, signOverdue) {
   var active = orders.filter(ctlNotDone);
-  var today = orders.filter(function (o) { return ctlIsTodayApply(o); }).length;
   var over = active.filter(function (o) { return ctlDwellOf(o) > overdueHours; }).length;
   var cards = [
     { n: active.length, l: '进行中', c: '#1d4ed8', hash: '#/orders?active=1', tip: '前往管制单列表（进行中）' },
-    { n: today, l: '今日新增', c: 'var(--brand)', hash: '#/orders?today=1', tip: '前往管制单列表（今日新增）' },
     { n: todo.signCount, l: '待我签核', c: 'var(--warn)', hash: '#/todo', tip: '前往我的待办' },
     { n: todo.flowCount, l: '待我流转', c: '#065f46', hash: '#/todo', tip: '前往我的待办' },
-    { n: over, l: '超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
+    { n: signOverdue || 0, l: '会签超时', c: '#9a3412', hash: '#/orders?sign_overdue=1', tip: '会签步骤滞留超过阈值（' + overdueHours + 'h）的单据' },
+    { n: over, l: '单据超期滞留', c: 'var(--bad)', hash: '#/orders?overdue=1', tip: '前往管制单列表（超期滞留）' }
   ];
   var html = '<div class="kb-stats">' + cards.map(function (cd) {
     return '<div class="kb-stat" style="--stat-color:' + cd.c + '" onclick="location.hash=\'' + cd.hash + '\'" title="' + cd.tip + '">'
@@ -666,14 +667,6 @@ function ctlStatsHtml(orders, todo, overdueHours) {
 
 // 否为完结（已出货/已作废）以外的进行中单据
 function ctlNotDone(o) { return o.status !== 'SHIPPED' && o.status !== 'RETIRED'; }
-
-// 今日新增：以 apply_at 为基准（当天零点后）
-function ctlIsTodayApply(o) {
-  var t = o.apply_at ? new Date(o.apply_at).getTime() : NaN;
-  if (isNaN(t)) return false;
-  var d = new Date(t), now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
 
 // 单张管制卡：单号 + 品名 + 状态徽章 + 数量·不良类型 + 滞留时长(超期高亮) + 下一步提示（点击进详情）
 function ctlBoardCardHtml(o) {
@@ -716,25 +709,32 @@ function ctlGotoOrders(statuses) {
 // 读取 route() 写入的 currentStatusFilter 作为初始状态筛选（看板阶段卡单击跳转）。
 
 var _ctlPager = { limit: 20, offset: 0, total: 0 };
-var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '', active: false, today: false, overdue: false };
+var _ctlQuery = { q: '', status: '', apply_dept: '', bad_type: '', sort: '', active: false, today: false, overdue: false, sign_overdue: false };
 var _ctlRows = [];            // 当前页已渲染行（委托单行内展开用，免重复请求）
 var _ctlNcrMap = {};          // order_id → ncr[] 聚合映射（委托单号列行内展开数据源）
 var _ctlExpandedOrder = null; // 当前行内展开的管制单 id
+var _ctlSearchTimer = null;   // 关键词防抖（2026-09-08 对齐 samples 300ms 即输即搜）
 
 async function renderList() {
   var view = $('#view');
   view.innerHTML = sendFilterHtml() + '<div id="ctl-sheet" class="ctl-sheet"></div>';
-  $('#ctl-field-q').value = _ctlQuery.q;
+  var qField = $('#ctl-field-q');
+  qField.value = _ctlQuery.q;
+  qField.addEventListener('input', function () {
+    clearTimeout(_ctlSearchTimer);
+    _ctlSearchTimer = setTimeout(function () { ctlFetchList(0); }, 300);
+  });
   var statusSel = $('#ctl-field-status');
   var initStatus = currentStatusFilter || _ctlQuery.status;
   if (initStatus) statusSel.value = initStatus;
   $('#ctl-field-apply_dept').value = _ctlQuery.apply_dept;
   $('#ctl-field-bad_type').value = _ctlQuery.bad_type;
   $('#ctl-field-sort').value = _ctlQuery.sort;
-  // 看板统计卡联动：进行中/今日新增/超期滞留（router.js 写入的哈希 query 筛选）
+  // 看板统计卡联动：进行中/今日新增/超期滞留/会签超时（router.js 写入的哈希 query 筛选）
   _ctlQuery.active = currentActiveFilter;
   _ctlQuery.today = currentTodayFilter;
   _ctlQuery.overdue = currentOverdueFilter;
+  _ctlQuery.sign_overdue = currentSignOverdueFilter;
   await ctlFetchList(0);
 }
 
@@ -773,10 +773,11 @@ function ctlQueryString() {
   var q = [];
   var map = { q: _ctlQuery.q, status: _ctlQuery.status, apply_dept: _ctlQuery.apply_dept, bad_type: _ctlQuery.bad_type, sort: _ctlQuery.sort };
   for (var k in map) { if (map[k] !== '' && map[k] != null) q.push(k + '=' + encodeURIComponent(map[k])); }
-  // 看板统计卡联动 quick filter：为 true 时输出 active=1/today=1/overdue=1
+  // 看板统计卡联动 quick filter：为 true 时输出 active=1/today=1/overdue=1/sign_overdue=1
   if (_ctlQuery.active) q.push('active=1');
   if (_ctlQuery.today) q.push('today=1');
   if (_ctlQuery.overdue) q.push('overdue=1');
+  if (_ctlQuery.sign_overdue) q.push('sign_overdue=1');
   return q.length ? '&' + q.join('&') : '';
 }
 
@@ -868,8 +869,8 @@ function ctlResetFilter() {
   $('#ctl-field-apply_dept').value = '';
   $('#ctl-field-bad_type').value = '';
   $('#ctl-field-sort').value = '';
-  _ctlQuery.active = _ctlQuery.today = _ctlQuery.overdue = false;
-  currentActiveFilter = currentTodayFilter = currentOverdueFilter = false;
+  _ctlQuery.active = _ctlQuery.today = _ctlQuery.overdue = _ctlQuery.sign_overdue = false;
+  currentActiveFilter = currentTodayFilter = currentOverdueFilter = currentSignOverdueFilter = false;
   ctlFetchList(0);
 }
 
@@ -1319,15 +1320,25 @@ function ctlFieldGrid(o) {
   }).join('') + '</div>';
 }
 
-/** 主卡：单号/状态 + 字段 + 11步进度 + 5阶段卡 + 操作按钮 */
+/** 主卡：单号/状态 + 字段 + 5阶段时间轴（11步明细折叠）+ 操作按钮
+ *  2026-09-08 方案三：原「11步进度条 + 5阶段卡」双呈现合并——首屏仅 5 阶段卡 + 当前步提示，
+ *  11 步明细收进 <details> 折叠（零 JS，原生展开），消除同信息三处重复、缩短首屏 */
 function ctlCardHtml(agg) {
   var o = agg.order;
   return '<div class="card"><div class="ctl-carat"><span class="mono">' + e(o.order_no) + '</span> '
     + statusBadge(o) + '</div>' + ctlFieldGrid(o)
-    + '<div class="ctl-sec">流程进度</div>' + controlRenderProgress(agg)
-    + '<div class="ctl-sec">阶段</div><div class="ctl-stage-grid">' + controlRenderStageCards(agg) + '</div>'
+    + '<div class="ctl-sec">阶段进度</div>' + controlRenderStageCards(agg) + ctlStepsFold(agg)
     + '<div class="ctl-sec">操作</div><div class="ctl-actions">' + ctlActionButtons(agg) + '</div>'
     + ctlLabelBtn(o) + '</div>';
+}
+
+/** 11 步明细折叠块（默认收起；展开为原 ctl-progress 步骤条，复用 progress.js 派生） */
+function ctlStepsFold(agg) {
+  var d = controlDeriveProgress(agg);
+  var cur = (d.steps || []).find ? (d.steps.find(function (s) { return s.current; }) || null) : null;
+  var curTip = cur ? '<div class="ctl-cur-step">当前步骤：' + e(cur.label) + '</div>' : '';
+  return curTip + '<details class="ctl-steps-fold"><summary>展开 11 步明细</summary>'
+    + controlRenderProgress(agg) + '</details>';
 }
 
 /** 可执行操作按钮（统一按钮区，2026-09-04：会签按钮收编入本区，置于流转按钮左侧；
@@ -1627,6 +1638,8 @@ var _ctlUtil = {
     var m = map[rec.decision] || ['待签', 'muted'];
     return '<span class="sign-state ' + m[1] + '">' + m[0] + (rec.signer_name ? ' · ' + rec.signer_name : '') + '</span>';
   },
+  /** 必填 label（带红星，前置提示而非提交后报错，2026-09-08 交互统一） */
+  reqLabel: function (text) { return '<label class="req">' + text + '</label>'; },
   /** 当前角色是否可对某会签节点发起签字（预约节点 + 状态匹配 + 并行会签角色/部门判定）
    *  2026-09-04 修复与收紧：①并行判定（原顺序首步短路导致非首步角色按钮缺失）；
    *  ②按部门区分（与后端 resolveSignTarget 的 role+dept 双匹配一致）——
@@ -1665,7 +1678,7 @@ var _ctlUtil = {
       return {
         head: '会签 · ' + (node ? node.node_name : action),
         body: '<div class="ctl-form-grid">'
-          + '<div><label>会签决定</label><select id="cf-decision">' + opts + '</select></div>'
+          + '<div><label class="req">会签决定</label><select id="cf-decision">' + opts + '</select></div>'
           + '<div class="nf-full"><label class="req">会签意见</label><textarea id="cf-comment" rows="2" placeholder="填写意见或原因"></textarea></div></div>',
         foot: _ctlUtil.foot('sign')
       };
@@ -1694,14 +1707,15 @@ var _ctlUtil = {
       return {
         head: '报工',
         body: '<div class="ctl-form-grid">'
-          + '<div><label>良品数</label><input id="cf-good_qty" type="number" min="0"></div>'
-          + '<div><label>不良数</label><input id="cf-ng_qty" type="number" min="0"></div>'
-          + '<div><label>报废数</label><input id="cf-scrap_qty" type="number" min="0"></div>'
+          + '<div><label class="req">良品数</label><input id="cf-good_qty" type="number" min="0"></div>'
+          + '<div><label class="req">不良数</label><input id="cf-ng_qty" type="number" min="0"></div>'
+          + '<div><label class="req">报废数</label><input id="cf-scrap_qty" type="number" min="0"></div>'
           + '<div><label>报废原因</label><input id="cf-scrap_reason"></div>'
           + '<div><label>批次号</label><input id="cf-batch_no" placeholder="可选"></div>'
           + '<div><label>包装称重记录</label><input id="cf-pack_record" placeholder="可选"></div>'
           + '<div><label>确认人</label><input id="cf-confirm_by" placeholder="可选"></div>'
-          + '<div><label>数量一致</label><select id="cf-qty_consistent"><option value="0">否</option><option value="1">是</option></select></div></div>',
+          + '<div><label>数量一致</label><select id="cf-qty_consistent"><option value="0">否</option><option value="1">是</option></select></div>'
+          + '<div class="nf-full muted" style="font-size:12px">良品/不良/报废至少填一项（合计 &gt; 0）</div></div>',
         foot: _ctlUtil.foot('rework')
       };
     }
@@ -1720,21 +1734,31 @@ var _ctlUtil = {
   }
 };
 
-/** 打开操作模态：trans 无字段时直接确认提交；有字段 / sign / ncr / rework / void 弹窗收集字段后 ctlSubmit */
+/** 打开操作模态：trans 无字段时走轻量确认弹窗（2026-09-08 与系统弹窗体系统一，替换原生 confirm）；
+ *  有字段 / sign / ncr / rework / void 弹窗收集字段后 ctlSubmit */
 function ctlOpen(kind, action) {
   _ctlModal = { kind: kind, action: kind === 'trans' ? action : null, node: kind === 'sign' ? action : null };
   if (kind === 'trans' && !_ctlUtil.transFields(action).length) {
-    if (confirm('确认执行「' + (CONTROL_ACTION_CN[action] || action) + '」？')) ctlSubmit('trans');
+    var m = {
+      head: '确认操作 · ' + (CONTROL_ACTION_CN[action] || action),
+      body: '<div style="padding:6px 0">确认执行「' + (CONTROL_ACTION_CN[action] || action) + '」？</div>',
+      foot: _ctlUtil.foot('trans')
+    };
+    var mask = openModal(m.head, m.body, { foot: m.foot });
+    if (mask) mask.classList.add('ctl-modal');
     return;
   }
-  var m = _ctlUtil.modalCfg(kind, action);
-  var mask = openModal(m.head, m.body, { foot: m.foot });
-  if (mask) mask.classList.add('ctl-modal');
+  var m2 = _ctlUtil.modalCfg(kind, action);
+  var mask2 = openModal(m2.head, m2.body, { foot: m2.foot });
+  if (mask2) mask2.classList.add('ctl-modal');
 }
 
-/** 统一提交入口：按模态上下文读取字段并调用对应 API */
+/** 统一提交入口：按模态上下文读取字段并调用对应 API。
+ *  2026-09-08 防重：提交期间禁用模态内全部按钮（治具 F17 同款），防慢网络双击造成重复报工/重复签字行 */
 async function ctlSubmit(kind) {
   var m = _ctlModal || {};
+  var btns = document.querySelectorAll('.modal-mask button');
+  btns.forEach(function (b) { b.disabled = true; });
   try {
     if (kind === 'trans') {
       var body = { comment: _ctlUtil.val('#cf-comment') || '' };
@@ -1764,6 +1788,9 @@ async function ctlSubmit(kind) {
     renderDetailBody();
   } catch (err) {
     toast('操作失败：' + err.message, 'err');
+  } finally {
+    // 成功路径模态已关闭、DOM 已重建（新按钮可用）；失败路径恢复按钮允许重试
+    document.querySelectorAll('.modal-mask button').forEach(function (b) { b.disabled = false; });
   }
 }
 
@@ -1892,6 +1919,8 @@ async function renderTodo() {
 /* --- subsystems/control/frontend/js/router.js --- */
 // subsystems/control/frontend/js/router.js — 管制子系统导航菜单与哈希路由
 // NAV 与 manifest.navigation 保持一致（单一事实来源见 AGENTS.md §17.3）；
+// 2026-09-08：移除「单据详情」侧边导航项（F3 对齐 samples/fixtures：详情由列表/看板行点击进入，不占导航位；
+// 保留 VIEWS.detail 与 #/detail?id= 深链路由不变）；
 // route() 解析 #/dashboard、#/orders、#/detail?id=3、#/label?id=3，并把 id/status 写入全局供各视图读取。
 
 var NAV = [
@@ -1900,7 +1929,6 @@ var NAV = [
   { k: 'orders', t: '管制单列表', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'ncr', t: '不良品委托单', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'new', t: '新建管制申请', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
-  { k: 'detail', t: '单据详情', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'label', t: '管制标签打印', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'logs', t: '操作日志', roles: ['ADMIN'] }
 ];
@@ -1915,6 +1943,7 @@ var currentNcrNoFilter = ''; // 聚合页预过滤：详情卡「在委托单列
 var currentActiveFilter = false;  // 看板统计卡「进行中」联动筛选
 var currentTodayFilter = false;   // 看板统计卡「今日新增」联动筛选
 var currentOverdueFilter = false; // 看板统计卡「超期滞留」联动筛选
+var currentSignOverdueFilter = false; // 看板统计卡「会签超时」联动筛选（2026-09-08 新增）
 
 // 简易元素构造器（自包含，不依赖其它子系统的 helper）
 function ctlEl(tag, cls, html) {
@@ -1968,6 +1997,7 @@ function route() {
   currentActiveFilter = q.active === '1' || q.active === 'true';
   currentTodayFilter = q.today === '1' || q.today === 'true';
   currentOverdueFilter = q.overdue === '1' || q.overdue === 'true';
+  currentSignOverdueFilter = q.sign_overdue === '1' || q.sign_overdue === 'true';
   // 详情需先选中单据；无 id 时引导去列表
   if (k === 'detail' && !currentControlId) {
     toast('请先从管制单列表选择一张单据', 'info');

@@ -327,7 +327,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 ## 14. 当前已知技术债
 
 - `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 4 个 action helper 拆分后仍偏大），后续治具迭代需关注拆分
-- 管制子系统（2026-09-03 全链路修复）：control_orders 加乐观锁 CAS、会签并行化（闸口① 不再强制串行）、出货前结余校验、会签超时 DAO 已落地；`subsystems/control/backend/routes-orders.js` 324 行接近 400 行红线，后续迭代关注拆分
+- 管制子系统（2026-09-03 全链路修复）：control_orders 加乐观锁 CAS、会签并行化（闸口① 不再强制串行）、出货前结余校验、会签超时 DAO 已落地。**2026-09-08 已拆分**：`routes-orders.js` 为薄入口（crud + flow 两域），`dao.js` 为薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；会签超时已接入看板「会签超时」统计卡（stats 接口 `signOverdue` + 列表 `sign_overdue=1`）；manifest 已物理删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边并移除「单据详情」导航项、补声明 control_files 表
 - `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
@@ -953,6 +953,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 |---|---|---|---|
 | 样品管理 | samples | 2026-08-07（重新上线） | samples / scan_logs / sample_models / sample_seqs |
 | 治具管理 | fixtures | 2026-09-08（用户授权上线） | fixtures / fixture_logs / fixture_files |
+| 管制流程管理 | control | 2026-09-08 前已上线（deployed:true） | control_orders / control_signs / control_ncr_logs / control_rework_logs / control_logs / control_seqs / control_settings / control_files |
 
 ### 20.5 AI 拦截逻辑
 
