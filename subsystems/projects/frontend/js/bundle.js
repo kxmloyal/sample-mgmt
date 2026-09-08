@@ -1,4 +1,4 @@
-/** BUNDLE vbmts208f8 — 28 files */
+/** BUNDLE vbmtsup484 — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -265,7 +265,8 @@ function closeModal(mask){if(!mask)return;mask.remove();var all=document.querySe
 const ROLE_CN = Object.assign({ PM: '项目经理(PM)' }, { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' });
 const PRIORITY_CN = { H: '高', M: '中', L: '低' };
 const CATEGORY_CN = { device: '设备', quality: '质量', process: '流程', safety: '安全', other: '其他' };
-const TASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', OVERDUE: '已延期' };
+// 方案三A：新增 CANCELLED 终态（已取消；灰色系，与 manifest stateMachine.states 同步）
+const TASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', OVERDUE: '已延期', CANCELLED: '已取消' };
 const SUBTASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成' };
 // v2：表单下拉选项（弹窗复用）
 const CATEGORY_KEYS = Object.keys(CATEGORY_CN);
@@ -316,6 +317,8 @@ const PApi = {
   notifUnread: '/api/projects/notifications/unread',
   notifications: '/api/projects/notifications',
   notifRead: '/api/projects/notifications/read',
+  // 附件受控下载（方案二A：登录 + 任务相关人校验）
+  fileDownload: (tid, fid) => '/api/projects/tasks/' + tid + '/files/' + fid + '/download',
   // 甘特依赖批量（方案B-③去 N+1）
   taskDepsBatch: pid => '/api/projects/' + pid + '/deps-batch'
 };
@@ -337,7 +340,8 @@ async function renderProjectDashboard() {
     { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)', href: '#/list', title: '查看任务列表（全部）' },
     { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)', href: '#/list?status=DONE', title: '查看已完成任务' },
     { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8', href: '#/list?status=IN_PROGRESS', title: '查看进行中任务' },
-    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' }
+    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' },
+    { k: 'cancelled', n: s.cancelled_count || 0, l: '已取消', c: '#64748b', href: '#/list?status=CANCELLED', title: '查看已取消任务' }
   ];
   // KbStats 共享组件（kb-stat 规范：fluent-card + .n/.l + --stat-color 竖色条，样式见 /css/app.css）
   $('#pk-stats').innerHTML = KbStats.render(stats, { click: 'navigate' });
@@ -367,8 +371,9 @@ async function renderProjectDashboard() {
 
 /* --- subsystems/projects/frontend/js/views/kanban.js --- */
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
-// 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
-// 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
+// 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE、
+// OVERDUE>IN_PROGRESS→RESUME、OVERDUE>DONE→FINISH、IN_PROGRESS>NOT_STARTED→BACK、DONE>IN_PROGRESS→REOPEN（方案一A②/三A 扩边）
+// 卡片内提供流转按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
 // 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
 // 方案B-⑥：看板顶部 OA 摘要卡（里程碑/风险/变更 三卡，当前筛选项目范围；空数据显示 0 计数+引导语）
@@ -422,6 +427,7 @@ async function kbCreate() {
     '<label>优先级</label><fluent-select id="kc-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>责任人</label><fluent-select id="kc-assignee"><fluent-option value="">未指派</fluent-option>' +
     users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>开始日期</label><fluent-text-field id="kc-sdate" type="date"></fluent-text-field>' +
     '<label>计划完成日期</label><fluent-text-field id="kc-date" type="date"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="kc-desc"></fluent-text-area>' +
     '</div>',
@@ -433,10 +439,13 @@ async function kbCreateSave() {
   const title = $('#kc-title').value.trim();
   if (!pid) return showToast('请选择项目', 'err');
   if (!title) return showToast('任务名称必填', 'err');
+  const sdate = $('#kc-sdate').value || null, pdate = $('#kc-date').value || null;
+  if (sdate && pdate && sdate > pdate) return showToast('开始日期不能晚于计划完成日期', 'err');
   try {
     await api('POST', PApi.projectTasks(pid), {
       title: title, category: $('#kc-category').value, priority: $('#kc-priority').value,
-      assignee_id: Number($('#kc-assignee').value) || null, planned_date: $('#kc-date').value || null,
+      assignee_id: Number($('#kc-assignee').value) || null,
+      start_date: sdate, planned_date: pdate,
       description: $('#kc-desc').value
     });
     showToast('创建成功'); pCloseModal(); kbLoad();
@@ -552,16 +561,23 @@ async function kbLoad() {
   board.innerHTML = cols.map(c =>
     '<div class="pk-col" data-status="' + c.k + '" ondragover="kbDragOver(event)" ondrop="kbDrop(event)">' +
     '<h4>' + c.t + '<span>' + rows.filter(x => (x.status_eff || x.status) === c.k).length + '</span></h4>' +
-    '<div id="kb-col-' + c.k + '"></div></div>').join('');
+    '<div id="kb-col-' + c.k + '">' +
+    (rows.some(x => (x.status_eff || x.status) === c.k) ? '' :
+      '<div class="pk-empty" style="padding:14px 8px"><span class="pk-empty-hint">暂无任务</span></div>') +
+    '</div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
     el.innerHTML = rows.filter(x => (x.status_eff || x.status) === c.k).map(t => {
       const st = t.status_eff || t.status;
       // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
+      // 方案一A②：OVERDUE 卡补「继续/完成」快捷按钮（后端 RESUME/FINISH），退回 BACK 由详情条操作
       const ops = (st === 'NOT_STARTED'
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
         (st === 'IN_PROGRESS'
-          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
+        (st === 'OVERDUE'
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'RESUME\')">继续</fluent-button>' +
+            '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'FINISH\')">完成</fluent-button>' : '');
       // v2：全部项目视图显示项目名标签（project_id 空 = 全部项目）
       const projTag = !f.project_id ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
       return '<div class="pk-card' + (st === 'OVERDUE' ? ' pk-card-overdue' : '') + '" draggable="true" data-id="' + t.id + '" data-status="' + st + '" ' +
@@ -602,7 +618,9 @@ function kbDragOver(e) {
   if (col && !col.classList.contains('drag-over')) col.classList.add('drag-over');
 }
 
-// 落列校验：仅 START/COMPLETE 合法转移；非法 toast 报错 + 重渲染回弹（后端 CAS 兜底）
+// 落列校验：仅合法转移；非法 toast 报错 + 重渲染回弹（后端 CAS 兜底）
+// 方案一A②/三A：扩边 OVERDUE→IN_PROGRESS(RESUME)/DONE(FINISH)、IN_PROGRESS→NOT_STARTED(BACK)、DONE→IN_PROGRESS(REOPEN)
+// CANCELLED 为终态：看板不设取消列（列表筛选 #/list?status=CANCELLED 查看），不可再流转
 async function kbDrop(e) {
   e.preventDefault();
   const col = e.target.closest('.pk-col');
@@ -611,11 +629,17 @@ async function kbDrop(e) {
   if (!targetStatus || !id) return;
   const ACTION_MAP = {
     'NOT_STARTED>IN_PROGRESS': 'START',
-    'IN_PROGRESS>DONE': 'COMPLETE'
+    'IN_PROGRESS>DONE': 'COMPLETE',
+    'OVERDUE>IN_PROGRESS': 'RESUME',
+    'OVERDUE>DONE': 'FINISH',
+    'IN_PROGRESS>NOT_STARTED': 'BACK',
+    'DONE>IN_PROGRESS': 'REOPEN'
   };
+  // 退回未开始时允许目标列存在派生延期（BACK 后 planned_date 已过 → 显示为 OVERDUE），做前缀匹配
   const card = document.querySelector('.pk-card[data-id="' + id + '"]');
   const from = card ? card.dataset.status : '';
-  const action = ACTION_MAP[from + '>' + targetStatus];
+  let action = ACTION_MAP[from + '>' + targetStatus];
+  if (!action && from === 'IN_PROGRESS' && (targetStatus === 'NOT_STARTED' || targetStatus === 'OVERDUE')) action = 'BACK';
   if (!action) { showToast('不允许的流转：' + (TASK_STATUS_CN[from] || from) + ' → ' + (TASK_STATUS_CN[targetStatus] || targetStatus), 'err'); kbLoad(); return; }
   try {
     await api('POST', PApi.task(id) + '/status', { action });
@@ -684,7 +708,8 @@ async function renderTaskList() {
     '<fluent-select id="lk-project"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
     '<fluent-select id="lk-status"><fluent-option value="">全部状态</fluent-option>' +
     '<fluent-option value="NOT_STARTED">未开始</fluent-option><fluent-option value="IN_PROGRESS">进行中</fluent-option>' +
-    '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
+    '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option>' +
+    '<fluent-option value="CANCELLED">已取消</fluent-option></fluent-select>' +
     '<fluent-select id="lk-category"><fluent-option value="">全部类别</fluent-option>' +
     CATEGORY_KEYS.map(k => '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
     '<fluent-select id="lk-priority"><fluent-option value="">全部优先级</fluent-option>' +
@@ -772,14 +797,18 @@ async function lkLoad() {
     '<td>' + (TASK_STATUS_CN[t.status_eff || t.status] || t.status_eff || t.status) + '</td>' +
     '<td>' + t.progress + '%</td>' +
     '<td>' + fmt(t.planned_date) + '</td>' +
-    '<td><a href="#/tasks/' + t.id + '">详情</a> ' + lkQuickOps(t) + '</td></tr>').join('');
+    '<td><a href="#/tasks/' + t.id + '">详情</a> ' + lkQuickOps(t) + '</td></tr>').join('') ||
+    '<tr><td colspan="10"><div class="pk-empty"><span class="pk-empty-icon">📭</span>没有符合筛选条件的任务<span class="pk-empty-hint">调整筛选条件或新建任务</span></div></td></tr>';
   renderLkPager(total);
 }
 // v2：行内快捷流转按钮（开始/完成，按有效状态动态显示）
+// 方案一A②：OVERDUE 行提供 继续(RESUME)/完成(FINISH)；CANCELLED 终态无快捷操作
 function lkQuickOps(t) {
   const st = t.status_eff || t.status;
   if (st === 'NOT_STARTED') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'START\')">开始</fluent-button>';
   if (st === 'IN_PROGRESS') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>';
+  if (st === 'OVERDUE') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'RESUME\')">继续</fluent-button> ' +
+    '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'FINISH\')">完成</fluent-button>';
   return '';
 }
 async function lkAction(id, action) {
@@ -1315,6 +1344,7 @@ async function msDelOk(id) {
 /* --- subsystems/projects/frontend/js/views/risks.js --- */
 // risks.js — OA 能力移植：风险管理（项目下拉 + 风险列表 + 严重度×概率矩阵标记 + 新建/编辑/解决/删除）
 // 权限：识别 = 项目成员（后端校验）；编辑/解决/删除 = ADMIN/PM（owner 后端二次校验）；只读角色仅浏览
+// 方案三C：识别/编辑弹窗支持关联任务（task_id）；卡片显示关联任务并深链详情
 async function renderRisks() {
   const v = $('#view');
   v.innerHTML =
@@ -1336,10 +1366,10 @@ var RISK_TYPE_CN = { schedule: '进度', quality: '质量', resource: '资源', 
 async function rkLoad() {
   const pid = $('#rk-project').value;
   const box = $('#rk-list');
-  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  if (!pid) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🗂</span>请先选择项目<span class="pk-empty-hint">选择项目后查看该项目的风险记录</span></div>'; return; }
   const list = await api('GET', PApi.risks(pid));
   const canManage = me.role === 'ADMIN' || me.role === 'PM';
-  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无风险记录</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🛡</span>该项目暂无风险记录<span class="pk-empty-hint">点击「识别风险」登记第一条风险</span></div>'; return; }
   box.innerHTML = '<div class="pk-stats">' + list.map(function (r) {
     const resolved = r.status === 'RESOLVED';
     return '<fluent-card class="kb-stat">' +
@@ -1348,6 +1378,7 @@ async function rkLoad() {
       ' · 严重度 <b style="color:' + SEV_COLOR[r.severity] + '">' + (SEV_CN[r.severity] || r.severity) + '</b>' +
       ' · 概率 <b style="color:' + SEV_COLOR[r.probability] + '">' + (SEV_CN[r.probability] || r.probability) + '</b></span>' +
       (r.impact ? '<span class="l">影响：' + esc(r.impact) + '</span>' : '') +
+      (r.task_id ? '<span class="l">关联任务：<a href="#/tasks/' + r.task_id + '">' + esc(r.task_title || ('#' + r.task_id)) + '</a></span>' : '') +
       '<span class="l">' + (resolved
         ? '<span style="color:#065f46">✔ 已解决</span>' + (r.resolved_name ? '（' + esc(r.resolved_name) + ' ' + (r.resolved_at || '').slice(0, 10) + '）' : '')
         : '<span style="color:#b91c1c">● 开放</span>' + (r.identified_name ? '（' + esc(r.identified_name) + ' 识别）' : '')) + '</span>' +
@@ -1364,18 +1395,37 @@ async function rkLoad() {
 function rkCreate() {
   const pid = $('#rk-project').value;
   if (!pid) return showToast('请先选择项目', 'err');
-  openModal('识别风险',
+  rkOpenForm('识别风险', null, 'rkCreateSave()');
+}
+// 方案三C：识别/编辑共用表单渲染（含关联任务下拉；tasks 异步注入，失败静默降级为不关联）
+async function rkTaskOptions(selElId, pid, currentTaskId) {
+  try {
+    const tasks = await api('GET', PApi.projectTasks(pid));
+    $('#' + selElId).innerHTML = '<fluent-option value="">不关联任务</fluent-option>' +
+      tasks.map(function (t) {
+        return '<fluent-option value="' + t.id + '"' + (t.id === currentTaskId ? ' selected' : '') + '>' +
+          esc(t.title) + ' · ' + (TASK_STATUS_CN[t.status_eff || t.status] || t.status) + '</fluent-option>';
+      }).join('');
+  } catch (e) { /* 保持「不关联任务」 */ }
+}
+function rkOpenForm(titleTxt, r, saveFn) {
+  const pid = $('#rk-project').value;
+  openModal(titleTxt,
     '<div class="pk-form">' +
-    '<label>风险名称 *</label><fluent-text-field id="rk-name"></fluent-text-field>' +
+    '<label>风险名称 *</label><fluent-text-field id="rk-name" value="' + (r ? esc(r.risk_name) : '') + '"></fluent-text-field>' +
     '<label>类型</label><fluent-select id="rk-type">' +
-    Object.keys(RISK_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '">' + RISK_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
-    '<label>严重度</label><fluent-select id="rk-sev"><fluent-option value="H">高</fluent-option><fluent-option value="M" selected>中</fluent-option><fluent-option value="L">低</fluent-option></fluent-select>' +
-    '<label>发生概率</label><fluent-select id="rk-prob"><fluent-option value="H">高</fluent-option><fluent-option value="M" selected>中</fluent-option><fluent-option value="L">低</fluent-option></fluent-select>' +
-    '<label>影响说明</label><fluent-text-field id="rk-impact"></fluent-text-field>' +
-    '<label>缓解措施</label><fluent-text-area id="rk-mit"></fluent-text-area>' +
-    '<label>描述</label><fluent-text-area id="rk-desc"></fluent-text-area></div>',
-    { foot: '<fluent-button appearance="accent" size="small" onclick="rkCreateSave()">提交</fluent-button>' +
+    Object.keys(RISK_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '"' + (r && r.risk_type === k ? ' selected' : '') + '>' + RISK_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>严重度</label><fluent-select id="rk-sev">' +
+    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + ((r ? r.severity : 'M') === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>发生概率</label><fluent-select id="rk-prob">' +
+    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + ((r ? r.probability : 'M') === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>关联任务</label><fluent-select id="rk-task"><fluent-option value="">不关联任务</fluent-option></fluent-select>' +
+    '<label>影响说明</label><fluent-text-field id="rk-impact" value="' + (r ? esc(r.impact || '') : '') + '"></fluent-text-field>' +
+    '<label>缓解措施</label><fluent-text-area id="rk-mit">' + (r ? esc(r.mitigation || '') : '') + '</fluent-text-area>' +
+    '<label>描述</label><fluent-text-area id="rk-desc">' + (r ? esc(r.description || '') : '') + '</fluent-text-area></div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="' + saveFn + (r ? '(' + r.id + ',' + r.version + ')">保存' : '">提交') + '</fluent-button>' +
             '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+  rkTaskOptions('rk-task', pid, r ? r.task_id : null);
 }
 async function rkCreateSave() {
   const pid = $('#rk-project').value;
@@ -1385,7 +1435,8 @@ async function rkCreateSave() {
     await api('POST', PApi.risks(pid), {
       risk_name: name, risk_type: $('#rk-type').value,
       severity: $('#rk-sev').value, probability: $('#rk-prob').value,
-      impact: $('#rk-impact').value, mitigation: $('#rk-mit').value, description: $('#rk-desc').value
+      impact: $('#rk-impact').value, mitigation: $('#rk-mit').value, description: $('#rk-desc').value,
+      task_id: Number($('#rk-task').value) || null
     });
     showToast('已识别'); pCloseModal(); rkLoad();
   } catch (e) { showToast(e.message, 'err'); }
@@ -1397,20 +1448,7 @@ async function rkEdit(id) {
   const r = list.find(function (x) { return x.id === id; });
   if (!r) return showToast('风险不存在', 'err');
   if (r.status === 'RESOLVED') return showToast('已解决风险不可编辑', 'err');
-  openModal('编辑风险',
-    '<div class="pk-form">' +
-    '<label>风险名称 *</label><fluent-text-field id="rk-name" value="' + esc(r.risk_name) + '"></fluent-text-field>' +
-    '<label>类型</label><fluent-select id="rk-type">' +
-    Object.keys(RISK_TYPE_CN).map(function (k) { return '<fluent-option value="' + k + '"' + (r.risk_type === k ? ' selected' : '') + '>' + RISK_TYPE_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
-    '<label>严重度</label><fluent-select id="rk-sev">' +
-    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + (r.severity === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
-    '<label>发生概率</label><fluent-select id="rk-prob">' +
-    ['H', 'M', 'L'].map(function (s) { return '<fluent-option value="' + s + '"' + (r.probability === s ? ' selected' : '') + '>' + SEV_CN[s] + '</fluent-option>'; }).join('') + '</fluent-select>' +
-    '<label>影响说明</label><fluent-text-field id="rk-impact" value="' + esc(r.impact || '') + '"></fluent-text-field>' +
-    '<label>缓解措施</label><fluent-text-area id="rk-mit">' + esc(r.mitigation || '') + '</fluent-text-area>' +
-    '<label>描述</label><fluent-text-area id="rk-desc">' + esc(r.description || '') + '</fluent-text-area></div>',
-    { foot: '<fluent-button appearance="accent" size="small" onclick="rkEditSave(' + id + ',' + r.version + ')">保存</fluent-button>' +
-            '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+  rkOpenForm('编辑风险', r, 'rkEditSave');
 }
 async function rkEditSave(id, version) {
   const name = $('#rk-name').value.trim();
@@ -1420,7 +1458,8 @@ async function rkEditSave(id, version) {
       risk_name: name, risk_type: $('#rk-type').value,
       severity: $('#rk-sev').value, probability: $('#rk-prob').value,
       impact: $('#rk-impact').value, mitigation: $('#rk-mit').value,
-      description: $('#rk-desc').value, version: version
+      description: $('#rk-desc').value, task_id: Number($('#rk-task').value) || null,
+      version: version
     });
     showToast('已保存'); pCloseModal(); rkLoad();
   } catch (e) { showToast(e.message, 'err'); }
@@ -1469,10 +1508,10 @@ async function renderChanges() {
 async function cgLoad() {
   const pid = $('#cg-project').value;
   const box = $('#cg-list');
-  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  if (!pid) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🗂</span>请先选择项目<span class="pk-empty-hint">选择项目后查看该项目的变更单</span></div>'; return; }
   const list = await api('GET', PApi.changes(pid));
   const canApprove = me.role === 'ADMIN' || me.role === 'PM';
-  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无变更单</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">📋</span>该项目暂无变更单<span class="pk-empty-hint">点击「发起变更」创建第一张变更单</span></div>'; return; }
   box.innerHTML = '<div class="pk-stats">' + list.map(function (c) {
     const pending = c.status === 'PENDING';
     return '<fluent-card class="kb-stat">' +
@@ -1480,6 +1519,7 @@ async function cgLoad() {
       '<span class="l">' + esc(c.description) + '</span>' +
       (c.before_value ? '<span class="l">变更前：' + esc(c.before_value) + ' → 变更后：' + esc(c.after_value || '—') + '</span>' : '') +
       (c.reason ? '<span class="l">原因：' + esc(c.reason) + '</span>' : '') +
+      (c.task_id ? '<span class="l">关联任务：<a href="#/tasks/' + c.task_id + '">' + esc(c.task_title || ('#' + c.task_id)) + '</a></span>' : '') +
       '<span class="l"><b style="color:' + CHG_STATUS_COLOR[c.status] + '">' + (CHG_STATUS_CN[c.status] || c.status) + '</b>' +
       ' · 申请人 ' + esc(c.applicant_name || ('#' + c.applicant_id)) +
       (pending ? '' : ' · 审批人 ' + esc(c.approver_name || ('#' + c.approver_id)) + ' ' + (c.approved_at || '').slice(0, 10)) + '</span>' +
@@ -1509,9 +1549,10 @@ function cgEdit(id) {
     cgForm('编辑变更单 ' + (c.change_no || ''), c, id, c.version);
   });
 }
-// 变更单新建/编辑共用弹窗
+// 变更单新建/编辑共用弹窗（方案三C：加关联任务下拉，异步注入；失败静默降级为不关联）
 function cgForm(title, c, cid, version) {
   const isBudget = c.change_type === 'BUDGET';
+  const pid = $('#cg-project').value;
   openModal(title,
     '<div class="pk-form">' +
     '<label>变更类型 *</label><fluent-select id="cg-type">' +
@@ -1520,9 +1561,17 @@ function cgForm(title, c, cid, version) {
     '<label>变更前</label><fluent-text-field id="cg-before" value="' + esc(c.before_value || '') + '"></fluent-text-field>' +
     '<label>变更后' + (isBudget ? '（数字，批准后写入项目预算）' : '') + '</label><fluent-text-field id="cg-after" value="' + esc(c.after_value || '') + '"></fluent-text-field>' +
     '<label>变更原因</label><fluent-text-area id="cg-reason">' + esc(c.reason || '') + '</fluent-text-area>' +
+    '<label>关联任务</label><fluent-select id="cg-task"><fluent-option value="">不关联任务</fluent-option></fluent-select>' +
     '<div class="muted" style="font-size:12px;margin-top:6px">审批人：管理员/项目经理/项目负责人；申请人不能审批本人发起的变更；BUDGET 类批准后自动更新项目预算。</div></div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="' + (cid ? 'cgEditSave(' + cid + ',' + version + ')' : 'cgCreateSave()') + '">提交</fluent-button>' +
             '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+  api('GET', PApi.projectTasks(pid)).then(function (tasks) {
+    $('#cg-task').innerHTML = '<fluent-option value="">不关联任务</fluent-option>' +
+      (tasks || []).map(function (t) {
+        return '<fluent-option value="' + t.id + '"' + (t.id === c.task_id ? ' selected' : '') + '>' +
+          esc(t.title) + ' · ' + (TASK_STATUS_CN[t.status_eff || t.status] || t.status) + '</fluent-option>';
+      }).join('');
+  }).catch(function () { /* 保持「不关联任务」 */ });
 }
 function cgReadForm() {
   return {
@@ -1530,7 +1579,8 @@ function cgReadForm() {
     description: $('#cg-desc').value.trim(),
     before_value: $('#cg-before').value,
     after_value: $('#cg-after').value,
-    reason: $('#cg-reason').value
+    reason: $('#cg-reason').value,
+    task_id: Number($('#cg-task').value) || null
   };
 }
 async function cgCreateSave() {
@@ -1725,8 +1775,8 @@ async function tplWizGo() {
 
 /* --- subsystems/projects/frontend/js/views/gantt.js --- */
 // gantt.js — OA 移植二期批次2：甘特图（纯前端自绘，无第三方依赖）
-// 数据：任务(标题/planned_date/status/progress) + 里程碑(target/actual/is_delayed) + 依赖(depends_on)
-// 任务无开始日字段 → 条形终点=planned_date、长度=工期估算(7天)起点；依赖箭头按「前置任务终点→后续任务起点」
+// 数据：任务(start_date/planned_date/status/progress) + 里程碑(target/actual/is_delayed) + 依赖(depends_on)
+// 方案三B：任务条起于 start_date（计划开始日，迁移新增列），无开始日回退「截止前 7 天」估算；依赖箭头按「前置终点→后续起点」
 var GT_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', BLOCKED: '阻塞' };
 var GT_STATUS_COLOR = { NOT_STARTED: '#94a3b8', IN_PROGRESS: '#2563eb', DONE: '#059669', BLOCKED: '#dc2626' };
 
@@ -1750,7 +1800,7 @@ async function renderGantt() {
 async function gtLoad() {
   const pid = $('#gt-project').value;
   const box = $('#gt-box');
-  if (!pid) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">请先选择项目</div>'; return; }
+  if (!pid) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🗂</span>请先选择项目<span class="pk-empty-hint">选择项目后查看任务/里程碑时间轴</span></div>'; return; }
   const tasks = await api('GET', PApi.projectTasks(pid));
   const milestones = await api('GET', PApi.milestones(pid));
   const depsMap = {}; // taskId -> [dependsOn...]（行结构与单任务 deps 完全一致，仅数据源换批量端点）
@@ -1765,13 +1815,13 @@ async function gtLoad() {
 
 function gtDraw(tasks, milestones, depsMap) {
   const box = $('#gt-box');
-  if (!tasks.length && !milestones.length) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">该项目暂无任务/里程碑</div>'; return; }
+  if (!tasks.length && !milestones.length) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">📊</span>该项目暂无任务/里程碑<span class="pk-empty-hint">在项目内创建任务后此处绘制时间轴</span></div>'; return; }
   const DAY = 86400000;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   // 日期范围：所有 planned_date / target_date 的 min/max，前后各留 3 天
   let min = null, max = null;
   function span(d) { if (!d) return; const t = new Date(d).getTime(); if (!min || t < min) min = t; if (!max || t > max) max = t; }
-  tasks.forEach(function (t) { span(t.planned_date); });
+  tasks.forEach(function (t) { span(t.planned_date); if (t.start_date) span(t.start_date); });
   milestones.forEach(function (m) { span(m.target_date); span(m.actual_date); });
   if (!min) { min = today.getTime(); max = min + 30 * DAY; }
   min -= 3 * DAY; max += 3 * DAY;
@@ -1806,15 +1856,18 @@ function gtDraw(tasks, milestones, depsMap) {
     body += '<div style="position:absolute;left:' + LEFTW + 'px;top:' + y + 'px;width:' + (totalDays * COLW) + 'px;height:' + (ROWH - 4) + 'px;border-bottom:1px solid #f8fafc"></div>';
     if (r.kind === 'task') {
       const dueT = d.planned_date ? new Date(d.planned_date).getTime() : null;
+      // 方案三B：真实跨度 — start_date(计划开始) 优先；无开始日回退「截止前 7 天」估算（与旧行为一致）
+      const stT = d.start_date ? new Date(d.start_date).getTime() : null;
       const est = 7 * DAY; // 无开始日：以「截止前 7 天」为默认工期窗
       const xEnd = dueT ? Math.round((dueT - min) / DAY) * COLW : null;
-      const xStart = xEnd !== null ? Math.max(0, xEnd - Math.round(est / DAY) * COLW) : null;
-      const overdue = dueT && d.status !== 'DONE' && dueT < today.getTime();
+      const xStart = xEnd !== null ? (stT ? Math.max(0, Math.round((stT - min) / DAY) * COLW) : Math.max(0, xEnd - Math.round(est / DAY) * COLW)) : null;
+      const overdue = dueT && d.status !== 'DONE' && d.status !== 'CANCELLED' && dueT < today.getTime();
       if (xStart !== null) {
         const w = Math.max(COLW, xEnd - xStart);
-        const color = GT_STATUS_COLOR[d.status] || '#94a3b8';
-        bars += '<div style="position:absolute;left:' + (LEFTW + xStart) + 'px;top:' + (y + 5) + 'px;width:' + w + 'px;height:' + (ROWH - 14) + 'px;background:' + color + ';opacity:' + (d.status === 'DONE' ? '.45' : '.8') + ';border-radius:4px;cursor:pointer" ' +
-          'onclick="gtOpenTask(' + d.id + ')" title="' + esc(d.title) + ' · ' + (GT_STATUS_CN[d.status] || d.status) + (d.progress !== undefined ? ' ' + d.progress + '%' : '') + (overdue ? ' · 已逾期' : '') + '">' +
+        const cancelled = d.status === 'CANCELLED';
+        const color = cancelled ? '#94a3b8' : (GT_STATUS_COLOR[d.status] || '#94a3b8');
+        bars += '<div style="position:absolute;left:' + (LEFTW + xStart) + 'px;top:' + (y + 5) + 'px;width:' + w + 'px;height:' + (ROWH - 14) + 'px;background:' + color + ';opacity:' + (cancelled ? '.35' : (d.status === 'DONE' ? '.45' : '.8')) + ';border-radius:4px;cursor:pointer' + (cancelled ? ';border-style:dashed' : '') + '" ' +
+          'onclick="gtOpenTask(' + d.id + ')" title="' + esc(d.title) + ' · ' + (TASK_STATUS_CN[d.status] || GT_STATUS_CN[d.status] || d.status) + (d.progress !== undefined ? ' ' + d.progress + '%' : '') + (overdue ? ' · 已逾期' : '') + '">' +
           (d.status === 'IN_PROGRESS' && d.progress ? '<div style="height:100%;width:' + d.progress + '%;background:rgba(255,255,255,.4);border-radius:4px"></div>' : '') + '</div>';
         if (overdue) bars += '<div style="position:absolute;left:' + (LEFTW + xEnd) + 'px;top:' + (y + 4) + 'px;font-size:10px;color:#dc2626">!</div>';
         rowPos[d.id] = { y: y, xEnd: xEnd, xStart: xStart, kind: 'task' };
@@ -2397,7 +2450,8 @@ var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
 var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
 const TD_TABS = [
   { k: 'subs', t: '子任务' }, { k: 'comments', t: '评论' },
-  { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
+  { k: 'files', t: '附件' }, { k: 'links', t: '关联' },
+  { k: 'xlinks', t: '风险/变更' }, { k: 'logs', t: '日志' }
 ];
 async function renderTaskDetail(tid) {
   if (_tdDirty && !confirm('详情有未保存的修改，离开将丢失，继续？')) { // 脏守卫：换任务前拦截
@@ -2429,7 +2483,7 @@ function tdSwitchTab(k) {
   const d = (_tdCache.tid === _tid) ? _tdCache.data : null;
   const badge = function (n) { return n != null ? ' <span class="td-badge">' + n + '</span>' : ''; };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
-    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length }[x.k] : null;
+    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length, xlinks: ((d.risks || []).length + (d.changes || []).length) }[x.k] : null;
     return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(n) + '</fluent-button>';
   }).join('');
   tdLoadSection(k);
@@ -2452,6 +2506,7 @@ async function tdLoadSection(kind) {
     else if (kind === 'comments') body.innerHTML = renderTdComments(d);
     else if (kind === 'files') body.innerHTML = renderTdFiles(d);
     else if (kind === 'links') body.innerHTML = renderTdLinks(d);
+    else if (kind === 'xlinks') tdLoadXlinks();
     else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
     // 方案A-④：数据到手后刷新 tabs 徽章
     if (kind !== 'info') tdSwitchTabBadges(d);
@@ -2461,7 +2516,7 @@ async function tdLoadSection(kind) {
 function tdSwitchTabBadges(d) {
   if (!d || !$('#td-tabs')) return;
   const badge = function (n) { return ' <span class="td-badge">' + n + '</span>'; };
-  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length };
+  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length, xlinks: ((d.risks || []).length + (d.changes || []).length) };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
     return '<fluent-button appearance="' + (x.k === _tdTab ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(counts[x.k]) + '</fluent-button>';
   }).join('');
@@ -2473,15 +2528,18 @@ function renderTdInfo(d) {
   const t = d.task;
   const st = t.status_eff || t.status;
   const canEdit = ['ADMIN', 'PM'].includes(me.role);
+  // 方案三A：状态底色（CANCELLED 灰；其余沿用 manifest 色系）
+  const stBg = { NOT_STARTED: '#fffbeb', IN_PROGRESS: '#eff6ff', DONE: '#ecfdf5', OVERDUE: '#fef2f2', CANCELLED: '#f1f5f9' }[st] || 'transparent';
   $('#td-info').innerHTML =
     '<h3>' + esc(t.title) + '</h3>' +
-    '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[st] || st) +
-    ' · 进度 ' + t.progress + '%</span>' +
+    '<div class="pk-row"><span class="pk-name">状态</span><span style="background:' + stBg + ';padding:1px 8px;border-radius:8px">' + (TASK_STATUS_CN[st] || st) + '</span>' +
+    '<span> · 进度 ' + t.progress + '%</span>' +
     '<span class="pk-progress" style="flex:1"><span class="pk-progress-bar" style="width:' + Math.min(t.progress || 0, 100) + '%"></span></span></div>' +
     '<div class="pk-row"><span class="pk-name">项目</span><span>' + esc(t.project_name || t.project_id) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">类别</span><span>' + (CATEGORY_CN[t.category] || t.category) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">优先级</span><span>' + (PRIORITY_CN[t.priority] || t.priority) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + esc(t.assignee_name || '未指派') + '</span></div>' +
+    (t.start_date ? '<div class="pk-row"><span class="pk-name">开始日期</span><span>' + fmt(t.start_date) + '</span></div>' : '') +
     '<div class="pk-row"><span class="pk-name">计划日期</span><span>' + fmt(t.planned_date) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">实际日期</span><span>' + fmt(t.actual_date) + '</span></div>' +
     (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + esc(t.description) + '</span></div>' : '') +
@@ -2512,7 +2570,7 @@ function renderTdSubs(d) {
     '<fluent-button size="small" appearance="neutral" onclick="pConfirm(\'确认删除该子任务？\',\'tdSubDel(' + s.id + ')\')">删除</fluent-button>' +
     '</div>').join('');
   return (rows ? '<div class="muted" style="font-size:11px;margin-bottom:6px">拖「⋮⋮」调整执行顺序（自动保存）</div>' : '') +
-    '<div id="td-subs-list">' + (rows || '<span class="pk-name">无子任务</span>') + '</div>';
+    '<div id="td-subs-list">' + (rows || '<span class="pk-name pk-empty-line">无子任务</span>') + '</div>';
 }
 // v2：评论分区（输入框 + 列表，含删除按钮）+ 方案A-③ @提及（oninput 触发候选浮层；提交时解析提及发通知）
 function renderTdComments(d) {
@@ -2524,23 +2582,52 @@ function renderTdComments(d) {
       (c.operator_id === me.id || me.role === 'ADMIN' || me.role === 'PM'
         ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('') + '</div>';
 }
-// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）+ 方案A-⑤ 图片缩略图
+// v2：附件分区（上传区 + 列表，含删除按钮）+ 方案A-⑤ 图片缩略图
+// 方案二A：下载切换为受控端点（登录 + 相关人校验）；缩略图预览暂留静态路径（兼容，后续迭代收紧）
 function renderTdFiles(d) {
   return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
-      '<span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
-      '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('');
+    (d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
+      '<span class="pk-name"><a href="' + PApi.fileDownload(_tid, f.id) + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
+      '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('') || '<span class="pk-name pk-empty-line">暂无附件</span>');
+}
+// 方案三C：风险/变更互链 tab（详情 payload 的 risks/changes，由后端批量查询注入；点击跳对应管理页）
+function renderTdXlinks(d) {
+  const rk = (d.risks || []).map(r =>
+    '<div class="pk-row"><span class="pk-name">风险</span>' +
+    '<span><a href="#/risks?project=' + d.task.project_id + '">' + esc(r.risk_name) + '</a>' +
+    ' <span class="pk-tag ' + (r.severity || 'm').toLowerCase() + '">' + (r.severity === 'H' ? '高' : r.severity === 'L' ? '低' : '中') + '</span>' +
+    ' <span class="muted">' + (r.status === 'RESOLVED' ? '已解决' : '开放') + '</span></span></div>').join('');
+  const ch = (d.changes || []).map(c =>
+    '<div class="pk-row"><span class="pk-name">变更</span>' +
+    '<span><a href="#/changes?project=' + d.task.project_id + '">' + esc(c.change_no || ('#' + c.id)) + '</a> ' + esc(c.description || '').slice(0, 40) +
+    ' <span class="muted">' + (c.status === 'PENDING' ? '待审批' : c.status === 'APPROVED' ? '已批准' : c.status === 'REJECTED' ? '已驳回' : c.status) + '</span></span></div>').join('');
+  return (rk + ch) || '<span class="pk-name pk-empty-line">暂无关联风险/变更</span>';
+}
+// 风险/变更 tab 懒加载：详情缓存无数据时按项目拉全量过滤（量级小，一次请求）
+async function tdLoadXlinks() {
+  const d = await tdFetch();
+  if (d.risks || d.changes) { $('#td-body').innerHTML = renderTdXlinks(d); return; }
+  try {
+    const [rk, ch] = await Promise.all([
+      api('GET', PApi.risks(d.task.project_id)).catch(function () { return []; }),
+      api('GET', PApi.changes(d.task.project_id)).catch(function () { return []; })
+    ]);
+    d.risks = (rk || []).filter(function (x) { return x.task_id === _tid; });
+    d.changes = (ch || []).filter(function (x) { return x.task_id === _tid; });
+  } catch (e) { d.risks = []; d.changes = []; }
+  $('#td-body').innerHTML = renderTdXlinks(d);
+  tdSwitchTabBadges(d);
 }
 // v2：关联分区（样品/治具）
 function renderTdLinks(d) {
   return d.links.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.ref_type === 'sample' ? '样品' : '治具') + '</span>' +
-    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
+    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name pk-empty-line">未关联</span>';
 }
 // v2：操作日志分区
 function renderTdLogs(d) {
   return d.logs.map(l =>
-    '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');
+    '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('') || '<span class="pk-name pk-empty-line">暂无日志</span>';
 }
 
 
@@ -2576,7 +2663,8 @@ async function tdEdit() {
     '<label>类别</label><fluent-select id="te-category">' + CATEGORY_KEYS.map(function (k) { return '<fluent-option value="' + k + '"' + (t.category === k ? ' selected' : '') + '>' + CATEGORY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>优先级</label><fluent-select id="te-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '"' + (t.priority === k ? ' selected' : '') + '>' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     assigneeField +
-    '<label>计划完成日期</label><fluent-text-field id="te-date" type="date" value="' + (t.planned_date || '') + '"></fluent-text-field>' +
+    '<label>开始日期</label><fluent-text-field id="te-sdate" type="date" value="' + String(t.start_date || '').slice(0, 10) + '"></fluent-text-field>' +
+    '<label>计划完成日期</label><fluent-text-field id="te-date" type="date" value="' + String(t.planned_date || '').slice(0, 10) + '"></fluent-text-field>' +
     '<label>进度(%)</label><fluent-text-field id="te-progress" type="number" min="0" max="100" value="' + (t.progress || 0) + '"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="te-desc">' + esc(t.description || '') + '</fluent-text-area>' +
     '<label>解决方案</label><fluent-text-area id="te-solution">' + esc(t.solution || '') + '</fluent-text-area>' +
@@ -2587,7 +2675,7 @@ async function tdEdit() {
       head: '<h3>编辑任务</h3>' });
   _tdDirty = false;
   // 脏守卫（借鉴样品详情弹窗 D1.5）：任一字段变更置位，保存/关闭时拦截确认
-  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
+  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-sdate', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', function () { _tdDirty = true; });
   });
@@ -2595,10 +2683,12 @@ async function tdEdit() {
 async function tdEditSave(version) {
   const title = $('#te-title').value.trim();
   if (!title) return showToast('任务名称必填', 'err');
+  const sdate = $('#te-sdate').value || null, pdate = $('#te-date').value || null;
+  if (sdate && pdate && sdate > pdate) return showToast('开始日期不能晚于计划完成日期', 'err');
   const body = {
     title: title, category: $('#te-category').value, priority: $('#te-priority').value,
     assignee_id: $('#te-assignee') ? (Number($('#te-assignee').value) || null) : null,
-    planned_date: $('#te-date').value || null, progress: Number($('#te-progress').value) || 0,
+    start_date: sdate, planned_date: pdate, progress: Number($('#te-progress').value) || 0,
     description: $('#te-desc').value, solution: $('#te-solution').value, notes: $('#te-notes').value,
     version: version
   };
@@ -2774,15 +2864,21 @@ async function tdDel() {
 var _tdUsers = null; // 成员缓存（@补全用，进详情时拉一次）
 
 // === ① 快捷流转条：状态→可用动作映射（与状态机 ACTION 对齐；canEdit 由主渲染器传入） ===
+// 方案一A②/三A：BACK/REOPEN 已补后端转边；OVERDUE 保留 开始(RESUME)/完成(FINISH)；
+// 退回(BACK)与重新打开(REOPEN) 按钮已可用；新增 CANCELLED 终态（仅 PM/ADMIN 可 CANCEL，见 tduxCanCancel）
 function tduxQuickActions(t, canEdit) {
   if (!canEdit) return '';
+  const st = t.status_eff || t.status;
   const MAP = {
-    'NOT_STARTED': [{ a: 'START', t: '▶ 开始', cls: 'accent' }],
-    'IN_PROGRESS': [{ a: 'COMPLETE', t: '✔ 完成', cls: 'accent' }, { a: 'BACK', t: '↩ 退回', cls: 'neutral' }],
-    'OVERDUE': [{ a: 'START', t: '▶ 开始', cls: 'accent' }, { a: 'COMPLETE', t: '✔ 完成', cls: 'accent' }],
-    'DONE': [{ a: 'REOPEN', t: '↩ 重新打开', cls: 'neutral' }]
+    'NOT_STARTED': [{ a: 'START', t: '▶ 开始', cls: 'accent' }, { a: 'CANCEL', t: '✕ 取消', cls: 'neutral', pm: 1 }],
+    'IN_PROGRESS': [{ a: 'COMPLETE', t: '✔ 完成', cls: 'accent' }, { a: 'BACK', t: '↩ 退回', cls: 'neutral' }, { a: 'CANCEL', t: '✕ 取消', cls: 'neutral', pm: 1 }],
+    'OVERDUE': [{ a: 'RESUME', t: '▶ 继续', cls: 'accent' }, { a: 'FINISH', t: '✔ 完成', cls: 'accent' }, { a: 'CANCEL', t: '✕ 取消', cls: 'neutral', pm: 1 }],
+    'DONE': [{ a: 'REOPEN', t: '↩ 重新打开', cls: 'neutral' }],
+    'CANCELLED': [] // 终态：无出边（如需恢复走 DB/后续 REOPEN 需求再评估）
   };
-  const acts = MAP[t.status] || [];
+  // CANCEL 仅 ADMIN/PM（与状态机 role=["PM","ADMIN"] 对齐；ASSIGNEE/MEMBER 不可取消）
+  let acts = (MAP[st] || []);
+  if (typeof me !== 'undefined' && me.role !== 'ADMIN' && me.role !== 'PM') acts = acts.filter(x => !x.pm);
   if (!acts.length) return '';
   return '<div class="td-quick">' + acts.map(x =>
     '<fluent-button appearance="' + x.cls + '" size="small" onclick="tduxTransition(' + t.id + ',\'' + x.a + '\')">' + x.t + '</fluent-button>').join('') +
@@ -2790,7 +2886,9 @@ function tduxQuickActions(t, canEdit) {
 }
 
 // 快捷流转执行（成功后走 tdRefresh 清缓存强刷 + 通知由后端触发点③自动发）
+// 取消任务先确认（CANCELLED 为终态不可逆）
 async function tduxTransition(tid, action) {
+  if (action === 'CANCEL' && !confirm('确认取消该任务？取消后为终态，不可再流转。')) return;
   try {
     const r = await api('POST', PApi.task(tid) + '/status', { action: action });
     showToast(r.message || '流转成功');

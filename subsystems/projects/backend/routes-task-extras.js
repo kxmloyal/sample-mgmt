@@ -1,8 +1,11 @@
 // subsystems/projects/backend/routes-task-extras.js — 任务依赖/附件/关联子路径路由
 // 拆分原因：routes-tasks.js 超 20000 字符硬红线，依赖/附件/关联 7 条路由移至本文件（Task 7 重构）
 // 注册顺序：本文件在 routes-tasks.js 之后注册（所有路径均含 :tid 静态段，不与 /tasks/export 冲突）
+// 方案二A（2026-09）：新增附件受控下载端点（登录 + 任务可见性校验 + res.download 流式发送）；
+// 旧静态路径 /uploads/projects/* 保留（存量链接/缩略图兼容，roadmap P3-2 渐进切换，两个迭代后再评估收紧静态挂载）
 const D = require('../../../db');
 const perm = require('./permissions');
+const path = require('path');
 const { createUploader } = require('../../../shared/middleware/upload');
 
 function register(app) {
@@ -105,6 +108,29 @@ function register(app) {
         return { status: 200, body: { ok: 1 } };
       });
       res.status(r2.status).json(r2.body);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // 方案二A：附件受控下载（GET /files/:fid/download）
+  // 权限：登录 + 任务相关人（ADMIN/PM/owner/member/assignee，同 canEditTask 宽口径——下载为读操作，编辑口径即可覆盖）
+  // 兼容：旧静态路径 /uploads/projects/<file_path> 不受影响（存量链接与缩略图渐进切换）
+  // 安全：file_path 取库内值并 path.basename 归一化，拒绝穿越；res.download 流式发送原始文件名
+  app.get('/api/projects/tasks/:tid/files/:fid/download', requireAuth, async (req, res) => {
+    try {
+      const u = await currentUser(req);
+      const tid = Number(req.params.tid);
+      const fid = Number(req.params.fid);
+      const t = await D.getTask(null, tid);
+      if (!t) return res.status(404).json({ error: '任务不存在' });
+      if (!await canEditTask(null, u, t, true)) return res.status(403).json({ error: '无权下载该附件' });
+      const f = await D.fetchOne(null, 'SELECT * FROM project_task_files WHERE id=? AND task_id=?', [fid, tid]);
+      if (!f) return res.status(404).json({ error: '附件不存在' });
+      const safeName = path.basename(String(f.file_path || ''));
+      if (!safeName || safeName.includes('..')) return res.status(400).json({ error: '附件路径非法' });
+      const abs = path.join(process.cwd(), 'public', 'uploads', 'projects', safeName);
+      res.download(abs, f.file_name || safeName, function (err) {
+        if (err && !res.headersSent) res.status(404).json({ error: '附件文件已丢失' });
+      });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

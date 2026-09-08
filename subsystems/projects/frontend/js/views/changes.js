@@ -21,10 +21,10 @@ async function renderChanges() {
 async function cgLoad() {
   const pid = $('#cg-project').value;
   const box = $('#cg-list');
-  if (!pid) { box.innerHTML = '<div class="empty-hint">请先选择项目</div>'; return; }
+  if (!pid) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🗂</span>请先选择项目<span class="pk-empty-hint">选择项目后查看该项目的变更单</span></div>'; return; }
   const list = await api('GET', PApi.changes(pid));
   const canApprove = me.role === 'ADMIN' || me.role === 'PM';
-  if (!list.length) { box.innerHTML = '<div class="empty-hint">该项目暂无变更单</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">📋</span>该项目暂无变更单<span class="pk-empty-hint">点击「发起变更」创建第一张变更单</span></div>'; return; }
   box.innerHTML = '<div class="pk-stats">' + list.map(function (c) {
     const pending = c.status === 'PENDING';
     return '<fluent-card class="kb-stat">' +
@@ -32,6 +32,7 @@ async function cgLoad() {
       '<span class="l">' + esc(c.description) + '</span>' +
       (c.before_value ? '<span class="l">变更前：' + esc(c.before_value) + ' → 变更后：' + esc(c.after_value || '—') + '</span>' : '') +
       (c.reason ? '<span class="l">原因：' + esc(c.reason) + '</span>' : '') +
+      (c.task_id ? '<span class="l">关联任务：<a href="#/tasks/' + c.task_id + '">' + esc(c.task_title || ('#' + c.task_id)) + '</a></span>' : '') +
       '<span class="l"><b style="color:' + CHG_STATUS_COLOR[c.status] + '">' + (CHG_STATUS_CN[c.status] || c.status) + '</b>' +
       ' · 申请人 ' + esc(c.applicant_name || ('#' + c.applicant_id)) +
       (pending ? '' : ' · 审批人 ' + esc(c.approver_name || ('#' + c.approver_id)) + ' ' + (c.approved_at || '').slice(0, 10)) + '</span>' +
@@ -61,9 +62,10 @@ function cgEdit(id) {
     cgForm('编辑变更单 ' + (c.change_no || ''), c, id, c.version);
   });
 }
-// 变更单新建/编辑共用弹窗
+// 变更单新建/编辑共用弹窗（方案三C：加关联任务下拉，异步注入；失败静默降级为不关联）
 function cgForm(title, c, cid, version) {
   const isBudget = c.change_type === 'BUDGET';
+  const pid = $('#cg-project').value;
   openModal(title,
     '<div class="pk-form">' +
     '<label>变更类型 *</label><fluent-select id="cg-type">' +
@@ -72,9 +74,17 @@ function cgForm(title, c, cid, version) {
     '<label>变更前</label><fluent-text-field id="cg-before" value="' + esc(c.before_value || '') + '"></fluent-text-field>' +
     '<label>变更后' + (isBudget ? '（数字，批准后写入项目预算）' : '') + '</label><fluent-text-field id="cg-after" value="' + esc(c.after_value || '') + '"></fluent-text-field>' +
     '<label>变更原因</label><fluent-text-area id="cg-reason">' + esc(c.reason || '') + '</fluent-text-area>' +
+    '<label>关联任务</label><fluent-select id="cg-task"><fluent-option value="">不关联任务</fluent-option></fluent-select>' +
     '<div class="muted" style="font-size:12px;margin-top:6px">审批人：管理员/项目经理/项目负责人；申请人不能审批本人发起的变更；BUDGET 类批准后自动更新项目预算。</div></div>',
     { foot: '<fluent-button appearance="accent" size="small" onclick="' + (cid ? 'cgEditSave(' + cid + ',' + version + ')' : 'cgCreateSave()') + '">提交</fluent-button>' +
             '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+  api('GET', PApi.projectTasks(pid)).then(function (tasks) {
+    $('#cg-task').innerHTML = '<fluent-option value="">不关联任务</fluent-option>' +
+      (tasks || []).map(function (t) {
+        return '<fluent-option value="' + t.id + '"' + (t.id === c.task_id ? ' selected' : '') + '>' +
+          esc(t.title) + ' · ' + (TASK_STATUS_CN[t.status_eff || t.status] || t.status) + '</fluent-option>';
+      }).join('');
+  }).catch(function () { /* 保持「不关联任务」 */ });
 }
 function cgReadForm() {
   return {
@@ -82,7 +92,8 @@ function cgReadForm() {
     description: $('#cg-desc').value.trim(),
     before_value: $('#cg-before').value,
     after_value: $('#cg-after').value,
-    reason: $('#cg-reason').value
+    reason: $('#cg-reason').value,
+    task_id: Number($('#cg-task').value) || null
   };
 }
 async function cgCreateSave() {

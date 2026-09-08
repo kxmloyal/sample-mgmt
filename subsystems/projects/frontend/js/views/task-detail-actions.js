@@ -28,7 +28,8 @@ async function tdEdit() {
     '<label>类别</label><fluent-select id="te-category">' + CATEGORY_KEYS.map(function (k) { return '<fluent-option value="' + k + '"' + (t.category === k ? ' selected' : '') + '>' + CATEGORY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>优先级</label><fluent-select id="te-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '"' + (t.priority === k ? ' selected' : '') + '>' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     assigneeField +
-    '<label>计划完成日期</label><fluent-text-field id="te-date" type="date" value="' + (t.planned_date || '') + '"></fluent-text-field>' +
+    '<label>开始日期</label><fluent-text-field id="te-sdate" type="date" value="' + String(t.start_date || '').slice(0, 10) + '"></fluent-text-field>' +
+    '<label>计划完成日期</label><fluent-text-field id="te-date" type="date" value="' + String(t.planned_date || '').slice(0, 10) + '"></fluent-text-field>' +
     '<label>进度(%)</label><fluent-text-field id="te-progress" type="number" min="0" max="100" value="' + (t.progress || 0) + '"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="te-desc">' + esc(t.description || '') + '</fluent-text-area>' +
     '<label>解决方案</label><fluent-text-area id="te-solution">' + esc(t.solution || '') + '</fluent-text-area>' +
@@ -39,7 +40,7 @@ async function tdEdit() {
       head: '<h3>编辑任务</h3>' });
   _tdDirty = false;
   // 脏守卫（借鉴样品详情弹窗 D1.5）：任一字段变更置位，保存/关闭时拦截确认
-  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
+  ['te-title', 'te-category', 'te-priority', 'te-assignee', 'te-sdate', 'te-date', 'te-progress', 'te-desc', 'te-solution', 'te-notes'].forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', function () { _tdDirty = true; });
   });
@@ -47,10 +48,12 @@ async function tdEdit() {
 async function tdEditSave(version) {
   const title = $('#te-title').value.trim();
   if (!title) return showToast('任务名称必填', 'err');
+  const sdate = $('#te-sdate').value || null, pdate = $('#te-date').value || null;
+  if (sdate && pdate && sdate > pdate) return showToast('开始日期不能晚于计划完成日期', 'err');
   const body = {
     title: title, category: $('#te-category').value, priority: $('#te-priority').value,
     assignee_id: $('#te-assignee') ? (Number($('#te-assignee').value) || null) : null,
-    planned_date: $('#te-date').value || null, progress: Number($('#te-progress').value) || 0,
+    start_date: sdate, planned_date: pdate, progress: Number($('#te-progress').value) || 0,
     description: $('#te-desc').value, solution: $('#te-solution').value, notes: $('#te-notes').value,
     version: version
   };

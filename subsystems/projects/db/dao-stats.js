@@ -16,13 +16,15 @@ module.exports = function createStatsDao(deps) {
       "SUM(status='DONE') AS done_count, " +
       "SUM(status='IN_PROGRESS') AS in_progress_count, " +
       "SUM(status='NOT_STARTED') AS not_started_count, " +
-      "SUM(status<>'DONE' AND planned_date < CURDATE()) AS overdue_count " +
+      "SUM(status='CANCELLED') AS cancelled_count, " +
+      "SUM(status<>'DONE' AND status<>'CANCELLED' AND planned_date < CURDATE()) AS overdue_count " +
       'FROM project_tasks');
     const projectCount = Number(scalar.project_count) || 0;
     const total = Number(scalar.total_tasks) || 0;
     const done = Number(scalar.done_count) || 0;
     const inProgress = Number(scalar.in_progress_count) || 0;
     const notStarted = Number(scalar.not_started_count) || 0;
+    const cancelled = Number(scalar.cancelled_count) || 0;
     const overdue = Number(scalar.overdue_count) || 0;
     // 三维分布 + 近 8 周趋势：4 个独立聚合并行（串行→并发，等待取 max 而非累加）
     const [categoryDist, priorityDist, statusDist, trend] = await Promise.all([
@@ -36,7 +38,7 @@ module.exports = function createStatsDao(deps) {
     ]);
     return {
       project_count: projectCount, total_tasks: total, done_count: done, in_progress_count: inProgress,
-      not_started_count: notStarted, overdue_count: overdue,
+      not_started_count: notStarted, cancelled_count: cancelled, overdue_count: overdue,
       completion_rate: total ? Math.round(done / total * 100) : 0,
       category_dist: categoryDist, priority_dist: priorityDist, status_dist: statusDist, trend
     };

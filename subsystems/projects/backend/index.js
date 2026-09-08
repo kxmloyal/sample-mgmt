@@ -6,8 +6,9 @@
 // routes-projects 最后（/:id 参数路由）
 function register(app) {
   require('./routes-notif').register(app);        // 站内通知（方案B-②）：/notifications 静态前缀最先，避免被 :id 抢占
-  require('./routes-stats').register(app);        // 静态路径（/workflow /stats /tasks/export /tasks）最先，避免被 :tid 抢占
-  require('./routes-tasks').register(app);        // 含 /tasks/:tid 参数路由
+  require('./routes-stats').register(app);        // 静态路径（/workflow /stats /tasks/export /tasks /tasks/batch→无, batch在edit域）最先，避免被 :tid 抢占
+  require('./routes-tasks').register(app);        // 含 /tasks/:tid 参数路由（创建/列表/详情/流转/子任务/评论）
+  require('./routes-task-edit').register(app);    // 任务编辑/删除/批量域（方案一B 拆分；/tasks/:tid 与 /tasks/batch，方法级不冲突）
   require('./routes-task-extras').register(app);  // 子路径路由
   require('./routes-tdux').register(app);         // 任务详情交互强化（方案A）：子任务排序 + 评论@提及通知
   require('./routes-milestones').register(app);   // OA 移植：里程碑（/milestones 静态前缀 + /:id/milestones 列表）

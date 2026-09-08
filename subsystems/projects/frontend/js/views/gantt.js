@@ -1,6 +1,6 @@
 // gantt.js — OA 移植二期批次2：甘特图（纯前端自绘，无第三方依赖）
-// 数据：任务(标题/planned_date/status/progress) + 里程碑(target/actual/is_delayed) + 依赖(depends_on)
-// 任务无开始日字段 → 条形终点=planned_date、长度=工期估算(7天)起点；依赖箭头按「前置任务终点→后续任务起点」
+// 数据：任务(start_date/planned_date/status/progress) + 里程碑(target/actual/is_delayed) + 依赖(depends_on)
+// 方案三B：任务条起于 start_date（计划开始日，迁移新增列），无开始日回退「截止前 7 天」估算；依赖箭头按「前置终点→后续起点」
 var GT_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', BLOCKED: '阻塞' };
 var GT_STATUS_COLOR = { NOT_STARTED: '#94a3b8', IN_PROGRESS: '#2563eb', DONE: '#059669', BLOCKED: '#dc2626' };
 
@@ -24,7 +24,7 @@ async function renderGantt() {
 async function gtLoad() {
   const pid = $('#gt-project').value;
   const box = $('#gt-box');
-  if (!pid) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">请先选择项目</div>'; return; }
+  if (!pid) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">🗂</span>请先选择项目<span class="pk-empty-hint">选择项目后查看任务/里程碑时间轴</span></div>'; return; }
   const tasks = await api('GET', PApi.projectTasks(pid));
   const milestones = await api('GET', PApi.milestones(pid));
   const depsMap = {}; // taskId -> [dependsOn...]（行结构与单任务 deps 完全一致，仅数据源换批量端点）
@@ -39,13 +39,13 @@ async function gtLoad() {
 
 function gtDraw(tasks, milestones, depsMap) {
   const box = $('#gt-box');
-  if (!tasks.length && !milestones.length) { box.innerHTML = '<div style="padding:24px;color:#94a3b8">该项目暂无任务/里程碑</div>'; return; }
+  if (!tasks.length && !milestones.length) { box.innerHTML = '<div class="pk-empty"><span class="pk-empty-icon">📊</span>该项目暂无任务/里程碑<span class="pk-empty-hint">在项目内创建任务后此处绘制时间轴</span></div>'; return; }
   const DAY = 86400000;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   // 日期范围：所有 planned_date / target_date 的 min/max，前后各留 3 天
   let min = null, max = null;
   function span(d) { if (!d) return; const t = new Date(d).getTime(); if (!min || t < min) min = t; if (!max || t > max) max = t; }
-  tasks.forEach(function (t) { span(t.planned_date); });
+  tasks.forEach(function (t) { span(t.planned_date); if (t.start_date) span(t.start_date); });
   milestones.forEach(function (m) { span(m.target_date); span(m.actual_date); });
   if (!min) { min = today.getTime(); max = min + 30 * DAY; }
   min -= 3 * DAY; max += 3 * DAY;
@@ -80,15 +80,18 @@ function gtDraw(tasks, milestones, depsMap) {
     body += '<div style="position:absolute;left:' + LEFTW + 'px;top:' + y + 'px;width:' + (totalDays * COLW) + 'px;height:' + (ROWH - 4) + 'px;border-bottom:1px solid #f8fafc"></div>';
     if (r.kind === 'task') {
       const dueT = d.planned_date ? new Date(d.planned_date).getTime() : null;
+      // 方案三B：真实跨度 — start_date(计划开始) 优先；无开始日回退「截止前 7 天」估算（与旧行为一致）
+      const stT = d.start_date ? new Date(d.start_date).getTime() : null;
       const est = 7 * DAY; // 无开始日：以「截止前 7 天」为默认工期窗
       const xEnd = dueT ? Math.round((dueT - min) / DAY) * COLW : null;
-      const xStart = xEnd !== null ? Math.max(0, xEnd - Math.round(est / DAY) * COLW) : null;
-      const overdue = dueT && d.status !== 'DONE' && dueT < today.getTime();
+      const xStart = xEnd !== null ? (stT ? Math.max(0, Math.round((stT - min) / DAY) * COLW) : Math.max(0, xEnd - Math.round(est / DAY) * COLW)) : null;
+      const overdue = dueT && d.status !== 'DONE' && d.status !== 'CANCELLED' && dueT < today.getTime();
       if (xStart !== null) {
         const w = Math.max(COLW, xEnd - xStart);
-        const color = GT_STATUS_COLOR[d.status] || '#94a3b8';
-        bars += '<div style="position:absolute;left:' + (LEFTW + xStart) + 'px;top:' + (y + 5) + 'px;width:' + w + 'px;height:' + (ROWH - 14) + 'px;background:' + color + ';opacity:' + (d.status === 'DONE' ? '.45' : '.8') + ';border-radius:4px;cursor:pointer" ' +
-          'onclick="gtOpenTask(' + d.id + ')" title="' + esc(d.title) + ' · ' + (GT_STATUS_CN[d.status] || d.status) + (d.progress !== undefined ? ' ' + d.progress + '%' : '') + (overdue ? ' · 已逾期' : '') + '">' +
+        const cancelled = d.status === 'CANCELLED';
+        const color = cancelled ? '#94a3b8' : (GT_STATUS_COLOR[d.status] || '#94a3b8');
+        bars += '<div style="position:absolute;left:' + (LEFTW + xStart) + 'px;top:' + (y + 5) + 'px;width:' + w + 'px;height:' + (ROWH - 14) + 'px;background:' + color + ';opacity:' + (cancelled ? '.35' : (d.status === 'DONE' ? '.45' : '.8')) + ';border-radius:4px;cursor:pointer' + (cancelled ? ';border-style:dashed' : '') + '" ' +
+          'onclick="gtOpenTask(' + d.id + ')" title="' + esc(d.title) + ' · ' + (TASK_STATUS_CN[d.status] || GT_STATUS_CN[d.status] || d.status) + (d.progress !== undefined ? ' ' + d.progress + '%' : '') + (overdue ? ' · 已逾期' : '') + '">' +
           (d.status === 'IN_PROGRESS' && d.progress ? '<div style="height:100%;width:' + d.progress + '%;background:rgba(255,255,255,.4);border-radius:4px"></div>' : '') + '</div>';
         if (overdue) bars += '<div style="position:absolute;left:' + (LEFTW + xEnd) + 'px;top:' + (y + 4) + 'px;font-size:10px;color:#dc2626">!</div>';
         rowPos[d.id] = { y: y, xEnd: xEnd, xStart: xStart, kind: 'task' };

@@ -13,7 +13,8 @@ async function renderProjectDashboard() {
     { k: 'total', n: s.total_tasks, l: '总任务', c: 'var(--brand)', href: '#/list', title: '查看任务列表（全部）' },
     { k: 'done', n: s.done_count, l: '已完成', c: 'var(--ok)', href: '#/list?status=DONE', title: '查看已完成任务' },
     { k: 'doing', n: s.in_progress_count, l: '进行中', c: '#1d4ed8', href: '#/list?status=IN_PROGRESS', title: '查看进行中任务' },
-    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' }
+    { k: 'overdue', n: s.overdue_count, l: '已延期', c: 'var(--bad)', href: '#/list?status=OVERDUE', title: '查看已延期任务' },
+    { k: 'cancelled', n: s.cancelled_count || 0, l: '已取消', c: '#64748b', href: '#/list?status=CANCELLED', title: '查看已取消任务' }
   ];
   // KbStats 共享组件（kb-stat 规范：fluent-card + .n/.l + --stat-color 竖色条，样式见 /css/app.css）
   $('#pk-stats').innerHTML = KbStats.render(stats, { click: 'navigate' });

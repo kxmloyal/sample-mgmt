@@ -1,6 +1,7 @@
 // kanban.js — 任务看板：4 列（未开始/进行中/已完成/已延期），HTML5 拖拽流转（仅合法转移）
-// 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE；非法流转 toast 报错并重渲染回弹
-// 卡片内提供「开始/完成」按钮兜底（移动端无拖拽能力时亦可流转）
+// 落列按 ACTION_MAP 判定：NOT_STARTED>IN_PROGRESS→START、IN_PROGRESS>DONE→COMPLETE、
+// OVERDUE>IN_PROGRESS→RESUME、OVERDUE>DONE→FINISH、IN_PROGRESS>NOT_STARTED→BACK、DONE>IN_PROGRESS→REOPEN（方案一A②/三A 扩边）
+// 卡片内提供流转按钮兜底（移动端无拖拽能力时亦可流转）
 // v2：看板「我的任务」筛选状态；列分组/计数按 status_eff；卡片进度条 + 项目名标签 + OVERDUE 强调
 // 迭代1：类别/优先级/责任人下拉筛选（A2）+ 筛选 URL 化（A4，筛选函数在 kanban-filter.js 保持顶层函数 ≤10）
 // 方案B-⑥：看板顶部 OA 摘要卡（里程碑/风险/变更 三卡，当前筛选项目范围；空数据显示 0 计数+引导语）
@@ -54,6 +55,7 @@ async function kbCreate() {
     '<label>优先级</label><fluent-select id="kc-priority">' + PRIORITY_KEYS.map(function (k) { return '<fluent-option value="' + k + '">' + PRIORITY_CN[k] + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<label>责任人</label><fluent-select id="kc-assignee"><fluent-option value="">未指派</fluent-option>' +
     users.map(function (u) { return '<fluent-option value="' + u.id + '">' + esc(u.display_name || ('#' + u.id)) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    '<label>开始日期</label><fluent-text-field id="kc-sdate" type="date"></fluent-text-field>' +
     '<label>计划完成日期</label><fluent-text-field id="kc-date" type="date"></fluent-text-field>' +
     '<label>描述</label><fluent-text-area id="kc-desc"></fluent-text-area>' +
     '</div>',
@@ -65,10 +67,13 @@ async function kbCreateSave() {
   const title = $('#kc-title').value.trim();
   if (!pid) return showToast('请选择项目', 'err');
   if (!title) return showToast('任务名称必填', 'err');
+  const sdate = $('#kc-sdate').value || null, pdate = $('#kc-date').value || null;
+  if (sdate && pdate && sdate > pdate) return showToast('开始日期不能晚于计划完成日期', 'err');
   try {
     await api('POST', PApi.projectTasks(pid), {
       title: title, category: $('#kc-category').value, priority: $('#kc-priority').value,
-      assignee_id: Number($('#kc-assignee').value) || null, planned_date: $('#kc-date').value || null,
+      assignee_id: Number($('#kc-assignee').value) || null,
+      start_date: sdate, planned_date: pdate,
       description: $('#kc-desc').value
     });
     showToast('创建成功'); pCloseModal(); kbLoad();
@@ -184,16 +189,23 @@ async function kbLoad() {
   board.innerHTML = cols.map(c =>
     '<div class="pk-col" data-status="' + c.k + '" ondragover="kbDragOver(event)" ondrop="kbDrop(event)">' +
     '<h4>' + c.t + '<span>' + rows.filter(x => (x.status_eff || x.status) === c.k).length + '</span></h4>' +
-    '<div id="kb-col-' + c.k + '"></div></div>').join('');
+    '<div id="kb-col-' + c.k + '">' +
+    (rows.some(x => (x.status_eff || x.status) === c.k) ? '' :
+      '<div class="pk-empty" style="padding:14px 8px"><span class="pk-empty-hint">暂无任务</span></div>') +
+    '</div></div>').join('');
   for (const c of cols) {
     const el = $('#kb-col-' + c.k);
     el.innerHTML = rows.filter(x => (x.status_eff || x.status) === c.k).map(t => {
       const st = t.status_eff || t.status;
       // P2 修复：卡片流转按钮兜底（移动端无拖拽；桌面亦可用），stopPropagation 避免触发跳详情
+      // 方案一A②：OVERDUE 卡补「继续/完成」快捷按钮（后端 RESUME/FINISH），退回 BACK 由详情条操作
       const ops = (st === 'NOT_STARTED'
         ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'START\')">开始</fluent-button>' : '') +
         (st === 'IN_PROGRESS'
-          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '');
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>' : '') +
+        (st === 'OVERDUE'
+          ? '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'RESUME\')">继续</fluent-button>' +
+            '<fluent-button appearance="secondary" size="small" onclick="event.stopPropagation();kbAction(' + t.id + ',\'FINISH\')">完成</fluent-button>' : '');
       // v2：全部项目视图显示项目名标签（project_id 空 = 全部项目）
       const projTag = !f.project_id ? '<span class="pk-proj-tag">' + esc(t.project_name) + '</span>' : '';
       return '<div class="pk-card' + (st === 'OVERDUE' ? ' pk-card-overdue' : '') + '" draggable="true" data-id="' + t.id + '" data-status="' + st + '" ' +
@@ -234,7 +246,9 @@ function kbDragOver(e) {
   if (col && !col.classList.contains('drag-over')) col.classList.add('drag-over');
 }
 
-// 落列校验：仅 START/COMPLETE 合法转移；非法 toast 报错 + 重渲染回弹（后端 CAS 兜底）
+// 落列校验：仅合法转移；非法 toast 报错 + 重渲染回弹（后端 CAS 兜底）
+// 方案一A②/三A：扩边 OVERDUE→IN_PROGRESS(RESUME)/DONE(FINISH)、IN_PROGRESS→NOT_STARTED(BACK)、DONE→IN_PROGRESS(REOPEN)
+// CANCELLED 为终态：看板不设取消列（列表筛选 #/list?status=CANCELLED 查看），不可再流转
 async function kbDrop(e) {
   e.preventDefault();
   const col = e.target.closest('.pk-col');
@@ -243,11 +257,17 @@ async function kbDrop(e) {
   if (!targetStatus || !id) return;
   const ACTION_MAP = {
     'NOT_STARTED>IN_PROGRESS': 'START',
-    'IN_PROGRESS>DONE': 'COMPLETE'
+    'IN_PROGRESS>DONE': 'COMPLETE',
+    'OVERDUE>IN_PROGRESS': 'RESUME',
+    'OVERDUE>DONE': 'FINISH',
+    'IN_PROGRESS>NOT_STARTED': 'BACK',
+    'DONE>IN_PROGRESS': 'REOPEN'
   };
+  // 退回未开始时允许目标列存在派生延期（BACK 后 planned_date 已过 → 显示为 OVERDUE），做前缀匹配
   const card = document.querySelector('.pk-card[data-id="' + id + '"]');
   const from = card ? card.dataset.status : '';
-  const action = ACTION_MAP[from + '>' + targetStatus];
+  let action = ACTION_MAP[from + '>' + targetStatus];
+  if (!action && from === 'IN_PROGRESS' && (targetStatus === 'NOT_STARTED' || targetStatus === 'OVERDUE')) action = 'BACK';
   if (!action) { showToast('不允许的流转：' + (TASK_STATUS_CN[from] || from) + ' → ' + (TASK_STATUS_CN[targetStatus] || targetStatus), 'err'); kbLoad(); return; }
   try {
     await api('POST', PApi.task(id) + '/status', { action });

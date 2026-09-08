@@ -33,6 +33,13 @@ function register(app) {
         const n = Number(req.body.after_value);
         if (!isFinite(n) || n < 0) return res.status(400).json({ error: 'BUDGET 变更的 after_value 须为非负数字（批准后将写入预算）' });
       }
+      // 方案三C：task_id 可选关联任务（同项目校验）
+      let taskId = req.body.task_id === undefined ? undefined : (Number(req.body.task_id) || null);
+      if (taskId) {
+        const lt = await D.fetchOne(null, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+        if (!lt) return res.status(404).json({ error: '关联任务不存在' });
+        if (lt.project_id !== id) return res.status(400).json({ error: '只能关联同一项目内的任务' });
+      }
       const r2 = await D.withTransaction(async conn => {
         const p = await D.getProject(conn, id);
         if (!p) return { status: 404, body: { error: '项目不存在' } };
@@ -46,7 +53,8 @@ function register(app) {
           project_id: id, change_no: 'PC' + day + String(seq).padStart(4, '0'),
           change_type: changeType, description: description,
           before_value: req.body.before_value, after_value: req.body.after_value,
-          reason: req.body.reason, applicant_id: u.id, created_by: u.id
+          reason: req.body.reason, task_id: taskId === undefined ? null : taskId,
+          applicant_id: u.id, created_by: u.id
         }, conn);
         await D.addProjectLog(conn, 'change', c.id, 'CREATE', JSON.stringify({ change_no: 'PC' + day + String(seq).padStart(4, '0'), change_type: changeType, project_id: id }), u.id);
         return { status: 201, body: { id: c.id, change_no: 'PC' + day + String(seq).padStart(4, '0') } };
@@ -63,9 +71,22 @@ function register(app) {
       if (req.body.status !== undefined) return res.status(400).json({ error: '状态请通过审批操作变更' });
       if (req.body.change_type && !CHANGE_TYPES.includes(req.body.change_type))
         return res.status(400).json({ error: 'change_type 须为 SCOPE/TIME/RESOURCE/BUDGET' });
+      // 方案三C：task_id 关联任务可选更新（undefined=不改，null=清除）
+      let taskId;
+      if (req.body.task_id !== undefined) {
+        taskId = Number(req.body.task_id) || null;
+        if (taskId) {
+          const lt = await D.fetchOne(null, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+          if (!lt) return res.status(404).json({ error: '关联任务不存在' });
+        }
+      }
       const r2 = await D.withTransaction(async conn => {
         const c = await D.getChange(conn, cid);
         if (!c) return { status: 404, body: { error: '变更单不存在' } };
+        if (taskId) {
+          const lt = await D.fetchOne(conn, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+          if (lt.project_id !== c.project_id) return { status: 400, body: { error: '只能关联同一项目内的任务' } };
+        }
         const acc = await perm.getProjectAccess(conn, c.project_id, u.id);
         const canManage = perm.isGlobalManager(u.role) || acc.isOwner;
         if (!canManage && c.applicant_id !== u.id) return { status: 403, body: { error: '仅申请人或项目经理可编辑' } };
@@ -74,7 +95,8 @@ function register(app) {
           description: req.body.description !== undefined ? String(req.body.description).trim() : c.description,
           before_value: req.body.before_value !== undefined ? req.body.before_value : c.before_value,
           after_value: req.body.after_value !== undefined ? req.body.after_value : c.after_value,
-          reason: req.body.reason !== undefined ? req.body.reason : c.reason
+          reason: req.body.reason !== undefined ? req.body.reason : c.reason,
+          task_id: taskId !== undefined ? taskId : c.task_id
         }, Number(req.body.version));
         if (r.changed === 0) {
           const fresh = await D.getChange(conn, cid);

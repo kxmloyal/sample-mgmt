@@ -29,10 +29,11 @@ module.exports = function createTaskDao(deps) {
   }
 
   // ===== 任务 =====
+  // 方案三B：新增 start_date（计划开始日，可空；甘特真实跨度数据源），列由 db/migrations/projects-plm.js 幂等添加
   async function createTask(data, conn) {
-    const sql = 'INSERT INTO project_tasks (project_id,title,description,category,priority,assignee_id,planned_date,status,progress,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)';
+    const sql = 'INSERT INTO project_tasks (project_id,title,description,category,priority,assignee_id,start_date,planned_date,status,progress,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)';
     const params = [data.project_id, data.title, data.description || '', data.category || 'other',
-      data.priority || 'M', data.assignee_id || null, data.planned_date || null, 'NOT_STARTED', 0, data.created_by];
+      data.priority || 'M', data.assignee_id || null, data.start_date || null, data.planned_date || null, 'NOT_STARTED', 0, data.created_by];
     const r = await conn.execute(sql, params);
     return { id: r[0].insertId };
   }
@@ -54,7 +55,8 @@ module.exports = function createTaskDao(deps) {
     // 乐观锁：WHERE id AND version；匹配成功则 version+1，返回 affectedRows（0=版本冲突）
     const sets = [], params = [];
     // C1 修复：剔除 status（状态仅能经 /status 流转接口变更，DAO 层兜底防绕过）
-    const fields = ['title', 'description', 'category', 'priority', 'assignee_id', 'planned_date', 'progress', 'solution', 'notes', 'actual_date'];
+    // 方案三B：fields 增加 start_date（计划开始日）
+    const fields = ['title', 'description', 'category', 'priority', 'assignee_id', 'start_date', 'planned_date', 'progress', 'solution', 'notes', 'actual_date'];
     for (const f of fields) {
       if (data[f] !== undefined) { sets.push(f + '=?'); params.push(data[f]); }
     }

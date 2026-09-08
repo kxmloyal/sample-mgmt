@@ -16,7 +16,8 @@ async function renderTaskList() {
     '<fluent-select id="lk-project"><fluent-option value="">全部项目</fluent-option></fluent-select>' +
     '<fluent-select id="lk-status"><fluent-option value="">全部状态</fluent-option>' +
     '<fluent-option value="NOT_STARTED">未开始</fluent-option><fluent-option value="IN_PROGRESS">进行中</fluent-option>' +
-    '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option></fluent-select>' +
+    '<fluent-option value="DONE">已完成</fluent-option><fluent-option value="OVERDUE">已延期</fluent-option>' +
+    '<fluent-option value="CANCELLED">已取消</fluent-option></fluent-select>' +
     '<fluent-select id="lk-category"><fluent-option value="">全部类别</fluent-option>' +
     CATEGORY_KEYS.map(k => '<fluent-option value="' + k + '">' + CATEGORY_CN[k] + '</fluent-option>').join('') + '</fluent-select>' +
     '<fluent-select id="lk-priority"><fluent-option value="">全部优先级</fluent-option>' +
@@ -104,14 +105,18 @@ async function lkLoad() {
     '<td>' + (TASK_STATUS_CN[t.status_eff || t.status] || t.status_eff || t.status) + '</td>' +
     '<td>' + t.progress + '%</td>' +
     '<td>' + fmt(t.planned_date) + '</td>' +
-    '<td><a href="#/tasks/' + t.id + '">详情</a> ' + lkQuickOps(t) + '</td></tr>').join('');
+    '<td><a href="#/tasks/' + t.id + '">详情</a> ' + lkQuickOps(t) + '</td></tr>').join('') ||
+    '<tr><td colspan="10"><div class="pk-empty"><span class="pk-empty-icon">📭</span>没有符合筛选条件的任务<span class="pk-empty-hint">调整筛选条件或新建任务</span></div></td></tr>';
   renderLkPager(total);
 }
 // v2：行内快捷流转按钮（开始/完成，按有效状态动态显示）
+// 方案一A②：OVERDUE 行提供 继续(RESUME)/完成(FINISH)；CANCELLED 终态无快捷操作
 function lkQuickOps(t) {
   const st = t.status_eff || t.status;
   if (st === 'NOT_STARTED') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'START\')">开始</fluent-button>';
   if (st === 'IN_PROGRESS') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'COMPLETE\')">完成</fluent-button>';
+  if (st === 'OVERDUE') return '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'RESUME\')">继续</fluent-button> ' +
+    '<fluent-button size="small" appearance="neutral" onclick="lkAction(' + t.id + ',\'FINISH\')">完成</fluent-button>';
   return '';
 }
 async function lkAction(id, action) {

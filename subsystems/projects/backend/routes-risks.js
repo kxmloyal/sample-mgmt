@@ -33,6 +33,13 @@ function register(app) {
         return res.status(400).json({ error: 'probability 仅允许 H/M/L' });
       if (req.body.risk_type && !RISK_TYPES.includes(req.body.risk_type))
         return res.status(400).json({ error: 'risk_type 非法' });
+      // 方案三C：task_id 可选关联任务（同项目校验；传 null/空清除关联）
+      let taskId = req.body.task_id === undefined ? undefined : (Number(req.body.task_id) || null);
+      if (taskId) {
+        const lt = await D.fetchOne(null, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+        if (!lt) return res.status(404).json({ error: '关联任务不存在' });
+        if (lt.project_id !== id) return res.status(400).json({ error: '只能关联同一项目内的任务' });
+      }
       const r2 = await D.withTransaction(async conn => {
         const p = await D.getProject(conn, id);
         if (!p) return { status: 404, body: { error: '项目不存在' } };
@@ -43,6 +50,7 @@ function register(app) {
           project_id: id, risk_name: riskName, description: req.body.description,
           risk_type: req.body.risk_type, severity: req.body.severity, probability: req.body.probability,
           impact: req.body.impact, mitigation: req.body.mitigation,
+          task_id: taskId === undefined ? null : taskId,
           identified_by: u.id, created_by: u.id
         }, conn);
         await D.addProjectLog(conn, 'risk', r.id, 'CREATE', JSON.stringify({ risk_name: riskName, project_id: id }), u.id);
@@ -64,9 +72,22 @@ function register(app) {
         return res.status(400).json({ error: 'probability 仅允许 H/M/L' });
       if (req.body.risk_type && !RISK_TYPES.includes(req.body.risk_type))
         return res.status(400).json({ error: 'risk_type 非法' });
+      // 方案三C：task_id 关联任务可选更新（同项目校验；undefined=不改，null=清除）
+      let taskId;
+      if (req.body.task_id !== undefined) {
+        taskId = Number(req.body.task_id) || null;
+        if (taskId) {
+          const lt = await D.fetchOne(null, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+          if (!lt) return res.status(404).json({ error: '关联任务不存在' });
+        }
+      }
       const r2 = await D.withTransaction(async conn => {
         const r0 = await D.getRisk(conn, rid);
         if (!r0) return { status: 404, body: { error: '风险不存在' } };
+        if (taskId) {
+          const lt = await D.fetchOne(conn, 'SELECT project_id FROM project_tasks WHERE id=?', [taskId]);
+          if (lt.project_id !== r0.project_id) return { status: 400, body: { error: '只能关联同一项目内的任务' } };
+        }
         const acc = await perm.getProjectAccess(conn, r0.project_id, u.id);
         if (!perm.isGlobalManager(u.role) && !acc.isOwner) return { status: 403, body: { error: '无权编辑风险' } };
         const r = await D.updateRisk(conn, rid, {
@@ -76,7 +97,8 @@ function register(app) {
           severity: req.body.severity || r0.severity,
           probability: req.body.probability || r0.probability,
           impact: req.body.impact !== undefined ? req.body.impact : r0.impact,
-          mitigation: req.body.mitigation !== undefined ? req.body.mitigation : r0.mitigation
+          mitigation: req.body.mitigation !== undefined ? req.body.mitigation : r0.mitigation,
+          task_id: taskId !== undefined ? taskId : r0.task_id
         }, Number(req.body.version));
         if (r.changed === 0) {
           const fresh = await D.getRisk(conn, rid);

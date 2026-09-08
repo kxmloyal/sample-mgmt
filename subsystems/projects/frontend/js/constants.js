@@ -2,7 +2,8 @@
 const ROLE_CN = Object.assign({ PM: '项目经理(PM)' }, { ADMIN: '管理员', RD: '研发(RD)', ME: '生技(ME)', QA: '品保(QA)', CUSTODY: '保管(CUSTODY)' });
 const PRIORITY_CN = { H: '高', M: '中', L: '低' };
 const CATEGORY_CN = { device: '设备', quality: '质量', process: '流程', safety: '安全', other: '其他' };
-const TASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', OVERDUE: '已延期' };
+// 方案三A：新增 CANCELLED 终态（已取消；灰色系，与 manifest stateMachine.states 同步）
+const TASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成', OVERDUE: '已延期', CANCELLED: '已取消' };
 const SUBTASK_STATUS_CN = { NOT_STARTED: '未开始', IN_PROGRESS: '进行中', DONE: '已完成' };
 // v2：表单下拉选项（弹窗复用）
 const CATEGORY_KEYS = Object.keys(CATEGORY_CN);

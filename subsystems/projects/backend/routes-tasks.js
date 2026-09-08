@@ -1,8 +1,9 @@
-// subsystems/projects/backend/routes-tasks.js — 任务/子任务/评论/流转
-// Task 2：POST 创建任务（支撑项目 CRUD 测试）；Task 3：列表/详情/编辑（乐观锁）/删除（级联）
-// Task 4：POST /status 状态流转（CAS + 状态机 + 伪角色 ASSIGNEE/MEMBER + 依赖校验 + OVERDUE 自动延期互斥）
+// subsystems/projects/backend/routes-tasks.js — 任务创建/列表/详情/流转/子任务/评论
+// Task 2：POST 创建任务（支撑项目 CRUD 测试）；Task 3：列表/详情；Task 4：POST /status 状态流转（CAS + 状态机 + 伪角色 ASSIGNEE/MEMBER + 依赖校验）
 // Task 5：子任务（三态 CAS 流转）+ 评论（作者/ADMIN/PM 可删，同事务留痕）；详情补全 subtasks/comments 字段
 // Task 6：依赖/附件/关联路由已拆分至 routes-task-extras.js（本文件超 20000 字符红线重构，Task 7）
+// 方案一B（2026-09）：编辑/删除/批量操作域拆分至 routes-task-edit.js（本文件曾达 22.6k 字符红线）
+// 方案一A（2026-09）：OVERDUE 回归纯派生态（去除流转事务内物理写回）；流转匹配改用 status_eff，新增 OVERDUE/DONE/IN_PROGRESS 出边
 const D = require('../../../db');
 const perm = require('./permissions');
 const wf = require('./workflow-config');
@@ -35,7 +36,7 @@ function register(app) {
       const t = await D.withTransaction(async conn => {
         const task = await D.createTask({ project_id: pid, title, description: req.body.description,
           category: req.body.category, priority: req.body.priority, assignee_id: req.body.assignee_id || null,
-          planned_date: req.body.planned_date || null, created_by: u.id }, conn);
+          start_date: req.body.start_date || null, planned_date: req.body.planned_date || null, created_by: u.id }, conn);
         await D.addProjectLog(conn, 'task', task.id, 'CREATE', JSON.stringify({ title }), u.id);
         // 通知触发点①：新建任务带指派人 → 通知被指派人（自己创建给自己不发）
         // 注：createTask 仅返回 {id}，assignee 从请求体取（兼容 DAO 契约不变）
@@ -60,72 +61,29 @@ function register(app) {
   });
 
   // 任务详情（Task 6 补全 deps/files/links/logs，Promise.all 并行；v2 改调 getTaskDetail JOIN 项目名/责任人）
+  // 方案三C：并行补拉本项目关联到本任务的风险/变更互链数据（量级小；无关联返回空数组，前端 tab 显示空态）
   app.get('/api/projects/tasks/:tid', requireAuth, async (req, res) => {
     try {
       const tid = Number(req.params.tid);
       const t = await D.getTaskDetail(null, tid);
       if (!t) return res.status(404).json({ error: '任务不存在' });
-      const [subtasks, comments, deps, files, links, logs] = await Promise.all([
+      const [subtasks, comments, deps, files, links, logs, risks, changes] = await Promise.all([
         D.listSubtasks(null, tid),
         D.listTaskComments(null, tid),
         D.listTaskDeps(null, tid),
         D.listTaskFiles(null, tid),
         D.listTaskLinks(null, tid),
-        D.listTaskLogs(null, tid)
+        D.listTaskLogs(null, tid),
+        D.fetchAll(null, 'SELECT id,project_id,risk_name,severity,probability,status,task_id FROM project_risks WHERE task_id=?', [tid]),
+        D.fetchAll(null, 'SELECT id,project_id,change_no,change_type,description,status,task_id FROM project_changes WHERE task_id=?', [tid])
       ]);
-      res.json({ task: t, subtasks, deps, comments, files, links, logs });
+      res.json({ task: t, subtasks, deps, comments, files, links, logs, risks, changes });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 编辑任务（乐观锁 version 冲突 409；ADMIN/PM/成员/assignee）
-  app.put('/api/projects/tasks/:tid', requireAuth, async (req, res) => {
-    try {
-      const u = await currentUser(req);
-      const tid = Number(req.params.tid);
-      // 事务内读取与写入保持原子性；响应在事务外发送（事务内发响应会导致连接池状态异常，数据未持久化即返回假成功）
-      const r2 = await D.withTransaction(async conn => {
-        const t = await D.getTask(conn, tid);
-        if (!t) return { status: 404, body: { error: '任务不存在' } };
-        if (!await canEditTask(conn, u, t, true)) return { status: 403, body: { error: '无权编辑该任务' } };
-        const body = req.body || {};
-        // C1 修复：状态只能通过 /status 流转接口变更，编辑接口禁止改 status（防绕过状态机/CAS/依赖校验/留痕）
-        if (body.status !== undefined) return { status: 400, body: { error: '状态请通过状态流转操作变更' } };
-        const r = await D.updateTask(conn, tid, body, Number(body.version));
-        if (r.changed === 0) return { status: 409, body: { error: '数据已被他人修改，请刷新后重试' } };
-        await D.addProjectLog(conn, 'task', tid, 'UPDATE', JSON.stringify({ fields: Object.keys(body).filter(k => k !== 'version') }), u.id);
-        // 通知触发点②：编辑改指派人 → 通知新指派人（旧指派人改派不通知，避免噪音）
-        if (body.assignee_id !== undefined) {
-          const na = Number(body.assignee_id) || null;
-          if (na && na !== t.assignee_id && na !== u.id) {
-            await D.addNotification(conn, { user_id: na, type: 'ASSIGN',
-              title: '任务改派给你：' + t.title, body: (t.project_name || ''),
-              link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
-          }
-        }
-        return { status: 200, body: { ok: 1 } };
-      });
-      res.status(r2.status).json(r2.body);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+  // 编辑/删除/批量操作域已拆分至 routes-task-edit.js（方案一B，2026-09；对外路径与行为零变化）
 
-  // 删除任务（ADMIN/PM/成员；级联清理附属表 + 留痕，同事务）
-  app.delete('/api/projects/tasks/:tid', requireAuth, async (req, res) => {
-    try {
-      const u = await currentUser(req);
-      const tid = Number(req.params.tid);
-      const r2 = await D.withTransaction(async conn => {
-        const t = await D.getTask(conn, tid);
-        if (!t) return { status: 404, body: { error: '任务不存在' } };
-        if (!await canEditTask(conn, u, t, false)) return { status: 403, body: { error: '无权删除该任务' } };
-        await D.deleteTaskCascade(conn, tid);
-        await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title }), u.id);
-        return { status: 200, body: { ok: 1 } };
-      });
-      res.status(r2.status).json(r2.body);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // 状态流转（CAS 条件更新 + 状态机配置 + 依赖校验 + 同事务留痕 + 触发 OVERDUE 自动延期互斥）
+  // 状态流转（CAS 条件更新 + 状态机配置 + 依赖校验 + 同事务留痕）
   app.post('/api/projects/tasks/:tid/status', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
@@ -137,7 +95,10 @@ function register(app) {
         const cfg = await wf.loadWorkflow(conn);
         const t = await D.getTask(conn, tid);
         if (!t) return { status: 404, body: { error: '任务不存在' } };
-        const tr = cfg.transitions.find(x => x.action === action && x.from === t.status);
+        // 方案一A②：流转匹配用 status_eff（planned_date 已过且未完成 → 派生 OVERDUE），
+        // 延期任务可走 OVERDUE 出边继续处理/补录完成/取消；CAS 落库仍按物理 status
+        const cur = t.status_eff || t.status;
+        const tr = cfg.transitions.find(x => x.action === action && x.from === cur);
         if (!tr) {
           // CAS 语义：action 合法但当前状态不匹配 = 状态已并发变更 → 409；action 不存在 → 400
           const any = cfg.transitions.find(x => x.action === action);
@@ -152,11 +113,9 @@ function register(app) {
             'WHERE d.task_id=? AND p.status<>\'DONE\'', [tid]);
           if (pending && pending.c > 0) return { status: 409, body: { error: '存在未完成的前置任务，禁止流转' } };
         }
-        // 自动延期批量（与手动流转同事务，CAS 保证互斥：已超期则手动流转必然 409）
-        await conn.execute(
-          "UPDATE project_tasks SET status='OVERDUE', version=version+1 WHERE id=? AND status IN ('NOT_STARTED','IN_PROGRESS') AND planned_date < CURDATE()",
-          [tid]);
-        // 手动流转 CAS（WHERE status=读取时的旧值，affectedRows=0 → 并发冲突）
+        // 方案一A①：OVERDUE 回归纯派生态，取消物理写回（此前先 UPDATE 写 OVERDUE 再流转，导致延期任务永久锁死于 OVERDUE）；
+        // 派生延期任务走 OVERDUE 出边（RESUME→IN_PROGRESS / FINISH→DONE / CANCEL→CANCELLED），CAS 按物理 status 匹配
+        // 手动流转 CAS（WHERE status=读取时的物理旧值，affectedRows=0 → 并发冲突）
         const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
           [tr.to, tid, t.status]);
         if (r[0].affectedRows === 0) return { status: 409, body: { error: '任务状态已变更，请刷新后重试' } };
@@ -165,18 +124,19 @@ function register(app) {
           await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
         }
         await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action }), u.id);
-        // 通知触发点③：任务完成/退回 → 通知创建人（操作人是创建人自己则不通知）
-        if (tr.to === 'DONE' || tr.to === 'NOT_STARTED') {
+        // 通知触发点③：任务完成/退回/取消 → 通知创建人（操作人是创建人自己则不通知）
+        if (tr.to === 'DONE' || tr.to === 'NOT_STARTED' || tr.to === 'CANCELLED') {
           if (t.created_by && t.created_by !== u.id) {
+            const CN = { DONE: '任务已完成：', NOT_STARTED: '任务被退回：', CANCELLED: '任务被取消：' };
             await D.addNotification(conn, { user_id: t.created_by,
               type: 'STATUS',
-              title: (tr.to === 'DONE' ? '任务已完成：' : '任务被退回：') + t.title,
+              title: CN[tr.to] + t.title,
               body: '操作人 ' + (u.display_name || u.username || ('#' + u.id)),
               link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
           }
         }
         const nt = await D.getTask(conn, tid);
-        return { status: 200, body: { task: nt, message: tr.label } };
+        return { status: 200, body: { task: nt, message: tr.label, status_eff: nt.status_eff || nt.status } };
       });
       res.status(r2.status).json(r2.body);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -305,75 +265,6 @@ function register(app) {
         return { status: 200, body: { ok: 1 } };
       });
       res.status(r2.status).json(r2.body);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-  // A3 批量操作（事务内逐条 canEditTask 校验 + 留痕；无权限/状态不允许条目跳过并统计；单批上限 100）
-  // 返回 { ok:[tid], skipped:[{id,reason}] }；delete 走 deleteTaskCascade 级联清理；status 复用单任务流转约束（依赖校验）
-  app.post('/api/projects/tasks/batch', requireAuth, async (req, res) => {
-    try {
-      const u = await currentUser(req);
-      const body = req.body || {};
-      const action = body.action;
-      const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger).slice(0, 100) : [];
-      if (!['assign', 'status', 'delete'].includes(action)) return res.status(400).json({ error: '非法批量操作' });
-      if (ids.length === 0) return res.status(400).json({ error: 'ids 必填' });
-      const ok = []; const skipped = [];
-      await D.withTransaction(async conn => {
-        for (const tid of ids) {
-          const t = await D.getTask(conn, tid);
-          if (!t) { skipped.push({ id: tid, reason: '任务不存在' }); continue; }
-          if (!await canEditTask(conn, u, t, action !== 'delete')) {
-            skipped.push({ id: tid, reason: '无权限' }); continue;
-          }
-          if (action === 'assign') {
-            const assigneeId = Number(body.assignee_id) || null;
-            await D.updateTask(conn, tid, { assignee_id: assigneeId, version: t.version }, t.version);
-            await D.addProjectLog(conn, 'task', tid, 'BATCH_ASSIGN', JSON.stringify({ assignee_id: assigneeId }), u.id);
-            // 通知触发点④：批量改派 → 通知新指派人
-            if (assigneeId && assigneeId !== t.assignee_id && assigneeId !== u.id) {
-              await D.addNotification(conn, { user_id: assigneeId, type: 'ASSIGN',
-                title: '批量改派任务给你：' + t.title, body: '',
-                link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
-            }
-          } else if (action === 'status') {
-            const act2 = String(body.action2 || '').trim();
-            const cfg = await wf.loadWorkflow(conn);
-            const tr = cfg.transitions.find(x => x.action === act2 && x.from === t.status);
-            if (!tr) { skipped.push({ id: tid, reason: '状态不允许该操作' }); continue; }
-            // 依赖校验（与单任务流转一致）：进入 IN_PROGRESS/DONE 前前置须全部 DONE
-            if (tr.to === 'IN_PROGRESS' || tr.to === 'DONE') {
-              const pending = await D.fetchOne(conn,
-                'SELECT COUNT(*) AS c FROM project_task_deps d JOIN project_tasks p ON p.id=d.depends_on_id ' +
-                "WHERE d.task_id=? AND p.status<>'DONE'", [tid]);
-              if (pending && pending.c > 0) { skipped.push({ id: tid, reason: '存在未完成前置任务' }); continue; }
-            }
-            // P2-1 修复：与单任务流转一致 — 先执行 OVERDUE 自动延期（CAS 互斥），再手动流转
-            await conn.execute(
-              "UPDATE project_tasks SET status='OVERDUE', version=version+1 WHERE id=? AND status IN ('NOT_STARTED','IN_PROGRESS') AND planned_date < CURDATE()",
-              [tid]);
-            const r = await conn.execute('UPDATE project_tasks SET status=?, version=version+1 WHERE id=? AND status=?',
-              [tr.to, tid, t.status]);
-            if (r[0].affectedRows === 0) { skipped.push({ id: tid, reason: '状态已变更' }); continue; }
-            if (tr.to === 'DONE') {
-              await conn.execute('UPDATE project_tasks SET progress=100, actual_date=COALESCE(actual_date,CURDATE()) WHERE id=?', [tid]);
-            }
-            await D.addProjectLog(conn, 'task', tid, 'STATUS_CHANGE', JSON.stringify({ from: t.status, to: tr.to, action: act2, batch: 1 }), u.id);
-            // 通知触发点⑤：批量完成/退回 → 通知创建人
-            if ((tr.to === 'DONE' || tr.to === 'NOT_STARTED') && t.created_by && t.created_by !== u.id) {
-              await D.addNotification(conn, { user_id: t.created_by,
-                type: 'STATUS',
-                title: (tr.to === 'DONE' ? '任务已完成：' : '任务被退回：') + t.title,
-                body: '批量操作',
-                link: '#/tasks/' + tid, ref_type: 'task', ref_id: tid });
-            }
-          } else if (action === 'delete') {
-            await D.deleteTaskCascade(conn, tid);
-            await D.addProjectLog(conn, 'task', tid, 'DELETE', JSON.stringify({ title: t.title, batch: 1 }), u.id);
-          }
-          ok.push(tid);
-        }
-      });
-      res.json({ ok: ok, skipped: skipped });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }

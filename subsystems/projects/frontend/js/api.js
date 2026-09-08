@@ -38,6 +38,8 @@ const PApi = {
   notifUnread: '/api/projects/notifications/unread',
   notifications: '/api/projects/notifications',
   notifRead: '/api/projects/notifications/read',
+  // 附件受控下载（方案二A：登录 + 任务相关人校验）
+  fileDownload: (tid, fid) => '/api/projects/tasks/' + tid + '/files/' + fid + '/download',
   // 甘特依赖批量（方案B-③去 N+1）
   taskDepsBatch: pid => '/api/projects/' + pid + '/deps-batch'
 };

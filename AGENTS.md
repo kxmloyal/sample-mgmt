@@ -334,7 +334,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
 - `routes-samples.js` 已拆分（2026-09-02 B3-T1）：机型路由拆至 `routes-samples-models.js`、图片保存拆至 `sample-images.js`，主文件降至 65.7% 红线内
 - `db/migrations.js` 已拆分（2026-09-02 B3-T2）：迁移按子系统拆至 `db/migrations/` 目录（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 为薄转发，接口不变
-- `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），后续项目追踪迭代需关注拆分（如 info 主卡渲染拆独立 helper）
+- `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），2026-09-08 v3 迭代后降至 13.6k（tabs 拆分/空态收敛），持续观察；`backend/routes-tasks.js` 已于 v3 拆分（22.6k→14.8k，编辑/删除/批量域迁至 routes-task-edit.js）；`frontend/js/views/task-detail.js`、`kanban.js`（15.0k）均在红线内，后续迭代仍需关注容量
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
 - `db/migrations.js` 顶层函数 11 个（批次 2 新增 deleted_at 迁移后突破 §7.2 ≤10 上限，2026-09-01 记录），建议下批次拆分为 `db/migrations/` 目录按域分文件
 - `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分

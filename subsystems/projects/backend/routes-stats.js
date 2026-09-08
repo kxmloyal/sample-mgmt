@@ -92,10 +92,10 @@ function register(app) {
       const u = await currentUser(req);
       if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可修改状态机配置' });
       const body = req.body || {};
-      // 拓扑固定校验：4 态 + 4 转移边
-      const KEYS = ['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'OVERDUE'];
+      // 拓扑校验：5 态（方案三A 新增 CANCELLED 终态）+ 转移边集合（方案一A 起 OVERDUE 为派生态，含 RESUME/FINISH/BACK/REOPEN/CANCEL 人工出边）
+      const KEYS = ['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'OVERDUE', 'CANCELLED'];
       if (!body.states || KEYS.some(k => !body.states[k]))
-        return res.status(400).json({ error: '状态必须包含 NOT_STARTED/IN_PROGRESS/DONE/OVERDUE 四态' });
+        return res.status(400).json({ error: '状态必须包含 NOT_STARTED/IN_PROGRESS/DONE/OVERDUE/CANCELLED 五态' });
       if (!Array.isArray(body.transitions) || body.transitions.length === 0)
         return res.status(400).json({ error: 'transitions 必填' });
       // P1-3 修复：保存前校验每个转边的 from/to/action 合法性 + action 唯一 + 角色非空
@@ -109,9 +109,9 @@ function register(app) {
         if (!from || !to || !act) return res.status(400).json({ error: '转边 from/to/action 均不能为空' });
         if (KEYS.indexOf(from) < 0 || KEYS.indexOf(to) < 0)
           return res.status(400).json({ error: '转边 from/to 必须为合法状态（' + KEYS.join('/') + '）' });
-        // 存量缺陷修复：SYSTEM 伪角色的转边（如 AUTO_OVERDUE 双边）豁免 action 唯一校验——
-        // 人工流转仍严格唯一，系统边按"源状态+动作"判重，与 manifest 默认配置自洽
-        const isSystemEdge = Array.isArray(tr.role) && tr.role.includes('SYSTEM');
+        // 存量缺陷修复：SYSTEM 伪角色的转边豁免 action 唯一校验（历史 AUTO_OVERDUE 双边）；
+        // CANCEL 终态边（NOT_STARTED/IN_PROGRESS/OVERDUE → CANCELLED）同 action 三边，亦按"源状态+动作"判重豁免
+        const isSystemEdge = (Array.isArray(tr.role) && tr.role.includes('SYSTEM')) || to === 'CANCELLED';
         if (!isSystemEdge) {
           if (seenActions.has(act)) return res.status(400).json({ error: '转边 action 重复：' + act });
           seenActions.add(act);

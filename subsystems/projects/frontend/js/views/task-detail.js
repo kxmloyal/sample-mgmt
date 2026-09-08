@@ -10,7 +10,8 @@ var _tdCache = { tid: 0, data: null, ts: 0, ttl: 8000 };
 var _tdCacheTtl = 8000; // 8s 内同任务复用（弱一致只读）；写操作后走 tdRefresh 清缓存强制重新拉取
 const TD_TABS = [
   { k: 'subs', t: '子任务' }, { k: 'comments', t: '评论' },
-  { k: 'files', t: '附件' }, { k: 'links', t: '关联' }, { k: 'logs', t: '日志' }
+  { k: 'files', t: '附件' }, { k: 'links', t: '关联' },
+  { k: 'xlinks', t: '风险/变更' }, { k: 'logs', t: '日志' }
 ];
 async function renderTaskDetail(tid) {
   if (_tdDirty && !confirm('详情有未保存的修改，离开将丢失，继续？')) { // 脏守卫：换任务前拦截
@@ -42,7 +43,7 @@ function tdSwitchTab(k) {
   const d = (_tdCache.tid === _tid) ? _tdCache.data : null;
   const badge = function (n) { return n != null ? ' <span class="td-badge">' + n + '</span>' : ''; };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
-    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length }[x.k] : null;
+    const n = d ? { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length, xlinks: ((d.risks || []).length + (d.changes || []).length) }[x.k] : null;
     return '<fluent-button appearance="' + (x.k === k ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(n) + '</fluent-button>';
   }).join('');
   tdLoadSection(k);
@@ -65,6 +66,7 @@ async function tdLoadSection(kind) {
     else if (kind === 'comments') body.innerHTML = renderTdComments(d);
     else if (kind === 'files') body.innerHTML = renderTdFiles(d);
     else if (kind === 'links') body.innerHTML = renderTdLinks(d);
+    else if (kind === 'xlinks') tdLoadXlinks();
     else if (kind === 'logs') body.innerHTML = renderTdLogs(d);
     // 方案A-④：数据到手后刷新 tabs 徽章
     if (kind !== 'info') tdSwitchTabBadges(d);
@@ -74,7 +76,7 @@ async function tdLoadSection(kind) {
 function tdSwitchTabBadges(d) {
   if (!d || !$('#td-tabs')) return;
   const badge = function (n) { return ' <span class="td-badge">' + n + '</span>'; };
-  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length };
+  const counts = { subs: (d.subtasks || []).length, comments: (d.comments || []).length, files: (d.files || []).length, links: (d.links || []).length, logs: (d.logs || []).length, xlinks: ((d.risks || []).length + (d.changes || []).length) };
   $('#td-tabs').innerHTML = TD_TABS.map(function (x) {
     return '<fluent-button appearance="' + (x.k === _tdTab ? 'accent' : 'neutral') + '" size="small" onclick="tdSwitchTab(\'' + x.k + '\')">' + x.t + badge(counts[x.k]) + '</fluent-button>';
   }).join('');
@@ -86,15 +88,18 @@ function renderTdInfo(d) {
   const t = d.task;
   const st = t.status_eff || t.status;
   const canEdit = ['ADMIN', 'PM'].includes(me.role);
+  // 方案三A：状态底色（CANCELLED 灰；其余沿用 manifest 色系）
+  const stBg = { NOT_STARTED: '#fffbeb', IN_PROGRESS: '#eff6ff', DONE: '#ecfdf5', OVERDUE: '#fef2f2', CANCELLED: '#f1f5f9' }[st] || 'transparent';
   $('#td-info').innerHTML =
     '<h3>' + esc(t.title) + '</h3>' +
-    '<div class="pk-row"><span class="pk-name">状态</span><span>' + (TASK_STATUS_CN[st] || st) +
-    ' · 进度 ' + t.progress + '%</span>' +
+    '<div class="pk-row"><span class="pk-name">状态</span><span style="background:' + stBg + ';padding:1px 8px;border-radius:8px">' + (TASK_STATUS_CN[st] || st) + '</span>' +
+    '<span> · 进度 ' + t.progress + '%</span>' +
     '<span class="pk-progress" style="flex:1"><span class="pk-progress-bar" style="width:' + Math.min(t.progress || 0, 100) + '%"></span></span></div>' +
     '<div class="pk-row"><span class="pk-name">项目</span><span>' + esc(t.project_name || t.project_id) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">类别</span><span>' + (CATEGORY_CN[t.category] || t.category) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">优先级</span><span>' + (PRIORITY_CN[t.priority] || t.priority) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">责任人</span><span>' + esc(t.assignee_name || '未指派') + '</span></div>' +
+    (t.start_date ? '<div class="pk-row"><span class="pk-name">开始日期</span><span>' + fmt(t.start_date) + '</span></div>' : '') +
     '<div class="pk-row"><span class="pk-name">计划日期</span><span>' + fmt(t.planned_date) + '</span></div>' +
     '<div class="pk-row"><span class="pk-name">实际日期</span><span>' + fmt(t.actual_date) + '</span></div>' +
     (t.description ? '<div class="pk-row"><span class="pk-name">描述</span><span>' + esc(t.description) + '</span></div>' : '') +
@@ -125,7 +130,7 @@ function renderTdSubs(d) {
     '<fluent-button size="small" appearance="neutral" onclick="pConfirm(\'确认删除该子任务？\',\'tdSubDel(' + s.id + ')\')">删除</fluent-button>' +
     '</div>').join('');
   return (rows ? '<div class="muted" style="font-size:11px;margin-bottom:6px">拖「⋮⋮」调整执行顺序（自动保存）</div>' : '') +
-    '<div id="td-subs-list">' + (rows || '<span class="pk-name">无子任务</span>') + '</div>';
+    '<div id="td-subs-list">' + (rows || '<span class="pk-name pk-empty-line">无子任务</span>') + '</div>';
 }
 // v2：评论分区（输入框 + 列表，含删除按钮）+ 方案A-③ @提及（oninput 触发候选浮层；提交时解析提及发通知）
 function renderTdComments(d) {
@@ -137,22 +142,51 @@ function renderTdComments(d) {
       (c.operator_id === me.id || me.role === 'ADMIN' || me.role === 'PM'
         ? '<fluent-button size="small" appearance="neutral" onclick="tdCmtDel(' + c.id + ')">删除</fluent-button>' : '') + '</div>').join('') + '</div>';
 }
-// v2：附件分区（上传区 + 列表，含删除按钮；下载链接前缀 /uploads/projects/）+ 方案A-⑤ 图片缩略图
+// v2：附件分区（上传区 + 列表，含删除按钮）+ 方案A-⑤ 图片缩略图
+// 方案二A：下载切换为受控端点（登录 + 相关人校验）；缩略图预览暂留静态路径（兼容，后续迭代收紧）
 function renderTdFiles(d) {
   return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
-    d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
-      '<span class="pk-name"><a href="/uploads/projects/' + f.file_path + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
-      '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('');
+    (d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
+      '<span class="pk-name"><a href="' + PApi.fileDownload(_tid, f.id) + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
+      '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('') || '<span class="pk-name pk-empty-line">暂无附件</span>');
+}
+// 方案三C：风险/变更互链 tab（详情 payload 的 risks/changes，由后端批量查询注入；点击跳对应管理页）
+function renderTdXlinks(d) {
+  const rk = (d.risks || []).map(r =>
+    '<div class="pk-row"><span class="pk-name">风险</span>' +
+    '<span><a href="#/risks?project=' + d.task.project_id + '">' + esc(r.risk_name) + '</a>' +
+    ' <span class="pk-tag ' + (r.severity || 'm').toLowerCase() + '">' + (r.severity === 'H' ? '高' : r.severity === 'L' ? '低' : '中') + '</span>' +
+    ' <span class="muted">' + (r.status === 'RESOLVED' ? '已解决' : '开放') + '</span></span></div>').join('');
+  const ch = (d.changes || []).map(c =>
+    '<div class="pk-row"><span class="pk-name">变更</span>' +
+    '<span><a href="#/changes?project=' + d.task.project_id + '">' + esc(c.change_no || ('#' + c.id)) + '</a> ' + esc(c.description || '').slice(0, 40) +
+    ' <span class="muted">' + (c.status === 'PENDING' ? '待审批' : c.status === 'APPROVED' ? '已批准' : c.status === 'REJECTED' ? '已驳回' : c.status) + '</span></span></div>').join('');
+  return (rk + ch) || '<span class="pk-name pk-empty-line">暂无关联风险/变更</span>';
+}
+// 风险/变更 tab 懒加载：详情缓存无数据时按项目拉全量过滤（量级小，一次请求）
+async function tdLoadXlinks() {
+  const d = await tdFetch();
+  if (d.risks || d.changes) { $('#td-body').innerHTML = renderTdXlinks(d); return; }
+  try {
+    const [rk, ch] = await Promise.all([
+      api('GET', PApi.risks(d.task.project_id)).catch(function () { return []; }),
+      api('GET', PApi.changes(d.task.project_id)).catch(function () { return []; })
+    ]);
+    d.risks = (rk || []).filter(function (x) { return x.task_id === _tid; });
+    d.changes = (ch || []).filter(function (x) { return x.task_id === _tid; });
+  } catch (e) { d.risks = []; d.changes = []; }
+  $('#td-body').innerHTML = renderTdXlinks(d);
+  tdSwitchTabBadges(d);
 }
 // v2：关联分区（样品/治具）
 function renderTdLinks(d) {
   return d.links.map(l =>
     '<div class="pk-row"><span class="pk-name">' + (l.ref_type === 'sample' ? '样品' : '治具') + '</span>' +
-    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name">未关联</span>';
+    '<span>' + esc(l.ref_no || l.ref_id) + ' ' + esc(l.ref_name || '') + '</span></div>').join('') || '<span class="pk-name pk-empty-line">未关联</span>';
 }
 // v2：操作日志分区
 function renderTdLogs(d) {
   return d.logs.map(l =>
-    '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('');
+    '<div class="pk-row"><span class="pk-name">' + (l.operator_name || '—') + '</span><span>' + l.action + '</span><span>' + (l.detail || '') + '</span></div>').join('') || '<span class="pk-name pk-empty-line">暂无日志</span>';
 }
 

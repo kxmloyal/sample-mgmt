@@ -61,12 +61,14 @@ module.exports = function createDaoOa(deps) {
   }
 
   // ===== 风险 =====
+  // 方案三C：列表带 task_id + 关联任务标题（risk_tasks 列由迁移幂等添加；LEFT JOIN 兼容未关联/脏数据）
   async function listRisks(conn, projectId) {
     return fetchAll(conn,
-      'SELECT r.*, u1.display_name AS identified_name, u2.display_name AS resolved_name ' +
+      'SELECT r.*, u1.display_name AS identified_name, u2.display_name AS resolved_name, t.title AS task_title ' +
       'FROM project_risks r ' +
       'LEFT JOIN users u1 ON u1.id=r.identified_by ' +
       'LEFT JOIN users u2 ON u2.id=r.resolved_by ' +
+      'LEFT JOIN project_tasks t ON t.id=r.task_id ' +
       'WHERE r.project_id=? ORDER BY r.id DESC', [projectId]);
   }
   async function getRisk(conn, id) {
@@ -75,18 +77,18 @@ module.exports = function createDaoOa(deps) {
   async function createRisk(data, conn) {
     if (!conn) throw new Error('createRisk 必须传事务连接 conn（需取 insertId）');
     const r = await conn.execute(
-      'INSERT INTO project_risks (project_id,risk_name,description,risk_type,severity,probability,impact,mitigation,identified_by,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO project_risks (project_id,risk_name,description,risk_type,severity,probability,impact,mitigation,task_id,identified_by,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       [data.project_id, data.risk_name, data.description || '', data.risk_type || 'other',
        data.severity || 'M', data.probability || 'M', data.impact || '', data.mitigation || '',
-       data.identified_by, data.created_by]);
+       data.task_id || null, data.identified_by, data.created_by]);
     return { id: r[0].insertId };
   }
   async function updateRisk(conn, id, data, expectVersion) {
     const r = await conn.execute(
-      'UPDATE project_risks SET risk_name=?, description=?, risk_type=?, severity=?, probability=?, impact=?, mitigation=?, version=version+1 ' +
+      'UPDATE project_risks SET risk_name=?, description=?, risk_type=?, severity=?, probability=?, impact=?, mitigation=?, task_id=?, version=version+1 ' +
       'WHERE id=? AND status=\'OPEN\' AND version=?',
       [data.risk_name, data.description || '', data.risk_type || 'other', data.severity || 'M',
-       data.probability || 'M', data.impact || '', data.mitigation || '', id, expectVersion]);
+       data.probability || 'M', data.impact || '', data.mitigation || '', data.task_id || null, id, expectVersion]);
     return { changed: r[0].affectedRows };
   }
   // 解决风险（CAS：仅 OPEN 可解决；resolved_at=当前时间）
@@ -116,13 +118,14 @@ module.exports = function createDaoOa(deps) {
   }
 
   // ===== 变更单（二期批次1；审批人=ADMIN/PM/项目 owner，TIME 类仅记录不自动顺延） =====
-  // 列表（含申请人/审批人展示名）
+  // 列表（含申请人/审批人展示名 + 方案三C 关联任务标题）
   async function listChanges(conn, projectId) {
     return fetchAll(conn,
-      'SELECT c.*, u1.display_name AS applicant_name, u2.display_name AS approver_name ' +
+      'SELECT c.*, u1.display_name AS applicant_name, u2.display_name AS approver_name, t.title AS task_title ' +
       'FROM project_changes c ' +
       'LEFT JOIN users u1 ON u1.id=c.applicant_id ' +
       'LEFT JOIN users u2 ON u2.id=c.approver_id ' +
+      'LEFT JOIN project_tasks t ON t.id=c.task_id ' +
       'WHERE c.project_id=? ORDER BY c.id DESC', [projectId]);
   }
   async function getChange(conn, id) {
@@ -131,19 +134,19 @@ module.exports = function createDaoOa(deps) {
   async function createChange(data, conn) {
     if (!conn) throw new Error('createChange 必须传事务连接 conn（需取 insertId）');
     const r = await conn.execute(
-      'INSERT INTO project_changes (project_id,change_no,change_type,description,before_value,after_value,reason,applicant_id,created_by) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO project_changes (project_id,change_no,change_type,description,before_value,after_value,reason,task_id,applicant_id,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)',
       [data.project_id, data.change_no || null, data.change_type, data.description,
        data.before_value || '', data.after_value || '', data.reason || '',
-       data.applicant_id, data.created_by]);
+       data.task_id || null, data.applicant_id, data.created_by]);
     return { id: r[0].insertId };
   }
   // 编辑变更单（CAS：仅 PENDING 可改）
   async function updateChange(conn, id, data, expectVersion) {
     const r = await conn.execute(
-      'UPDATE project_changes SET change_type=?, description=?, before_value=?, after_value=?, reason=?, version=version+1 ' +
+      'UPDATE project_changes SET change_type=?, description=?, before_value=?, after_value=?, reason=?, task_id=?, version=version+1 ' +
       'WHERE id=? AND status=\'PENDING\' AND version=?',
       [data.change_type, data.description, data.before_value || '', data.after_value || '',
-       data.reason || '', id, expectVersion]);
+       data.reason || '', data.task_id || null, id, expectVersion]);
     return { changed: r[0].affectedRows };
   }
   // 审批（CAS：仅 PENDING 可批；to=APPROVED/REJECTED；同事务写 approver/approved_at）

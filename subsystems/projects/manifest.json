@@ -20,7 +20,16 @@
       { "name": "project_task_files", "schema": "db/schema.sql" },
       { "name": "project_task_links", "schema": "db/schema.sql" },
       { "name": "project_logs", "schema": "db/schema.sql" },
-      { "name": "project_workflow", "schema": "db/schema.sql" }
+      { "name": "project_workflow", "schema": "db/schema.sql" },
+      { "name": "project_milestones", "schema": "db/schema.sql" },
+      { "name": "project_risks", "schema": "db/schema.sql" },
+      { "name": "project_changes", "schema": "db/schema.sql" },
+      { "name": "project_model_refs", "schema": "db/schema.sql" },
+      { "name": "project_seq", "schema": "db/schema.sql" },
+      { "name": "project_templates", "schema": "db/schema.sql" },
+      { "name": "project_relations", "schema": "db/schema.sql" },
+      { "name": "project_extras", "schema": "db/schema.sql" },
+      { "name": "project_notifications", "schema": "db/schema.sql" }
     ]
   },
   "roles": {
@@ -40,13 +49,19 @@
       "NOT_STARTED": { "label": "未开始", "color": "#92400e", "bg": "#fffbeb" },
       "IN_PROGRESS": { "label": "进行中", "color": "#1d4ed8", "bg": "#eff6ff" },
       "DONE":        { "label": "已完成", "color": "#065f46", "bg": "#ecfdf5" },
-      "OVERDUE":     { "label": "已延期", "color": "#b91c1c", "bg": "#fef2f2" }
+      "OVERDUE":     { "label": "已延期", "color": "#b91c1c", "bg": "#fef2f2" },
+      "CANCELLED":   { "label": "已取消", "color": "#475569", "bg": "#f1f5f9" }
     },
     "transitions": [
       { "from": "NOT_STARTED", "to": "IN_PROGRESS", "action": "START", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "开始处理" },
       { "from": "IN_PROGRESS", "to": "DONE", "action": "COMPLETE", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "标记完成" },
-      { "from": "NOT_STARTED", "to": "OVERDUE", "action": "AUTO_OVERDUE", "role": ["SYSTEM"], "label": "自动延期" },
-      { "from": "IN_PROGRESS", "to": "OVERDUE", "action": "AUTO_OVERDUE", "role": ["SYSTEM"], "label": "自动延期" }
+      { "from": "OVERDUE", "to": "IN_PROGRESS", "action": "RESUME", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "继续处理" },
+      { "from": "OVERDUE", "to": "DONE", "action": "FINISH", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "补录完成" },
+      { "from": "IN_PROGRESS", "to": "NOT_STARTED", "action": "BACK", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "退回未开始" },
+      { "from": "DONE", "to": "IN_PROGRESS", "action": "REOPEN", "role": ["PM", "ADMIN", "MEMBER", "ASSIGNEE"], "label": "重新打开" },
+      { "from": "NOT_STARTED", "to": "CANCELLED", "action": "CANCEL", "role": ["PM", "ADMIN"], "label": "取消任务" },
+      { "from": "IN_PROGRESS", "to": "CANCELLED", "action": "CANCEL", "role": ["PM", "ADMIN"], "label": "取消任务" },
+      { "from": "OVERDUE", "to": "CANCELLED", "action": "CANCEL", "role": ["PM", "ADMIN"], "label": "取消任务" }
     ]
   },
   "files": {
