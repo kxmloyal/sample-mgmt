@@ -1,6 +1,7 @@
 // tests/subsystems.test.js — 子系统管理模块单元测试
 // 覆盖：列表/新建/编辑/导出 + 权限分支（ADMIN/非ADMIN/未登录）
 // 2026-08-13：权限矩阵账号（rd01/qa01/mfg01/me01）曾被停用，beforeAll 临时启用、afterAll 恢复原状态
+// 2026-09-08：列表新增上线可见性过滤（默认仅返回 deployed:true；?all=1 仅 ADMIN 生效），相关断言同步更新
 require('dotenv').config();
 const { pool } = require('../db');
 const { getApp, login } = require('./helpers/setup');
@@ -41,7 +42,7 @@ beforeAll(async () => {
 }, 30000);
 
 // ============================================================
-// GET /api/subsystems — 获取子系统列表（登录后按角色过滤）
+// GET /api/subsystems — 获取子系统列表（登录后按角色过滤 + 2026-09-08 按 deployed 过滤）
 // ============================================================
 describe('GET /api/subsystems', () => {
   it('未登录应返回空数组（不向匿名访问暴露子系统清单）', async () => {
@@ -65,6 +66,21 @@ describe('GET /api/subsystems', () => {
     expect(typeof sub.navCount).toBe('number');
   });
 
+  // 2026-09-08 上线可见性过滤：默认列表仅含 deployed:true 子系统（当前线上= samples/fixtures）
+  it('默认列表应仅返回已上线子系统（deployed:true），不含 control/workbench/projects', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/subsystems');
+    expect(res.status).toBe(200);
+    const ids = res.body.map(function (s) { return s.id; });
+    expect(ids).toContain('samples');
+    expect(ids).toContain('fixtures');
+    expect(ids).not.toContain('control');
+    expect(ids).not.toContain('workbench');
+    expect(ids).not.toContain('projects');
+    // 返回项均应标记已上线
+    res.body.forEach(function (s) { expect(s.deployed).toBe(true); });
+  });
+
   it('应包含样品管理子系统（登录后）', async () => {
     const { agent } = await login('admin', 'admin123');
     const res = await agent.get('/api/subsystems');
@@ -81,18 +97,44 @@ describe('GET /api/subsystems', () => {
     expect(fixtures.name).toBe('治具管理');
   });
 
-  // 2026-08-07 角色过滤：已登录用户仅返回 manifest.roles.use 允许进入的子系统（projects 未完成仅 ADMIN 可见）
-  it('已登录 ADMIN 应看到全部子系统（含 projects）', async () => {
+  // ?all=1 全量清单：仅 ADMIN 生效（管理页使用）
+  it('ADMIN 传 ?all=1 应看到全量（含未上线 control/workbench/projects）', async () => {
     const { agent } = await login('admin', 'admin123');
-    const res = await agent.get('/api/subsystems');
+    const res = await agent.get('/api/subsystems?all=1');
+    expect(res.status).toBe(200);
+    const ids = res.body.map(function (s) { return s.id; });
+    expect(ids).toContain('samples');
+    expect(ids).toContain('fixtures');
+    expect(ids).toContain('control');
+    expect(ids).toContain('workbench');
+    expect(ids).toContain('projects');
+  });
+
+  // 2026-09-08：非 ADMIN 传 all=1 静默降级为过滤列表（不报错、不泄露未上线清单）
+  it('非 ADMIN（RD）传 ?all=1 应静默降级，仍只看到已上线子系统', async () => {
+    const { agent } = await login('rd01', 'rd123');
+    const res = await agent.get('/api/subsystems?all=1');
+    expect(res.status).toBe(200);
+    const ids = res.body.map(function (s) { return s.id; });
+    expect(ids).toContain('samples');
+    expect(ids).toContain('fixtures');
+    expect(ids).not.toContain('control');
+    expect(ids).not.toContain('workbench');
+    expect(ids).not.toContain('projects');
+  });
+
+  // 2026-08-07 角色过滤（未上线子系统的角色断言改走 ?all=1 全量接口）
+  it('已登录 ADMIN 全量清单应包含 projects（?all=1）', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/subsystems?all=1');
     expect(res.status).toBe(200);
     const projects = res.body.find(function (s) { return s.id === 'projects'; });
     expect(projects).toBeDefined();
   });
 
-  it('已登录非 ADMIN（RD）应看不到 projects，但可见 samples/fixtures', async () => {
+  it('已登录非 ADMIN（RD）全量清单应看不到 projects，但可见 samples/fixtures（?all=1 降级）', async () => {
     const { agent } = await login('rd01', 'rd123');
-    const res = await agent.get('/api/subsystems');
+    const res = await agent.get('/api/subsystems?all=1');
     expect(res.status).toBe(200);
     const ids = res.body.map(function (s) { return s.id; });
     expect(ids).not.toContain('projects');
@@ -100,20 +142,26 @@ describe('GET /api/subsystems', () => {
     expect(ids).toContain('fixtures');
   });
 
-  it('已登录非 ADMIN（QA）应看不到 projects', async () => {
+  it('已登录非 ADMIN（QA）应看不到 projects（?all=1 降级）', async () => {
     const { agent } = await login('qa01', 'qa123');
-    const res = await agent.get('/api/subsystems');
+    const res = await agent.get('/api/subsystems?all=1');
     const ids = res.body.map(function (s) { return s.id; });
     expect(ids).not.toContain('projects');
   });
 });
 
 // ============================================================
-// GET /api/subsystems/:id — 获取单个子系统 manifest（公开端点）
+// GET /api/subsystems/:id — 获取单个子系统 manifest（2026-09-02 安全批次起需登录，b0fb21a9）
 // ============================================================
 describe('GET /api/subsystems/:id', () => {
-  it('应返回完整 manifest', async () => {
+  it('未登录应返回 401（不向匿名暴露 manifest）', async () => {
     const res = await request(await getApp()).get('/api/subsystems/samples');
+    expect(res.status).toBe(401);
+  });
+
+  it('登录后应返回完整 manifest', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/subsystems/samples');
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('samples');
     expect(res.body.name).toBe('样品管理');
@@ -121,8 +169,9 @@ describe('GET /api/subsystems/:id', () => {
     expect(res.body.stateMachine).toBeDefined();
   });
 
-  it('不存在的子系统应返回 404', async () => {
-    const res = await request(await getApp()).get('/api/subsystems/nonexistent');
+  it('登录后不存在的子系统应返回 404', async () => {
+    const { agent } = await login('admin', 'admin123');
+    const res = await agent.get('/api/subsystems/nonexistent');
     expect(res.status).toBe(404);
   });
 });
@@ -241,11 +290,11 @@ describe('POST /api/subsystems', () => {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
-  it('创建后子系统列表应包含新模块', async () => {
+  it('创建后子系统列表应包含新模块（?all=1：模板生成的 manifest 未写 deployed，默认列表不含）', async () => {
     const { agent } = await login('admin', 'admin123');
     await agent.post('/api/subsystems').send({ id: TEST_ID, name: '列表测试' });
 
-    const res = await agent.get('/api/subsystems');
+    const res = await agent.get('/api/subsystems?all=1');
     const found = res.body.find(function (s) { return s.id === TEST_ID; });
     expect(found).toBeDefined();
     expect(found.name).toBe('列表测试');
@@ -254,7 +303,7 @@ describe('POST /api/subsystems', () => {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
-  it('删除子系统后列表应不再包含它', async () => {
+  it('删除子系统后列表应不再包含它（?all=1）', async () => {
     const { agent } = await login('admin', 'admin123');
     await agent.post('/api/subsystems').send({ id: TEST_ID, name: '删除测试' });
 
@@ -262,7 +311,7 @@ describe('POST /api/subsystems', () => {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
 
     // 下次请求应刷新 registry（不再包含已删除的）
-    const res = await agent.get('/api/subsystems');
+    const res = await agent.get('/api/subsystems?all=1');
     const found = res.body.find(function (s) { return s.id === TEST_ID; });
     expect(found).toBeUndefined();
   });

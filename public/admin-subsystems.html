@@ -59,7 +59,7 @@ var ICONS = {flask:'🧪',wrench:'🔧',chart:'📊',_default:'📦'};
 async function load() {
   var list = document.getElementById('list');
   try {
-    var res = await fetch('/api/subsystems');
+    var res = await fetch('/api/subsystems?all=1');
     var subs = await res.json();
     if (!subs.length) { list.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">暂无子系统</div>'; return; }
     list.innerHTML = subs.map(function(m) {

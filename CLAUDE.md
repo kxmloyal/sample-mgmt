@@ -396,8 +396,8 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 ### 18.1 核心判断
 
-- `subsystems/<id>/manifest.json` 顶层 `"deployed": true` = 该子系统**已正式上线**，数据受保护。
-- 已上线子系统（当前：samples，2026-08-06）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
+- `subsystems/<id>/manifest.json` 顶层 `"deployed": true` = 该子系统**已正式上线**，数据受保护；同时只有已上线子系统才在门户首页展示入口（`GET /api/subsystems` 默认仅返回已上线，管理页 `?all=1` 看全量，2026-09-08）。
+- 已上线子系统（当前：samples、fixtures〔2026-09-08 用户授权上线〕）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
 - 未上线子系统可自由注入测试数据（seed/造数测试）。
 
 ### 18.2 Claude MUST 遵守
