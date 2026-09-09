@@ -29,6 +29,8 @@ function register(app) {
       limit_item: query.limit_item || undefined,
       source_type: query.source_type || undefined,
       model: query.model || undefined,
+      // 组别（2026-09-09）：station 列存组别中文，与 STATIONS 常量同源；列表/导出共用
+      station: query.station || undefined,
       // mine=1 → 仅我创建的
       mine_uid: (query.mine === '1' && user && user.id) ? user.id : undefined,
       checkout_overdue: query.checkout_overdue || undefined,

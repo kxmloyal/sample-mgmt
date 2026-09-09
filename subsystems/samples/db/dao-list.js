@@ -23,6 +23,8 @@ module.exports = function createDaoList(deps) {
     if (opts.limit_item) { where.push('limit_item = ?'); params.push(opts.limit_item); }
     if (opts.source_type) { where.push('source_type = ?'); params.push(opts.source_type); }
     if (opts.model) { where.push('model = ?'); params.push(opts.model); }
+    // 组别筛选（2026-09-09）：station 列存组别中文（扇叶组/马达组/成品组/品保部/SMT/供应商，STATIONS 常量同源）
+    if (opts.station) { where.push('station = ?'); params.push(opts.station); }
     // mine_uid=当前用户 id → 只看「我创建的」（服务端派生，路由层注入，客户端不可伪造他人 uid）
     if (opts.mine_uid) { where.push('created_by = ?'); params.push(opts.mine_uid); }
     // 领出超时未归还（口径与 listCheckoutOverdue 一致）
