@@ -33,6 +33,9 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     expect(src).toMatch(/CREATE TABLE IF NOT EXISTS sample_storage_cabinets/);
     expect(src).toContain("'/api/samples/storage-map/cabinets/:key'");
     expect(src).toContain("u.role !== 'ADMIN'");
+    // 2026-09-09 修复：全局 db.js 无 D.run（臆造接口致「D.run is not a function」）——写操作统一走 D.pool().query
+    expect(src).toContain('await D.pool().query(');
+    expect(src).not.toContain('D.run(');
   });
 });
 

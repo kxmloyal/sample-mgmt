@@ -25,10 +25,10 @@ function stateOf(status) {
 }
 
 async function ensureCabinetTable() {
-  // 幂等建表（首次访问自动建；后续迭代可加管理界面维护）
-  await D.run("CREATE TABLE IF NOT EXISTS sample_storage_cabinets (" +
+  // 幂等建表（仅在 PUT 配置时执行）；rows/columns 为 MariaDB 关键字，DDL 中加反引号
+  await D.pool().query("CREATE TABLE IF NOT EXISTS sample_storage_cabinets (" +
     "cabinet_key VARCHAR(50) PRIMARY KEY, cabinet_no INT NOT NULL, " +
-    "rows INT NOT NULL DEFAULT 9, columns INT NOT NULL DEFAULT 3, " +
+    "`rows` INT NOT NULL DEFAULT 9, `columns` INT NOT NULL DEFAULT 3, " +
     "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, updated_by INT NULL)");
 }
 
@@ -38,11 +38,13 @@ function register(app) {
 
   app.get('/api/samples/storage-map', requireAuth, async (req, res) => {
     try {
-      await ensureCabinetTable();
+      // 读路径不做 DDL（ensureCabinetTable 仅在 PUT 配置时执行，兼容 deployed:true 只读护栏）；
+      // 配置表未建时捕获降级为「未配置态」，柜体按数据自适应尺寸
+      let cabCfg = [];
+      try { cabCfg = await D.fetchAll(null, 'SELECT cabinet_key, `rows`, `columns` FROM sample_storage_cabinets'); } catch (_) {}
       const rows = await D.fetchAll(null,
         "SELECT id, sample_no, name, model, station, status, storage_location FROM samples " +
         "WHERE deleted_at IS NULL");
-      const cabCfg = await D.fetchAll(null, 'SELECT cabinet_key, rows, columns FROM sample_storage_cabinets');
       const cfgMap = {}; cabCfg.forEach(c => { cfgMap[c.cabinet_key] = c; });
 
       const cabinets = {};   // key → {key,no,cols,rows,cells:{'C-R':{in,out,ret,samples:[...]}}}
@@ -97,7 +99,7 @@ function register(app) {
       const m = key.match(/^(\d+)#样品柜$/);
       if (!m) return res.status(400).json({ error: '柜名须为 N#样品柜 格式' });
       await ensureCabinetTable();
-      await D.run('INSERT INTO sample_storage_cabinets (cabinet_key, cabinet_no, rows, columns, updated_by) VALUES (?,?,?,?,?) ' +
+      await D.pool().query('INSERT INTO sample_storage_cabinets (cabinet_key, cabinet_no, `rows`, `columns`, updated_by) VALUES (?,?,?,?,?) ' +
         'ON DUPLICATE KEY UPDATE rows=VALUES(rows), columns=VALUES(columns), updated_by=VALUES(updated_by)',
         [key, Number(m[1]), rws, cls, u.id]);
       res.json({ ok: true });
