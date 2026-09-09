@@ -54,6 +54,12 @@ describe('领用人选择器 前端接线', () => {
     expect(picker).toContain('positionCoPanel');
     expect(css).toContain('.co-cand-fixed{position:fixed');
   });
+  test('滚动跟随：window capture 监听（兜住 shadow DOM 滚动容器）+ 处理器防叠加', () => {
+    const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
+    expect(picker).toContain("window.addEventListener('scroll', window._coScrollHandler, true)");
+    expect(picker).toContain("window.removeEventListener('scroll', window._coScrollHandler, true)");
+    expect(picker).toContain("window.addEventListener('resize', positionCoPanel)");
+  });
 });
 
 describe('排序增强：同部门优先 + 领用频率（后端）', () => {

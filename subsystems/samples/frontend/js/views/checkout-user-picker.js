@@ -22,9 +22,13 @@ function initCheckoutUserPicker() {
   document.body.appendChild(panel);
   panel.style.display = 'none';
   panel.innerHTML = '<div class="co-cand-item muted">候选加载中…</div>';
-  var mb = document.querySelector('.modal-body');
-  if (mb) mb.addEventListener('scroll', positionCoPanel); // 弹窗滚动时面板跟随
-  window.addEventListener('resize', hideCoCandidates);
+  // 全局滚动跟随（capture=true 捕获任意元素的滚动，含 fluent-dialog shadow DOM 内部滚动容器——
+  // 2026-09-09 实证：绑 .modal-body 收不到事件，弹窗内容滚动时面板钉在原地）；
+  // resize 同样重新定位而非收起；处理器挂 window 便于重复初始化时先移除防叠加
+  if (window._coScrollHandler) window.removeEventListener('scroll', window._coScrollHandler, true);
+  window._coScrollHandler = positionCoPanel;
+  window.addEventListener('scroll', window._coScrollHandler, true);
+  window.addEventListener('resize', positionCoPanel);
   api('GET', '/api/samples/checkout-users').then(function (rows) {
     _coUsers = Array.isArray(rows) ? rows : [];
     renderCoCandidates('');
