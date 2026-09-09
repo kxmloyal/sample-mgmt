@@ -33,8 +33,9 @@ async function viewSamples() {
     '<fluent-select id="f-limit-item"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-source"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
     '<fluent-select id="f-model"' + hideAdv + ' onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
-    // 组别筛选（2026-09-09）：station 列存组别中文，选项与 STATIONS 常量（constants.js）同源
-    '<fluent-select id="f-station"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部组别</fluent-option>' + (typeof STATIONS !== 'undefined' ? STATIONS : ['马达组','扇叶组','成品组','品保部','SMT','供应商']).map(function(x) { return '<fluent-option value="' + e(x) + '">' + e(x) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    // 组别筛选（2026-09-09）：station 列存组别中文，选项与 STATIONS 常量（constants.js）同源；
+    // 全角色可见（保管/生技按组别查找是日常主路径，不随方案C高级筛选折叠；2026-09-09 用户反馈修正）
+    '<fluent-select id="f-station" onchange="loadSamples()"><fluent-option value="">全部组别</fluent-option>' + (typeof STATIONS !== 'undefined' ? STATIONS : ['马达组','扇叶组','成品组','品保部','SMT','供应商']).map(function(x) { return '<fluent-option value="' + e(x) + '">' + e(x) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-sort"' + hideAdv + ' onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button>' +

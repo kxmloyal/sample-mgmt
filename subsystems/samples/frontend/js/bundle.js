@@ -1,4 +1,4 @@
-/** BUNDLE vbmttnz400 — 27 files */
+/** BUNDLE vbmttpjpqf — 27 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -972,8 +972,9 @@ async function viewSamples() {
     '<fluent-select id="f-limit-item"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-source"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部来源</fluent-option><fluent-option value="C">客供</fluent-option><fluent-option value="T">元山</fluent-option><fluent-option value="G">塔岗</fluent-option></fluent-select>' +
     '<fluent-select id="f-model"' + hideAdv + ' onchange="loadSamples()">' + modelOpts + '</fluent-select>' +
-    // 组别筛选（2026-09-09）：station 列存组别中文，选项与 STATIONS 常量（constants.js）同源
-    '<fluent-select id="f-station"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部组别</fluent-option>' + (typeof STATIONS !== 'undefined' ? STATIONS : ['马达组','扇叶组','成品组','品保部','SMT','供应商']).map(function(x) { return '<fluent-option value="' + e(x) + '">' + e(x) + '</fluent-option>'; }).join('') + '</fluent-select>' +
+    // 组别筛选（2026-09-09）：station 列存组别中文，选项与 STATIONS 常量（constants.js）同源；
+    // 全角色可见（保管/生技按组别查找是日常主路径，不随方案C高级筛选折叠；2026-09-09 用户反馈修正）
+    '<fluent-select id="f-station" onchange="loadSamples()"><fluent-option value="">全部组别</fluent-option>' + (typeof STATIONS !== 'undefined' ? STATIONS : ['马达组','扇叶组','成品组','品保部','SMT','供应商']).map(function(x) { return '<fluent-option value="' + e(x) + '">' + e(x) + '</fluent-option>'; }).join('') + '</fluent-select>' +
     '<fluent-select id="f-sort"' + hideAdv + ' onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button>' +
