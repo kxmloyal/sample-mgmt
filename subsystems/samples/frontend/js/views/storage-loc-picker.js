@@ -27,13 +27,16 @@ function initStorageLocPicker() {
   window.addEventListener('resize', window._smResizeHandler);
   var load = function (d) {
     _smCache = d;
-    renderSmCandidates('');
+    // 补丁B（sm 同款）：接口返回时若输入框已失焦/已销毁则不渲染（防迟到响应把已关面板重新弹开）
+    if (input === document.getElementById('scan-loc') && document.activeElement === input) renderSmCandidates('');
   };
   if (_smCache) load(_smCache);
   else api('GET', '/api/samples/storage-map').then(load).catch(function () { _smCache = { cabinets: [] }; panel.style.display = 'none'; });
-  input.oninput = function () { renderSmCandidates(this.value || ''); };
-  input.onfocus = function () { renderSmCandidates(this.value || ''); };
-  input.onblur = function () { setTimeout(hideSmCandidates, 200); };
+  input.oninput = function () { if (window._smBlurTimer) { clearTimeout(window._smBlurTimer); window._smBlurTimer = null; } renderSmCandidates(this.value || ''); };
+  input.onfocus = function () { if (window._smBlurTimer) { clearTimeout(window._smBlurTimer); window._smBlurTimer = null; } renderSmCandidates(this.value || ''); };
+  input.onblur = function () { window._smBlurTimer = setTimeout(hideSmCandidates, 200); };
+  // 全局兜底与领用人 picker 同款（ensureCoOutsideClose 统一注册，收起时双 picker 一起收）
+  if (typeof ensureCoOutsideClose === 'function') ensureCoOutsideClose();
 }
 
 // 候选排序：空位优先（方便接收保管直接拿空格）→ 柜号 → 列 → 行；输入时按包含过滤

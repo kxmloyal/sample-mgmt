@@ -36,4 +36,21 @@ describe('候选框时机修正', () => {
     expect(co).toContain('setTimeout(hideCoCandidates, 200)');
     expect(sm).toContain('setTimeout(hideSmCandidates, 200)');
   });
+
+  test('⑥迟到响应防复弹：接口返回时输入框已失焦/销毁则不渲染面板', () => {
+    expect(co).toContain('document.activeElement === input');
+    expect(sm).toContain('document.activeElement === input');
+  });
+
+  test('⑦全局 click-away 兜底：pointerdown capture 点面板/输入框以外即收起（覆盖 blur 触发不到的路径）', () => {
+    expect(co).toContain('function ensureCoOutsideClose');
+    expect(co).toContain("document.addEventListener('pointerdown', window._coOutsideHandler, true)");
+    expect(co).toContain('t.closest(\'#scan-co-cand\')');
+    expect(sm).toContain("if (typeof ensureCoOutsideClose === 'function') ensureCoOutsideClose();");
+  });
+
+  test('⑧blur 定时器可取消：聚焦/输入先 clearTimeout（防 200ms 内回焦被旧定时器误杀）', () => {
+    expect(co).toContain('clearTimeout(window._coBlurTimer)');
+    expect(sm).toContain('clearTimeout(window._smBlurTimer)');
+  });
 });

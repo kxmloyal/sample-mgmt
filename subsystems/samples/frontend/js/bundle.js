@@ -1,4 +1,4 @@
-/** BUNDLE vbmtu6z2wd — 30 files */
+/** BUNDLE vbmtu7dpkd — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2197,13 +2197,30 @@ function initCheckoutUserPicker() {
   if (window._coResizeHandler) window.removeEventListener('resize', window._coResizeHandler);
   window._coResizeHandler = positionCoPanel;
   window.addEventListener('resize', window._coResizeHandler);
+  ensureCoOutsideClose();
   api('GET', '/api/samples/checkout-users').then(function (rows) {
     _coUsers = Array.isArray(rows) ? rows : [];
-    renderCoCandidates('');
+    // 时机评审补丁B：接口返回时若输入框已失焦/已销毁则不渲染（否则面板会在 200ms 失焦关闭后
+    // 被迟到的响应重新弹开且无人再关——「候选框一直显示」的主因）
+    if (input === document.getElementById('scan-co-user') && document.activeElement === input) renderCoCandidates('');
   }).catch(function () { _coUsers = []; panel.style.display = 'none'; });
-  input.oninput = function () { _coPick = null; renderCoCandidates(this.value || ''); };
-  input.onfocus = function () { renderCoCandidates(this.value || ''); };
-  input.onblur = function () { setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
+  input.oninput = function () { if (window._coBlurTimer) { clearTimeout(window._coBlurTimer); window._coBlurTimer = null; } _coPick = null; renderCoCandidates(this.value || ''); };
+  input.onfocus = function () { if (window._coBlurTimer) { clearTimeout(window._coBlurTimer); window._coBlurTimer = null; } renderCoCandidates(this.value || ''); };
+  input.onblur = function () { window._coBlurTimer = setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
+}
+
+// 全局兜底：点击面板/输入框以外任意处即收起候选（覆盖切动作表单、点其他按钮等 blur 触发不到的路径；
+// pointerdown capture 在候选 onmousedown 之前一拍，靠 closest 排除面板内部点击）
+function ensureCoOutsideClose() {
+  if (window._coOutsideHandler) return;
+  window._coOutsideHandler = function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#scan-co-cand') || t.closest('#scan-co-user') || t.closest('#scan-loc-cand') || t.closest('#scan-loc')) return;
+    hideCoCandidates();
+    if (typeof hideSmCandidates === 'function') hideSmCandidates();
+  };
+  document.addEventListener('pointerdown', window._coOutsideHandler, true);
 }
 
 // 视口定位：贴输入框右侧；右缘越界收进屏内、下缘越界上移（不产生任何滚动条）
@@ -2292,13 +2309,16 @@ function initStorageLocPicker() {
   window.addEventListener('resize', window._smResizeHandler);
   var load = function (d) {
     _smCache = d;
-    renderSmCandidates('');
+    // 补丁B（sm 同款）：接口返回时若输入框已失焦/已销毁则不渲染（防迟到响应把已关面板重新弹开）
+    if (input === document.getElementById('scan-loc') && document.activeElement === input) renderSmCandidates('');
   };
   if (_smCache) load(_smCache);
   else api('GET', '/api/samples/storage-map').then(load).catch(function () { _smCache = { cabinets: [] }; panel.style.display = 'none'; });
-  input.oninput = function () { renderSmCandidates(this.value || ''); };
-  input.onfocus = function () { renderSmCandidates(this.value || ''); };
-  input.onblur = function () { setTimeout(hideSmCandidates, 200); };
+  input.oninput = function () { if (window._smBlurTimer) { clearTimeout(window._smBlurTimer); window._smBlurTimer = null; } renderSmCandidates(this.value || ''); };
+  input.onfocus = function () { if (window._smBlurTimer) { clearTimeout(window._smBlurTimer); window._smBlurTimer = null; } renderSmCandidates(this.value || ''); };
+  input.onblur = function () { window._smBlurTimer = setTimeout(hideSmCandidates, 200); };
+  // 全局兜底与领用人 picker 同款（ensureCoOutsideClose 统一注册，收起时双 picker 一起收）
+  if (typeof ensureCoOutsideClose === 'function') ensureCoOutsideClose();
 }
 
 // 候选排序：空位优先（方便接收保管直接拿空格）→ 柜号 → 列 → 行；输入时按包含过滤

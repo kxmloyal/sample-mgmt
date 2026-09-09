@@ -31,13 +31,30 @@ function initCheckoutUserPicker() {
   if (window._coResizeHandler) window.removeEventListener('resize', window._coResizeHandler);
   window._coResizeHandler = positionCoPanel;
   window.addEventListener('resize', window._coResizeHandler);
+  ensureCoOutsideClose();
   api('GET', '/api/samples/checkout-users').then(function (rows) {
     _coUsers = Array.isArray(rows) ? rows : [];
-    renderCoCandidates('');
+    // 时机评审补丁B：接口返回时若输入框已失焦/已销毁则不渲染（否则面板会在 200ms 失焦关闭后
+    // 被迟到的响应重新弹开且无人再关——「候选框一直显示」的主因）
+    if (input === document.getElementById('scan-co-user') && document.activeElement === input) renderCoCandidates('');
   }).catch(function () { _coUsers = []; panel.style.display = 'none'; });
-  input.oninput = function () { _coPick = null; renderCoCandidates(this.value || ''); };
-  input.onfocus = function () { renderCoCandidates(this.value || ''); };
-  input.onblur = function () { setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
+  input.oninput = function () { if (window._coBlurTimer) { clearTimeout(window._coBlurTimer); window._coBlurTimer = null; } _coPick = null; renderCoCandidates(this.value || ''); };
+  input.onfocus = function () { if (window._coBlurTimer) { clearTimeout(window._coBlurTimer); window._coBlurTimer = null; } renderCoCandidates(this.value || ''); };
+  input.onblur = function () { window._coBlurTimer = setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
+}
+
+// 全局兜底：点击面板/输入框以外任意处即收起候选（覆盖切动作表单、点其他按钮等 blur 触发不到的路径；
+// pointerdown capture 在候选 onmousedown 之前一拍，靠 closest 排除面板内部点击）
+function ensureCoOutsideClose() {
+  if (window._coOutsideHandler) return;
+  window._coOutsideHandler = function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#scan-co-cand') || t.closest('#scan-co-user') || t.closest('#scan-loc-cand') || t.closest('#scan-loc')) return;
+    hideCoCandidates();
+    if (typeof hideSmCandidates === 'function') hideSmCandidates();
+  };
+  document.addEventListener('pointerdown', window._coOutsideHandler, true);
 }
 
 // 视口定位：贴输入框右侧；右缘越界收进屏内、下缘越界上移（不产生任何滚动条）
