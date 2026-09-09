@@ -64,3 +64,18 @@ for (const [id, scripts] of Object.entries(sources)) {
 
 console.log('\nDone. VER=' + BUNDLE_VER);
 fs.writeFileSync(path.join(ROOT, 'tools', '.bundle-ver'), BUNDLE_VER);
+
+// 2026-09-09：同步刷新各子系统 index.html 的 module.css 版本号（此前只刷 bundle ?v=，
+// CSS 改动后浏览器长期吃旧缓存——实证：module.css 固定 v=202609071807，右侧候选面板样式不生效）
+// 策略：仅替换 module.css?v= 的值，无该引用的子系统自动跳过（零风险幂等）
+for (const id of Object.keys(sources)) {
+  const htmlPath = path.join(ROOT, 'subsystems', id, 'frontend', 'index.html');
+  if (!fs.existsSync(htmlPath)) continue;
+  let html = fs.readFileSync(htmlPath, 'utf-8');
+  const re = new RegExp('(module\\.css\\?v=)([A-Za-z0-9]+)');
+  if (re.test(html)) {
+    html = html.replace(re, '$1' + BUNDLE_VER);
+    fs.writeFileSync(htmlPath, html, 'utf-8');
+    console.log('css ver refreshed: subsystems/' + id + '/frontend/index.html -> ' + BUNDLE_VER);
+  }
+}
