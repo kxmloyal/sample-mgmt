@@ -87,13 +87,16 @@
 
 /* === 领用人选择器（2026-09-09 方案A）：候选面板 === */
 /* 2026-09-09 增强：改为输入框右侧弹出（不挤压下方表单）；窄屏 (<520px) 回落为下方全宽 */
+/* 2026-09-09 修正：容器加宽 260px+按内容自适应上限、面板内隐藏横向滚动，行内超长省略号截断（姓名/部门/徽标均不换行） */
 .co-wrap{position:relative;display:flex;align-items:flex-start}
 .co-wrap fluent-text-field{flex:1;min-width:0}
 .co-cand-panel{position:relative;min-height:0;margin:-4px 0 4px}
-.co-cand-panel.co-cand-right{position:absolute;left:calc(100% + 8px);top:0;width:220px;max-height:264px;overflow-y:auto;z-index:30;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:8px;box-shadow:0 4px 12px rgba(15,23,42,.10);padding:4px;margin:0}
-.co-cand-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;font-size:13px;cursor:pointer;border-radius:6px;background:var(--bg,#f8fafc);border:1px solid var(--line,#e2e8f0);margin-top:2px}
+.co-cand-panel.co-cand-right{position:absolute;left:calc(100% + 8px);top:0;width:260px;max-width:min(72vw,340px);max-height:264px;overflow-y:auto;overflow-x:hidden;z-index:30;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:8px;box-shadow:0 4px 12px rgba(15,23,42,.10);padding:4px;margin:0;box-sizing:content-box}
+.co-cand-item{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 10px;font-size:13px;cursor:pointer;border-radius:6px;background:var(--bg,#f8fafc);border:1px solid var(--line,#e2e8f0);margin-top:2px;min-width:0}
 .co-cand-item:hover{background:#eef2ff;border-color:var(--brand,#2563eb)}
-.co-cand-item .co-cand-dept{font-size:12px;color:var(--muted,#64748b);flex:none;display:flex;align-items:center;gap:4px}
-.co-badge{flex:none;font-size:10px;padding:1px 5px;border-radius:8px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.co-cand-item>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-weight:400}
+.co-cand-item .co-cand-dept{font-size:12px;color:var(--muted,#64748b);flex:none;max-width:52%;display:flex;align-items:center;gap:4px;overflow:hidden;white-space:nowrap}
+.co-cand-item .co-cand-dept .co-dept-name{overflow:hidden;text-overflow:ellipsis}
+.co-badge{flex:none;font-size:10px;padding:1px 5px;border-radius:8px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;white-space:nowrap}
 .co-badge-dept{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
-@media (max-width:520px){.co-cand-panel.co-cand-right{position:static;width:100%;left:0;box-shadow:none;margin-top:4px}}
+@media (max-width:520px){.co-cand-panel.co-cand-right{position:static;width:100%;max-width:none;left:0;box-shadow:none;margin-top:4px}}

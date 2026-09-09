@@ -68,4 +68,10 @@ describe('排序增强：同部门优先 + 领用频率（后端）', () => {
     expect(picker).toContain('co-badge-dept');
     expect(picker).toContain('次</span>');
   });
+  test('容器防横向滚动：面板 overflow-x hidden + 行内省略号截断', () => {
+    const css = read('subsystems/samples/frontend/css/module.css');
+    expect(css).toContain('overflow-x:hidden');
+    expect(css).toContain('text-overflow:ellipsis');
+    expect(css).toContain('max-width:min(72vw,340px)');
+  });
 });

@@ -38,8 +38,8 @@ function renderCoCandidates(kw) {
     var badge = '';
     if (u.dept && u.dept === myDept) badge = '<span class="co-badge co-badge-dept">同部门</span>';
     else if (u.freq > 0) badge = '<span class="co-badge">' + u.freq + '次</span>';
-    return '<div class="co-cand-item" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) +
-      '<span class="co-cand-dept">' + e(u.dept || '') + badge + '</span></div>';
+    return '<div class="co-cand-item"><b title="' + e(u.display_name) + '" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) + '</b>' +
+      '<span class="co-cand-dept"><span class="co-dept-name">' + e(u.dept || '') + '</span>' + badge + '</span></div>';
   }).join('');
 }
 
