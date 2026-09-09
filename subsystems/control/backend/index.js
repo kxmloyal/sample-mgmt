@@ -6,6 +6,7 @@ function register(app) {
   require('./routes-label').register(app);
   require('./routes-settings').register(app);
   require('./routes-files').register(app);
+  require('./routes-scan-in').register(app); // 扫码入库（2026-09-09，独立通道）
 }
 
 /**

@@ -125,6 +125,17 @@
       ]
     },
     {
+      "key": "scanin",
+      "label": "扫码入库",
+      "icon": "scan",
+      "view": "renderScanIn",
+      "roles": [
+        "ADMIN",
+        "CUSTODY",
+        "ME"
+      ]
+    },
+    {
       "key": "label",
       "label": "管制标签打印",
       "icon": "qr",

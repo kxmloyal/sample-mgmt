@@ -116,6 +116,7 @@
     "subsystems/control/frontend/js/views/label.js",
     "subsystems/control/frontend/js/views/logs.js",
     "subsystems/control/frontend/js/views/todo.js",
+    "subsystems/control/frontend/js/views/scan-in.js",
     "subsystems/control/frontend/js/router.js"
   ]
 }

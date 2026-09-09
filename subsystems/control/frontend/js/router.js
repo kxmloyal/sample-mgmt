@@ -10,11 +10,12 @@ var NAV = [
   { k: 'orders', t: '管制单列表', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'ncr', t: '不良品委托单', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'new', t: '新建管制申请', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
+  { k: 'scanin', t: '扫码入库', roles: ['ADMIN', 'CUSTODY', 'ME'] },
   { k: 'label', t: '管制标签打印', roles: ['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME'] },
   { k: 'logs', t: '操作日志', roles: ['ADMIN'] }
 ];
 
-var PAGE_TITLE = { dashboard: '管制看板', todo: '我的待办', orders: '管制单列表', ncr: '不良品委托单', new: '新建管制申请', detail: '单据详情', label: '管制标签打印', logs: '操作日志' };
+var PAGE_TITLE = { dashboard: '管制看板', todo: '我的待办', orders: '管制单列表', ncr: '不良品委托单', new: '新建管制申请', scanin: '扫码入库', detail: '单据详情', label: '管制标签打印', logs: '操作日志' };
 
 // 路由参数：route() 哈希 query 解析后写入，供各视图读取
 var currentControlId = null;
@@ -55,7 +56,7 @@ function setActive(k) {
 
 var VIEWS = {
   dashboard: renderDashboard, todo: renderTodo, orders: renderList, ncr: renderNcrList, new: renderNew,
-  detail: renderDetail, label: renderLabel, logs: renderLogs
+  scanin: renderScanIn, detail: renderDetail, label: renderLabel, logs: renderLogs
 };
 
 function route() {
