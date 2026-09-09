@@ -61,4 +61,9 @@ describe('孪生视图接线（前端/manifest/router）', () => {
     const sources = JSON.parse(read('tools/bundle-sources.json'));
     expect(sources.samples).toContain('subsystems/samples/frontend/js/views/storage-map.js');
   });
+  test('弹窗关闭用共享 closeModal（禁 projects 域 pCloseModal——跨域臆造致关不掉）', () => {
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    expect(view).toContain("closeModal(this.closest('.modal-mask'))");
+    expect(view).not.toContain('pCloseModal');
+  });
 });

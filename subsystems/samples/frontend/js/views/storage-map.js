@@ -89,7 +89,7 @@ async function smCellSamples(cabNo, col, row) {
   }).join('');
   openModal(cab.key + ' · ' + col + '-' + row + '（' + occ.samples.length + ' 件）',
     '<div class="co-cand-panel" style="position:static;display:block;box-shadow:none;border:none;padding:0;width:auto;max-height:50vh;overflow-y:auto">' + rows + '</div>',
-    { foot: '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">关闭</fluent-button>' });
+    { foot: '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>' });
 }
 
 // ADMIN 行列配置（默认 3 列×9 行；配置持久化 sample_storage_cabinets）
@@ -100,14 +100,17 @@ function smConfigCabinet(key, cols, rows) {
   window._smCfgKey = key;
   openModal('配置 ' + key + ' 行列', html, { foot:
     '<fluent-button appearance="accent" size="small" onclick="smSaveCabinetCfg()">保存</fluent-button>' +
-    '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+    '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
 }
 async function smSaveCabinetCfg() {
   var cols = Number(document.getElementById('sm-cfg-cols').value);
   var rows = Number(document.getElementById('sm-cfg-rows').value);
   try {
     await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(window._smCfgKey), { columns: cols, rows: rows });
-    toast('已保存'); pCloseModal(); viewStorageMap();
+    toast('已保存');
+    var m = document.querySelector('.modal-mask');
+    if (m) closeModal(m);
+    viewStorageMap();
   } catch (e) { toast(e.message, 'err'); }
 }
 
