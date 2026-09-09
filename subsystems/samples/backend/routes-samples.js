@@ -86,6 +86,24 @@ function register(app) {
     const u = await currentUser(req);
     const filterOpts = _sampleFilterOpts(req.query, u); // 复用列表筛选口径（scope 随当前筛选，导出与列表一致）
     const samples = await D.listSamples(filterOpts); // 不传 limit/offset → 全量（与列表同排序）
+    // 2026-09-09：借出/归还字段互斥存储（各字段只承载「最近一次」动作的值）——领出中行无归还侧、
+    // 已归还行领用人/领出/应还已在归还时清空。导出前从 scan_logs 溯源补齐对方侧，使
+    // 「归还时间 + 领用人/部门/领出/应还」能同行齐备（回归清单见 README 设备导入/样品导出段）
+    const byId = {}; samples.forEach(x => { byId[x.id] = x; });
+    const ids = samples.map(x => x.id);
+    const hist = ids.length ? await D.listCheckoutReturnLogs(ids) : [];
+    for (const h of hist) {
+      const row = byId[h.sample_id];
+      if (!row) continue;
+      if (h.action === 'CHECKOUT') {
+        if (row.checkout_user == null) row.checkout_user = (h.note || '').match(/领用人 ([^（]+)/) ? h.note.match(/领用人 ([^（]+)/)[1] : null;
+        if (row.checkout_dept == null) row.checkout_dept = (h.note || '').match(/（([^）]+)）/) ? h.note.match(/（([^）]+)）/)[1] : null;
+        if (row.checkout_at == null) row.checkout_at = h.checkout_at;
+        if (row.expected_return_at == null) row.expected_return_at = (h.note || '').match(/应还 (\S+)/) ? h.note.match(/应还 (\S+)/)[1] : null;
+      } else if (h.action === 'RETURN_OUT') {
+        if (row.returned_at == null) row.returned_at = h.returned_at; // 借出中行：补最近一次归还历史
+      }
+    }
     const cols = [
       { key: 'sample_no', label: '编号' },
       { key: 'name', label: '名称' },
