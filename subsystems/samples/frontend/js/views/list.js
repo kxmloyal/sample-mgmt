@@ -39,8 +39,9 @@ async function viewSamples() {
     '<fluent-select id="f-sort"' + hideAdv + ' onchange="loadSamples()">' + sortOpts + '</fluent-select>' +
     '<fluent-button appearance="accent" size="small" onclick="loadSamples()">查询</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="exportSamplesCsv()">导出 CSV</fluent-button>' +
-    // 机型视图切换入口（hash 路由切换；勿直调 viewSampleModelWall——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
-    '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button></div>' +
+    // 机型/柜位视图切换入口（hash 路由切换；勿直调视图函数——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
+    '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button>' +
+    '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/storagemap\'">柜位视图</fluent-button></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
     // 2026-09-08：待处理=角色待办（与看板同口径）；ADMIN 无角色待办语义，隐藏入口（列表回归全量档案角色）

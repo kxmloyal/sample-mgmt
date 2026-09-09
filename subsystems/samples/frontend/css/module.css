@@ -100,3 +100,27 @@
 .co-cand-item .co-cand-dept .co-dept-name{overflow:hidden;text-overflow:ellipsis}
 .co-badge{flex:none;font-size:10px;padding:1px 5px;border-radius:8px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;white-space:nowrap}
 .co-badge-dept{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+
+/* === 样品柜数字孪生（2026-09-09）=== */
+.sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-top:12px}
+.sm-cab{background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:12px}
+.sm-cab-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sm-cells{display:grid;gap:5px}
+.sm-cell{position:relative;border:1px solid var(--line,#e2e8f0);border-radius:7px;min-height:52px;padding:4px 6px;font-size:11px;cursor:pointer;background:#f8fafc;transition:box-shadow .15s ease,transform .15s ease;display:flex;flex-direction:column;justify-content:space-between}
+.sm-cell:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(15,23,42,.10)}
+.sm-cell.sm-in{background:#eff6ff;border-color:#bfdbfe}
+.sm-cell.sm-out{background:#fff7ed;border-color:#fed7aa}
+.sm-cell.sm-ret{background:#fefce8;border-color:#fde68a}
+.sm-cell.sm-empty{background:#fff;border-style:dashed;color:#94a3b8}
+.sm-pos{font-weight:600;color:#475569}
+.sm-badge{position:absolute;top:3px;right:5px;font-size:10px;background:#1e293b;color:#fff;border-radius:8px;padding:0 5px;line-height:15px}
+.sm-sub{font-size:10px;color:#9a3412;font-weight:600}
+.sm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:-1px;margin-right:3px}
+.sm-dot.sm-in{background:#2563eb}
+.sm-dot.sm-out{background:#ea580c}
+.sm-dot.sm-ret{background:#ca8a04}
+.sm-dot.sm-empty{background:#e2e8f0;border:1px solid #cbd5e1}
+.sm-legend{font-size:12px;color:var(--muted,#64748b);white-space:nowrap}
+.sm-warn{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px}
+.sm-tag{display:inline-block;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:6px;padding:2px 8px;font-size:12px;margin:3px 4px 0 0;cursor:pointer}
+.sm-tag:hover{border-color:var(--brand,#2563eb);color:var(--brand,#2563eb)}

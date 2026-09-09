@@ -6,6 +6,7 @@ const NAV=[
   {k:'new',t:'新建样品+打印码',roles:['ADMIN','RD']},
   {k:'models',t:'机型列表',roles:['ADMIN','RD']},
   {k:'scan',t:'扫码台',roles:['ADMIN','RD','ME','QA','CUSTODY']},
+  {k:'storagemap',t:'柜位视图',roles:['ADMIN','RD','ME','QA','CUSTODY']},
   {k:'logs',t:'操作日志',roles:['ADMIN']},
 ];
 function buildNav(){
@@ -16,13 +17,13 @@ function buildNav(){
 }
 function setActive(k){document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));}
 
-const VIEWS={dashboard:viewDashboard,samples:viewSamples,wall:viewSampleModelWall,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,};
+const VIEWS={dashboard:viewDashboard,samples:viewSamples,wall:viewSampleModelWall,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,storagemap:viewStorageMap,};
 function route(){
   const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
   const v=VIEWS[k]||viewDashboard; setActive(k);
-  const meta={dashboard:'样品看板',samples:'样品列表',wall:'机型视图',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',};
+  const meta={dashboard:'样品看板',samples:'样品列表',wall:'机型视图',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',storagemap:'柜位视图',};
   $('#page-title').textContent=meta[k]||'';
   $('#page-actions').innerHTML='';
   v();

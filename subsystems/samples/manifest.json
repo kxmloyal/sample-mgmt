@@ -112,6 +112,19 @@
       ]
     },
     {
+      "key": "storagemap",
+      "label": "柜位视图",
+      "icon": "grid",
+      "view": "viewStorageMap",
+      "roles": [
+        "ADMIN",
+        "RD",
+        "ME",
+        "QA",
+        "CUSTODY"
+      ]
+    },
+    {
       "key": "logs",
       "label": "操作日志",
       "icon": "history",
