@@ -105,9 +105,10 @@ module.exports = function createDao(deps) {
   }
 
   // T13 软删除：deleted_at 置位 + version 推进；scan_logs 保留（审计不断链）
-  // 单条 UPDATE 原子生效（原为 scan_logs/samples 双 DELETE 才需事务包裹，软删后仅一条语句）
+  // 时区口径（2026-09-09）：NOW() 与 created_at/updated_at 的 CURRENT_TIMESTAMP 同为会话墙钟（+08），
+  // 原 UTC_TIMESTAMP() 与同行其他时间列差 8h，已统一；存量行由 migrateSamplesDeletedAtTz 一次性校正
   async function deleteSample(id) {
-    await run('UPDATE samples SET deleted_at=UTC_TIMESTAMP(), version=version+1 WHERE id=?', [id]);
+    await run('UPDATE samples SET deleted_at=NOW(), version=version+1 WHERE id=?', [id]);
   }
 
   // 日志

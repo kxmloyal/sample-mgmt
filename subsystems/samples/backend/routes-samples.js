@@ -59,11 +59,18 @@ function register(app) {
   const SAMPLE_STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
   const INSPECT_SOON_DAYS = 7;
 
-  /** 时间列格式化：mysql2 默认将 TIMESTAMP 列返回 Date 对象，统一转 ISO 后取 YYYY-MM-DD HH:mm；null/空 → '' */
+  /** 时间列格式化：统一转北京时间(+08)后取 YYYY-MM-DD HH:mm；null/空 → ''。
+   *  2026-09-09 修复：原实现直接 slice UTC ISO 串，CSV 导出的归还/领出/更新等时间列整体慢 8h；
+   *  对齐前端共享 fmt() 同款修复先例（2026-09-08）。字符串按含 Z 的 UTC 解析，Date 对象（mysql2 TIMESTAMP）本已是绝对时刻。
+   *  非 ISO 纯日期串（如手工录入 YYYY-MM-DD）原样透传，避免时区二次偏移。 */
   function fmtTime(v) {
     if (v == null || v === '') return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
     const s = v instanceof Date ? v.toISOString() : String(v);
-    return s.slice(0, 16).replace('T', ' ');
+    const dt = new Date(s);
+    if (isNaN(dt.getTime())) return s.slice(0, 16).replace('T', ' ');
+    const b = new Date(dt.getTime() + 8 * 3600000); // UTC → 北京时间
+    return b.toISOString().slice(0, 16).replace('T', ' ');
   }
 
   /** 复检状态中文（与前端 list-inspect.js 判定一致：正常/近7天到期/逾期N天/—） */
@@ -100,7 +107,9 @@ function register(app) {
       { key: 'next_inspect_at', label: '复检到期', fmt: v => fmtTime(v) },
       { key: 'updated_at', label: '更新时间', fmt: v => fmtTime(v) }
     ];
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    // 文件名时间戳用北京时间（2026-09-09 对齐 fmtTime 修复；此前为 UTC，文件名比实际早 8h）
+    const bNow = new Date(Date.now() + 8 * 3600000);
+    const stamp = bNow.toISOString().slice(0, 16).replace(/[-:T]/g, '');
     sendCsv(res, 'samples-' + stamp + '.csv', toCsv(samples, cols));
   }));
 

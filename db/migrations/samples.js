@@ -29,4 +29,20 @@ async function migrateSamplesCheckout(pool) {
   }
 }
 
-module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout };
+// deleted_at 时区口径统一（2026-09-09）：软删除原用 UTC_TIMESTAMP()——该函数返回 UTC 真实时刻，
+// 会话时区 +08 下 TIMESTAMP 列存储/展示为「UTC 值的墙钟直存」，比 NOW()（+08 墙钟）慢 8h。
+// ① 存量一次性校正：deleted_at 整体 +8h 归位（方向实证：id=68 原值 03:32:06，实际软删动作发生在
+//    updated_at 同刻的 11:32:06 → +8h 才是正确方向；2026-09-09 首跑误用 -8h 已在生产 +16h 复原，
+//    本迁移仅服务未校正过的环境，标志表防重入）
+// ② dao.js deleteSample 同步改写 NOW()（已一并修改）
+// 注意：生产执行前需备份 samples 表（2026-09-09 已按用户要求先备份再操作）
+async function migrateSamplesDeletedAtTz(pool) {
+  const [[mk]] = await pool.query(
+    "SELECT COUNT(*) c FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='_migr_sample_deleted_tz'");
+  if (mk.c) return; // 已执行过，防重入
+  await pool.execute("UPDATE samples SET deleted_at = DATE_ADD(deleted_at, INTERVAL 8 HOUR) WHERE deleted_at IS NOT NULL");
+  await pool.execute("CREATE TABLE _migr_sample_deleted_tz (id INT PRIMARY KEY, done_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+  await pool.execute("INSERT INTO _migr_sample_deleted_tz (id) VALUES (1)");
+}
+
+module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout, migrateSamplesDeletedAtTz };
