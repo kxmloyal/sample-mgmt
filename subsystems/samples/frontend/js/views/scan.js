@@ -104,7 +104,7 @@ function showScanActionForm(action){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
     // 2026-09-09 方案A：领用人升级为可搜索选择器（系统用户点选自动带部门；手填兜底兼容外来人员）
     // 2026-09-09 增强：候选面板改为输入框右侧弹出（不挤压下方表单）；后端同部门优先+领用频率排序，前端加「同部门/N次」徽标
-    html='<label>领用人 *</label><div class="co-wrap"><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onfocus="renderCoCandidates(this.value||\'\')" oninput="_coPick=null;renderCoCandidates(this.value||\'\')" onblur="setTimeout(function(){var p=document.getElementById(\'scan-co-cand\');if(p)p.innerHTML=\'\';},200)"></fluent-text-field><div id="scan-co-cand" class="co-cand-panel co-cand-right"></div></div>'+
+    html='<label>领用人 *</label><div class="co-wrap"><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onfocus="renderCoCandidates(this.value||\'\')" oninput="_coPick=null;renderCoCandidates(this.value||\'\')" onblur="setTimeout(function(){hideCoCandidates();},200)"></fluent-text-field><div id="scan-co-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
       '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
       '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+

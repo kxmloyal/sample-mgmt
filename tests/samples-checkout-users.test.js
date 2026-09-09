@@ -44,10 +44,15 @@ describe('领用人选择器 前端接线', () => {
     const scan = read('subsystems/samples/frontend/js/views/scan.js');
     expect(scan).toContain('_coPick&&_coPick.dept');
   });
-  test('候选面板挂输入框右侧（co-wrap + co-cand-right）', () => {
+  test('候选面板 fixed 定位挂 body（防触发 modal 滚动容器滚动条）', () => {
+    const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
     const scan = read('subsystems/samples/frontend/js/views/scan.js');
-    expect(scan).toContain('co-wrap');
-    expect(scan).toContain('co-cand-right');
+    const css = read('subsystems/samples/frontend/css/module.css');
+    expect(scan).toContain('co-cand-fixed');
+    expect(scan).toContain('hideCoCandidates');
+    expect(picker).toContain('document.body.appendChild(panel)');
+    expect(picker).toContain('positionCoPanel');
+    expect(css).toContain('.co-cand-fixed{position:fixed');
   });
 });
 
@@ -67,11 +72,5 @@ describe('排序增强：同部门优先 + 领用频率（后端）', () => {
     const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
     expect(picker).toContain('co-badge-dept');
     expect(picker).toContain('次</span>');
-  });
-  test('容器防横向滚动：面板 overflow-x hidden + 行内省略号截断', () => {
-    const css = read('subsystems/samples/frontend/css/module.css');
-    expect(css).toContain('overflow-x:hidden');
-    expect(css).toContain('text-overflow:ellipsis');
-    expect(css).toContain('max-width:min(72vw,340px)');
   });
 });
