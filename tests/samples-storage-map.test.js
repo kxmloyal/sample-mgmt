@@ -65,7 +65,26 @@ describe('孪生视图接线（前端/manifest/router）', () => {
     const view = read('subsystems/samples/frontend/js/views/storage-map.js');
     // 源码里 \\' 转义后的字面是 closeModal(this.closest(\\'.modal-mask\\'))，断言取稳定子串
     expect(view).toContain("closeModal(this.closest(");
-    expect(view).toContain("if (m) closeModal(m);");
+    expect(view).toContain('if (ms.length) closeModal(ms[ms.length - 1]);');
     expect(view).not.toContain('pCloseModal');
+  });
+  test('全链路评审 P1/P2：detail 叠层安全（topBody/topMask）——renderTab 不灌底层窗、扫码操作关全部窗', () => {
+    const detail = read('subsystems/samples/frontend/js/views/detail.js');
+    expect(detail).toContain('function _topBody');
+    expect(detail).toContain('function _topMask');
+    expect(detail).toContain('var body = _topBody();');
+    expect(detail).toContain('var b = _topBody();');
+    // renderTab 不得再用裸 querySelector('.modal-body')（叠层时命中底层清单窗）
+    expect(detail).not.toContain("querySelector('.modal-body')");
+    expect(detail).toContain('querySelectorAll(\'.modal-mask\')');
+    const ms = detail.indexOf('querySelectorAll(\'.modal-mask\')');
+    const hash = detail.indexOf("location.hash = '#/scan?no='");
+    expect(ms).toBeGreaterThan(-1);
+    expect(hash).toBeGreaterThan(ms); // 先关全部弹窗再跳 hash
+  });
+  test('全链路评审 P2（storage-map 侧）：配置弹窗取消/保存走顶层关闭 closeSmCfgModal', () => {
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    expect(view).toContain('function closeSmCfgModal');
+    expect(view).toContain('onclick="closeSmCfgModal()"');
   });
 });

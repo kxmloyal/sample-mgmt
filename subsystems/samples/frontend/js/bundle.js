@@ -1,4 +1,4 @@
-/** BUNDLE vbmtu7dpkd — 30 files */
+/** BUNDLE vbmtu847al — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1378,8 +1378,10 @@ function goScanFromDetail(id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s || !s.sample_no) { toast('样品数据未就绪', 'err'); return; }
   _detailDirty = false;
-  var m = document.querySelector('.modal-mask');
-  if (m) closeModal(m);
+  // 评审 P2 修复：querySelector 只取第一个（叠层时=底层清单窗，详情残留）；
+  // 且 hash 跳转不清弹窗（modal 挂 body）→ 跳扫码台前关闭全部弹窗
+  var ms = document.querySelectorAll('.modal-mask');
+  for (var i = 0; i < ms.length; i++) closeModal(ms[i]);
   location.hash = '#/scan?no=' + encodeURIComponent(s.sample_no);
 }
 function _buildHeadHTML(s, id) {
@@ -1401,13 +1403,27 @@ function _applyDetailDensity(tab) {
 }
 
 // D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
+// 顶层弹窗引用（评审 P1 修复）：叠层（格位清单→详情）时 querySelector('.modal-body') 会命中
+// 底层清单窗的 body——内容灌错窗；统一取最上层 mask（DOM 末位）
+function _topBody() {
+  var ms = document.querySelectorAll('.modal-mask');
+  return ms.length ? ms[ms.length - 1].querySelector('.modal-body') : null;
+}
+
+// 顶层弹窗引用（评审 P2 修复同源）：goScanFromDetail 等关「详情自己」时须取最上层 mask
+function _topMask() {
+  var ms = document.querySelectorAll('.modal-mask');
+  return ms.length ? ms[ms.length - 1] : null;
+}
+
+// D2.2 Tab 切换（大图/日志懒渲染骨架先行；body 一律取顶层弹窗）
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
   if (_detailTab === 'card' && _detailDirty && !confirm('标示卡有未保存的修改，切换将丢失，继续？')) return; // D1.5 切Tab拦截
   _detailDirty = false; // 离开/重渲标示卡后重置
   _detailTab = tab;
-  var body = document.querySelector('.modal-body');
+  var body = _topBody();
   if (!body) return;
   var tabsHTML = _buildTabsHTML(s, id, tab);
   _applyDetailDensity(tab);
@@ -1415,7 +1431,7 @@ function renderTab(tab, id) {
     body.innerHTML = tabsHTML + _buildTabSkeleton(tab); // 骨架先行
     setTimeout(function() {
       if (!_detailSample || _detailTab !== tab) return; // 期间已切走，丢弃过期渲染
-      var b = document.querySelector('.modal-body');
+      var b = _topBody();
       if (!b) return;
       b.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
       if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步历史照片（T14）调用时机保持
@@ -3040,6 +3056,8 @@ function smCellSamples(cabNo, col, row) {
 }
 
 // ADMIN 行列配置（默认 3 列×9 行；配置持久化 sample_storage_cabinets）
+// 叠层防御：配置弹窗也须开在详情之上——详情开着时点「配置行列」会叠第三层，保存后
+// viewStorageMap() 重建视图但 modal 挂 body 不随视图卸载，故保存/取消都显式关闭「自己这一层」
 function smConfigCabinet(key, cols, rows) {
   var html = '<div class="pk-form">' +
     '<label>列数（横向格位数）</label><fluent-text-field id="sm-cfg-cols" type="number" min="1" max="50" value="' + cols + '"></fluent-text-field>' +
@@ -3047,7 +3065,7 @@ function smConfigCabinet(key, cols, rows) {
   window._smCfgKey = key;
   openModal('配置 ' + key + ' 行列', html, { foot:
     '<fluent-button appearance="accent" size="small" onclick="smSaveCabinetCfg()">保存</fluent-button>' +
-    '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+    '<fluent-button appearance="neutral" size="small" onclick="closeSmCfgModal()">取消</fluent-button>' });
 }
 async function smSaveCabinetCfg() {
   var cols = Number(document.getElementById('sm-cfg-cols').value);
@@ -3055,10 +3073,14 @@ async function smSaveCabinetCfg() {
   try {
     await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(window._smCfgKey), { columns: cols, rows: rows });
     toast('已保存');
-    var m = document.querySelector('.modal-mask');
-    if (m) closeModal(m);
+    closeSmCfgModal();
     viewStorageMap();
   } catch (e) { toast(e.message, 'err'); }
+}
+// 关配置弹窗：取最上层 mask（叠层时不能误关底层的格位清单/详情窗）
+function closeSmCfgModal() {
+  var ms = document.querySelectorAll('.modal-mask');
+  if (ms.length) closeModal(ms[ms.length - 1]);
 }
 
 // 未入柜清单折叠

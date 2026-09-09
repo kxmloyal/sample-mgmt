@@ -29,8 +29,10 @@ function goScanFromDetail(id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s || !s.sample_no) { toast('样品数据未就绪', 'err'); return; }
   _detailDirty = false;
-  var m = document.querySelector('.modal-mask');
-  if (m) closeModal(m);
+  // 评审 P2 修复：querySelector 只取第一个（叠层时=底层清单窗，详情残留）；
+  // 且 hash 跳转不清弹窗（modal 挂 body）→ 跳扫码台前关闭全部弹窗
+  var ms = document.querySelectorAll('.modal-mask');
+  for (var i = 0; i < ms.length; i++) closeModal(ms[i]);
   location.hash = '#/scan?no=' + encodeURIComponent(s.sample_no);
 }
 function _buildHeadHTML(s, id) {
@@ -52,13 +54,27 @@ function _applyDetailDensity(tab) {
 }
 
 // D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
+// 顶层弹窗引用（评审 P1 修复）：叠层（格位清单→详情）时 querySelector('.modal-body') 会命中
+// 底层清单窗的 body——内容灌错窗；统一取最上层 mask（DOM 末位）
+function _topBody() {
+  var ms = document.querySelectorAll('.modal-mask');
+  return ms.length ? ms[ms.length - 1].querySelector('.modal-body') : null;
+}
+
+// 顶层弹窗引用（评审 P2 修复同源）：goScanFromDetail 等关「详情自己」时须取最上层 mask
+function _topMask() {
+  var ms = document.querySelectorAll('.modal-mask');
+  return ms.length ? ms[ms.length - 1] : null;
+}
+
+// D2.2 Tab 切换（大图/日志懒渲染骨架先行；body 一律取顶层弹窗）
 function renderTab(tab, id) {
   var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
   if (!s) return;
   if (_detailTab === 'card' && _detailDirty && !confirm('标示卡有未保存的修改，切换将丢失，继续？')) return; // D1.5 切Tab拦截
   _detailDirty = false; // 离开/重渲标示卡后重置
   _detailTab = tab;
-  var body = document.querySelector('.modal-body');
+  var body = _topBody();
   if (!body) return;
   var tabsHTML = _buildTabsHTML(s, id, tab);
   _applyDetailDensity(tab);
@@ -66,7 +82,7 @@ function renderTab(tab, id) {
     body.innerHTML = tabsHTML + _buildTabSkeleton(tab); // 骨架先行
     setTimeout(function() {
       if (!_detailSample || _detailTab !== tab) return; // 期间已切走，丢弃过期渲染
-      var b = document.querySelector('.modal-body');
+      var b = _topBody();
       if (!b) return;
       b.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
       if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步历史照片（T14）调用时机保持

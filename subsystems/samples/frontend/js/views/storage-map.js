@@ -98,6 +98,8 @@ function smCellSamples(cabNo, col, row) {
 }
 
 // ADMIN 行列配置（默认 3 列×9 行；配置持久化 sample_storage_cabinets）
+// 叠层防御：配置弹窗也须开在详情之上——详情开着时点「配置行列」会叠第三层，保存后
+// viewStorageMap() 重建视图但 modal 挂 body 不随视图卸载，故保存/取消都显式关闭「自己这一层」
 function smConfigCabinet(key, cols, rows) {
   var html = '<div class="pk-form">' +
     '<label>列数（横向格位数）</label><fluent-text-field id="sm-cfg-cols" type="number" min="1" max="50" value="' + cols + '"></fluent-text-field>' +
@@ -105,7 +107,7 @@ function smConfigCabinet(key, cols, rows) {
   window._smCfgKey = key;
   openModal('配置 ' + key + ' 行列', html, { foot:
     '<fluent-button appearance="accent" size="small" onclick="smSaveCabinetCfg()">保存</fluent-button>' +
-    '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">取消</fluent-button>' });
+    '<fluent-button appearance="neutral" size="small" onclick="closeSmCfgModal()">取消</fluent-button>' });
 }
 async function smSaveCabinetCfg() {
   var cols = Number(document.getElementById('sm-cfg-cols').value);
@@ -113,10 +115,14 @@ async function smSaveCabinetCfg() {
   try {
     await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(window._smCfgKey), { columns: cols, rows: rows });
     toast('已保存');
-    var m = document.querySelector('.modal-mask');
-    if (m) closeModal(m);
+    closeSmCfgModal();
     viewStorageMap();
   } catch (e) { toast(e.message, 'err'); }
+}
+// 关配置弹窗：取最上层 mask（叠层时不能误关底层的格位清单/详情窗）
+function closeSmCfgModal() {
+  var ms = document.querySelectorAll('.modal-mask');
+  if (ms.length) closeModal(ms[ms.length - 1]);
 }
 
 // 未入柜清单折叠
