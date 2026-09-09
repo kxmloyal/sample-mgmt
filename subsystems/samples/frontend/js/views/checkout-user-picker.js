@@ -23,7 +23,8 @@ function initCheckoutUserPicker() {
   input.onfocus = function () { renderCoCandidates(this.value || ''); };
 }
 
-// 渲染候选列表：按输入前缀/包含过滤（最多 8 条）；空输入显示全部前 8 条便于直接点选
+// 渲染候选列表：按输入前缀/包含过滤（最多 8 条）；空输入显示全部前 8 条便于直接点选。
+// 后端已按「同部门优先→领用频率降序→姓名序」返回，前端按原顺序渲染，并为同部门/高频候选加徽标
 function renderCoCandidates(kw) {
   var panel = document.getElementById('scan-co-cand');
   if (!panel || !_coUsers) return;
@@ -32,9 +33,13 @@ function renderCoCandidates(kw) {
     return !k || u.display_name.indexOf(k) === 0 || u.display_name.indexOf(k) > -1 || (u.dept || '').indexOf(k) > -1;
   }).slice(0, 8);
   if (!list.length) { panel.innerHTML = ''; return; }
+  var myDept = (me && me.dept) || '';
   panel.innerHTML = list.map(function (u) {
+    var badge = '';
+    if (u.dept && u.dept === myDept) badge = '<span class="co-badge co-badge-dept">同部门</span>';
+    else if (u.freq > 0) badge = '<span class="co-badge">' + u.freq + '次</span>';
     return '<div class="co-cand-item" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) +
-      '<span class="co-cand-dept">' + e(u.dept || '') + '</span></div>';
+      '<span class="co-cand-dept">' + e(u.dept || '') + badge + '</span></div>';
   }).join('');
 }
 

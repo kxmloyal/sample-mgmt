@@ -1,4 +1,4 @@
-/** BUNDLE vbmttqe8xk — 28 files */
+/** BUNDLE vbmttr3gkd — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2174,7 +2174,8 @@ function initCheckoutUserPicker() {
   input.onfocus = function () { renderCoCandidates(this.value || ''); };
 }
 
-// 渲染候选列表：按输入前缀/包含过滤（最多 8 条）；空输入显示全部前 8 条便于直接点选
+// 渲染候选列表：按输入前缀/包含过滤（最多 8 条）；空输入显示全部前 8 条便于直接点选。
+// 后端已按「同部门优先→领用频率降序→姓名序」返回，前端按原顺序渲染，并为同部门/高频候选加徽标
 function renderCoCandidates(kw) {
   var panel = document.getElementById('scan-co-cand');
   if (!panel || !_coUsers) return;
@@ -2183,9 +2184,13 @@ function renderCoCandidates(kw) {
     return !k || u.display_name.indexOf(k) === 0 || u.display_name.indexOf(k) > -1 || (u.dept || '').indexOf(k) > -1;
   }).slice(0, 8);
   if (!list.length) { panel.innerHTML = ''; return; }
+  var myDept = (me && me.dept) || '';
   panel.innerHTML = list.map(function (u) {
+    var badge = '';
+    if (u.dept && u.dept === myDept) badge = '<span class="co-badge co-badge-dept">同部门</span>';
+    else if (u.freq > 0) badge = '<span class="co-badge">' + u.freq + '次</span>';
     return '<div class="co-cand-item" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) +
-      '<span class="co-cand-dept">' + e(u.dept || '') + '</span></div>';
+      '<span class="co-cand-dept">' + e(u.dept || '') + badge + '</span></div>';
   }).join('');
 }
 
@@ -2309,8 +2314,8 @@ function showScanActionForm(action){
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
     // 2026-09-09 方案A：领用人升级为可搜索选择器（系统用户点选自动带部门；手填兜底兼容外来人员）
-    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onblur="setTimeout(function(){var p=document.getElementById(\'scan-co-cand\');if(p)p.innerHTML=\'\';},200)"></fluent-text-field>'+
-      '<div id="scan-co-cand" class="co-cand-panel"></div>'+
+    // 2026-09-09 增强：候选面板改为输入框右侧弹出（不挤压下方表单）；后端同部门优先+领用频率排序，前端加「同部门/N次」徽标
+    html='<label>领用人 *</label><div class="co-wrap"><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onfocus="renderCoCandidates(this.value||\'\')" oninput="_coPick=null;renderCoCandidates(this.value||\'\')" onblur="setTimeout(function(){var p=document.getElementById(\'scan-co-cand\');if(p)p.innerHTML=\'\';},200)"></fluent-text-field><div id="scan-co-cand" class="co-cand-panel co-cand-right"></div></div>'+
       '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
       '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
       '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
