@@ -154,9 +154,11 @@ CREATE TABLE IF NOT EXISTS project_extras (
   actual_cost DECIMAL(18,2) COMMENT '实际成本',
   project_type VARCHAR(32) COMMENT '项目类型',
   priority VARCHAR(10) NOT NULL DEFAULT 'M' COMMENT '优先级 H/M/L',
+  expected_benefit TEXT NULL COMMENT '预期效益（年节约/产能提升等，2026-09-08 设备导入）',
+  benefit_note TEXT NULL COMMENT '实际效益备注（验收后填写，2026-09-08 设备导入）',
   updated_by INT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目扩展信息-预算/成本(OA移植)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目扩展信息-预算/成本/效益(OA移植+设备导入)';
 
 CREATE TABLE IF NOT EXISTS project_changes (
   id INT AUTO_INCREMENT PRIMARY KEY,

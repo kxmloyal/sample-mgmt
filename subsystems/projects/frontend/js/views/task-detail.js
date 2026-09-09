@@ -145,7 +145,8 @@ function renderTdComments(d) {
 // v2：附件分区（上传区 + 列表，含删除按钮）+ 方案A-⑤ 图片缩略图
 // 方案二A：下载切换为受控端点（登录 + 相关人校验）；缩略图预览暂留静态路径（兼容，后续迭代收紧）
 function renderTdFiles(d) {
-  return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
+  return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button>' +
+    '<span class="muted" style="font-size:12px">支持 pdf/office/图片/zip/图纸(dwg·dxf·step)，≤50MB</span></div>' +
     (d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
       '<span class="pk-name"><a href="' + PApi.fileDownload(_tid, f.id) + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
       '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('') || '<span class="pk-name pk-empty-line">暂无附件</span>');

@@ -267,3 +267,35 @@ describe('方案一B 拆分后契约回归', () => {
     expect(d.body.task.status).toBe('IN_PROGRESS');
   });
 });
+
+// ===== 设备导入追踪（2026-09-08）：效益字段 + 模板种子 =====
+describe('设备导入：效益字段与模板', () => {
+  test('PUT /extras 写入并回读预期/实际效益', async () => {
+    const put = await pm.agent.put('/api/projects/' + pid + '/extras')
+      .send({ budget: 100000, actual_cost: 80000, expected_benefit: '年节约人工 20 万元', benefit_note: '验收后实测 18 万' });
+    expect(put.status).toBe(200);
+    const ex = await pm.agent.get('/api/projects/' + pid + '/extras');
+    expect(Number(ex.body.budget)).toBe(100000); // DECIMAL 序列化为字符串，转数值断言
+    expect(ex.body.expected_benefit).toBe('年节约人工 20 万元');
+    expect(ex.body.benefit_note).toBe('验收后实测 18 万');
+  });
+  test('旧调用方兼容：只传 budget 不清效益字段', async () => {
+    const put = await pm.agent.put('/api/projects/' + pid + '/extras').send({ budget: 120000 });
+    expect(put.status).toBe(200);
+    const ex = await pm.agent.get('/api/projects/' + pid + '/extras');
+    expect(Number(ex.body.budget)).toBe(120000);
+    expect(ex.body.expected_benefit).toBe('年节约人工 20 万元');
+  });
+  test('效益文本超 500 字 → 400', async () => {
+    const r = await pm.agent.put('/api/projects/' + pid + '/extras')
+      .send({ expected_benefit: '长'.repeat(501) });
+    expect(r.status).toBe(400);
+  });
+  test('设备导入标准流程模板已内置（5 任务 3 里程碑）', async () => {
+    const list = await pm.agent.get('/api/projects/templates');
+    const tpl = list.body.find(x => x.name === '设备导入标准流程');
+    expect(tpl).toBeTruthy();
+    expect(tpl.tasks.length).toBe(5);
+    expect(tpl.milestones.length).toBe(3);
+  });
+});

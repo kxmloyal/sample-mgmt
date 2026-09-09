@@ -67,9 +67,9 @@
   "files": {
     "enabled": true,
     "uploadDir": "public/uploads/projects",
-    "maxSize": 10485760,
+    "maxSize": 52428800,
     "categories": [
-      { "key": "attachment", "label": "任务附件", "extensions": ["pdf", "jpg", "jpeg", "png", "doc", "docx", "xls", "xlsx", "zip"] }
+      { "key": "attachment", "label": "任务附件", "extensions": ["pdf", "jpg", "jpeg", "png", "doc", "docx", "xls", "xlsx", "zip", "dwg", "dxf", "step", "stp"] }
     ]
   }
 }

@@ -104,16 +104,23 @@ module.exports = function createDaoOa(deps) {
     return { changed: r[0].affectedRows };
   }
 
-  // ===== 项目扩展信息（预算/成本，1:1 扩展表） =====
+  // ===== 项目扩展信息（预算/成本，1:1 扩展表；2026-09-08 设备导入：+预期/实际效益） =====
   async function getProjectExtras(conn, projectId) {
     return fetchOne(conn, 'SELECT * FROM project_extras WHERE project_id=?', [projectId]);
   }
   // 幂等 upsert：未建过 extras 行的新项目也能直接保存
+  // 兼容语义（同 risks/changes 的 task_id 模式）：新字段未传（undefined）= 保留库内值；
+  // 传 null 或空串 = 清除——旧调用方（routes-changes BUDGET 联动只传 budget）不会误清效益
   async function saveProjectExtras(conn, projectId, data, userId) {
+    const sets = ['budget=VALUES(budget)', 'actual_cost=VALUES(actual_cost)', 'project_type=VALUES(project_type)', 'priority=VALUES(priority)', 'updated_by=VALUES(updated_by)'];
+    if ('expected_benefit' in data) sets.push('expected_benefit=VALUES(expected_benefit)');
+    if ('benefit_note' in data) sets.push('benefit_note=VALUES(benefit_note)');
+    const val = v => (v !== undefined && v !== null && v !== '' ? v : null);
     await conn.execute(
-      'INSERT INTO project_extras (project_id,budget,actual_cost,project_type,priority,updated_by) VALUES (?,?,?,?,?,?) ' +
-      'ON DUPLICATE KEY UPDATE budget=VALUES(budget), actual_cost=VALUES(actual_cost), project_type=VALUES(project_type), priority=VALUES(priority), updated_by=VALUES(updated_by)',
-      [projectId, data.budget || null, data.actual_cost || null, data.project_type || '', data.priority || 'M', userId]);
+      'INSERT INTO project_extras (project_id,budget,actual_cost,project_type,priority,expected_benefit,benefit_note,updated_by) VALUES (?,?,?,?,?,?,?,?) ' +
+      'ON DUPLICATE KEY UPDATE ' + sets.join(', '),
+      [projectId, data.budget || null, data.actual_cost || null, data.project_type || '', data.priority || 'M',
+       val(data.expected_benefit), val(data.benefit_note), userId]);
     return { changed: 1 };
   }
 

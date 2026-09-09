@@ -18,7 +18,8 @@ function register(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // 保存预算/成本（ADMIN/PM/owner；金额非负数校验；幂等 upsert）
+  // 保存预算/成本/效益（ADMIN/PM/owner；金额非负数校验；效益文本 ≤500 字；幂等 upsert；
+  // 2026-09-08 设备导入：新增 expected_benefit/benefit_note 可选字段，旧客户端不传时写 NULL 兼容）
   app.put('/api/projects/:id/extras', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
@@ -31,6 +32,10 @@ function register(app) {
           body[k] = n;
         }
       }
+      for (const k of ['expected_benefit', 'benefit_note']) {
+        if (body[k] !== undefined && body[k] !== null && String(body[k]).length > 500)
+          return res.status(400).json({ error: k + ' 须不超过 500 字' });
+      }
       if (body.priority && !['H', 'M', 'L'].includes(body.priority))
         return res.status(400).json({ error: 'priority 仅允许 H/M/L' });
       const r2 = await D.withTransaction(async conn => {
@@ -41,7 +46,9 @@ function register(app) {
         await D.saveProjectExtras(conn, id, body, u.id);
         await D.addProjectLog(conn, 'project', id, 'UPDATE_EXTRAS', JSON.stringify({
           budget: body.budget !== undefined ? body.budget : null,
-          actual_cost: body.actual_cost !== undefined ? body.actual_cost : null
+          actual_cost: body.actual_cost !== undefined ? body.actual_cost : null,
+          expected_benefit: body.expected_benefit !== undefined ? body.expected_benefit : undefined,
+          benefit_note: body.benefit_note !== undefined ? body.benefit_note : undefined
         }), u.id);
         return { status: 200, body: { ok: 1 } };
       });

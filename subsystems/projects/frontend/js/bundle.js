@@ -1,4 +1,4 @@
-/** BUNDLE vbmtsup484 — 28 files */
+/** BUNDLE vbmtte3cvm — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1143,13 +1143,15 @@ function openProjectDetail(pid) {
   _pjd = openDetailModal({
     id: 'project-' + pid,
     fetchData: async function () {
-      // 并行拉：项目主数据 + 成员 + 项目任务（详情弹窗一次取齐，弹窗内免二次请求）
-      const [p, members, tasks] = await Promise.all([
+      // 并行拉：项目主数据 + 成员 + 项目任务 + 里程碑（当前阶段派生） + 预算/效益扩展
+      const [p, members, tasks, milestones, extras] = await Promise.all([
         api('GET', PApi.projects(pid)),
         api('GET', PApi.projects(pid) + '/members').catch(function () { return []; }),
-        api('GET', PApi.projectTasks(pid)).catch(function () { return []; })
+        api('GET', PApi.projectTasks(pid)).catch(function () { return []; }),
+        api('GET', PApi.milestones(pid)).catch(function () { return []; }),
+        api('GET', PApi.extras(pid)).catch(function () { return null; })
       ]);
-      return { project: p, members: members, tasks: tasks };
+      return { project: p, members: members, tasks: tasks, milestones: milestones, extras: extras };
     },
     buildHead: function (d) {
       const p = d.project;
@@ -1167,9 +1169,21 @@ function openProjectDetail(pid) {
     buildTabContent: function (d, key) {
       const p = d.project;
       if (key === 'info') {
+        // 当前阶段派生：最早一个未达成里程碑（只读派生，不动表；无里程碑显示 —）
+        const pending = (d.milestones || []).filter(function (m) { return !m.achieved; })
+          .sort(function (a, b) { return String(a.target_date || '').localeCompare(String(b.target_date || '')); });
+        const phase = pending.length ? esc(pending[0].name) : (d.milestones.length ? '全部达成' : '—');
+        const ex = d.extras;
         return '<div class="overview-cards">' +
           '<div class="overview-card"><div class="title">任务进度</div><div style="font-size:20px;font-weight:700">' + p.done_count + '<span style="font-size:13px;color:#64748b">/' + p.task_count + '</span></div>' +
           '<div class="pk-progress" style="margin-top:6px"><span class="pk-progress-bar" style="width:' + (p.task_count ? Math.round(p.done_count / p.task_count * 100) : 0) + '%"></span></div></div>' +
+          '<div class="overview-card"><div class="title">当前阶段</div><div style="font-size:15px;font-weight:600;margin-top:4px">' + phase + '</div>' +
+          (pending.length ? '<div class="muted" style="font-size:12px;margin-top:2px">目标 ' + fmt(pending[0].target_date) + '</div>' : '') + '</div>' +
+          '<div class="overview-card"><div class="title">预算 / 成本 / 效益</div><div style="font-size:13px;margin-top:4px">' +
+          '预算：<b>' + (ex && ex.budget != null ? '¥' + Number(ex.budget).toLocaleString() : '—') + '</b> · 实际：' + (ex && ex.actual_cost != null ? '¥' + Number(ex.actual_cost).toLocaleString() : '—') + '<br>' +
+          '<span class="muted">预期效益：' + (ex && ex.expected_benefit ? esc(ex.expected_benefit) : '—') + '</span>' +
+          (ex && ex.benefit_note ? '<br><span class="muted">实际效益：' + esc(ex.benefit_note) + '</span>' : '') +
+          '</div><div style="margin-top:6px"><fluent-button appearance="secondary" size="small" onclick="pjdExtras(' + p.id + ')">编辑预算/效益</fluent-button></div></div>' +
           '<div class="overview-card"><div class="title">描述</div><div style="font-size:13px;min-height:36px">' + esc(p.description || '—') + '</div></div>' +
           '<div class="overview-card"><div class="title">创建时间</div><div style="font-size:13px">' + fmt(p.created_at) + '</div></div>' +
           '</div>' +
@@ -1223,6 +1237,37 @@ function _pjdTaskRow(t) {
 function _pjdGoTasks(pid) { if (_pjd) _pjd.close(); location.hash = '#/list?project=' + pid; }
 function _pjdGoKanban(pid) { if (_pjd) _pjd.close(); location.hash = '#/kanban?project=' + pid; }
 function _pjdGoTask(tid) { if (_pjd) _pjd.close(); location.hash = '#/tasks/' + tid; }
+
+// 预算/效益编辑弹窗（设备导入 2026-09-08；保存走既有 PUT /extras，权限 ADMIN/PM/owner 后端校验）
+async function pjdExtras(pid) {
+  const ex = await api('GET', PApi.extras(pid)).catch(function () { return {}; });
+  openModal('预算 / 成本 / 效益',
+    '<div class="pk-form">' +
+    '<label>预算（元）</label><fluent-text-field id="pjx-budget" value="' + (ex.budget != null ? ex.budget : '') + '"></fluent-text-field>' +
+    '<label>实际成本（元）</label><fluent-text-field id="pjx-cost" value="' + (ex.actual_cost != null ? ex.actual_cost : '') + '"></fluent-text-field>' +
+    '<label>预期效益（年节约/产能提升等）</label><fluent-text-area id="pjx-eb">' + esc(ex.expected_benefit || '') + '</fluent-text-area>' +
+    '<label>实际效益备注（验收后填写）</label><fluent-text-area id="pjx-bn">' + esc(ex.benefit_note || '') + '</fluent-text-area>' +
+    '</div>',
+    { foot: '<fluent-button appearance="accent" size="small" onclick="pjdExtrasSave(' + pid + ')">保存</fluent-button>' +
+        '<fluent-button appearance="neutral" size="small" onclick="pCloseModal()">取消</fluent-button>' });
+}
+async function pjdExtrasSave(pid) {
+  const budget = $('#pjx-budget').value.trim();
+  const cost = $('#pjx-cost').value.trim();
+  if ((budget && (!isFinite(Number(budget)) || Number(budget) < 0)) || (cost && (!isFinite(Number(cost)) || Number(cost) < 0)))
+    return showToast('金额须为非负数字', 'err');
+  try {
+    await api('PUT', PApi.extras(pid), {
+      budget: budget === '' ? null : Number(budget),
+      actual_cost: cost === '' ? null : Number(cost),
+      expected_benefit: $('#pjx-eb').value.trim(),
+      benefit_note: $('#pjx-bn').value.trim()
+    });
+    showToast('已保存');
+    pCloseModal();
+    if (_pjd) _pjd.reload(); // 重读信息卡（openDetailModal 内建 reload）
+  } catch (e) { showToast(e.message, 'err'); }
+}
 
 
 /* --- subsystems/projects/frontend/js/views/milestones.js --- */
@@ -2585,7 +2630,8 @@ function renderTdComments(d) {
 // v2：附件分区（上传区 + 列表，含删除按钮）+ 方案A-⑤ 图片缩略图
 // 方案二A：下载切换为受控端点（登录 + 相关人校验）；缩略图预览暂留静态路径（兼容，后续迭代收紧）
 function renderTdFiles(d) {
-  return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button></div>' +
+  return '<div class="pk-filters"><input type="file" id="td-file"><fluent-button appearance="accent" size="small" onclick="tdUploadFile()">上传</fluent-button>' +
+    '<span class="muted" style="font-size:12px">支持 pdf/office/图片/zip/图纸(dwg·dxf·step)，≤50MB</span></div>' +
     (d.files.map(f => '<div class="pk-row">' + tduxFileThumb(f) +
       '<span class="pk-name"><a href="' + PApi.fileDownload(_tid, f.id) + '" target="_blank">' + esc(f.file_name) + '</a></span>' +
       '<fluent-button size="small" appearance="neutral" onclick="tdFileDel(' + f.id + ')">删除</fluent-button></div>').join('') || '<span class="pk-name pk-empty-line">暂无附件</span>');

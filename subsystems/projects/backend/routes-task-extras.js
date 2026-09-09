@@ -67,9 +67,10 @@ function register(app) {
 
   // ===== 附件（Task 6） =====
   // C3 修复：扩展名白名单（与 manifest files.categories 一致）+ multer 错误 JSON 化（类型/大小超限 400 而非 500 HTML）
+  // 2026-09-08 设备导入追踪：白名单补 CAD 图纸（dwg/dxf/step/stp），上限 10MB→50MB（manifest 同步，nginx client_max_body_size 需 ≥50m 由运维核对）
   const projUploader = createUploader({
-    uploadDir: 'public/uploads/projects', maxSize: 10485760,
-    allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'zip']
+    uploadDir: 'public/uploads/projects', maxSize: 52428800,
+    allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'zip', 'dwg', 'dxf', 'step', 'stp']
   });
   // 上传附件（multer 单文件，事务内落库 + 留痕；multer 错误经回调转 JSON 400）
   app.post('/api/projects/tasks/:tid/files', requireAuth, (req, res, next) => {
