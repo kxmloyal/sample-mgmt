@@ -43,8 +43,11 @@ function _buildHeadHTML(s, id) {
 }
 
 // D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式 D2 进 module.css）
+// 2026-09-09 修复：叠层弹窗（柜位格位清单→详情）时 querySelector 命中 DOM 第一个 dialog（=底层清单窗），
+// 密度类误打到底层致其突然变宽、详情自身反而无密度类；改为取最上层 mask 的 dialog（详情自身）
 function _applyDetailDensity(tab) {
-  var d = document.querySelector('.modal-mask fluent-dialog');
+  var ds = document.querySelectorAll('.modal-mask fluent-dialog');
+  var d = ds[ds.length - 1];
   if (d) { d.classList.add('dm-modal'); d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
 }
 

@@ -11,6 +11,7 @@ async function viewStorageMap() {
   var data;
   try { data = await api('GET', '/api/samples/storage-map'); }
   catch (err) { v.innerHTML = '<div class="empty">加载失败：' + e(err.message) + '</div>'; return; }
+  window._smMapData = data; // 缓存给格位点击用（smCellSamples 同步渲染，避免 async 竞态）
 
   var cabs = data.cabinets || [];
   var warnHtml = '';
@@ -64,8 +65,8 @@ function smRenderCabinet(c) {
 function smRenderCell(cab, cell) {
   var occ = cell.occupancy;
   var total = occ.in + occ.out + occ.ret + occ.reserved;
-  var cls = 'sm-empty', dots = '';
-  if (occ.in) { cls = 'sm-in'; dots = '<i class="sm-dot sm-ret" style="display:none"></i>'; }
+  var cls = 'sm-empty';
+  if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
@@ -75,8 +76,12 @@ function smRenderCell(cab, cell) {
 }
 
 // 格位点击：就地取孪生数据弹样品清单（轻弹窗复用 openModal）
-async function smCellSamples(cabNo, col, row) {
-  var data = await api('GET', '/api/samples/storage-map');
+// 2026-09-09：打开前剥离 dialog 上可能残留的详情密度类（d-high 等），保证清单窗恒为内容自适应小尺寸
+function smCellSamples(cabNo, col, row) {
+  var stale = document.querySelector('.modal-mask fluent-dialog');
+  if (stale) { stale.classList.remove('d-high', 'd-mid', 'd-low', 'dm-modal'); }
+  var data = window._smMapData || null;
+  if (!data) return;
   var cab = (data.cabinets || []).filter(function (x) { return x.no === cabNo; })[0];
   if (!cab) return;
   var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0];

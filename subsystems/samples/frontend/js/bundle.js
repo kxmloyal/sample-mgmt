@@ -1,4 +1,4 @@
-/** BUNDLE vbmtu6izzh — 30 files */
+/** BUNDLE vbmtu6z2wd — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1392,8 +1392,11 @@ function _buildHeadHTML(s, id) {
 }
 
 // D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式 D2 进 module.css）
+// 2026-09-09 修复：叠层弹窗（柜位格位清单→详情）时 querySelector 命中 DOM 第一个 dialog（=底层清单窗），
+// 密度类误打到底层致其突然变宽、详情自身反而无密度类；改为取最上层 mask 的 dialog（详情自身）
 function _applyDetailDensity(tab) {
-  var d = document.querySelector('.modal-mask fluent-dialog');
+  var ds = document.querySelectorAll('.modal-mask fluent-dialog');
+  var d = ds[ds.length - 1];
   if (d) { d.classList.add('dm-modal'); d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
 }
 
@@ -2930,6 +2933,7 @@ async function viewStorageMap() {
   var data;
   try { data = await api('GET', '/api/samples/storage-map'); }
   catch (err) { v.innerHTML = '<div class="empty">加载失败：' + e(err.message) + '</div>'; return; }
+  window._smMapData = data; // 缓存给格位点击用（smCellSamples 同步渲染，避免 async 竞态）
 
   var cabs = data.cabinets || [];
   var warnHtml = '';
@@ -2983,8 +2987,8 @@ function smRenderCabinet(c) {
 function smRenderCell(cab, cell) {
   var occ = cell.occupancy;
   var total = occ.in + occ.out + occ.ret + occ.reserved;
-  var cls = 'sm-empty', dots = '';
-  if (occ.in) { cls = 'sm-in'; dots = '<i class="sm-dot sm-ret" style="display:none"></i>'; }
+  var cls = 'sm-empty';
+  if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
@@ -2994,8 +2998,12 @@ function smRenderCell(cab, cell) {
 }
 
 // 格位点击：就地取孪生数据弹样品清单（轻弹窗复用 openModal）
-async function smCellSamples(cabNo, col, row) {
-  var data = await api('GET', '/api/samples/storage-map');
+// 2026-09-09：打开前剥离 dialog 上可能残留的详情密度类（d-high 等），保证清单窗恒为内容自适应小尺寸
+function smCellSamples(cabNo, col, row) {
+  var stale = document.querySelector('.modal-mask fluent-dialog');
+  if (stale) { stale.classList.remove('d-high', 'd-mid', 'd-low', 'dm-modal'); }
+  var data = window._smMapData || null;
+  if (!data) return;
   var cab = (data.cabinets || []).filter(function (x) { return x.no === cabNo; })[0];
   if (!cab) return;
   var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0];
