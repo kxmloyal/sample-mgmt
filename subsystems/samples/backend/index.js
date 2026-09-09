@@ -13,10 +13,12 @@ const fs = require('fs');
  */
 function register(app) {
   // Phase 6: 子系统自行注册路由
+  // 注意顺序：checkout-users 须在 routes-samples 之前注册——/api/samples/:id 会把 checkout-users
+  // 当作 :id 捕获（实测 14:48 返回「样品不存在」），与文件内 export/code-preview 先例同理
+  require('./routes-checkout-users').register(app); // 领用人候选（2026-09-09 方案A，只读轻接口）
   require('./routes-samples').register(app);
   require('./routes-scan').register(app);
   require('./routes-cards').register(app);
-  require('./routes-checkout-users').register(app); // 领用人候选（2026-09-09 方案A，只读轻接口）
 }
 
 /**

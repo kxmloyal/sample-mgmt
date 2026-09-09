@@ -20,6 +20,10 @@ describe('领用人候选 端点（routes-checkout-users.js）', () => {
   test('已挂载到子系统入口（register 链路完整）', () => {
     expect(read('subsystems/samples/backend/index.js')).toContain("require('./routes-checkout-users').register(app)");
   });
+  test('注册顺序：checkout-users 须在 routes-samples 之前（否则被 GET /:id 捕获成「样品不存在」）', () => {
+    const idx = read('subsystems/samples/backend/index.js');
+    expect(idx.indexOf('routes-checkout-users')).toBeLessThan(idx.indexOf("require('./routes-samples')"));
+  });
 });
 
 describe('领用人选择器 前端接线', () => {
