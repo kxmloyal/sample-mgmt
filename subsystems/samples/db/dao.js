@@ -120,6 +120,27 @@ module.exports = function createDao(deps) {
   }
 
   function listLogsBySample(sample_id) { return q('SELECT * FROM scan_logs WHERE sample_id = ? ORDER BY id DESC LIMIT 100', [sample_id]); }
+  // 批量取样品的领出/归还日志（导出溯源用，2026-09-09）：每样品各取最近一条 CHECKOUT/RETURN_OUT，
+  // 归还侧补领用人/部门/领出/应还（借用字段归还即清空），领出侧补最近归还历史
+  function listCheckoutReturnLogs(sampleIds) {
+    if (!sampleIds || !sampleIds.length) return Promise.resolve([]);
+    var marks = sampleIds.map(function () { return '?'; }).join(',');
+    return q(
+      'SELECT l.sample_id, l.action, l.note, l.created_at, ' +
+      "CASE WHEN l.action='CHECKOUT' THEN l.created_at END AS checkout_at, " +
+      "CASE WHEN l.action='RETURN_OUT' THEN l.created_at END AS returned_at " +
+      'FROM scan_logs l WHERE l.sample_id IN (' + marks + ") AND l.action IN ('CHECKOUT','RETURN_OUT') ORDER BY l.id ASC",
+      sampleIds).then(function (rows) {
+        // 同一样品多轮借用取最近一轮：倒序遍历首次遇到的 action 即最近
+        var seen = {}, out = [];
+        for (var i = rows.length - 1; i >= 0; i--) {
+          var k = rows[i].sample_id + ':' + rows[i].action;
+          if (seen[k]) continue;
+          seen[k] = 1; out.push(rows[i]);
+        }
+        return out;
+      });
+  }
   function listLogs() {
     return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON l.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
   }
@@ -138,7 +159,7 @@ module.exports = function createDao(deps) {
 
   return Object.assign({
     nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, updateSample, deleteSample,
-    addLog, listLogsBySample, listLogs,
+    addLog, listLogsBySample, listLogs, listCheckoutReturnLogs,
     listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels
   }, daoList);
 };
