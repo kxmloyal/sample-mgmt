@@ -69,7 +69,9 @@ function register(app) {
         });
 
       const ts = D.nowISO();
-      const updated = { ...s, updated_at: ts };
+      // updated_at 由 TIMESTAMP 列 ON UPDATE CURRENT_TIMESTAMP 自动维护（updateSample 列清单不含它，
+      // 此处显式赋值是死代码），2026-09-09 清理
+      const updated = { ...s };
 
       // action 执行器（scan-actions.js）：就地改写 updated，返回 {status,error} 回错 / {respond} 自行响应 / {logData} 走主事务
       const ar = await A.applyAction(chosenAction, { req, s, updated, ts, u, D, saveSampleImage });

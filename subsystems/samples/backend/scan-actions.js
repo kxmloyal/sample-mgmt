@@ -272,7 +272,8 @@ async function applyAction(chosenAction, ctx) {
         signed_by_rd: u.display_name || u.username, signed_by_qa: s.signed_by_qa,
         notes: '替代已作废样品 ' + s.sample_no, created_by: u.id, replaces: s.sample_no
       }, conn);
-      const oldUpdated = { ...s, status: 'RETIRED', replaced_by: ns.sample_no, updated_at: ts };
+      // updated_at 由 TIMESTAMP 列 ON UPDATE 自动维护（updateSample 列清单不含它），2026-09-09 清理死赋值
+      const oldUpdated = { ...s, status: 'RETIRED', replaced_by: ns.sample_no };
       await D.updateSample(oldUpdated, conn, s.version);
       await D.addLog({ sample_id: s.id, action: 'RECREATE_REPLACED', role: u.role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' }, conn);
       await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '替代 ' + s.sample_no }, conn);
