@@ -98,7 +98,8 @@ function showScanActionForm(action){
       '<label>复检结论 / 备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
-    html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
+    // 接收保管（2026-09-09 储位选择器）：点选已知格位（空位徽标置顶）+ 自由输入兜底（新柜位首录）
+    html='<label>保管储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
@@ -120,8 +121,9 @@ function showScanActionForm(action){
     html=buildCardFieldTable(s,true)+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
+    // 修改储位（2026-09-09 储位选择器）：同款点选候选，顺手统一历史脏数据（空格错版被规范值替代）
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
-      '<label>新储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"></fluent-text-field>'+
+      '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" value="'+e(s.storage_location||'')+'" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+
@@ -135,6 +137,8 @@ function showScanActionForm(action){
   if(action==='EDIT_CARD')applyCardFieldValues(s);
   // 方案A：领用表单渲染完成后初始化领用人候选（拉用户列表+绑定过滤事件；失败静默降级纯手填）
   if(action==='CHECKOUT'&&typeof initCheckoutUserPicker==='function')initCheckoutUserPicker();
+  // 2026-09-09：储位表单渲染后初始化格位候选（接收保管/修改储位共用；失败静默降级纯手填）
+  if((action==='CUSTODY'||action==='EDIT_STORAGE')&&typeof initStorageLocPicker==='function')initStorageLocPicker();
 }
 // T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
 // 返回 false 表示校验失败（已 toast），调用方中止提交

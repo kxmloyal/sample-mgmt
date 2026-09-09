@@ -1,4 +1,4 @@
-/** BUNDLE vbmttzt8a0 — 29 files */
+/** BUNDLE vbmtu3tdh7 — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2256,6 +2256,100 @@ function pickCheckoutUser(id) {
 }
 
 
+/* --- subsystems/samples/frontend/js/views/storage-loc-picker.js --- */
+// views/storage-loc-picker.js — 储位可搜索选择器（2026-09-09，孪生配套）
+// 数据源：GET /api/samples/storage-map（柜/格位/占用聚合）——候选=已知格位，空位带「空」徽标置顶排序（空位优先→柜号→格位）
+// 交互：与 checkout-user-picker 同款（body 级 fixed 面板，window capture 滚动跟随，铁律见该文件头注释）；
+//       输入过滤 + 点选回填；自由输入保留（新格位首录场景），格式提示 N#样品柜C-R
+// 服务两处表单：CUSTODY 接收保管 / EDIT_STORAGE 修改储位（同一 input id=scan-loc）
+
+var _smCache = null;      // storage-map 缓存（弹窗级）
+var _smPanelFor = null;   // 当前面板服务的 input id
+
+function initStorageLocPicker() {
+  _smPanelFor = 'scan-loc';
+  var input = document.getElementById('scan-loc');
+  var panel = document.getElementById('scan-loc-cand');
+  if (!input || !panel) return;
+  var stale = document.querySelectorAll('body > #scan-loc-cand');
+  for (var i = 0; i < stale.length; i++) stale[i].remove();
+  document.body.appendChild(panel);
+  panel.style.display = 'none';
+  panel.innerHTML = '<div class="co-cand-item muted">格位加载中…</div>';
+  if (window._smScrollHandler) window.removeEventListener('scroll', window._smScrollHandler, true);
+  window._smScrollHandler = positionSmPanel;
+  window.addEventListener('scroll', window._smScrollHandler, true);
+  window.addEventListener('resize', positionSmPanel);
+  var load = function (d) {
+    _smCache = d;
+    renderSmCandidates('');
+  };
+  if (_smCache) load(_smCache);
+  else api('GET', '/api/samples/storage-map').then(load).catch(function () { _smCache = { cabinets: [] }; panel.style.display = 'none'; });
+  input.oninput = function () { renderSmCandidates(this.value || ''); };
+  input.onfocus = function () { renderSmCandidates(this.value || ''); };
+  input.onblur = function () { setTimeout(hideSmCandidates, 200); };
+}
+
+// 候选排序：空位优先（方便接收保管直接拿空格）→ 柜号 → 列 → 行；输入时按包含过滤
+function smSortedCells() {
+  var out = [];
+  (_smCache.cabinets || []).forEach(function (cab) {
+    (cab.cells || []).forEach(function (cell) {
+      out.push({ key: cab.key, no: cab.no, col: cell.col, row: cell.row, label: cab.key.replace(/\s+/g, '') + cell.col + '-' + cell.row, empty: cell.empty, occ: cell.occupancy });
+    });
+  });
+  out.sort(function (a, b) {
+    if (a.empty !== b.empty) return a.empty ? -1 : 1;
+    if (a.no !== b.no) return a.no - b.no;
+    if (a.col !== b.col) return a.col - b.col;
+    return a.row - b.row;
+  });
+  return out;
+}
+
+function renderSmCandidates(kw) {
+  var panel = document.getElementById('scan-loc-cand');
+  if (!panel || !_smCache) return;
+  var k = String(kw || '').replace(/\s+/g, '');
+  var list = smSortedCells().filter(function (c) { return !k || c.label.indexOf(k) > -1 || c.key.indexOf(k) > -1; }).slice(0, 8);
+  if (!list.length) { hideSmCandidates(); return; }
+  panel.innerHTML = list.map(function (c) {
+    var badge = c.empty ? '<span class="co-badge co-badge-dept">空</span>'
+      : '<span class="co-badge">' + (c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved) + '件</span>';
+    return '<div class="co-cand-item"><b title="' + e(c.label) + '" onclick="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
+      '<span class="co-cand-dept">' + badge + '</span></div>';
+  }).join('');
+  panel.style.display = 'block';
+  positionSmPanel();
+}
+
+function positionSmPanel() {
+  var panel = document.getElementById('scan-loc-cand');
+  var input = document.getElementById(_smPanelFor);
+  if (!panel || !input || panel.style.display === 'none') return;
+  var r = input.getBoundingClientRect();
+  var w = 260, h = panel.offsetHeight || 8;
+  var left = r.right + 8;
+  if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+  var top = r.top;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8);
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+}
+
+function pickStorageLoc(label) {
+  var input = document.getElementById('scan-loc');
+  if (input) input.value = label;
+  hideSmCandidates();
+}
+
+function hideSmCandidates() {
+  var p = document.getElementById('scan-loc-cand');
+  if (p) p.style.display = 'none';
+}
+
+
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
@@ -2357,7 +2451,8 @@ function showScanActionForm(action){
       '<label>复检结论 / 备注</label><fluent-text-field id="scan-note" placeholder="如：复检通过"></fluent-text-field>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
-    html='<label>保管储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层"></fluent-text-field>'+
+    // 接收保管（2026-09-09 储位选择器）：点选已知格位（空位徽标置顶）+ 自由输入兜底（新柜位首录）
+    html='<label>保管储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
@@ -2379,8 +2474,9 @@ function showScanActionForm(action){
     html=buildCardFieldTable(s,true)+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
+    // 修改储位（2026-09-09 储位选择器）：同款点选候选，顺手统一历史脏数据（空格错版被规范值替代）
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
-      '<label>新储位 *</label><fluent-text-field id="scan-loc" placeholder="如 A区-3架-2层" value="'+e(s.storage_location||'')+'"></fluent-text-field>'+
+      '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" value="'+e(s.storage_location||'')+'" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+
@@ -2394,6 +2490,8 @@ function showScanActionForm(action){
   if(action==='EDIT_CARD')applyCardFieldValues(s);
   // 方案A：领用表单渲染完成后初始化领用人候选（拉用户列表+绑定过滤事件；失败静默降级纯手填）
   if(action==='CHECKOUT'&&typeof initCheckoutUserPicker==='function')initCheckoutUserPicker();
+  // 2026-09-09：储位表单渲染后初始化格位候选（接收保管/修改储位共用；失败静默降级纯手填）
+  if((action==='CUSTODY'||action==='EDIT_STORAGE')&&typeof initStorageLocPicker==='function')initStorageLocPicker();
 }
 // T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
 // 返回 false 表示校验失败（已 toast），调用方中止提交
