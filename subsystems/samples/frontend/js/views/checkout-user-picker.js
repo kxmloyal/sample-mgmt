@@ -28,13 +28,16 @@ function initCheckoutUserPicker() {
   if (window._coScrollHandler) window.removeEventListener('scroll', window._coScrollHandler, true);
   window._coScrollHandler = positionCoPanel;
   window.addEventListener('scroll', window._coScrollHandler, true);
-  window.addEventListener('resize', positionCoPanel);
+  if (window._coResizeHandler) window.removeEventListener('resize', window._coResizeHandler);
+  window._coResizeHandler = positionCoPanel;
+  window.addEventListener('resize', window._coResizeHandler);
   api('GET', '/api/samples/checkout-users').then(function (rows) {
     _coUsers = Array.isArray(rows) ? rows : [];
     renderCoCandidates('');
   }).catch(function () { _coUsers = []; panel.style.display = 'none'; });
   input.oninput = function () { _coPick = null; renderCoCandidates(this.value || ''); };
   input.onfocus = function () { renderCoCandidates(this.value || ''); };
+  input.onblur = function () { setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
 }
 
 // 视口定位：贴输入框右侧；右缘越界收进屏内、下缘越界上移（不产生任何滚动条）
@@ -73,7 +76,7 @@ function renderCoCandidates(kw) {
     var badge = '';
     if (u.dept && u.dept === myDept) badge = '<span class="co-badge co-badge-dept">同部门</span>';
     else if (u.freq > 0) badge = '<span class="co-badge">' + u.freq + '次</span>';
-    return '<div class="co-cand-item"><b title="' + e(u.display_name) + '" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) + '</b>' +
+    return '<div class="co-cand-item"><b title="' + e(u.display_name) + '" onmousedown="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) + '</b>' +
       '<span class="co-cand-dept"><span class="co-dept-name">' + e(u.dept || '') + '</span>' + badge + '</span></div>';
   }).join('');
   panel.style.display = 'block';

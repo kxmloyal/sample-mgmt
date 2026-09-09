@@ -58,7 +58,9 @@ describe('领用人选择器 前端接线', () => {
     const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
     expect(picker).toContain("window.addEventListener('scroll', window._coScrollHandler, true)");
     expect(picker).toContain("window.removeEventListener('scroll', window._coScrollHandler, true)");
-    expect(picker).toContain("window.addEventListener('resize', positionCoPanel)");
+    // 2026-09-09 时机评审④：resize 监听同样去重（_coResizeHandler 先移除再添加，防多次初始化累积）
+    expect(picker).toContain("window.addEventListener('resize', window._coResizeHandler)");
+    expect(picker).toContain("window.removeEventListener('resize', window._coResizeHandler)");
   });
 });
 

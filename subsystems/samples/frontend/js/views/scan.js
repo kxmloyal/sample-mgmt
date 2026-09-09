@@ -34,6 +34,10 @@ function viewScan(){
 var _scanReqSeq=0;
 async function doScan(){
   var seq=++_scanReqSeq;
+  // 时机评审修正①：扫码即收起遗留候选面板——扫码枪连续作业时 input 被整体移除不触发 blur，
+  // 面板（body 级）会残留到下一个样品的表单上；两个 picker 统一在此收口
+  if(typeof hideSmCandidates==='function')hideSmCandidates();
+  if(typeof hideCoCandidates==='function')hideCoCandidates();
   var code=$('#scan-code').value.trim();
   if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
@@ -243,6 +247,9 @@ async function confirmScan(action,btn){
   try{
     var r=await api('POST','/api/scan',body);
     handleScanSuccess(r);
+    // 时机评审修正②：储位类动作成功即失效格位缓存——该格位占用态已变（空→占用），
+    // 缓存不失效会导致下一件样品的候选空位徽标过期误导；领用人列表无此问题不处理
+    if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;
     if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
     if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
   }catch(e){toast(e.message,'err');}

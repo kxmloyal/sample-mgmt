@@ -1,10 +1,12 @@
 // views/storage-loc-picker.js — 储位可搜索选择器（2026-09-09，孪生配套）
 // 数据源：GET /api/samples/storage-map（柜/格位/占用聚合）——候选=已知格位，空位带「空」徽标置顶排序（空位优先→柜号→格位）
 // 交互：与 checkout-user-picker 同款（body 级 fixed 面板，window capture 滚动跟随，铁律见该文件头注释）；
-//       输入过滤 + 点选回填；自由输入保留（新格位首录场景），格式提示 N#样品柜C-R
+//       输入过滤 + 点选回填（onmousedown 先于 blur，杜绝 200ms 竞态）；自由输入保留（新格位首录场景），格式提示 N#样品柜C-R
+// 时机评审修正（2026-09-09）：①候选 onmousedown 触发（移动端 blur 竞态）；②resize 监听去重（防累积）；
+//       ③_smCache 由扫码成功回调失效（scan.js confirmSmScanOk），防格位占用态过期误导；④doScan 入口统一关面板
 // 服务两处表单：CUSTODY 接收保管 / EDIT_STORAGE 修改储位（同一 input id=scan-loc）
 
-var _smCache = null;      // storage-map 缓存（弹窗级）
+var _smCache = null;      // storage-map 缓存（弹窗级）；扫码成功后置 null 强制重拉
 var _smPanelFor = null;   // 当前面板服务的 input id
 
 function initStorageLocPicker() {
@@ -20,7 +22,9 @@ function initStorageLocPicker() {
   if (window._smScrollHandler) window.removeEventListener('scroll', window._smScrollHandler, true);
   window._smScrollHandler = positionSmPanel;
   window.addEventListener('scroll', window._smScrollHandler, true);
-  window.addEventListener('resize', positionSmPanel);
+  if (window._smResizeHandler) window.removeEventListener('resize', window._smResizeHandler);
+  window._smResizeHandler = positionSmPanel;
+  window.addEventListener('resize', window._smResizeHandler);
   var load = function (d) {
     _smCache = d;
     renderSmCandidates('');
@@ -58,7 +62,7 @@ function renderSmCandidates(kw) {
   panel.innerHTML = list.map(function (c) {
     var badge = c.empty ? '<span class="co-badge co-badge-dept">空</span>'
       : '<span class="co-badge">' + (c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved) + '件</span>';
-    return '<div class="co-cand-item"><b title="' + e(c.label) + '" onclick="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
+    return '<div class="co-cand-item"><b title="' + e(c.label) + '" onmousedown="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
       '<span class="co-cand-dept">' + badge + '</span></div>';
   }).join('');
   panel.style.display = 'block';

@@ -1,4 +1,4 @@
-/** BUNDLE vbmtu3tdh7 — 30 files */
+/** BUNDLE vbmtu4kt8o — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2191,13 +2191,16 @@ function initCheckoutUserPicker() {
   if (window._coScrollHandler) window.removeEventListener('scroll', window._coScrollHandler, true);
   window._coScrollHandler = positionCoPanel;
   window.addEventListener('scroll', window._coScrollHandler, true);
-  window.addEventListener('resize', positionCoPanel);
+  if (window._coResizeHandler) window.removeEventListener('resize', window._coResizeHandler);
+  window._coResizeHandler = positionCoPanel;
+  window.addEventListener('resize', window._coResizeHandler);
   api('GET', '/api/samples/checkout-users').then(function (rows) {
     _coUsers = Array.isArray(rows) ? rows : [];
     renderCoCandidates('');
   }).catch(function () { _coUsers = []; panel.style.display = 'none'; });
   input.oninput = function () { _coPick = null; renderCoCandidates(this.value || ''); };
   input.onfocus = function () { renderCoCandidates(this.value || ''); };
+  input.onblur = function () { setTimeout(hideCoCandidates, 200); }; // 评审修正：与 sm 同款延迟关（原来只靠点选关，点候选外区域失焦面板不收）
 }
 
 // 视口定位：贴输入框右侧；右缘越界收进屏内、下缘越界上移（不产生任何滚动条）
@@ -2236,7 +2239,7 @@ function renderCoCandidates(kw) {
     var badge = '';
     if (u.dept && u.dept === myDept) badge = '<span class="co-badge co-badge-dept">同部门</span>';
     else if (u.freq > 0) badge = '<span class="co-badge">' + u.freq + '次</span>';
-    return '<div class="co-cand-item"><b title="' + e(u.display_name) + '" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) + '</b>' +
+    return '<div class="co-cand-item"><b title="' + e(u.display_name) + '" onmousedown="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) + '</b>' +
       '<span class="co-cand-dept"><span class="co-dept-name">' + e(u.dept || '') + '</span>' + badge + '</span></div>';
   }).join('');
   panel.style.display = 'block';
@@ -2260,10 +2263,12 @@ function pickCheckoutUser(id) {
 // views/storage-loc-picker.js — 储位可搜索选择器（2026-09-09，孪生配套）
 // 数据源：GET /api/samples/storage-map（柜/格位/占用聚合）——候选=已知格位，空位带「空」徽标置顶排序（空位优先→柜号→格位）
 // 交互：与 checkout-user-picker 同款（body 级 fixed 面板，window capture 滚动跟随，铁律见该文件头注释）；
-//       输入过滤 + 点选回填；自由输入保留（新格位首录场景），格式提示 N#样品柜C-R
+//       输入过滤 + 点选回填（onmousedown 先于 blur，杜绝 200ms 竞态）；自由输入保留（新格位首录场景），格式提示 N#样品柜C-R
+// 时机评审修正（2026-09-09）：①候选 onmousedown 触发（移动端 blur 竞态）；②resize 监听去重（防累积）；
+//       ③_smCache 由扫码成功回调失效（scan.js confirmSmScanOk），防格位占用态过期误导；④doScan 入口统一关面板
 // 服务两处表单：CUSTODY 接收保管 / EDIT_STORAGE 修改储位（同一 input id=scan-loc）
 
-var _smCache = null;      // storage-map 缓存（弹窗级）
+var _smCache = null;      // storage-map 缓存（弹窗级）；扫码成功后置 null 强制重拉
 var _smPanelFor = null;   // 当前面板服务的 input id
 
 function initStorageLocPicker() {
@@ -2279,7 +2284,9 @@ function initStorageLocPicker() {
   if (window._smScrollHandler) window.removeEventListener('scroll', window._smScrollHandler, true);
   window._smScrollHandler = positionSmPanel;
   window.addEventListener('scroll', window._smScrollHandler, true);
-  window.addEventListener('resize', positionSmPanel);
+  if (window._smResizeHandler) window.removeEventListener('resize', window._smResizeHandler);
+  window._smResizeHandler = positionSmPanel;
+  window.addEventListener('resize', window._smResizeHandler);
   var load = function (d) {
     _smCache = d;
     renderSmCandidates('');
@@ -2317,7 +2324,7 @@ function renderSmCandidates(kw) {
   panel.innerHTML = list.map(function (c) {
     var badge = c.empty ? '<span class="co-badge co-badge-dept">空</span>'
       : '<span class="co-badge">' + (c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved) + '件</span>';
-    return '<div class="co-cand-item"><b title="' + e(c.label) + '" onclick="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
+    return '<div class="co-cand-item"><b title="' + e(c.label) + '" onmousedown="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
       '<span class="co-cand-dept">' + badge + '</span></div>';
   }).join('');
   panel.style.display = 'block';
@@ -2387,6 +2394,10 @@ function viewScan(){
 var _scanReqSeq=0;
 async function doScan(){
   var seq=++_scanReqSeq;
+  // 时机评审修正①：扫码即收起遗留候选面板——扫码枪连续作业时 input 被整体移除不触发 blur，
+  // 面板（body 级）会残留到下一个样品的表单上；两个 picker 统一在此收口
+  if(typeof hideSmCandidates==='function')hideSmCandidates();
+  if(typeof hideCoCandidates==='function')hideCoCandidates();
   var code=$('#scan-code').value.trim();
   if(!/^(SM-\d{4,}|[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2})$/.test(code)){toast('编号格式错误：支持 SM-XXXXXX 或 13 位编码（如 G-YD9015-Q-001-01）','err');return refocusScan();}
   var box=$('#scan-result');box.innerHTML='<div class="muted">解析中…</div>';
@@ -2596,6 +2607,9 @@ async function confirmScan(action,btn){
   try{
     var r=await api('POST','/api/scan',body);
     handleScanSuccess(r);
+    // 时机评审修正②：储位类动作成功即失效格位缓存——该格位占用态已变（空→占用），
+    // 缓存不失效会导致下一件样品的候选空位徽标过期误导；领用人列表无此问题不处理
+    if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;
     if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
     if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
   }catch(e){toast(e.message,'err');}
