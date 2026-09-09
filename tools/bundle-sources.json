@@ -21,6 +21,7 @@
     "subsystems/samples/frontend/js/views/card-fields.js",
     "subsystems/samples/frontend/js/views/scan-wizard.js",
     "subsystems/samples/frontend/js/views/scan-return-actions.js",
+    "subsystems/samples/frontend/js/views/checkout-user-picker.js",
     "subsystems/samples/frontend/js/views/scan.js",
     "subsystems/samples/frontend/js/views/logs.js",
     "subsystems/samples/frontend/js/views/models.js",

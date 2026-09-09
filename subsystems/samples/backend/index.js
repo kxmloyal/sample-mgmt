@@ -16,6 +16,7 @@ function register(app) {
   require('./routes-samples').register(app);
   require('./routes-scan').register(app);
   require('./routes-cards').register(app);
+  require('./routes-checkout-users').register(app); // 领用人候选（2026-09-09 方案A，只读轻接口）
 }
 
 /**

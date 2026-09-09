@@ -102,7 +102,9 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
-    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="如 张三" value="'+e(me.display_name||me.username||'')+'"></fluent-text-field>'+
+    // 2026-09-09 方案A：领用人升级为可搜索选择器（系统用户点选自动带部门；手填兜底兼容外来人员）
+    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onblur="setTimeout(function(){var p=document.getElementById(\'scan-co-cand\');if(p)p.innerHTML=\'\';},200)"></fluent-text-field>'+
+      '<div id="scan-co-cand" class="co-cand-panel"></div>'+
       '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
       '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
       '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
@@ -131,6 +133,8 @@ function showScanActionForm(action){
   formEl.innerHTML=html;
   // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
   if(action==='EDIT_CARD')applyCardFieldValues(s);
+  // 方案A：领用表单渲染完成后初始化领用人候选（拉用户列表+绑定过滤事件；失败静默降级纯手填）
+  if(action==='CHECKOUT'&&typeof initCheckoutUserPicker==='function')initCheckoutUserPicker();
 }
 // T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
 // 返回 false 表示校验失败（已 toast），调用方中止提交
@@ -153,6 +157,7 @@ function previewCheckoutDue(){
   tip.textContent='预计应还时间：'+fmt(due.toISOString())+'（'+n+' 小时后）';
 }
 // 收集 CHECKOUT 表单：领用人必填、时长前端软校验 1~8760 整数（后端仍兜底 400）
+// 方案A：领用人点选过系统用户且部门未手改时，提交前以候选部门兜底（防中途清空）；手改/手填完全以输入为准
 // 返回 false 表示校验失败（已 toast），调用方中止提交
 function collectCheckoutPayload(body){
   var uEl=document.getElementById('scan-co-user');
@@ -164,6 +169,7 @@ function collectCheckoutPayload(body){
   if(!Number.isInteger(hours)||hours<1||hours>8760){toast('领用时长须为 1~8760 小时的整数','err');return false;}
   body.checkout_user=user;
   if(dEl&&dEl.value.trim())body.checkout_dept=dEl.value.trim();
+  else if(_coPick&&_coPick.dept)body.checkout_dept=_coPick.dept; // 点选用户但部门被清空 → 回落候选部门
   body.durationHours=hours;
   return true;
 }

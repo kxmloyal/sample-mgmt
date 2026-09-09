@@ -1,4 +1,4 @@
-/** BUNDLE vbmttpjpqf — 27 files */
+/** BUNDLE vbmttqe8xk — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2148,6 +2148,61 @@ function renderReturnActions(action,s){
 }
 
 
+/* --- subsystems/samples/frontend/js/views/checkout-user-picker.js --- */
+// views/checkout-user-picker.js — 领用人可搜索选择器（2026-09-09 方案A）
+// 背景：扫码领用时操作员（保管/生技）不一定是领用人，纯手填易错写、部门口径不统一。
+// 形态：输入框实时过滤系统用户候选（姓名+部门），点选自动带出部门（仍可手改，兼容代借他部门）；
+//       输入不在用户表的名字 → 允许提交（手填兜底，兼容外来/供应商人员，保持旧行为）。
+// 数据：GET /api/samples/checkout-users（登录即可，仅 id/display_name/dept）；加载失败静默降级为纯手填。
+// 容量：独立文件避免 scan.js（74% 预警线）继续膨胀。
+
+var _coUsers = null;   // 用户候选缓存 [{id,display_name,dept}]；null=未加载，[]=加载失败
+var _coPick = null;    // 当前已点选的用户（用于提交时优先取其部门）
+
+// 初始化领用人选择器：拉候选（每弹窗一次）并绑定过滤/点选
+function initCheckoutUserPicker() {
+  _coPick = null;
+  var input = document.getElementById('scan-co-user');
+  var panel = document.getElementById('scan-co-cand');
+  if (!input || !panel) return;
+  panel.innerHTML = '<div class="co-cand-item muted">候选加载中…</div>';
+  api('GET', '/api/samples/checkout-users').then(function (rows) {
+    _coUsers = Array.isArray(rows) ? rows : [];
+    renderCoCandidates('');
+  }).catch(function () { _coUsers = []; panel.innerHTML = ''; });
+  input.oninput = function () { _coPick = null; renderCoCandidates(this.value || ''); };
+  input.onfocus = function () { renderCoCandidates(this.value || ''); };
+}
+
+// 渲染候选列表：按输入前缀/包含过滤（最多 8 条）；空输入显示全部前 8 条便于直接点选
+function renderCoCandidates(kw) {
+  var panel = document.getElementById('scan-co-cand');
+  if (!panel || !_coUsers) return;
+  var k = String(kw || '').trim();
+  var list = _coUsers.filter(function (u) {
+    return !k || u.display_name.indexOf(k) === 0 || u.display_name.indexOf(k) > -1 || (u.dept || '').indexOf(k) > -1;
+  }).slice(0, 8);
+  if (!list.length) { panel.innerHTML = ''; return; }
+  panel.innerHTML = list.map(function (u) {
+    return '<div class="co-cand-item" onclick="pickCheckoutUser(' + u.id + ')">' + e(u.display_name) +
+      '<span class="co-cand-dept">' + e(u.dept || '') + '</span></div>';
+  }).join('');
+}
+
+// 点选候选：填入姓名 + 自动带出部门（可手改）；记录选中项供提交时使用
+function pickCheckoutUser(id) {
+  var u = (_coUsers || []).filter(function (x) { return x.id === id; })[0];
+  if (!u) return;
+  _coPick = u;
+  var input = document.getElementById('scan-co-user');
+  var dept = document.getElementById('scan-co-dept');
+  if (input) input.value = u.display_name;
+  if (dept && u.dept) dept.value = u.dept; // 部门自动带出但仍可手改
+  var panel = document.getElementById('scan-co-cand');
+  if (panel) panel.innerHTML = '';
+}
+
+
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
@@ -2253,7 +2308,9 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
-    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="如 张三" value="'+e(me.display_name||me.username||'')+'"></fluent-text-field>'+
+    // 2026-09-09 方案A：领用人升级为可搜索选择器（系统用户点选自动带部门；手填兜底兼容外来人员）
+    html='<label>领用人 *</label><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onblur="setTimeout(function(){var p=document.getElementById(\'scan-co-cand\');if(p)p.innerHTML=\'\';},200)"></fluent-text-field>'+
+      '<div id="scan-co-cand" class="co-cand-panel"></div>'+
       '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
       '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
       '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
@@ -2282,6 +2339,8 @@ function showScanActionForm(action){
   formEl.innerHTML=html;
   // innerHTML 注入的 selected 属性不生效，需显式回显下拉值
   if(action==='EDIT_CARD')applyCardFieldValues(s);
+  // 方案A：领用表单渲染完成后初始化领用人候选（拉用户列表+绑定过滤事件；失败静默降级纯手填）
+  if(action==='CHECKOUT'&&typeof initCheckoutUserPicker==='function')initCheckoutUserPicker();
 }
 // T8: 收集 INSPECT_CUSTODY 复检周期——留空=沿用原周期；填写则前端软校验 1~3650 整数（后端仍兜底 400）
 // 返回 false 表示校验失败（已 toast），调用方中止提交
@@ -2304,6 +2363,7 @@ function previewCheckoutDue(){
   tip.textContent='预计应还时间：'+fmt(due.toISOString())+'（'+n+' 小时后）';
 }
 // 收集 CHECKOUT 表单：领用人必填、时长前端软校验 1~8760 整数（后端仍兜底 400）
+// 方案A：领用人点选过系统用户且部门未手改时，提交前以候选部门兜底（防中途清空）；手改/手填完全以输入为准
 // 返回 false 表示校验失败（已 toast），调用方中止提交
 function collectCheckoutPayload(body){
   var uEl=document.getElementById('scan-co-user');
@@ -2315,6 +2375,7 @@ function collectCheckoutPayload(body){
   if(!Number.isInteger(hours)||hours<1||hours>8760){toast('领用时长须为 1~8760 小时的整数','err');return false;}
   body.checkout_user=user;
   if(dEl&&dEl.value.trim())body.checkout_dept=dEl.value.trim();
+  else if(_coPick&&_coPick.dept)body.checkout_dept=_coPick.dept; // 点选用户但部门被清空 → 回落候选部门
   body.durationHours=hours;
   return true;
 }
