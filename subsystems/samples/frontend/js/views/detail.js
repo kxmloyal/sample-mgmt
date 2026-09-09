@@ -23,10 +23,21 @@ async function viewDetail(id) {
 }
 
 // D1.3 头部：编号 + 徽章 + 操作组
+// 2026-09-09 方案A：追加「扫码操作」——关弹窗后跳扫码台深链 #/scan?no=编号（viewScan 已支持自动填码
+// 触发 doScan 出动作表单），动作表单单一事实来源仍是扫码台，无双入口漂移；跳前先清标示卡未保存态
+function goScanFromDetail(id) {
+  var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
+  if (!s || !s.sample_no) { toast('样品数据未就绪', 'err'); return; }
+  _detailDirty = false;
+  var m = document.querySelector('.modal-mask');
+  if (m) closeModal(m);
+  location.hash = '#/scan?no=' + encodeURIComponent(s.sample_no);
+}
 function _buildHeadHTML(s, id) {
   var acts = [['🖨 标示卡', '打印标示卡', 'printCard(' + id + ')'],
     ['🏷 标签', '打印标签', 'window.open(\'/api/samples/' + id + '/label/print\'+getPrintSizeQuery(),\'_blank\')'],
-    ['⬇ 二维码', '下载二维码', 'downloadQR(' + id + ')']];
+    ['⬇ 二维码', '下载二维码', 'downloadQR(' + id + ')'],
+    ['📲 扫码操作', '去扫码台操作该样品（领用/归还/复检等）', 'goScanFromDetail(' + id + ')']];
   return '<b>' + e(s.sample_no) + '</b>' + statusBadge(s) + '<span class="pv-actions">' +
     acts.map(function(a) { return '<button class="pv-icon-btn" title="' + a[1] + '" onclick="' + a[2] + '">' + a[0] + '</button>'; }).join('') + '</span>';
 }

@@ -1,4 +1,4 @@
-/** BUNDLE vbmttw33p5 — 28 files */
+/** BUNDLE vbmttxntqr — 28 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1371,10 +1371,21 @@ async function viewDetail(id) {
 }
 
 // D1.3 头部：编号 + 徽章 + 操作组
+// 2026-09-09 方案A：追加「扫码操作」——关弹窗后跳扫码台深链 #/scan?no=编号（viewScan 已支持自动填码
+// 触发 doScan 出动作表单），动作表单单一事实来源仍是扫码台，无双入口漂移；跳前先清标示卡未保存态
+function goScanFromDetail(id) {
+  var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
+  if (!s || !s.sample_no) { toast('样品数据未就绪', 'err'); return; }
+  _detailDirty = false;
+  var m = document.querySelector('.modal-mask');
+  if (m) closeModal(m);
+  location.hash = '#/scan?no=' + encodeURIComponent(s.sample_no);
+}
 function _buildHeadHTML(s, id) {
   var acts = [['🖨 标示卡', '打印标示卡', 'printCard(' + id + ')'],
     ['🏷 标签', '打印标签', 'window.open(\'/api/samples/' + id + '/label/print\'+getPrintSizeQuery(),\'_blank\')'],
-    ['⬇ 二维码', '下载二维码', 'downloadQR(' + id + ')']];
+    ['⬇ 二维码', '下载二维码', 'downloadQR(' + id + ')'],
+    ['📲 扫码操作', '去扫码台操作该样品（领用/归还/复检等）', 'goScanFromDetail(' + id + ')']];
   return '<b>' + e(s.sample_no) + '</b>' + statusBadge(s) + '<span class="pv-actions">' +
     acts.map(function(a) { return '<button class="pv-icon-btn" title="' + a[1] + '" onclick="' + a[2] + '">' + a[0] + '</button>'; }).join('') + '</span>';
 }
