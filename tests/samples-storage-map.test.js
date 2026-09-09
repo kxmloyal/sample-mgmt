@@ -74,8 +74,9 @@ describe('孪生视图接线（前端/manifest/router）', () => {
     expect(detail).toContain('function _topMask');
     expect(detail).toContain('var body = _topBody();');
     expect(detail).toContain('var b = _topBody();');
-    // renderTab 不得再用裸 querySelector('.modal-body')（叠层时命中底层清单窗）
-    expect(detail).not.toContain("querySelector('.modal-body')");
+    // 禁「裸 document.querySelector('.modal-body')」（叠层时命中底层清单窗）；
+    // mask.querySelector（有作用域）与 _topBody 内部的最后一层查询是合法的
+    expect(detail).not.toContain("document.querySelector('.modal-body')");
     expect(detail).toContain('querySelectorAll(\'.modal-mask\')');
     const ms = detail.indexOf('querySelectorAll(\'.modal-mask\')');
     const hash = detail.indexOf("location.hash = '#/scan?no='");
