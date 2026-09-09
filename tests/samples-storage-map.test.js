@@ -63,7 +63,9 @@ describe('孪生视图接线（前端/manifest/router）', () => {
   });
   test('弹窗关闭用共享 closeModal（禁 projects 域 pCloseModal——跨域臆造致关不掉）', () => {
     const view = read('subsystems/samples/frontend/js/views/storage-map.js');
-    expect(view).toContain("closeModal(this.closest('.modal-mask'))");
+    // 源码里 \\' 转义后的字面是 closeModal(this.closest(\\'.modal-mask\\'))，断言取稳定子串
+    expect(view).toContain("closeModal(this.closest(");
+    expect(view).toContain("if (m) closeModal(m);");
     expect(view).not.toContain('pCloseModal');
   });
 });
