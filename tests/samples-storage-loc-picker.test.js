@@ -7,6 +7,7 @@ const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
   const scan = read('subsystems/samples/frontend/js/views/scan.js');
   const picker = read('subsystems/samples/frontend/js/views/storage-loc-picker.js');
+  const css = read('subsystems/samples/frontend/css/module.css');
   test('两处表单（接收保管/修改储位）均挂候选面板 + 事件接线', () => {
     expect((scan.match(/scan-loc-cand/g) || []).length).toBeGreaterThanOrEqual(2);
     expect(scan).toContain('renderSmCandidates');
@@ -40,5 +41,13 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     expect(picker).toContain('b.summary.empty - a.summary.empty');
     expect(picker).toContain('_smMapLastCab');
     expect(picker).toContain('if (ms.length) closeModal(ms[ms.length - 1]);');
+  });
+  test('方案B 滚动条根治：格高随可视高度动态计算（--sm-cellh + 夹逼 + 极小隐藏副标）', () => {
+    expect(picker).toContain("--sm-cellh");
+    expect(picker).toContain('window.innerHeight * 0.85 - 190');
+    expect(picker).toContain('Math.max(24, Math.min(40, cellH))');
+    expect(picker).toContain("classList.toggle('sm-map-tight'");
+    expect(css).toContain('height:var(--sm-cellh');
+    expect(css).toContain('.sm-map-matrix.sm-map-tight .sm-sub{display:none}');
   });
 });
