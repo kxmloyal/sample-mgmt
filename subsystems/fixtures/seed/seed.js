@@ -1,6 +1,9 @@
 // subsystems/fixtures/seed/seed.js — 治具子系统种子数据
 // 覆盖当前单人验证流程全部状态 + 呆滞样例（日志时间戳回退历史，命中呆滞判定）
 // 单人验证：申请部门人员验证通过即移交（无双人验证中间态）
+// 2026-09-10 修复：呆滞判定看 fixtures.updated_at（非日志时间），故末尾统一回填 updated_at 为
+// 各自最后一次留痕时间；同时把 1 个样例的下次保养调到 7 天窗口内，使看板「保养即将到期」块非空。
+// 预警覆盖：呆滞 3（REQUESTED/VERIFY_PENDING/TRANSFERRED）· 保养逾期 3 · 保养即将到期 1 · 领用逾期 1
 
 const D = require('../../../db');
 
@@ -129,7 +132,7 @@ async function seed(pool) {
   await addLog(f14.id, 'REPAIR_RD_REQ', 'ME', me01.id, '生技部', '退回RD维修：接触不良', daysAgo(1));
 
   // ═══ 15. REPAIR_DONE（维修完成待确认）═══
-  var f15 = await insertFix({ name: '电源负载测试治具', spec: 'DC-24V·10A', model: 'LOAD-24V', station: '电源测试站', category: '测试治具', status: 'REPAIR_DONE', requested_by: qa01.id, requested_dept: '品保文管中心', request_note: '电源带载老化', made_by: rd01.id, made_at: daysAgo(96), made_note: '电子负载10A/240W', verified_me: qa01.id, verified_me_at: daysAgo(94), verify_note: '申请单位确认合格', transferred_at: daysAgo(94), used_by: qa01.id, used_at: daysAgo(90), use_location: '品保中心·电源区', expected_return_days: 180, repair_type: 'ME', repair_requested_by: qa01.id, repair_requested_at: daysAgo(8), repair_note: '电流显示偏移', repaired_by: me01.id, repaired_at: daysAgo(1), repair_done_image: '/uploads/fixtures/demo_repair1.jpg', maintenance_cycle_days: 60, last_maintenance_at: daysAgo(45), next_maintenance_at: daysFromNow(15), storage_location: '生技部·维修台' });
+  var f15 = await insertFix({ name: '电源负载测试治具', spec: 'DC-24V·10A', model: 'LOAD-24V', station: '电源测试站', category: '测试治具', status: 'REPAIR_DONE', requested_by: qa01.id, requested_dept: '品保文管中心', request_note: '电源带载老化', made_by: rd01.id, made_at: daysAgo(96), made_note: '电子负载10A/240W', verified_me: qa01.id, verified_me_at: daysAgo(94), verify_note: '申请单位确认合格', transferred_at: daysAgo(94), used_by: qa01.id, used_at: daysAgo(90), use_location: '品保中心·电源区', expected_return_days: 180, repair_type: 'ME', repair_requested_by: qa01.id, repair_requested_at: daysAgo(8), repair_note: '电流显示偏移', repaired_by: me01.id, repaired_at: daysAgo(1), repair_done_image: '/uploads/fixtures/demo_repair1.jpg', maintenance_cycle_days: 60, last_maintenance_at: daysAgo(45), next_maintenance_at: daysFromNow(5), storage_location: '生技部·维修台' });
   await stdLogs(f15, 'QA', qa01, '品保文管中心', 100, 90);
   await addLog(f15.id, 'REPAIR_ME', 'QA', qa01.id, '品保文管中心', '报修：电流偏移', daysAgo(8));
   await addLog(f15.id, 'REPAIR_DONE', 'ME', me01.id, '生技部', '已更换采样电阻，待确认', daysAgo(1));
@@ -144,6 +147,12 @@ async function seed(pool) {
   var f17 = await insertFix({ name: '旧版VGA测试治具', spec: 'VGA·640×480', model: 'VGA-OBS', station: '已淘汰', category: '测试治具', status: 'RETIRED', requested_by: mfg01.id, requested_dept: '制造部', request_note: '旧机型测试用（已停产）', made_by: rd01.id, made_at: daysAgo(200), made_note: '已无对应产品', verified_me: mfg01.id, verified_me_at: daysAgo(194), verify_note: '申请部门确认合格', transferred_at: daysAgo(194), used_by: mfg01.id, used_at: daysAgo(190), use_location: '制造部·仓库', retired_by: admin.id, retired_at: daysAgo(30), retired_reason: '对应机种已全部停产，治具无使用场景', maintenance_cycle_days: 90, last_maintenance_at: daysAgo(200), next_maintenance_at: daysAgo(110), storage_location: '废弃区' });
   await stdLogs(f17, 'CUSTODY', mfg01, '制造部', 200, 190);
   await addLog(f17.id, 'RETIRE', 'ADMIN', admin.id, '系统', '机种停产，治具废弃', daysAgo(30));
+
+  // 呆滞判定依据 fixtures.updated_at（db/dao-dormant.js 的 listDormantFixtures），而上面插入时该列被
+  // DEFAULT CURRENT_TIMESTAMP 写成「刚刚」，导致本脚本注释声称的呆滞样例全部不生效（2026-09-10 修复：
+  // 实测 dormantCount 恒为 0）。统一回填为各自最后一次留痕时间——语义即「最后一次状态变更时间」，
+  // 同时让列表时间列可信。回填后 3 个样例命中阈值（dormant_days 默认 60）。
+  await run('UPDATE fixtures f SET f.updated_at = COALESCE((SELECT MAX(l.created_at) FROM fixture_logs l WHERE l.fixture_id = f.id), f.created_at)');
 
   console.log('导入完成：17 个治具，覆盖当前流程全部状态\n');
   var all = await query('SELECT status, COUNT(*) as cnt FROM fixtures GROUP BY status ORDER BY status');
