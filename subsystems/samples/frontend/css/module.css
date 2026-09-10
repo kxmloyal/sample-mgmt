@@ -126,16 +126,15 @@
 .sm-tag:hover{border-color:var(--brand,#2563eb);color:var(--brand,#2563eb)}
 
 /* === 柜位图选择弹窗（方案B，2026-09-10）=== */
-/* 2026-09-10 自适应：弹窗高度随内容撑开（矩阵不内部滚动），格位压缩到 40px 一眼看全；
-   极端大柜由 .sm-map-dialog 的 max-height:90vh + 弹窗整体滚动兜底 */
-.sm-map-picker{display:flex;gap:14px;min-height:0}
+/* 2026-09-10 自适应：弹窗高度完全随内容撑开（不设 max-height/overflow，避免 fluent-dialog
+   control 内部滚动条）；格位压缩到 40px 一眼看全；柜列表柜多时滚动（选择器合理） */
+.sm-map-picker{display:flex;gap:14px;align-items:flex-start}
 .sm-map-cablist{width:130px;flex:none;border-right:1px solid var(--line,#e2e8f0);overflow-y:auto;max-height:80vh;padding-right:8px}
 .sm-map-cabitem{padding:8px 10px;cursor:pointer;border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .sm-map-cabitem:hover{background:#f1f5f9}
 .sm-map-cabitem.active{background:#eff6ff;color:var(--brand,#2563eb);font-weight:600}
-.sm-map-matrix{flex:1;overflow:visible}
+.sm-map-matrix{flex:1;min-width:0}
 .sm-map-matrix .sm-cell{min-height:40px;padding:3px 5px;font-size:10px}
 .sm-map-matrix .sm-pos{font-size:11px}
 .sm-map-matrix .sm-badge{font-size:9px;line-height:13px;top:2px;right:4px}
 .sm-map-matrix .sm-sub{font-size:9px}
-.sm-map-dialog::part(control){max-height:90vh;overflow-y:auto}

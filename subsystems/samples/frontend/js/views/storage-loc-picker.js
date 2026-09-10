@@ -114,9 +114,6 @@ function openSmMapPicker() {
   openModal('选择储位（柜位图）',
     '<div class="sm-map-picker"><div class="sm-map-cablist">' + listHtml + '</div><div class="sm-map-matrix" id="sm-map-matrix"></div></div>',
     { foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
-  // 2026-09-10 自适应：给 dialog 加 sm-map-dialog 类（max-height:90vh + 弹窗整体滚动兜底，常规柜一眼看全无滚动条）
-  var dlg = document.querySelectorAll('.modal-mask fluent-dialog');
-  if (dlg.length) dlg[dlg.length - 1].classList.add('sm-map-dialog');
   smMapSelectCab(cur);
 }
 
