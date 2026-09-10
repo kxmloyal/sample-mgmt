@@ -185,3 +185,24 @@ function closeSmMapPicker() {
   var ms = document.querySelectorAll('.modal-mask');
   if (ms.length) closeModal(ms[ms.length - 1]);
 }
+
+// 储位提交口校验（2026-09-10 防误确认）：从 scan.js 抽出（该文件超 70% 预警线只做薄调用）。
+// 功能：CUSTODY/EDIT_STORAGE 提交前拦空值；EDIT_STORAGE 再拦「新储位=当前储位」零动作提交
+//（当前储位由表单 input 的 data-cur 属性携带，避免跨函数引用渲染局部变量）。
+// 参数：body=待提交载荷（校验通过后写入 body.location）；action='CUSTODY'|'EDIT_STORAGE'
+// 返回：true=校验通过（已填 body.location）；false=失败（已 toast，调用方须中止提交）
+// 兼容：历史脏数据（如「1#样品柜 3-8」含空格）比对前去空白，不误拦存量同值确认
+function collectScanLoc(body, action) {
+  var el = document.getElementById('scan-loc');
+  var loc = el && el.value ? el.value.trim() : '';
+  if (!loc) { toast('请填写储位（点选候选 / 柜位图 / 直接输入）', 'err'); return false; }
+  if (action === 'EDIT_STORAGE' && el) {
+    var cur = (el.getAttribute('data-cur') || '').replace(/\s+/g, '');
+    if (cur && loc.replace(/\s+/g, '') === cur) {
+      toast('新储位与当前储位相同——如确需原地重新确认请先改动储位', 'err');
+      return false;
+    }
+  }
+  body.location = loc;
+  return true;
+}

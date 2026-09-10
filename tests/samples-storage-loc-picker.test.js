@@ -56,6 +56,22 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     const co = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
     expect(co).toContain('var prefill = input.value;');
     expect(co).toContain("input.value = prefill || '';");
-    expect(scan).toContain('value="\'+e(me.display_name||me.username||\'\')+\'"'); // 领用人预填当前登录人仍在
+  });
+  test('防误确认（2026-09-10 用户需求）：领用人/新储位默认空，必须主动输入；零动作提交拦截', () => {
+    // 领用人/部门不再预填当前登录人（防顺手确认记成自己）
+    expect(scan).not.toContain('me.display_name||me.username');
+    expect(scan).toContain('placeholder="必填：点选候选或直接输入"');
+    // 修改储位新储位不预填当前储位（当前储位仅展示供核对；data-cur 携带原值供零动作比对）
+    expect(scan).not.toContain('value="\'+e(s.storage_location||\'\')+\'"');
+    expect(scan).toContain('data-cur="\'+e(s.storage_location||\'\')+\'"');
+    expect(scan).toContain('placeholder="必填：点选候选 / 柜位图 / 直接输入"');
+    // 校验抽至 storage-loc-picker.js（scan.js 超 70% 预警线薄调用）；空值 + 新=当前 双拦截
+    expect(scan).toContain('!collectScanLoc(body,action)');
+    expect(picker).toContain('function collectScanLoc(body, action)');
+    expect(picker).toContain('请填写储位（点选候选 / 柜位图 / 直接输入）');
+    expect(picker).toContain('新储位与当前储位相同');
+    expect(picker).toContain("el.getAttribute('data-cur')");
+    // 领用人空值拦截仍在（collectCheckoutPayload 原有校验）
+    expect(scan).toContain("if(!user){toast('请填写领用人','err');return false;}");
   });
 });

@@ -1,4 +1,4 @@
-/** BUNDLE vbmtv3q1lx — 30 files */
+/** BUNDLE vbmtv4qzg2 — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2488,6 +2488,27 @@ function closeSmMapPicker() {
   if (ms.length) closeModal(ms[ms.length - 1]);
 }
 
+// 储位提交口校验（2026-09-10 防误确认）：从 scan.js 抽出（该文件超 70% 预警线只做薄调用）。
+// 功能：CUSTODY/EDIT_STORAGE 提交前拦空值；EDIT_STORAGE 再拦「新储位=当前储位」零动作提交
+//（当前储位由表单 input 的 data-cur 属性携带，避免跨函数引用渲染局部变量）。
+// 参数：body=待提交载荷（校验通过后写入 body.location）；action='CUSTODY'|'EDIT_STORAGE'
+// 返回：true=校验通过（已填 body.location）；false=失败（已 toast，调用方须中止提交）
+// 兼容：历史脏数据（如「1#样品柜 3-8」含空格）比对前去空白，不误拦存量同值确认
+function collectScanLoc(body, action) {
+  var el = document.getElementById('scan-loc');
+  var loc = el && el.value ? el.value.trim() : '';
+  if (!loc) { toast('请填写储位（点选候选 / 柜位图 / 直接输入）', 'err'); return false; }
+  if (action === 'EDIT_STORAGE' && el) {
+    var cur = (el.getAttribute('data-cur') || '').replace(/\s+/g, '');
+    if (cur && loc.replace(/\s+/g, '') === cur) {
+      toast('新储位与当前储位相同——如确需原地重新确认请先改动储位', 'err');
+      return false;
+    }
+  }
+  body.location = loc;
+  return true;
+}
+
 
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
@@ -2600,11 +2621,12 @@ function showScanActionForm(action){
       '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
-    // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
+    // 领出表单（2026-09-05）：领用人/部门/领用时长（小时）+ 应还时间实时预览
     // 2026-09-09 方案A：领用人升级为可搜索选择器（系统用户点选自动带部门；手填兜底兼容外来人员）
     // 2026-09-09 增强：候选面板改为输入框右侧弹出（不挤压下方表单）；后端同部门优先+领用频率排序，前端加「同部门/N次」徽标
-    html='<label>领用人 *</label><div class="co-wrap"><fluent-text-field id="scan-co-user" placeholder="输入姓名过滤或直接填写" value="'+e(me.display_name||me.username||'')+'" onfocus="renderCoCandidates(this.value||\'\')" oninput="_coPick=null;renderCoCandidates(this.value||\'\')" onblur="setTimeout(function(){hideCoCandidates();},200)"></fluent-text-field><div id="scan-co-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
-      '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="留空默认当前部门" value="'+e(me.dept||'')+'"></fluent-text-field>'+
+    // 2026-09-10 防误确认（用户需求）：领用人/部门默认空——必须主动输入或点选候选，防操作员顺手确认把领用人记成自己
+    html='<label>领用人 *</label><div class="co-wrap"><fluent-text-field id="scan-co-user" placeholder="必填：点选候选或直接输入" onfocus="renderCoCandidates(this.value||\'\')" oninput="_coPick=null;renderCoCandidates(this.value||\'\')" onblur="setTimeout(function(){hideCoCandidates();},200)"></fluent-text-field><div id="scan-co-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<label>领用部门</label><fluent-text-field id="scan-co-dept" placeholder="选系统用户自动带出，或手填"></fluent-text-field>'+
       '<label>领用时长（小时）*</label><fluent-text-field id="scan-co-hours" type="number" min="1" max="8760" placeholder="如 24" oninput="previewCheckoutDue()"></fluent-text-field>'+
       '<p class="muted" id="scan-co-due" style="font-size:12px;min-height:16px"></p>'+
       '<label>领用备注</label><fluent-text-field id="scan-note" placeholder="如：产线对比测试用"></fluent-text-field>'+
@@ -2621,8 +2643,9 @@ function showScanActionForm(action){
   }else if(action==='EDIT_STORAGE'){
     // 修改储位（2026-09-09 储位选择器）：同款点选候选，顺手统一历史脏数据（空格错版被规范值替代）
     // 2026-09-10 方案B：新增「🗺 柜位图」按钮
+    // 2026-09-10 防误确认（用户需求）：新储位默认空——当前储位仅上方展示供核对，必须主动输入/点选，防「储位不动」零动作提交
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
-      '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" value="'+e(s.storage_location||'')+'" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" data-cur="'+e(s.storage_location||'')+'" placeholder="必填：点选候选 / 柜位图 / 直接输入" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
       '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
@@ -2717,7 +2740,9 @@ async function confirmScan(action,btn){
   if(action==='INSPECT_CUSTODY'&&!collectCustodyCycle(body))return;
   if(action==='CHECKOUT'&&!collectCheckoutPayload(body))return;
   if(action==='RELEASE'||action==='RE_RELEASE'){collectWizardPayload(body);}
-  if(action==='CUSTODY'||action==='EDIT_STORAGE'){body.location=document.getElementById('scan-loc').value;}
+  // 2026-09-10 防误确认：储位校验抽至 storage-loc-picker.js（scan.js 超 70% 预警线只做薄调用）；
+  // 校验失败 toast 并 return false，调用方中止提交
+  if((action==='CUSTODY'||action==='EDIT_STORAGE')&&!collectScanLoc(body,action))return;
   if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'){
     var noteEl2=document.getElementById('scan-note');if(noteEl2&&noteEl2.value.trim())body.note=noteEl2.value.trim();
   }
