@@ -16,10 +16,14 @@ function initCheckoutUserPicker() {
   var input = document.getElementById('scan-co-user');
   var panel = document.getElementById('scan-co-cand');
   if (!input || !panel) return;
+  // 预填值保护：innerHTML 注入的 value attribute 在 fluent 元素升级/DOM 搬迁后视觉值可能丢失
+  //（2026-09-10 实证：领用人框预填的当前登录人显示为空），搬迁后强制回填（与 storage-loc-picker 同款）
+  var prefill = input.value;
   // 清理上次弹窗遗留的 body 级面板（id 相同会干扰 getElementById），再把新面板移到 body
   var stale = document.querySelectorAll('body > #scan-co-cand');
   for (var i = 0; i < stale.length; i++) stale[i].remove();
   document.body.appendChild(panel);
+  input.value = prefill || '';
   panel.style.display = 'none';
   panel.innerHTML = '<div class="co-cand-item muted">候选加载中…</div>';
   // 全局滚动跟随（capture=true 捕获任意元素的滚动，含 fluent-dialog shadow DOM 内部滚动容器——

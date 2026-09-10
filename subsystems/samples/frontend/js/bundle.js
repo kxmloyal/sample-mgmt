@@ -1,4 +1,4 @@
-/** BUNDLE vbmtv1u6ch — 30 files */
+/** BUNDLE vbmtv3q1lx — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2198,10 +2198,14 @@ function initCheckoutUserPicker() {
   var input = document.getElementById('scan-co-user');
   var panel = document.getElementById('scan-co-cand');
   if (!input || !panel) return;
+  // 预填值保护：innerHTML 注入的 value attribute 在 fluent 元素升级/DOM 搬迁后视觉值可能丢失
+  //（2026-09-10 实证：领用人框预填的当前登录人显示为空），搬迁后强制回填（与 storage-loc-picker 同款）
+  var prefill = input.value;
   // 清理上次弹窗遗留的 body 级面板（id 相同会干扰 getElementById），再把新面板移到 body
   var stale = document.querySelectorAll('body > #scan-co-cand');
   for (var i = 0; i < stale.length; i++) stale[i].remove();
   document.body.appendChild(panel);
+  input.value = prefill || '';
   panel.style.display = 'none';
   panel.innerHTML = '<div class="co-cand-item muted">候选加载中…</div>';
   // 全局滚动跟随（capture=true 捕获任意元素的滚动，含 fluent-dialog shadow DOM 内部滚动容器——
@@ -2312,9 +2316,13 @@ function initStorageLocPicker() {
   var input = document.getElementById('scan-loc');
   var panel = document.getElementById('scan-loc-cand');
   if (!input || !panel) return;
+  // 预填值保护：innerHTML 注入的 value attribute 在 fluent 元素升级/DOM 搬迁后视觉值可能丢失
+  //（2026-09-10 实证：EDIT_STORAGE 预填的当前储位显示为空），搬迁后强制回填（与 checkout-user-picker 同款）
+  var prefill = input.value;
   var stale = document.querySelectorAll('body > #scan-loc-cand');
   for (var i = 0; i < stale.length; i++) stale[i].remove();
   document.body.appendChild(panel);
+  input.value = prefill || '';
   panel.style.display = 'none';
   panel.innerHTML = '<div class="co-cand-item muted">格位加载中…</div>';
   if (window._smScrollHandler) window.removeEventListener('scroll', window._smScrollHandler, true);

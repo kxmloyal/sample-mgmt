@@ -50,4 +50,12 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     expect(css).toContain('height:var(--sm-cellh');
     expect(css).toContain('.sm-map-matrix.sm-map-tight .sm-sub{display:none}');
   });
+  test('预填值保护：picker 初始化搬迁面板后强制回填 value（fluent 元素视觉值丢失修复）', () => {
+    expect(picker).toContain('var prefill = input.value;');
+    expect(picker).toContain("input.value = prefill || '';");
+    const co = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
+    expect(co).toContain('var prefill = input.value;');
+    expect(co).toContain("input.value = prefill || '';");
+    expect(scan).toContain('value="\'+e(me.display_name||me.username||\'\')+\'"'); // 领用人预填当前登录人仍在
+  });
 });

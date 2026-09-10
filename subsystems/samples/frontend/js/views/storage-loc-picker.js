@@ -14,9 +14,13 @@ function initStorageLocPicker() {
   var input = document.getElementById('scan-loc');
   var panel = document.getElementById('scan-loc-cand');
   if (!input || !panel) return;
+  // 预填值保护：innerHTML 注入的 value attribute 在 fluent 元素升级/DOM 搬迁后视觉值可能丢失
+  //（2026-09-10 实证：EDIT_STORAGE 预填的当前储位显示为空），搬迁后强制回填（与 checkout-user-picker 同款）
+  var prefill = input.value;
   var stale = document.querySelectorAll('body > #scan-loc-cand');
   for (var i = 0; i < stale.length; i++) stale[i].remove();
   document.body.appendChild(panel);
+  input.value = prefill || '';
   panel.style.display = 'none';
   panel.innerHTML = '<div class="co-cand-item muted">格位加载中…</div>';
   if (window._smScrollHandler) window.removeEventListener('scroll', window._smScrollHandler, true);
