@@ -6,11 +6,29 @@
 // 预警覆盖：呆滞 3（REQUESTED/VERIFY_PENDING/TRANSFERRED）· 保养逾期 3 · 保养即将到期 1 · 领用逾期 1
 
 const D = require('../../../db');
+// 上线护栏共用实现（AGENTS.md §20）：与其它子系统保持同一份校验逻辑
+const seedGuard = require('../../../tools/seed-guard');
 
 function daysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 19).replace('T', ' '); }
 function daysFromNow(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 19).replace('T', ' '); }
 
+/**
+ * 上线护栏（AGENTS.md §20）——治具子系统种子数据注入前的强制校验（薄封装）
+ *
+ * 实现位于共用模块 tools/seed-guard.js：该模块只依赖 fs/path、不 require db.js，
+ * 因此可脱离数据库做单元测试（db.js 在顶层执行 init()，require 即连库）。
+ * 本函数只固定子系统 id，供 seed() 前置校验与 seed-fixture.js 复用，避免校验逻辑出现两份。
+ * 语义：deployed === true → 抛错中止；false / 未写该字段 → 允许。
+ * 兼容：仅读取 manifest，不触碰数据库，不改变 seed 正常路径行为。
+ */
+function assertSeedAllowed(manifestPath) {
+  return seedGuard.assertSeedAllowed('fixtures', manifestPath);
+}
+
 async function seed(pool) {
+  // ★ 硬护栏：已上线则拒绝执行（AGENTS.md §20）；必须位于任何 DELETE / INSERT 之前
+  assertSeedAllowed();
+
   const { getUserByUsername } = D;
 
   function run(sql, params) { return pool.execute(sql, params || []); }
@@ -162,3 +180,5 @@ async function seed(pool) {
 }
 
 module.exports = seed;
+// 导出护栏，供 seed-fixture.js 前置校验与单元测试复用（单一事实来源，避免两处逻辑漂移）
+module.exports.assertSeedAllowed = assertSeedAllowed;
