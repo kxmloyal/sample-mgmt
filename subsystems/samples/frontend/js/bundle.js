@@ -1,4 +1,4 @@
-/** BUNDLE vbmtv0lmd9 — 30 files */
+/** BUNDLE vbmtv1u6ch — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2433,15 +2433,21 @@ function smMapSelectCab(no) {
   if (m) m.innerHTML = '<div class="sm-cab"><div class="sm-cab-head"><b>' + e(cab.key) + '</b>' +
     '<span class="muted" style="font-size:12px">' + cab.cols + '列×' + cab.rows + '行</span></div>' +
     '<div class="sm-cells" style="grid-template-columns:repeat(' + cab.cols + ',1fr)">' + cellsHtml + '</div></div>';
-  // 2026-09-10 滚动条根治：格高随可视高度自适应。app.css 弹窗主体预算 = 90vh − 头/尾（.modal-body
-  // overflow-y:auto），静态 40px 在 768p/高DPI 小屏必超预算触发上下滚动条；按行数动态算格高
-  //（85vh − 头尾/柜头预算 190px − 行间 gap），26~40px 夹逼，任何屏幕恰好装满不滚动；下次点柜自动重算
+  // 滚动条根治（二改）：不再用视口估算（85vh−190px 魔法数在不同缩放/字体/屏幕失准），
+  // 渲染后 rAF 实测 .modal-body 可视高 → 扣柜头/内边距 → 按行数均分出格高 --sm-cellh（22~40px 夹逼）。
+  // modal-body 本身 = 90vh−弹窗头尾（app.css 预算），按它的实测值分格必然装得下，不出滚动条
   if (m) {
     var rows = cab.rows || 1, gap = 5;
-    var cellH = Math.floor((window.innerHeight * 0.85 - 190 - (rows - 1) * gap) / rows);
-    cellH = Math.max(24, Math.min(40, cellH));
-    m.style.setProperty('--sm-cellh', cellH + 'px');
-    m.classList.toggle('sm-map-tight', cellH < 30); // 极小格高隐藏「领/退」副标防溢出
+    requestAnimationFrame(function () {
+      var body = m.closest('.modal-body');
+      if (!body) return;
+      var head = m.querySelector('.sm-cab-head');
+      var chrome = 26 + (head ? head.offsetHeight + 10 : 34); // 柜内边距+边框 + 柜头高度
+      var cellH = Math.floor((body.clientHeight - chrome - (rows - 1) * gap) / rows);
+      cellH = Math.max(22, Math.min(40, cellH));
+      m.style.setProperty('--sm-cellh', cellH + 'px');
+      m.classList.toggle('sm-map-tight', cellH < 28); // 极小格高隐藏「领/退」副标防溢出
+    });
   }
 }
 
