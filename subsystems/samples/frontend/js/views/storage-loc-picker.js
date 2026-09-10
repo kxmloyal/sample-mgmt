@@ -115,9 +115,12 @@ function openSmMapPicker() {
     return '<div class="sm-map-cabitem' + (c.no === cur ? ' active' : '') + '" data-no="' + c.no + '" onclick="smMapSelectCab(' + c.no + ')">' +
       '<span>' + e(c.key) + '</span><span class="muted" style="font-size:11px">空' + c.summary.empty + '</span></div>';
   }).join('');
+  // 图例（2026-09-10 用户反馈补齐）：复用柜位视图同款 smLegendHtml，放弹窗标题栏右侧——
+  // .modal-head 在 .modal-body 之外，格高实测（body.clientHeight）自动扣除其高度，不会把滚动条带回来
   openModal('选择储位（柜位图）',
     '<div class="sm-map-picker"><div class="sm-map-cablist">' + listHtml + '</div><div class="sm-map-matrix" id="sm-map-matrix"></div></div>',
-    { foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
+    { head: '<h3>选择储位（柜位图）</h3><span class="sm-map-legend">' + smLegendHtml(false) + '</span>',
+      foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
   smMapSelectCab(cur);
 }
 

@@ -8,6 +8,7 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
   const scan = read('subsystems/samples/frontend/js/views/scan.js');
   const picker = read('subsystems/samples/frontend/js/views/storage-loc-picker.js');
   const css = read('subsystems/samples/frontend/css/module.css');
+  const map = read('subsystems/samples/frontend/js/views/storage-map.js');
   test('两处表单（接收保管/修改储位）均挂候选面板 + 事件接线', () => {
     expect((scan.match(/scan-loc-cand/g) || []).length).toBeGreaterThanOrEqual(2);
     expect(scan).toContain('renderSmCandidates');
@@ -73,5 +74,18 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     expect(picker).toContain("el.getAttribute('data-cur')");
     // 领用人空值拦截仍在（collectCheckoutPayload 原有校验）
     expect(scan).toContain("if(!user){toast('请填写领用人','err');return false;}");
+  });
+  test('柜位图弹窗图例（2026-09-10 用户反馈）：与柜位视图共用 smLegendHtml，标签唯一来源', () => {
+    // 图例函数单一来源在 storage-map.js，弹窗复用（不各自硬编码）
+    expect(map).toContain('function smLegendHtml(withLabel)');
+    expect(map).toContain('smLegendHtml(true)');      // 柜位视图顶栏（带「图例：」前缀）
+    expect(picker).toContain('smLegendHtml(false)');  // 弹窗标题栏（无前缀，省空间）
+    expect(picker).toContain('sm-map-legend');
+    expect(css).toContain('.sm-map-legend{display:flex');
+    // 4 个标签只在共享函数里出现一次，弹窗不得再抄一份
+    expect((map.match(/被领走\(占位\)/g) || []).length).toBe(1);
+    expect(picker).not.toContain('被领走(占位)');
+    // 图例放在 modal-head（body 之外），不占格高预算、不引入滚动条
+    expect(picker).toContain("head: '<h3>选择储位（柜位图）</h3><span class=\"sm-map-legend\">'");
   });
 });

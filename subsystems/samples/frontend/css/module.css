@@ -121,6 +121,9 @@
 .sm-dot.sm-ret{background:#ca8a04}
 .sm-dot.sm-empty{background:#e2e8f0;border:1px solid #cbd5e1}
 .sm-legend{font-size:12px;color:var(--muted,#64748b);white-space:nowrap}
+/* 储位选择弹窗标题栏图例容器（2026-09-10）：.modal-head 为 space-between 弹性行，此容器右对齐；
+   窄屏可换行不溢出（.sm-legend 自身 nowrap 保证单片标签不折断） */
+.sm-map-legend{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
 .sm-warn{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px}
 .sm-tag{display:inline-block;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:6px;padding:2px 8px;font-size:12px;margin:3px 4px 0 0;cursor:pointer}
 .sm-tag:hover{border-color:var(--brand,#2563eb);color:var(--brand,#2563eb)}

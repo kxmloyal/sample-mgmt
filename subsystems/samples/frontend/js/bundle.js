@@ -1,4 +1,4 @@
-/** BUNDLE vbmtv4qzg2 — 30 files */
+/** BUNDLE vbmtv68i76 — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2417,9 +2417,12 @@ function openSmMapPicker() {
     return '<div class="sm-map-cabitem' + (c.no === cur ? ' active' : '') + '" data-no="' + c.no + '" onclick="smMapSelectCab(' + c.no + ')">' +
       '<span>' + e(c.key) + '</span><span class="muted" style="font-size:11px">空' + c.summary.empty + '</span></div>';
   }).join('');
+  // 图例（2026-09-10 用户反馈补齐）：复用柜位视图同款 smLegendHtml，放弹窗标题栏右侧——
+  // .modal-head 在 .modal-body 之外，格高实测（body.clientHeight）自动扣除其高度，不会把滚动条带回来
   openModal('选择储位（柜位图）',
     '<div class="sm-map-picker"><div class="sm-map-cablist">' + listHtml + '</div><div class="sm-map-matrix" id="sm-map-matrix"></div></div>',
-    { foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
+    { head: '<h3>选择储位（柜位图）</h3><span class="sm-map-legend">' + smLegendHtml(false) + '</span>',
+      foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
   smMapSelectCab(cur);
 }
 
@@ -3109,14 +3112,22 @@ async function viewStorageMap() {
   v.innerHTML =
     '<div class="pk-filters" style="align-items:center">' +
     '<b style="font-size:15px">样品柜数字孪生</b>' +
-    '<span class="muted" style="font-size:12px">图例：</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>' +
+    smLegendHtml(true) +
     '<fluent-button appearance="neutral" size="small" onclick="viewStorageMap()">刷新</fluent-button>' +
     '</div>' + warnHtml + unknownHtml +
     '<div class="sm-grid">' + cabs.map(smRenderCabinet).join('') + '</div>';
+}
+
+// 柜位图图例（2026-09-10 抽公共）：柜位视图顶栏与「储位选择弹窗」标题栏共用同一份标签，
+// 保证两处颜色说明永不漂移（§15.2 禁复制粘贴；此前弹窗漏搬图例，新用户分不清 4 色含义）。
+// 参数：withLabel=true 时前置「图例：」文案（柜位视图用）；弹窗标题栏空间紧，传 false。
+// 返回：4 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+function smLegendHtml(withLabel) {
+  return (withLabel ? '<span class="muted" style="font-size:12px">图例：</span>' : '') +
+    '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>';
 }
 
 // 渲染单柜：头部（柜名/统计/ADMIN 配置钮）+ 格位矩阵（列×行）

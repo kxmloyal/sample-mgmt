@@ -29,14 +29,22 @@ async function viewStorageMap() {
   v.innerHTML =
     '<div class="pk-filters" style="align-items:center">' +
     '<b style="font-size:15px">样品柜数字孪生</b>' +
-    '<span class="muted" style="font-size:12px">图例：</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
-    '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>' +
+    smLegendHtml(true) +
     '<fluent-button appearance="neutral" size="small" onclick="viewStorageMap()">刷新</fluent-button>' +
     '</div>' + warnHtml + unknownHtml +
     '<div class="sm-grid">' + cabs.map(smRenderCabinet).join('') + '</div>';
+}
+
+// 柜位图图例（2026-09-10 抽公共）：柜位视图顶栏与「储位选择弹窗」标题栏共用同一份标签，
+// 保证两处颜色说明永不漂移（§15.2 禁复制粘贴；此前弹窗漏搬图例，新用户分不清 4 色含义）。
+// 参数：withLabel=true 时前置「图例：」文案（柜位视图用）；弹窗标题栏空间紧，传 false。
+// 返回：4 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+function smLegendHtml(withLabel) {
+  return (withLabel ? '<span class="muted" style="font-size:12px">图例：</span>' : '') +
+    '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>';
 }
 
 // 渲染单柜：头部（柜名/统计/ADMIN 配置钮）+ 格位矩阵（列×行）
