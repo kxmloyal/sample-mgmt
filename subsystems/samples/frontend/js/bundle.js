@@ -1,4 +1,4 @@
-/** BUNDLE vbmtu847al — 30 files */
+/** BUNDLE vbmtuxlllf — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2395,6 +2395,75 @@ function hideSmCandidates() {
   if (p) p.style.display = 'none';
 }
 
+// ═══ 柜位图选择弹窗（方案B，2026-09-10）═══
+// 交互：点「🗺 柜位图」→ 弹窗（左柜列表 + 右数字孪生矩阵）→ 点格位回填储位
+// 柜多时：柜列表按「空位多→少」排序 + 可滚动；记住上次选的柜（接收保管连续放同一柜）
+// 叠层安全：关闭用 _topMask 顶层（柜位图弹窗可能叠在详情/清单之上）
+var _smMapLastCab = null; // 记住上次选的柜号
+
+function openSmMapPicker() {
+  if (!_smCache || !_smCache.cabinets || !_smCache.cabinets.length) { toast('柜位数据未就绪', 'err'); return; }
+  var cabs = _smCache.cabinets.slice().sort(function (a, b) { return (b.summary.empty - a.summary.empty) || (a.no - b.no); });
+  var cur = _smMapLastCab || cabs[0].no;
+  var listHtml = cabs.map(function (c) {
+    return '<div class="sm-map-cabitem' + (c.no === cur ? ' active' : '') + '" data-no="' + c.no + '" onclick="smMapSelectCab(' + c.no + ')">' +
+      '<span>' + e(c.key) + '</span><span class="muted" style="font-size:11px">空' + c.summary.empty + '</span></div>';
+  }).join('');
+  openModal('选择储位（柜位图）',
+    '<div class="sm-map-picker"><div class="sm-map-cablist">' + listHtml + '</div><div class="sm-map-matrix" id="sm-map-matrix"></div></div>',
+    { foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
+  smMapSelectCab(cur);
+}
+
+function smMapSelectCab(no) {
+  _smMapLastCab = no;
+  var cab = (_smCache.cabinets || []).filter(function (c) { return c.no === no; })[0];
+  if (!cab) return;
+  var items = document.querySelectorAll('.sm-map-cabitem');
+  for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', Number(items[i].getAttribute('data-no')) === no);
+  var cellsHtml = '';
+  for (var row = 1; row <= cab.rows; row++) {
+    for (var col = 1; col <= cab.cols; col++) {
+      var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0] ||
+        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } };
+      cellsHtml += smMapRenderCell(cab, cell);
+    }
+  }
+  var m = document.getElementById('sm-map-matrix');
+  if (m) m.innerHTML = '<div class="sm-cab"><div class="sm-cab-head"><b>' + e(cab.key) + '</b>' +
+    '<span class="muted" style="font-size:12px">' + cab.cols + '列×' + cab.rows + '行</span></div>' +
+    '<div class="sm-cells" style="grid-template-columns:repeat(' + cab.cols + ',1fr)">' + cellsHtml + '</div></div>';
+}
+
+// 储位选择场景的格位渲染：点格位直接选储位（与柜位视图的 smRenderCell 交互不同，不复用）
+function smMapRenderCell(cab, cell) {
+  var occ = cell.occupancy;
+  var total = occ.in + occ.out + occ.ret + occ.reserved;
+  var cls = 'sm-empty';
+  if (occ.in) cls = 'sm-in';
+  if (occ.ret) cls = 'sm-ret';
+  if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
+  var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  return '<div class="sm-cell ' + cls + '" onclick="smMapPick(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
+    '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
+}
+
+function smMapPick(cabNo, col, row) {
+  var cab = (_smCache.cabinets || []).filter(function (c) { return c.no === cabNo; })[0];
+  if (!cab) return;
+  var label = cab.key.replace(/\s+/g, '') + col + '-' + row;
+  var input = document.getElementById('scan-loc');
+  if (input) input.value = label;
+  closeSmMapPicker();
+}
+
+// 顶层关闭（叠层安全：柜位图弹窗可能叠在详情/清单之上，不能误关底层）
+function closeSmMapPicker() {
+  var ms = document.querySelectorAll('.modal-mask');
+  if (ms.length) closeModal(ms[ms.length - 1]);
+}
+
 
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
@@ -2502,7 +2571,9 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
     // 接收保管（2026-09-09 储位选择器）：点选已知格位（空位徽标置顶）+ 自由输入兜底（新柜位首录）
+    // 2026-09-10 方案B：新增「🗺 柜位图」按钮——弹柜位图弹窗（左柜列表+右矩阵）点格位直接选储位
     html='<label>保管储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
@@ -2525,8 +2596,10 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     // 修改储位（2026-09-09 储位选择器）：同款点选候选，顺手统一历史脏数据（空格错版被规范值替代）
+    // 2026-09-10 方案B：新增「🗺 柜位图」按钮
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
       '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" value="'+e(s.storage_location||'')+'" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+

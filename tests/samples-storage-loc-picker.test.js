@@ -28,4 +28,17 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     expect(iPicker).toBeGreaterThan(-1);
     expect(iPicker).toBeLessThan(iScan);
   });
+  test('方案B 柜位图弹窗：两处表单挂「🗺 柜位图」按钮 + 弹窗函数齐全', () => {
+    expect((scan.match(/openSmMapPicker\(\)/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(picker).toContain('function openSmMapPicker');
+    expect(picker).toContain('function smMapSelectCab');
+    expect(picker).toContain('function smMapRenderCell');
+    expect(picker).toContain('function smMapPick');
+    expect(picker).toContain('function closeSmMapPicker');
+  });
+  test('方案B 柜多处理：柜列表空位优先排序 + 记住上次柜 + 顶层关闭（叠层安全）', () => {
+    expect(picker).toContain('b.summary.empty - a.summary.empty');
+    expect(picker).toContain('_smMapLastCab');
+    expect(picker).toContain('if (ms.length) closeModal(ms[ms.length - 1]);');
+  });
 });

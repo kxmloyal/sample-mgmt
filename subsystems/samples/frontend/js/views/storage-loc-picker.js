@@ -96,3 +96,72 @@ function hideSmCandidates() {
   var p = document.getElementById('scan-loc-cand');
   if (p) p.style.display = 'none';
 }
+
+// ═══ 柜位图选择弹窗（方案B，2026-09-10）═══
+// 交互：点「🗺 柜位图」→ 弹窗（左柜列表 + 右数字孪生矩阵）→ 点格位回填储位
+// 柜多时：柜列表按「空位多→少」排序 + 可滚动；记住上次选的柜（接收保管连续放同一柜）
+// 叠层安全：关闭用 _topMask 顶层（柜位图弹窗可能叠在详情/清单之上）
+var _smMapLastCab = null; // 记住上次选的柜号
+
+function openSmMapPicker() {
+  if (!_smCache || !_smCache.cabinets || !_smCache.cabinets.length) { toast('柜位数据未就绪', 'err'); return; }
+  var cabs = _smCache.cabinets.slice().sort(function (a, b) { return (b.summary.empty - a.summary.empty) || (a.no - b.no); });
+  var cur = _smMapLastCab || cabs[0].no;
+  var listHtml = cabs.map(function (c) {
+    return '<div class="sm-map-cabitem' + (c.no === cur ? ' active' : '') + '" data-no="' + c.no + '" onclick="smMapSelectCab(' + c.no + ')">' +
+      '<span>' + e(c.key) + '</span><span class="muted" style="font-size:11px">空' + c.summary.empty + '</span></div>';
+  }).join('');
+  openModal('选择储位（柜位图）',
+    '<div class="sm-map-picker"><div class="sm-map-cablist">' + listHtml + '</div><div class="sm-map-matrix" id="sm-map-matrix"></div></div>',
+    { foot: '<fluent-button appearance="neutral" size="small" onclick="closeSmMapPicker()">取消</fluent-button>' });
+  smMapSelectCab(cur);
+}
+
+function smMapSelectCab(no) {
+  _smMapLastCab = no;
+  var cab = (_smCache.cabinets || []).filter(function (c) { return c.no === no; })[0];
+  if (!cab) return;
+  var items = document.querySelectorAll('.sm-map-cabitem');
+  for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', Number(items[i].getAttribute('data-no')) === no);
+  var cellsHtml = '';
+  for (var row = 1; row <= cab.rows; row++) {
+    for (var col = 1; col <= cab.cols; col++) {
+      var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0] ||
+        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } };
+      cellsHtml += smMapRenderCell(cab, cell);
+    }
+  }
+  var m = document.getElementById('sm-map-matrix');
+  if (m) m.innerHTML = '<div class="sm-cab"><div class="sm-cab-head"><b>' + e(cab.key) + '</b>' +
+    '<span class="muted" style="font-size:12px">' + cab.cols + '列×' + cab.rows + '行</span></div>' +
+    '<div class="sm-cells" style="grid-template-columns:repeat(' + cab.cols + ',1fr)">' + cellsHtml + '</div></div>';
+}
+
+// 储位选择场景的格位渲染：点格位直接选储位（与柜位视图的 smRenderCell 交互不同，不复用）
+function smMapRenderCell(cab, cell) {
+  var occ = cell.occupancy;
+  var total = occ.in + occ.out + occ.ret + occ.reserved;
+  var cls = 'sm-empty';
+  if (occ.in) cls = 'sm-in';
+  if (occ.ret) cls = 'sm-ret';
+  if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
+  var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  return '<div class="sm-cell ' + cls + '" onclick="smMapPick(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
+    '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
+}
+
+function smMapPick(cabNo, col, row) {
+  var cab = (_smCache.cabinets || []).filter(function (c) { return c.no === cabNo; })[0];
+  if (!cab) return;
+  var label = cab.key.replace(/\s+/g, '') + col + '-' + row;
+  var input = document.getElementById('scan-loc');
+  if (input) input.value = label;
+  closeSmMapPicker();
+}
+
+// 顶层关闭（叠层安全：柜位图弹窗可能叠在详情/清单之上，不能误关底层）
+function closeSmMapPicker() {
+  var ms = document.querySelectorAll('.modal-mask');
+  if (ms.length) closeModal(ms[ms.length - 1]);
+}

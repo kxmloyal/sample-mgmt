@@ -103,7 +103,9 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'INSPECT_CUSTODY\',this)">确认到期复检</fluent-button></div>';
   }else if(action==='CUSTODY'){
     // 接收保管（2026-09-09 储位选择器）：点选已知格位（空位徽标置顶）+ 自由输入兜底（新柜位首录）
+    // 2026-09-10 方案B：新增「🗺 柜位图」按钮——弹柜位图弹窗（左柜列表+右矩阵）点格位直接选储位
     html='<label>保管储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'CUSTODY\',this)">确认接收保管</fluent-button></div>';
   }else if(action==='CHECKOUT'){
     // 领出表单（2026-09-05）：领用人/部门（默认当前用户）/领用时长（小时）+ 应还时间实时预览
@@ -126,8 +128,10 @@ function showScanActionForm(action){
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_CARD\',this)">保存修正 + 打印标示卡</fluent-button></div>';
   }else if(action==='EDIT_STORAGE'){
     // 修改储位（2026-09-09 储位选择器）：同款点选候选，顺手统一历史脏数据（空格错版被规范值替代）
+    // 2026-09-10 方案B：新增「🗺 柜位图」按钮
     html='<label>当前储位</label><p class="muted">'+e(s.storage_location||'未设置')+'</p>'+
       '<label>新储位 *</label><div class="co-wrap"><fluent-text-field id="scan-loc" placeholder="点选或输入，如 1#样品柜3-8" value="'+e(s.storage_location||'')+'" onfocus="renderSmCandidates(this.value||\'\')" oninput="renderSmCandidates(this.value||\'\')" onblur="setTimeout(function(){hideSmCandidates();},200)"></fluent-text-field><div id="scan-loc-cand" class="co-cand-panel co-cand-fixed"></div></div>'+
+      '<div style="margin-top:8px"><fluent-button appearance="neutral" size="small" onclick="openSmMapPicker()">🗺 柜位图</fluent-button></div>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" onclick="confirmScan(\'EDIT_STORAGE\',this)">确认修改储位</fluent-button></div>';
   }else if(action==='RETURN_REQUEST'){
     html='<label>退回原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述样品存在的问题"></textarea>'+

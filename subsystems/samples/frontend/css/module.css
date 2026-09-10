@@ -124,3 +124,11 @@
 .sm-warn{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px}
 .sm-tag{display:inline-block;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:6px;padding:2px 8px;font-size:12px;margin:3px 4px 0 0;cursor:pointer}
 .sm-tag:hover{border-color:var(--brand,#2563eb);color:var(--brand,#2563eb)}
+
+/* === 柜位图选择弹窗（方案B，2026-09-10）=== */
+.sm-map-picker{display:flex;gap:14px;min-height:320px;max-height:62vh}
+.sm-map-cablist{width:130px;flex:none;border-right:1px solid var(--line,#e2e8f0);overflow-y:auto;max-height:62vh;padding-right:8px}
+.sm-map-cabitem{padding:8px 10px;cursor:pointer;border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.sm-map-cabitem:hover{background:#f1f5f9}
+.sm-map-cabitem.active{background:#eff6ff;color:var(--brand,#2563eb);font-weight:600}
+.sm-map-matrix{flex:1;overflow-y:auto;max-height:62vh}
