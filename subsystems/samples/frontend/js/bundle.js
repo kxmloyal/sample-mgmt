@@ -1,4 +1,4 @@
-/** BUNDLE vbmtv7rilr — 30 files */
+/** BUNDLE vbmtvcbt4p — 30 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -389,11 +389,15 @@ var _dashCheckoutPager = { limit: 5, offset: 0, total: 0 };
 var _dashCheckoutData = [];
 
 // 统计卡配置（对齐治具 DASH_STATS 模式，配置驱动 + 角色排序）
+// 2026-09-10 语义澄清（用户确认）：RELEASED 卡统计的是「当前状态仍停留在已发行」的样品，
+// 即**已发行但保管部尚未接收**的待办滞留量，不是「累计发行量」。实测同口径差异很大
+// （累计曾发行 released_at 非空 = 61 件，该卡显示 31 件），标签若写作「已发行」会被读成累计数，
+// 故卡片与比例条图例统一改为「已发行·待接收」；列表筛选/导出等状态名场景仍保留「已发行」。
 var DASH_STATS = [
   { label: '总数', key: 'total', color: 'var(--brand)', countByStatus: false },
   { label: '新建·待制作', key: 'NEW', color: 'var(--muted)', countByStatus: true },
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
-  { label: '已发行', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
+  { label: '已发行·待接收', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
   { label: '保管中', key: 'IN_CUSTODY', color: 'var(--brand)', countByStatus: true },
   { label: '领用中', key: 'CHECKED_OUT', color: '#1d4ed8', countByStatus: true },
   { label: '退回审核中', key: 'RETURNING', color: 'var(--bad)', countByStatus: true },
@@ -411,7 +415,7 @@ var STAT_ORDER = {
   CUSTODY: ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED']
 };
 var STAT_LABELS = {
-  NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行',
+  NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行·待接收',
   IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃'
 };
 
@@ -2864,7 +2868,7 @@ var HELP_DATA=[
   {
     id:'dashboard', module:'看板', desc:'登录后的样品看板',
     items:[
-      {h:'样品状态概览',body:'顶部6个状态卡片，显示各状态样品数量\n点击卡片可跳转对应列表筛选\nNEW=待制作确认 / PRODUCED=制作完成 / RELEASED=已发行 / IN_CUSTODY=保管中 / RETURNING=退回审核中 / RETIRED=已作废'},
+      {h:'样品状态概览',body:'顶部指标卡：总数 + 7 个状态各自数量\n单击卡片筛选下方待办列表（再次单击取消），双击跳转样品列表并带状态筛选\nNEW=待制作确认 / PRODUCED=制作完成 / RELEASED=已发行·待接收（已发行但保管部尚未接收的待办量，非累计发行量） / IN_CUSTODY=保管中 / CHECKED_OUT=领用中 / RETURNING=退回审核中 / RETIRED=已作废'},
       {h:'待办列表',body:'根据您的角色显示需要处理的样品\n研发：待制作+指派重做的样品\n品保：待发行+退回审核的样品\n保管/生技：待接收的样品'},
       {h:'复检提醒',body:'逾期样品：已过复检日期仍未复检\n7日内到期：未来7天需要复检的样品\n点击可跳转对应列表'},
       {h:'操作日志',body:'最近操作记录表格，显示时间/样品/动作/操作人\n点击右上角「查看全部日志」查看全量'}

@@ -10,11 +10,15 @@ var _dashCheckoutPager = { limit: 5, offset: 0, total: 0 };
 var _dashCheckoutData = [];
 
 // 统计卡配置（对齐治具 DASH_STATS 模式，配置驱动 + 角色排序）
+// 2026-09-10 语义澄清（用户确认）：RELEASED 卡统计的是「当前状态仍停留在已发行」的样品，
+// 即**已发行但保管部尚未接收**的待办滞留量，不是「累计发行量」。实测同口径差异很大
+// （累计曾发行 released_at 非空 = 61 件，该卡显示 31 件），标签若写作「已发行」会被读成累计数，
+// 故卡片与比例条图例统一改为「已发行·待接收」；列表筛选/导出等状态名场景仍保留「已发行」。
 var DASH_STATS = [
   { label: '总数', key: 'total', color: 'var(--brand)', countByStatus: false },
   { label: '新建·待制作', key: 'NEW', color: 'var(--muted)', countByStatus: true },
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
-  { label: '已发行', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
+  { label: '已发行·待接收', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
   { label: '保管中', key: 'IN_CUSTODY', color: 'var(--brand)', countByStatus: true },
   { label: '领用中', key: 'CHECKED_OUT', color: '#1d4ed8', countByStatus: true },
   { label: '退回审核中', key: 'RETURNING', color: 'var(--bad)', countByStatus: true },
@@ -32,7 +36,7 @@ var STAT_ORDER = {
   CUSTODY: ['total','RELEASED','IN_CUSTODY','CHECKED_OUT','NEW','PRODUCED','RETURNING','RETIRED']
 };
 var STAT_LABELS = {
-  NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行',
+  NEW: '新建·待制作', PRODUCED: '制作完成', RELEASED: '已发行·待接收',
   IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃'
 };
 
