@@ -50,6 +50,16 @@ function register(app) {
       const cabinets = {};   // key → {key,no,cols,rows,cells:{'C-R':{in,out,ret,samples:[...]}}}
       const unknownLoc = []; // 无法解析的储位串（提示规范录入）
       const uncabineted = []; // 未入柜池（storage_location 为空）
+
+      // 2026-09-10 新增：配置表里尚无样品的柜也渲染为「全空柜」，支持 ADMIN 先建柜、后放样品。
+      // 原逻辑柜体只从样品储位派生 → 空柜无法预先建立（新柜必须先手输储位才有柜）。
+      // 键格式非法则跳过（不阻断整表读取）；configured 置 true 以免显示「未配置」角标。
+      cabCfg.forEach(c => {
+        const m = /^(\d+)#样品柜$/.exec(String(c.cabinet_key || ''));
+        if (!m) return;
+        cabinets[c.cabinet_key] = { key: c.cabinet_key, no: Number(m[1]), cols: Number(c.columns) || 3, rows: Number(c.rows) || 9, cells: {}, configured: true };
+      });
+
       for (const s of rows) {
         const st = stateOf(s.status);
         if (!s.storage_location) { if (st === 'in' || st === 'out' || st === 'ret') uncabineted.push(s); continue; }

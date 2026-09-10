@@ -30,6 +30,7 @@ async function viewStorageMap() {
     '<div class="pk-filters" style="align-items:center">' +
     '<b style="font-size:15px">样品柜数字孪生</b>' +
     smLegendHtml(true) +
+    (me.role === 'ADMIN' ? '<fluent-button appearance="accent" size="small" onclick="smConfigCabinet(null,3,9)">➕ 新增柜</fluent-button>' : '') +
     '<fluent-button appearance="neutral" size="small" onclick="viewStorageMap()">刷新</fluent-button>' +
     '</div>' + warnHtml + unknownHtml +
     '<div class="sm-grid">' + cabs.map(smRenderCabinet).join('') + '</div>';
@@ -108,21 +109,45 @@ function smCellSamples(cabNo, col, row) {
 // ADMIN 行列配置（默认 3 列×9 行；配置持久化 sample_storage_cabinets）
 // 叠层防御：配置弹窗也须开在详情之上——详情开着时点「配置行列」会叠第三层，保存后
 // viewStorageMap() 重建视图但 modal 挂 body 不随视图卸载，故保存/取消都显式关闭「自己这一层」
+// 配置行列 / 新增柜（ADMIN）：key 为空 = 新增模式（多一个柜号字段，保存时拼成 N#样品柜）。
+// 复用同一弹窗与同一个 PUT 接口，避免为「新增」再加一对函数（§7.2 顶层函数 ≤10）。
 function smConfigCabinet(key, cols, rows) {
-  var html = '<div class="pk-form">' +
+  var isNew = !key;
+  var noHtml = '';
+  if (isNew) {
+    // 默认柜号 = 现有最大柜号 + 1（不猜最小空缺号，避免与「物理存在但尚无样品」的柜号撞车）
+    var cabs = (window._smMapData && window._smMapData.cabinets) || [];
+    var maxNo = cabs.reduce(function (m, c) { return Math.max(m, c.no || 0); }, 0);
+    noHtml = '<label>柜号（数字，柜名 = 柜号 + #样品柜）</label>' +
+      '<fluent-text-field id="sm-cfg-no" type="number" min="1" max="99" value="' + (maxNo + 1) + '"></fluent-text-field>';
+  }
+  var html = '<div class="pk-form">' + noHtml +
     '<label>列数（横向格位数）</label><fluent-text-field id="sm-cfg-cols" type="number" min="1" max="50" value="' + cols + '"></fluent-text-field>' +
-    '<label>行数（纵向格位数）</label><fluent-text-field id="sm-cfg-rows" type="number" min="1" max="50" value="' + rows + '"></fluent-text-field></div>';
-  window._smCfgKey = key;
-  openModal('配置 ' + key + ' 行列', html, { foot:
-    '<fluent-button appearance="accent" size="small" onclick="smSaveCabinetCfg()">保存</fluent-button>' +
+    '<label>行数（纵向格位数）</label><fluent-text-field id="sm-cfg-rows" type="number" min="1" max="50" value="' + rows + '"></fluent-text-field>' +
+    (isNew ? '<p class="muted" style="font-size:12px">创建后立即在柜位视图与扫码台「🗺 柜位图」中显示为空柜，可直接点选空位放样</p>' : '') +
+    '</div>';
+  window._smCfgKey = key || null;
+  openModal(isNew ? '新增保管柜' : '配置 ' + key + ' 行列', html, { foot:
+    '<fluent-button appearance="accent" size="small" onclick="smSaveCabinetCfg()">' + (isNew ? '创建' : '保存') + '</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="closeSmCfgModal()">取消</fluent-button>' });
 }
 async function smSaveCabinetCfg() {
   var cols = Number(document.getElementById('sm-cfg-cols').value);
   var rows = Number(document.getElementById('sm-cfg-rows').value);
+  var key = window._smCfgKey;
+  var isNew = !key;
+  if (isNew) {
+    var noEl = document.getElementById('sm-cfg-no');
+    var no = Number(noEl && noEl.value);
+    if (!Number.isInteger(no) || no < 1 || no > 99) return toast('柜号须为 1~99 的整数', 'err');
+    key = no + '#样品柜';
+    // 已存在的柜不允许经「新增」入口覆盖（改尺寸请用该柜的「配置行列」）
+    var exists = ((window._smMapData && window._smMapData.cabinets) || []).filter(function (c) { return c.key === key; }).length;
+    if (exists) return toast(key + ' 已存在，如需改尺寸请用该柜的「配置行列」', 'err');
+  }
   try {
-    await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(window._smCfgKey), { columns: cols, rows: rows });
-    toast('已保存');
+    await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(key), { columns: cols, rows: rows });
+    toast(isNew ? '已新增 ' + key : '已保存');
     closeSmCfgModal();
     viewStorageMap();
   } catch (e) { toast(e.message, 'err'); }

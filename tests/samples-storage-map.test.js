@@ -41,6 +41,21 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     // DDL/SELECT 原本已加反引号，仅这句漏加——本断言锁住，防止再次漏加
     expect(src).toContain('`rows`=VALUES(`rows`), `columns`=VALUES(`columns`)');
     expect(src).not.toMatch(/ON DUPLICATE KEY UPDATE\s+rows=/);
+    // 2026-09-10 新增：配置表中尚无样品的柜也要补种为全空柜（支持先建柜后放样品）
+    expect(src).toContain('cabCfg.forEach(c => {');
+    expect(src).toContain('{ key: c.cabinet_key, no: Number(m[1]), cols: Number(c.columns) || 3');
+  });
+  test('新增柜入口（2026-09-10）：ADMIN 按钮复用配置弹窗（key=null 新增模式，柜号自增默认）', () => {
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    expect(view).toContain("me.role === 'ADMIN' ? '<fluent-button appearance=\"accent\" size=\"small\" onclick=\"smConfigCabinet(null,3,9)\">➕ 新增柜</fluent-button>'");
+    expect(view).toContain("var isNew = !key;");
+    expect(view).toContain("id=\"sm-cfg-no\"");
+    expect(view).toContain("openModal(isNew ? '新增保管柜' : '配置 ' + key + ' 行列'");
+    // 已存在的柜不得经「新增」入口覆盖尺寸；柜号范围校验 1~99
+    expect(view).toContain('已存在，如需改尺寸请用该柜的「配置行列」');
+    expect(view).toContain("toast('柜号须为 1~99 的整数', 'err')");
+    // 复用同一 PUT 接口（不新增端点）
+    expect(view).toContain("await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(key)");
   });
 });
 
@@ -120,5 +135,24 @@ suite('柜配置 upsert 真实执行（保留字反引号回归）', () => {
     const [rows] = await D.pool().query('SELECT `rows`, `columns` FROM sample_storage_cabinets WHERE cabinet_key=?', [KEY]);
     expect(rows[0].rows).toBe(5);
     expect(rows[0].columns).toBe(6);
+  });
+  test('空柜渲染（2026-09-10）：配置表中尚无样品的柜也返回全空格位（configured=true）', async () => {
+    await getApp();
+    const admin = await login('admin', 'admin123');
+    const KEY = '97#样品柜';
+    const put = await admin.agent.put('/api/samples/storage-map/cabinets/' + encodeURIComponent(KEY)).send({ rows: 4, columns: 3 });
+    expect(put.status).toBe(200);
+    const res = await admin.agent.get('/api/samples/storage-map');
+    expect(res.status).toBe(200);
+    const cab = (res.body.cabinets || []).find(c => c.key === KEY);
+    expect(cab).toBeTruthy();          // 原逻辑下无样品柜不出现，此断言即回归点
+    expect(cab.configured).toBe(true); // 不显示「未配置」角标
+    expect(cab.cols).toBe(3);
+    expect(cab.rows).toBe(4);
+    expect(cab.summary.total).toBe(12);
+    expect(cab.summary.empty).toBe(12); // 全空
+    expect(cab.cells.length).toBe(12);
+    expect(cab.cells.every(x => x.empty === true)).toBe(true);
+    await D.pool().query('DELETE FROM sample_storage_cabinets WHERE cabinet_key=?', [KEY]);
   });
 });
