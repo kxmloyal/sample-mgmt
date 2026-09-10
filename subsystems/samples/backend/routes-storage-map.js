@@ -99,8 +99,11 @@ function register(app) {
       const m = key.match(/^(\d+)#样品柜$/);
       if (!m) return res.status(400).json({ error: '柜名须为 N#样品柜 格式' });
       await ensureCabinetTable();
+      // 2026-09-10 修复：ON DUPLICATE KEY UPDATE 的 rows/columns 必须加反引号——两者是 MariaDB 保留字，
+      // 未加时整条语句语法错误（用户实测 500：near 'rows=VALUES(rows), columns=VALUES(columns)...'）。
+      // DDL（ensureCabinetTable）与 SELECT 原本已加，仅此句漏加；VALUES() 函数 MariaDB 兼容保留
       await D.pool().query('INSERT INTO sample_storage_cabinets (cabinet_key, cabinet_no, `rows`, `columns`, updated_by) VALUES (?,?,?,?,?) ' +
-        'ON DUPLICATE KEY UPDATE rows=VALUES(rows), columns=VALUES(columns), updated_by=VALUES(updated_by)',
+        'ON DUPLICATE KEY UPDATE `rows`=VALUES(`rows`), `columns`=VALUES(`columns`), updated_by=VALUES(updated_by)',
         [key, Number(m[1]), rws, cls, u.id]);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }

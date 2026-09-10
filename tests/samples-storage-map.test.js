@@ -36,6 +36,11 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     // 2026-09-09 修复：全局 db.js 无 D.run（臆造接口致「D.run is not a function」）——写操作统一走 D.pool().query
     expect(src).toContain('await D.pool().query(');
     expect(src).not.toContain('D.run(');
+    // 2026-09-10 修复：ON DUPLICATE KEY UPDATE 中 rows/columns 未加反引号 → MariaDB 保留字语法错误
+    //（用户实测 near 'rows=VALUES(rows), columns=VALUES(columns), updated_by=VALUES(updated_by)'）；
+    // DDL/SELECT 原本已加反引号，仅这句漏加——本断言锁住，防止再次漏加
+    expect(src).toContain('`rows`=VALUES(`rows`), `columns`=VALUES(`columns`)');
+    expect(src).not.toMatch(/ON DUPLICATE KEY UPDATE\s+rows=/);
   });
 });
 
@@ -87,5 +92,33 @@ describe('孪生视图接线（前端/manifest/router）', () => {
     const view = read('subsystems/samples/frontend/js/views/storage-map.js');
     expect(view).toContain('function closeSmCfgModal');
     expect(view).toContain('onclick="closeSmCfgModal()"');
+  });
+});
+
+// ── 运行时回归：柜配置 upsert 真实执行（2026-09-10，MariaDB 保留字 rows/columns）──
+// 静态断言无法复现 SQL 语法错误（用户实测 500：near 'rows=VALUES(rows), columns=VALUES(columns)...'），
+// 故此处对测试库真跑一遍写路径。§20.2：已上线子系统的写类验证仅允许在独立测试库 sample_mgmt_test 进行。
+const { getApp, login } = require('./helpers/setup');
+const { isDeployed } = require('./helpers/deployed');
+const D = require('../db');
+// samples deployed:true 时仅当 DB_NAME 指向测试库才执行（与 samples-checkout-e2e.test.js 同款守卫）
+const suite = (isDeployed('samples') && process.env.DB_NAME !== 'sample_mgmt_test') ? describe.skip : describe;
+
+suite('柜配置 upsert 真实执行（保留字反引号回归）', () => {
+  const KEY = '99#样品柜'; // 借高位柜号避免污染真实柜配置，afterAll 清理
+  afterAll(async () => {
+    try { await D.pool().query('DELETE FROM sample_storage_cabinets WHERE cabinet_key=?', [KEY]); } catch (_) {}
+  });
+  test('ADMIN PUT 行列：INSERT 分支 + ON DUPLICATE 分支均无 SQL 语法错误，值正确落库', async () => {
+    await getApp();
+    const admin = await login('admin', 'admin123');
+    const url = '/api/samples/storage-map/cabinets/' + encodeURIComponent(KEY);
+    const r1 = await admin.agent.put(url).send({ rows: 7, columns: 4 }); // 首插（INSERT 分支）
+    expect(r1.status).toBe(200);
+    const r2 = await admin.agent.put(url).send({ rows: 5, columns: 6 }); // 重复键（原 bug 触发点）
+    expect(r2.status).toBe(200);
+    const [rows] = await D.pool().query('SELECT `rows`, `columns` FROM sample_storage_cabinets WHERE cabinet_key=?', [KEY]);
+    expect(rows[0].rows).toBe(5);
+    expect(rows[0].columns).toBe(6);
   });
 });
