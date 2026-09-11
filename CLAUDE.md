@@ -5,7 +5,7 @@
 
 ## 1. 项目一句话
 
-制造品质管理系统:Node.js + Express + MariaDB + 原生 HTML 单页,含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
+制造品质管理系统:Node.js + Express + **MySQL 8.0.13+**(不支持 MariaDB/5.7) + 原生 HTML 单页,含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
 **子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
 
@@ -163,7 +163,7 @@
 - 70%:停止新增业务,输出拆分方案
 - 90%:仅允许精简/重构,禁追加新功能
 
-**当前所有文件均在健康容量范围内,无预警触发**。
+**本行已过时（2026-09-11 复核）**——实际已触发/超出预警：`public/css/app.css` 21,910 字符（**109.6%，已超 20000 红线**）、`README.md` 19,678 字符（98.4%）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）。容量现状以第 11 节与每次修改报告为准。
 
 ## 7. 修改完成强制报告
 
@@ -226,8 +226,8 @@
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 管制子系统已拆分（2026-09-08）：`routes-orders.js` 薄入口（crud+flow 两域）、`dao.js` 薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；看板新增「会签超时」统计卡（stats.signOverdue + 列表 sign_overdue=1）；manifest 删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边与「单据详情」导航项（深链 #/detail?id= 保留）
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
-- `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06），建议门户块拆独立样式文件（需三系统回归）
-- `subsystems/samples/db/dao.js` 达 ≈90% 字符红线（18044/20000，2026-09-05 领用+机型墙聚合后），后续 samples 迭代仅允许精简/重构，建议按域拆分 dao 文件
+- `public/css/app.css` **2026-09-11 复核：21,910 字符（109.6%）已超 20000 字符红线**（旧记录 94% 过时）；建议门户块拆独立样式文件（需三系统回归）
+- `subsystems/samples/db/dao.js` **2026-09-11 复核已回落**至 167 行 / 9961 字符（≈49.8%），旧记录 ≈90% 过时；当前最接近红线：`README.md` ≈98%、`routes-samples.js` ≈89%
 - 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
 ## 12. 验证清单(提交前自检)
@@ -344,7 +344,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 ## 16. 卡片设计系统（Claude 实施指引）
 
-> 完整规范见 [docs/superpowers/specs/2026-08-04-card-design-system.md](./docs/superpowers/specs/2026-08-04-card-design-system.md) 与 [AGENTS.md 第 18 节](./AGENTS.md#18-卡片设计系统规范强制)。
+> 完整规范见 [docs/archive/specs/2026-08-04-card-design-system.md](./docs/archive/specs/2026-08-04-card-design-system.md)（已实施并归档）与 [AGENTS.md 第 18 节](./AGENTS.md#18-卡片设计系统规范强制)。
 
 ### 16.1 核心要点
 
@@ -363,7 +363,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 ## 17. JS 合并构建（Claude 实施指引）
 
 > 完整规范见 [AGENTS.md 第 19 节](./AGENTS.md#19-js-合并构建规范强制)。
-> 每个子系统前端仅 1 个 `bundle.js`（25→1 / 16→1 / 7→1），defer 加载。
+> 每个子系统前端仅 1 个 `bundle.js`（control 25→1 / fixtures 20→1 / projects 28→1 / samples 30→1 / workbench 10→1），defer 加载。
 
 ### 17.1 Claude MUST 遵守
 
@@ -374,7 +374,7 @@ Claude 生成 manifest.json 后 MUST 自检：
   # 更新 index.html 中的版本号（tools/.bundle-ver 中获取）
   ```
 - 修改任意 JS 文件内容后，同上重建
-- 三个 `index.html` 中 **只能有 2 个 script**：`fluentui`（module） + `bundle.js`（defer）
+- 五个 `index.html`（control / fixtures / projects / samples / workbench）中 **只能有 2 个 script**：`fluentui`（module） + `bundle.js`（defer）
 - 初始化调用（`boot()`/`bootFixture()`）已包含在 bundle 末尾，**不要**在 HTML 中写内联 `<script>boot()</script>`
 
 ### 17.2 Claude 禁止行为
@@ -398,7 +398,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 ### 18.1 核心判断
 
 - `subsystems/<id>/manifest.json` 顶层 `"deployed": true` = 该子系统**已正式上线**，数据受保护；普通用户门户仅展示已上线入口，**ADMIN 门户全量可见（未上线半透明+「未上线」角标）**，`?all=1` 兼容保留（2026-09-08）。
-- 已上线子系统（当前：samples、fixtures〔2026-09-08 用户授权上线〕、control〔manifest deployed:true〕）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
+- 已上线子系统（当前：samples、fixtures〔2026-09-08 用户授权上线〕、control〔manifest deployed:true〕、workbench〔manifest deployed:true，无自有数据表，仅聚合〕）：**禁止注入测试数据、禁止清库、禁止跑数据写入类测试**。
 - 未上线子系统可自由注入测试数据（seed/造数测试）。
 
 ### 18.2 Claude MUST 遵守
@@ -457,7 +457,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 1. **单一启动入口（MUST）**：启停只用宝塔面板（启动文件=`server.js`，端口=4000），禁止手工 `npm start` / `node server.js` / `nohup ... &` 另起实例。
 2. **独立进程边界**：sample-mgmt(4000) 与 backend/CPK(3500) 是互不相关的独立面板项目，各自独立 PID 文件与端口，禁止混淆、禁止交叉启停。
-3. **启动脚本已加固**：`sample_mgmt_start.sh` 已改为「若实例已运行则跳过并同步 PID，仅无实例时才拉起」，误跑也不会再造游离实例。
+3. **启动脚本现状（2026-09-11 复核）**：`sample_mgmt_start.sh` **当前无任何守卫**，无条件 `nohup node server.js &` 并覆写 PID 文件 → **严禁执行**（误跑即造游离实例与 PID 错位）。加固待用户授权。
 4. **防复发清单**：面板「负载状态」应始终仅一个 `node server.js`(4000)；发现非 4000 端口的 sample-mgmt 进程 = 游离残留，须由运维清理；PID 文件与 4000 归属不一致 → 按 §20.1 提交重启申请，由运维「停止→启动」接管。
 
 ### 20.3 AI 拦截逻辑

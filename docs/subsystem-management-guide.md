@@ -45,7 +45,7 @@ server.js 启动
 
 1. 管理员登录门户 → 页脚「子系统管理」→ 进入管理面板
 2. 点击「+ 新建子系统」→ 填写 ID / 名称 / 描述 / 图标 → 确认创建
-3. 重启服务（`pm2 restart sample-mgmt`）使新路由生效
+3. **重启服务使新路由生效**：由运维在**宝塔面板 → Node 项目 → 停止 → 启动**（本项目禁止 AI/手工重启，见 AGENTS.md §23）。原因：`POST /api/subsystems` 只写入 manifest 与骨架文件，**不调用新子系统的 `register(app)`**，故路由不会热挂载
 
 ### 方式二：命令行手动创建
 
@@ -90,7 +90,7 @@ async function seed() { return true; }
 module.exports = { register, initDB, seed };
 ```
 
-**重启后自动生效**，门户页自动出现新卡片。
+**重启后自动生效**，门户页自动出现新卡片（重启由运维在宝塔面板执行，禁止手工 `pm2 restart`）。
 
 ---
 
@@ -164,12 +164,14 @@ module.exports = { register, initDB, seed };
 |---|---|
 | 查看所有子系统 | 页面自动加载卡片式列表 |
 | 新建子系统 | 点击「+ 新建子系统」→ 填写表单 → 确认 |
-| 编辑 manifest | 点击「编辑」→ JSON 编辑器 → 修改 → 保存 |
+| 编辑 manifest | 点击「编辑」→ JSON 编辑器 → 修改 → 保存（**路由/状态机改动需重启**） |
 | 导出 manifest | 点击「导出」→ 浏览器下载 JSON 文件 |
+| 上线/下线开关 | 切换 `deployed`（**仅 ADMIN，且需用户授权**）→ **门户刷新即生效，无需重启**；上线后该子系统数据受 AGENTS.md §20 保护（禁注入测试数据、禁跑写入类测试） |
 
 **注意事项**：
-- 新建后的子系统需**重启服务**才能激活路由挂载
-- 编辑 manifest 后，路由变更需**重启服务**生效
+- 新建后的子系统需**重启服务**才能激活路由挂载（`POST /api/subsystems` 不调用新子系统的 `register(app)`）
+- 编辑 manifest 后，**路由 / 状态机变更**需重启服务生效；**仅改 `deployed`（上线开关）或门户展示字段**刷新页面即生效，无需重启
+- 重启一律由运维在**宝塔面板 → Node 项目**执行；本项目 AI 与文档使用者**禁止** `pm2 restart` / `npm start` / `node server.js`（AGENTS.md §23）
 - 删除子系统：直接删除 `subsystems/<id>/` 目录，下次请求列表时自动刷新
 
 ---
@@ -236,7 +238,7 @@ subsystems/<id>/
 
 ## 9. 部署检查清单
 
-- [ ] 服务运行：`pm2 status` 确认 `sample-mgmt` 状态为 `online`
+- [ ] 服务运行：**宝塔面板 → Node 项目** 状态为「运行中」（若采用方案 B/PM2，则由运维在 PM2 管理器查看；本项目禁止 AI/文档使用者手工 `pm2`/`npm start`，见 AGENTS.md §23）
 - [ ] 子系统发现：`curl http://localhost:4000/api/subsystems` 返回预期子系统
 - [ ] 门户卡片：访问 `/` 确认动态渲染正确
 - [ ] 管理页面：`/admin-subsystems.html` 可访问，ADMIN 可新建/编辑/导出
@@ -248,7 +250,7 @@ subsystems/<id>/
 ## 10. 常见问题
 
 **Q: 新建子系统后门户未显示新卡片？**
-A: 需重启服务（`pm2 restart sample-mgmt`）使路由挂载生效。
+A: 需重启服务使路由挂载生效——由运维在**宝塔面板 → Node 项目 → 停止 → 启动**（禁止手工 `pm2 restart`，见 AGENTS.md §23）。若只是门户卡片未刷新，先 Ctrl+F5 强刷。
 
 **Q: 删除子系统目录后列表仍显示？**
 A: 下次请求 `/api/subsystems` 时会自动刷新 registry，刷新页面即可。

@@ -123,6 +123,8 @@ v2.0.1 针对项目追踪子系统的 `/api/projects/stats` 看板接口进行**
 测试覆盖：项目 CRUD、成员管理（owner 转移/移除）、任务 CRUD 与乐观锁、状态机流转与 CAS 并发、子任务三态流转、依赖环/阻塞校验、附件上传、样品/治具关联、工作流配置读写、CSV 导出。
 
 > 说明：测试当前连接生产库 `sample_mgmt`；projects 子系统尚未标记 `deployed`（未上线），按 §20 允许注入测试数据。后续 projects 上线需按 §20 配置独立测试库与护栏。
+>
+> **修订（2026-09-11，commit `fde4e8c`）**：上句记载的旧状态已作废——`jest.config.js` 已挂 `setupFiles: tests/setup-env.js`，**`npm test` / `npx jest` 一律强制连独立测试库 `sample_mgmt_test`**，并加「库名 MUST 以 `_test` 结尾」失败即停断言；测试连接生产库的问题已闭环（见 CONTRIBUTING.md「测试数据库隔离（强制）」）。以上原文保留以存历史。
 
 ---
 

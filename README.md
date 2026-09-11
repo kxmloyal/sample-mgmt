@@ -384,7 +384,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 
 ## 技术栈
 
-Node.js + Express · MariaDB(MySQL) via mysql2 · express-session + bcryptjs · qrcode · Fluent Web Components · 原生 HTML/CSS/JS 单页（源文件无框架；前端 JS 由 `tools/build-bundles.js` 合并为单 bundle，版本号破缓存）。
+Node.js + Express · **MySQL 8.0.13+**（via mysql2 连接池；**不支持 MariaDB / 5.7**——「取消 NEW 释放编号」依赖函数唯一索引 `uk_sample_no_live`） · express-session + bcryptjs · qrcode · Fluent Web Components · 原生 HTML/CSS/JS 单页（源文件无框架；前端 JS 由 `tools/build-bundles.js` 合并为单 bundle，版本号破缓存）。
 
 ## 目录
 

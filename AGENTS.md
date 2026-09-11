@@ -32,13 +32,13 @@
 | 层 | 技术 |
 |---|---|
 | 后端 | Node.js + Express 4.x(CommonJS) |
-| 数据库 | MariaDB(MySQL) via mysql2,连接池,数据存 `sample_mgmt` 库 |
+| 数据库 | **MySQL 8.0.13+** via mysql2,连接池,数据存 `sample_mgmt` 库(**不支持 MariaDB / MySQL 5.7**:编号释放依赖函数唯一索引 `uk_sample_no_live`,见 §12/§20) |
 | 鉴权 | express-session + bcryptjs,8h session |
 | 二维码 | qrcode |
 | 前端 | 原生 HTML/CSS/JS 单页(无构建、无框架) |
 | 配置 | dotenv 加载 .env;PM2/宝塔注入的环境变量优先 |
 
-**数据库**:已从 SQLite 迁移至 MariaDB。如需回退 SQLite,仅需替换 `db.js`。
+**数据库**:已从 SQLite 迁移至 **MySQL 8.0.13+**。**不可回退 SQLite**——现有 SQL 使用 `ON DUPLICATE KEY UPDATE`、`VALUES()`、`INFORMATION_SCHEMA`、**函数索引**等 MySQL 专有特性;`db.js` 亦已依赖 mysql2 连接池与 express-mysql-session。**亦不支持 MariaDB**:表达式索引是 MariaDB 的缺失能力(2026-09-11 修订,旧文"仅需替换 db.js"作废)。
 
 ## 3. 目录结构
 
@@ -82,15 +82,22 @@
 ├── data/                  # 共享数据(limit-items.json, source-types.json)
 ├── tests/                 # 单元测试(含 helpers)
 ├── docs/
-│   ├── deploy-baota.md    # 宝塔部署文档
-│   ├── operation-manual.md # 用户操作说明书
+│   ├── deploy-baota.md    # 宝塔部署教程(部署运维权威文档)
+│   ├── operation-manual.md # 总操作说明书(全子系统,权威)
+│   ├── 样品系统操作说明.md / 治具系统操作说明.md / 管制系统操作说明.md
+│   │   / 项目追踪系统操作说明.md / 工作台操作说明.md   # 各子系统分册(发放版)
 │   ├── subsystem-management-guide.md # 子系统管理指南
-│   ├── RELEASE-v2.0.0.md  # v2.0.0 发布说明
+│   ├── role-permission-matrix.md      # 角色权限矩阵 + 状态中英对照
+│   ├── label-card-standard.md         # 标签/标示卡标准
+│   ├── sample-code-encoding.md        # 样品编号编码与占用口径
+│   ├── fixtures-flow-report.md / fixtures-model-view-2026-09-03.md / projects-review-2026-09-03.md  # 专项报告(带日期快照)
+│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md  # 发布说明
+│   ├── 账号收集模板.xlsx / 通用项目追踪模板.xlsx  # 表格模板
 │   ├── archive/           # 已完成迭代的设计文档与实现计划归档
 │   └── superpowers/       # 当前有效规范与计划
 │       ├── specs/         # brainstorming 产出的设计文档(迭代完成后归档)
 │       └── plans/         # writing-plans 产出的实现计划(迭代完成后归档)
-├── .env.example           # 环境变量模板(含 MariaDB 连接配置)
+├── .env.example           # 环境变量模板(含 MySQL 连接配置)
 ├── .gitignore
 └── package.json
 ```
@@ -311,7 +318,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 
 ## 12. 数据库约定
 
-- 五表:`users` / `samples` / `scan_logs` / `fixtures` / `fixture_logs` + `fixture_files` 附属表(schema 见 `db.js`)
+- 表结构来源:各子系统 `subsystems/*/db/schema.sql`(启动时幂等执行) + 框架表(`users`/`sessions`/`user_portal_prefs`/`user_roles`/`workbench_settings` 等);增量迁移按子系统拆至 `db/migrations/`(`db/migrations.js` 为薄转发)。**样品编号占用口径依赖函数唯一索引 `uk_sample_no_live`,故 MySQL MUST ≥ 8.0.13**
 - 数据库写入由 `mysql2` 连接池自动提交,无需手动 `persist()`(no-op 保留兼容)
 - 时间字段:建表用 `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,代码中用 `nowISO()` 生成 ISO 8601
 - **改字段名/类型/删除字段** MUST 全量检索 DAO、XML、原生 SQL、ETL、报表、定时脚本、历史初始化脚本
@@ -331,14 +338,14 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
 - `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
-- `public/css/app.css` 已达 94% 字符红线（约 19.9k/20k，2026-08-06 记录），建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
+- `public/css/app.css` **2026-09-11 复核：300 行 / 21,910 字符（109.6%，已超 20000 字符红线）**（2026-08-06 记录的 94% 已过时）——按 §7.1 该文件**仅允许精简/重构**，建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
 - `routes-samples.js` 已拆分（2026-09-02 B3-T1）：机型路由拆至 `routes-samples-models.js`、图片保存拆至 `sample-images.js`，主文件降至 65.7% 红线内
 - `db/migrations.js` 已拆分（2026-09-02 B3-T2）：迁移按子系统拆至 `db/migrations/` 目录（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 为薄转发，接口不变
 - `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），2026-09-08 v3 迭代后降至 13.6k（tabs 拆分/空态收敛），持续观察；`backend/routes-tasks.js` 已于 v3 拆分（22.6k→14.8k，编辑/删除/批量域迁至 routes-task-edit.js）；`frontend/js/views/task-detail.js`、`kanban.js`（15.0k）均在红线内，后续迭代仍需关注容量
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
-- `db/migrations.js` 顶层函数 11 个（批次 2 新增 deleted_at 迁移后突破 §7.2 ≤10 上限，2026-09-01 记录），建议下批次拆分为 `db/migrations/` 目录按域分文件
+- ~~`db/migrations.js` 顶层函数 11 个~~ **已解决**：2026-09-02 B3-T2 已拆分为 `db/migrations/`（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 现为薄转发
 - `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
-- `subsystems/samples/db/dao.js` 2026-09-05（领用功能 + 机型墙聚合）后达 234 行 / 18044 字符（≈90% 字符红线），已达 90% 阈值——后续 samples 迭代**仅允许精简/重构**（建议按 建样序号/列表查询/机型 三个域拆分 dao 文件），禁止直接追加新查询函数
+- `subsystems/samples/db/dao.js` **2026-09-11 复核：167 行 / 9961 字符（≈49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前最接近红线者：`README.md` 498 行 / 19678 字符（98.4%）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17840 字符（89.2%）、`public/css/app.css`（见下条，已超线）
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
 
@@ -707,7 +714,7 @@ module.exports = { register, initDB, seed };
 2. 生成 `backend/index.js` 骨架（含 register/initDB/seed 模板）
 3. 生成 `frontend/index.html` 骨架
 4. 生成 `db/schema.sql` 骨架
-5. 触发热重载（无需手动重启）
+5. 写入 manifest 与骨架文件并刷新 registry（门户刷新即见卡片）；**注意：新增子系统的 API 路由不会热挂载**——`POST /api/subsystems` 不调用新子系统的 `register(app)`，需**重启服务**后才生效（由运维在宝塔面板执行，见 §23）
 
 ### 17.9 现有子系统迁移路径
 
@@ -793,7 +800,7 @@ module.exports = { register, initDB, seed };
 
 ## 18. 卡片设计系统规范（强制）
 
-> 完整规范见 `docs/superpowers/specs/2026-08-04-card-design-system.md`。
+> 完整规范见 `docs/archive/specs/2026-08-04-card-design-system.md`（该迭代已实施完成，设计文档于 2026-09-11 归档；当前未完成的规范保留在 `docs/superpowers/`）。
 > 所有子系统的卡片组件 MUST 遵循本节规范，禁止各自定义风格不一的卡片。
 
 ### 18.1 设计 Token（app.css :root 已定义）
@@ -866,7 +873,7 @@ node tools/build-bundles.js
 ```
 
 该脚本自动：
-1. 解析三个子系统 `index.html` 中的 `<script src>` 顺序（即依赖顺序）
+1. 读取 `tools/bundle-sources.json` 中各子系统的**文件顺序**（即依赖顺序；早期版本为解析 `index.html` 的 `<script src>`，2026-08 起已改为该 JSON 单一事实来源）
 2. 按顺序拼接所有 JS 文件为单个 `bundle.js`
 3. 在末尾追加子系统对应的初始化调用（`boot()`/`bootFixture()`）
 4. 将 `bundle.js` 输出到 `/tmp`（避免 `subsystems/` 目录权限问题）
@@ -875,17 +882,24 @@ node tools/build-bundles.js
 **输出**：
 | 子系统 | 原始文件数 | bundle 大小 |
 |---|---|---|
-| samples | 25 → 1 | ~100KB |
-| fixtures | 16 → 1 | ~75KB |
-| workbench | 7 → 1 | ~29KB |
+| control | 25 → 1 | ~102KB |
+| fixtures | 20 → 1 | ~102KB |
+| projects | 28 → 1 | ~165KB |
+| samples | 30 → 1 | ~172KB |
+| workbench | 10 → 1 | ~47KB |
+
+> 上表为 2026-09-11 重建实测值：「原始文件数」= `tools/bundle-sources.json` 中该子系统的条目数（含 `shared/frontend/*` 共享模块），「bundle 大小」= 构建脚本输出的字符数（`out.length/1024`，非字节）。
 
 ### 19.2 部署步骤
 
 ```bash
+rm -f /tmp/bundle-*.js   # 先清旧产物(属主不同会 EACCES)
 node tools/build-bundles.js
-# 将 /tmp/bundle-*.js 复制到子系统 js/ 目录
-sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
+# 将 /tmp/bundle-*.js 复制到子系统 js/ 目录(共 5 个子系统)
+sudo cp /tmp/bundle-control.js    subsystems/control/frontend/js/bundle.js
 sudo cp /tmp/bundle-fixtures.js   subsystems/fixtures/frontend/js/bundle.js
+sudo cp /tmp/bundle-projects.js   subsystems/projects/frontend/js/bundle.js
+sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
 sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 # 更新 index.html script 引用路径 + 版本号
 ```
@@ -954,6 +968,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 | 样品管理 | samples | 2026-08-07（重新上线） | samples / scan_logs / sample_models / sample_seqs |
 | 治具管理 | fixtures | 2026-09-08（用户授权上线） | fixtures / fixture_logs / fixture_files |
 | 管制流程管理 | control | 2026-09-08 前已上线（deployed:true） | control_orders / control_signs / control_ncr_logs / control_rework_logs / control_logs / control_seqs / control_settings / control_files |
+| 全局工作台 | workbench | 已上线（deployed:true，2026-09-11 复核补录） | 无自有数据表（`database.tables: []`，仅跨子系统只读聚合） |
 
 ### 20.5 AI 拦截逻辑
 
@@ -1053,7 +1068,7 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 
 1. **单一启动入口（MUST）**：sample-mgmt 的启动/停止**只用宝塔面板**（启动文件=`server.js`，端口=4000），禁止任何人手工 `npm start` / `node server.js` / `nohup ... &` 另起实例。
 2. **独立进程边界**：sample-mgmt(4000) 与 backend/CPK(3500) 是**互不相关**的独立面板项目，各自独立 PID 文件与端口，禁止混淆、禁止交叉启停。
-3. **启动脚本加固（已完成）**：`sample_mgmt_start.sh` 已改为「若 instance 已在运行则跳过并同步 PID，仅无实例时才拉起」，即使被误跑也不会再造游离实例。
+3. **启动脚本现状（2026-09-11 复核，以本行为准）**：仓库内 `sample_mgmt_start.sh` **当前没有任何「已运行则跳过」守卫**（与本节旧记录不符），其行为是**无条件**执行 `nohup node server.js &` 并覆写 `sample_mgmt.pid`。因此**严禁执行该脚本**——误跑即再造游离实例与 PID 错位，正是 2026-08-24 事故的机理。加固方案待用户明确授权后再实施。
 4. **防复发清单**：
    - 面板「负载状态」应始终看到**仅一个** `node server.js`（4000）；
    - 出现「非 4000 端口的 sample-mgmt 进程」= 游离残留，须由运维清理；

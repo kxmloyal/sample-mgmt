@@ -1,6 +1,6 @@
 # 制造品质管理系统 — 宝塔面板部署教程
 
-本教程适用于把「样品管理 / 治具管理 / 项目追踪 / 全局工作台」四大子系统部署到 **宝塔面板（Linux 服务器）**，对外提供多人访问，并支持手机扫码（需 HTTPS）。
+本教程适用于把「管制流程管理 / 样品管理 / 治具管理 / 项目追踪 / 全局工作台」五大子系统部署到 **宝塔面板（Linux 服务器）**，对外提供多人访问，并支持手机扫码（需 HTTPS）。
 
 ---
 
@@ -8,24 +8,26 @@
 
 | 项目 | 说明 |
 |---|---|
-| 技术栈 | Node.js + Express + **MariaDB/MySQL**（mysql2 连接池） |
-| 数据库 | 需自建 **MariaDB（或 MySQL 5.7+）**，默认库名 `sample_mgmt`（`.env` 中 `DB_NAME` 可改） |
+| 技术栈 | Node.js + Express + **MySQL 8.0.13+**（mysql2 连接池） |
+| 数据库 | 需自建 **MySQL 8.0.13+**（**不支持 MariaDB、也不支持 MySQL 5.7**——「取消 NEW 样品释放编号」依赖函数唯一索引 `uk_sample_no_live`，MariaDB 无表达式索引，5.7 亦不支持），默认库名 `sample_mgmt`（`.env` 中 `DB_NAME` 可改） |
 | 入口文件 | `server.js` |
-| 启动命令 | `npm start`（即 `node server.js`） |
+| 启动命令 | `npm start`（即 `node server.js`）——**仅用于本地自检**；生产环境禁止手工启动/重启，一律由运维在宝塔面板执行（AGENTS.md §23） |
 | 默认端口 | `4000`（可用 `.env` 中 `PORT` 改） |
 | 统一入口 | `public/portal.html` 门户页（**未登录显示内嵌登录框，登录后按角色显示子系统卡片**） |
-| 子系统 | `subsystems/<id>/`：样品管理 / 治具管理 / 项目追踪 / 全局工作台，由框架启动时自动扫描 manifest 挂载 |
+| 子系统 | `subsystems/<id>/`：管制流程管理 / 样品管理 / 治具管理 / 项目追踪 / 全局工作台（共 5 个），由框架启动时自动扫描 manifest 挂载 |
 | 建表方式 | `db.js` 启动时自动执行 `subsystems/*/db/schema.sql`（幂等，含各子系统业务表） |
 | 会话密钥 | `.env` 中 `SESSION_SECRET`（生产环境**务必改掉**默认开发值） |
 | 环境变量 | 项目根目录 `.env` 文件读取（`dotenv`），模板见 `.env.example` |
 | 目录权限 | 运行用户（默认 `www`）需可写 `logs/`（日志）与 `public/uploads/`（图片上传） |
 | 手机摄像头扫码 | 依赖浏览器原生 `BarcodeDetector`，**必须在 HTTPS 下才可用**（或 localhost）。仅桌面扫码枪不需要。 |
-| 上线保护 | **样品管理已正式上线**（manifest `deployed:true`）：禁止向线上库注入测试数据，`npm run seed-samples` 会被护栏自动拒绝（见 3.5）。 |
+| 上线保护 | **已上线 4 个**：管制流程管理 / 样品管理 / 治具管理 / 全局工作台（manifest `deployed:true`）——禁止向线上库注入测试数据，`npm run seed-samples` / `npm run seed-fixture` 会被护栏自动拒绝（见 3.5）。 |
 | 未完成子系统 | **项目追踪（projects）未完成**：门户仅 ADMIN 可见、非 ADMIN 直连入口会被弹回门户（见 9.4）。 |
 
 > ⚠️ 结论先行：**手机扫码一定要配域名 + SSL 证书**。否则手机端只能手动输入编号代替扫码。
 >
-> ⚠️ 本系统数据库已从 SQLite 迁移至 **MariaDB**，部署前必须先装数据库（见 3.2），不能再沿用旧版"单文件零依赖"方式。
+> ⚠️ 本系统数据库已从 SQLite 迁移至 **MySQL 8.0.13+**，部署前必须先装数据库（见 3.2），不能再沿用旧版"单文件零依赖"方式。
+>
+> ⚠️ **版本硬要求（2026-09-11）**：编号释放功能依赖函数唯一索引 `((IF(deleted_at IS NULL, sample_no, NULL)))`，**MySQL 必须 ≥ 8.0.13**；**MariaDB 不支持表达式索引**——若装 MariaDB，迁移失败后旧 `sample_no` 唯一索引仍然生效，"取消 NEW 后复用编号"会直接报 `ER_DUP_ENTRY` 导致建样失败。
 
 ---
 
@@ -34,7 +36,7 @@
 - 一台 Linux 服务器（CentOS / Ubuntu / Debian 均可），已装好**宝塔面板**。
 - 开放端口：宝塔面板 `8888`、以及后续要用的 `80 / 443`。
 - 准备一个域名（如 `sample.your-company.com`），A 记录解析到服务器 IP。
-- 本地先确认项目能跑：`npm install && npm run seed && npm start`，浏览器开 `http://localhost:4000`（未登录显示登录框，`admin / admin123` 登录后可见子系统卡片）。
+- **本地**先确认项目能跑：`npm install && npm run seed && npm start`，浏览器开 `http://localhost:4000`（未登录显示登录框，`admin / admin123` 登录后可见子系统卡片）。（生产服务器上**禁止**用 `npm start` 手工起服务，见第 0 节与 AGENTS.md §23）
 
 ---
 
@@ -58,7 +60,7 @@
 
 ### 3.2 安装并初始化数据库（新增，必做）
 
-1. 宝塔 → **软件商店** → 安装 **MariaDB**（或 MySQL 5.7+）→ 启动。
+1. 宝塔 → **软件商店** → 安装 **MySQL 8.0**（版本 MUST ≥ 8.0.13）→ 启动。**不要安装 MariaDB**（原因见第 0 节版本要求）。
 2. 宝塔 → **数据库** → **添加数据库**（或直接在 MySQL 终端执行）：
    ```sql
    CREATE DATABASE IF NOT EXISTS sample_mgmt DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
@@ -130,7 +132,7 @@ npm install --production
 npm run seed          # 创建 6 个角色账号（仅首次执行）
 # 以下为可选的演示/测试数据（生产环境一律跳过）：
 npm run seed-samples  # 样品演示数据 —— 样品系统已上线，护栏会直接拒绝（exit 1），生产环境无需执行
-npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示可执行（15 个治具）
+npm run seed-fixture  # 治具演示数据 —— 治具已于 2026-09-08 上线，护栏同样直接拒绝（exit 1）
 ```
 
 > 若依赖安装慢，可切换 npm 镜像：`npm config set registry https://registry.npmmirror.com`
@@ -138,7 +140,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
 ### 3.6 启动并验证
 
 - 在 Node.js 项目列表点 **启动**（首次启动会自动建表，见 3.2 说明）。
-- 浏览器直接访问 `http://服务器IP:4000`，未登录应看到**门户登录框**；用 `admin / admin123` 登录后，应看到样品管理 / 治具管理 / 全局工作台三张卡片（项目追踪仅 ADMIN 可见）。
+- 浏览器直接访问 `http://服务器IP:4000`，未登录应看到**门户登录框**；用 `admin / admin123` 登录后，应看到**四张卡片**：管制流程管理 / 样品管理 / 治具管理 / 全局工作台（均已上线）；项目追踪未上线，仅 ADMIN 可见（半透明+「未上线」角标），故 ADMIN 共看到五张。
 - 点击「样品管理」卡片进入系统，验证登录、列表、扫码台等流程。
 
 ### 3.7 绑定域名 + 开启 HTTPS（手机扫码必需）
@@ -156,7 +158,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
 
 适用：没装官方 Node 管理器，或习惯用 PM2 守护。
 
-1. 宝塔 → 软件商店 → 安装 **PM2 管理器**（顺带装 Node）与 **MariaDB**（建库同 3.2）。
+1. 宝塔 → 软件商店 → 安装 **PM2 管理器**（顺带装 Node）与 **MySQL 8.0.13+**（建库同 3.2）。
 2. 上传代码到 `/www/wwwroot/sample-mgmt`（同 3.3），配置 `.env`（同 3.4）。
 3. 宝塔「终端」：
    ```bash
@@ -164,7 +166,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
    npm install --production
    npm run seed          # 角色账号（仅首次）
    npm run seed-samples  # 可选演示数据（样品已上线，护栏会拒绝，生产跳过）
-   npm run seed-fixture  # 可选演示数据
+   npm run seed-fixture  # 可选演示数据（治具已上线，护栏会拒绝，生产跳过）
    ```
 4. PM2 管理器 → **添加项目**：
    - 启动文件：`/www/wwwroot/sample-mgmt/server.js`
@@ -189,6 +191,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
 | `LOGIN_RATE_LIMIT_MAX` | 登录限流（次/分钟） | 默认 `10`，可按需调 |
 | `API_RATE_LIMIT_MAX` | API 限流（次/分钟） | 默认 `200` |
 | `LOG_DIR` | 日志目录 | 默认 `logs`（需可写） |
+| `DEMO_MODE` | 演示模式开关 | 控制登录页是否展示演示账号（`routes/auth.js`）；**生产环境设 `=false` 关闭** |
 | `UPLOAD_MAX_SIZE` | 上传大小上限（字节） | 默认 `5242880`（5MB），图片类建议 ≤10MB |
 | `DB_HOST` | 数据库地址 | `127.0.0.1` |
 | `DB_PORT` | 数据库端口 | `3306` |
@@ -196,7 +199,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
 | `DB_PASSWORD` | 数据库密码 | **3.2 步骤设置的强密码** |
 | `DB_NAME` | 数据库名 | `sample_mgmt` |
 
-配置方式（推荐）：编辑项目根目录 `.env` 文件（`cp .env.example .env` 后修改），改完点**重启**。
+配置方式（推荐）：编辑项目根目录 `.env` 文件（`cp .env.example .env` 后修改）；**改完需重启生效，由运维在宝塔面板 → Node 项目执行「停止 → 启动」**（禁止手工 `npm start` / `pm2 restart`，见 AGENTS.md §23）。
 
 > 兼容性：若通过宝塔「Node.js 项目 → 设置 → 环境变量」、PM2 ecosystem、或启动命令注入同名变量，**注入值优先**，`.env` 仅作兜底。
 
@@ -204,7 +207,7 @@ npm run seed-fixture  # 治具演示数据 —— 治具未上线，如需演示
 
 ## 6. 数据备份与迁移
 
-数据库存放在 **MariaDB** 中，备份用 `mysqldump`（也可直接用宝塔「数据库 → 备份」功能）：
+数据库存放在 **MySQL 8.0.13+** 中，备份用 `mysqldump`（也可直接用宝塔「数据库 → 备份」功能）：
 
 ```bash
 # 备份（输出到项目外目录）
@@ -216,7 +219,7 @@ mysql -h127.0.0.1 -usample_mgmt -p sample_mgmt < /www/backup/sample-2026-08-04.s
 
 > 建议用宝塔「计划任务」设置每日把导出的 `.sql` 打包传到 OSS / 另一块磁盘；`logs/`、`public/uploads/` 按需一并备份。
 >
-> ⚠️ **上线保护**：样品管理已上线（deployed:true），其线上数据（`samples` / `scan_logs` / `sample_models` / `sample_seqs` 表）**禁止** TRUNCATE / DELETE / UPDATE 批量清理；需要清理或回滚时先备份、再经用户明确确认后操作。
+> ⚠️ **上线保护（2026-09-11 复核：已上线 4 个）**：管制流程管理 / 样品管理 / 治具管理 / 全局工作台均 `deployed:true`，其线上数据**禁止** TRUNCATE / DELETE / UPDATE 批量清理；受保护表包括 `samples` / `scan_logs` / `sample_models` / `sample_seqs` / `fixtures` / `fixture_logs` / `fixture_files` / `control_*` 等；需要清理或回滚时先备份、再经用户明确确认后操作。
 
 ---
 
@@ -227,19 +230,22 @@ cd /www/wwwroot/sample-mgmt
 git pull            # 或重新上传解压
 npm install --production
 # 若本次更新涉及子系统前端 JS（subsystems/*/frontend/js/），需重建 bundle 并更新版本号：
+rm -f /tmp/bundle-*.js   # 先清旧产物（属主不同会 EACCES）
 node tools/build-bundles.js
-sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
+# 将 /tmp/bundle-*.js 复制到子系统 js/ 目录（共 5 个子系统）
+sudo cp /tmp/bundle-control.js    subsystems/control/frontend/js/bundle.js
 sudo cp /tmp/bundle-fixtures.js   subsystems/fixtures/frontend/js/bundle.js
 sudo cp /tmp/bundle-projects.js   subsystems/projects/frontend/js/bundle.js
+sudo cp /tmp/bundle-samples.js    subsystems/samples/frontend/js/bundle.js
 sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 # 并按 tools/.bundle-ver 更新各子系统 index.html 中 bundle.js?v= 版本号（仅改 JS 时需要）
-pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
+# 重启：由运维在宝塔面板 → Node 项目 → 停止 → 启动（本项目禁止 AI/手工重启，见 AGENTS.md §23）
 ```
 
 > - 表结构由 `db.js` 启动时自动执行 `subsystems/*/db/schema.sql`（幂等，`CREATE TABLE IF NOT EXISTS`），**新增表无需手动建**。
 > - **字段级变更**（加列/改类型）需手动 `ALTER TABLE` 并同步子系统的 `db/schema.sql` 与全链路代码；迁移脚本见 `db/migrations.js`。
 > - 仅修改后端代码/配置时，**无需**重建 bundle，改完重启即可。
-> - 升级后建议核对日志无报错、样品 / 治具 / 工作台各子系统均能正常登录访问（子系统隔离回归）；已上线子系统的数据仅做只读验证，禁止注入测试数据。
+> - 升级后建议核对日志无报错、管制流程 / 样品 / 治具 / 工作台各子系统均能正常登录访问（子系统隔离回归）；已上线子系统的数据仅做只读验证，禁止注入测试数据。
 
 ---
 
@@ -248,7 +254,7 @@ pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 | 现象 | 可能原因 / 解决办法 |
 |---|---|
 | 页面打不开 / 502 | Node 项目没启动；检查端口是否 `4000`、是否被防火墙挡；看项目「日志」 |
-| 启动即报数据库错误 | **MariaDB 未安装/未启动**，或 `.env` 中 `DB_PASSWORD` 与 3.2 设置不一致；先在宝塔确认数据库可连接 |
+| 启动即报数据库错误 | **MySQL 未安装/未启动**，或版本 < 8.0.13（迁移执行函数索引会失败），或 `.env` 中 `DB_PASSWORD` 与 3.2 设置不一致；先在宝塔确认数据库可连接 |
 | 手机端点不开摄像头 | **不是 HTTPS**。`BarcodeDetector` 只在安全上下文可用 → 必须配域名 + SSL。临时可手动输入编号 |
 | 登录后马上掉线 | `SESSION_SECRET` 改了但没重启；或多实例运行导致会话不一致（确保只跑一个 Node 进程） |
 | 上传图片失败 | `public/uploads/` 目录不可写；或文件超过 `UPLOAD_MAX_SIZE` 白名单限制 |
@@ -272,19 +278,19 @@ pm2 restart sample-mgmt   # 或宝塔 Node 项目 → 重启
 4. **会话时效**：`server.js` cookie `maxAge` 为 8 小时，可按需调整。
 5. **全局工作台阈值**：积压阈值（默认 3 天 / 7 天）仅 ADMIN 可在工作台「阈值设置」修改，存于 `workbench_settings` 表，全局生效。
 6. **主动提醒**：复检逾期目前靠看板高亮；如需邮件 / 企业微信主动推送，可在此基础上扩展。
-7. **未完成子系统管理**：项目追踪当前仅 ADMIN 可见（`subsystems/projects/manifest.json` 的 `roles.use` 为 `["ADMIN"]`，且前端入口有角色拦截）；开发完成后开放给全员时，改回全角色并移除前端拦截即可。子系统正式上线需管理员明确授权（`deployed:true`），上线后受数据保护（见第 0 节）。
+7. **未完成子系统管理**：项目追踪当前**未声明 `deployed`（即未上线）**，普通用户门户不展示入口、仅 ADMIN 可见（`roles.use` 早已是全部 6 个角色，可见性由 `deployed` 控制，不是靠 `roles.use=["ADMIN"]`）。开发完成后开放给全员时，经用户授权设 `deployed:true` 即可；上线后受数据保护（见第 0 节）。
 
 ---
 
 ## 10. 快速检查清单（部署完照着勾）
 
 - [ ] Node 版本 ≥ 18 已装
-- [ ] **MariaDB 已安装并创建 `sample_mgmt` 库与账号**（3.2）
+- [ ] **MySQL 8.0.13+ 已安装并创建 `sample_mgmt` 库与账号**（3.2；不要用 MariaDB）
 - [ ] 代码上传到 `/www/wwwroot/sample-mgmt`（无 node_modules/data）
 - [ ] `npm install` 完成
 - [ ] `cp .env.example .env` 并修改 `SESSION_SECRET` 为随机长串、`DB_PASSWORD` 为数据库密码
 - [ ] `npm run seed` 已执行（首次，创建角色账号）
-- [ ] 项目以 `node server.js` 启动（环境变量从 `.env` 读取）
+- [ ] 项目已由宝塔面板启动（环境变量从 `.env` 读取；**不要**手工 `npm start`）
 - [ ] `http://IP:4000` 未登录显示门户登录框，登录后能看到子系统卡片并可进入
 - [ ] 非 ADMIN 账号登录后看不到「项目追踪」卡片（仅 ADMIN 可见）
 - [ ] 已绑域名 + 申请 Let's Encrypt + 强制 HTTPS
