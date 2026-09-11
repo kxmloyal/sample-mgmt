@@ -1,5 +1,5 @@
 // subsystems/control/frontend/js/todo.js — 角色待办派生与渲染（看板顶部待办区）
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.3
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.3
 // 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）；
 // 待我签核按列表接口注入的 pending 行（该单全部待签行的 role+dept）精准判定。
 // 2026-09-04 修复与收紧：①原「会签节点首步角色」近似导致非首步角色待办缺失（误导）；

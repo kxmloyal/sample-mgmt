@@ -1,5 +1,5 @@
 // subsystems/control/frontend/js/settings.js — 超期滞留阈值设置（仅 ADMIN 可调整）
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
 // 依赖：shared modal.js(openModal/closeModal)、api-base.js(api/showToast)、views/dashboard.js(renderDashboard 重渲染)
 // 后端：GET/PUT /api/control/settings（PUT 仅 ADMIN，写 control_settings 全局生效）
 

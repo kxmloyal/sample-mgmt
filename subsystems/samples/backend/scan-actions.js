@@ -142,7 +142,7 @@ async function applyAction(chosenAction, ctx) {
     updated.storage_location = location.trim();
     logData = { sample_id: s.id, action: 'CUSTODY', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' };
   }
-  // === 领用/归还流程（2026-09-05，docs/superpowers/specs/2026-09-05-samples-checkout-design.md） ===
+  // === 领用/归还流程（2026-09-05，docs/archive/specs/2026-09-05-samples-checkout-design.md） ===
   else if (chosenAction === 'CHECKOUT') {
     // 领出：登记领用人/领用部门/领用时长（小时），写应还时间 expected_return_at；储位保留（归还后回原储位）
     // returned_at 置空开启新借用周期（上次归还留痕随日志查询，字段只承载最近一次归还）

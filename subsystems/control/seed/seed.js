@@ -1,5 +1,5 @@
 // subsystems/control/seed/seed.js — 管制流程子系统种子数据
-// 权威依据：docs/superpowers/specs/2026-08-24-control-flow-design.md §5-§8
+// 权威依据：docs/archive/specs/2026-08-24-control-flow-design.md §5-§8
 // 说明：
 //  - 读 manifest 判定 deployed:true 时拒绝执行（AGENTS.md §20.2 上线保护）。
 //  - 造 12 张管制单覆盖全状态（DRAFT/SIGNING/LABELED/CONTROL_STORED/NCR_DONE/

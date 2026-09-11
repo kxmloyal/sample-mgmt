@@ -1,5 +1,5 @@
 // subsystems/control/frontend/js/views/ncr-list.js — 不良品委托单(NCR) 聚合列表
-// 权威依据：docs/superpowers/specs/2026-08-26-control-ncr-interaction-design.md §3.2
+// 权威依据：docs/archive/specs/2026-08-26-control-ncr-interaction-design.md §3.2
 // 数据源：GET /api/control/ncrs（跨单聚合，登录即可）；行点击回跳所属管制单详情并定位该张 NCR。
 // 能力：筛选（单号/所属管制单/检验部门/处理部门/创建人/日期区间）+ 分页 + 导出 CSV（AGENTS.md §21）。
 

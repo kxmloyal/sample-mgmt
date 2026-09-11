@@ -1,5 +1,5 @@
 // subsystems/control/backend/routes-settings.js — 系统配置（超期滞留阈值）读写
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
 // 职责：GET /api/control/settings（登录读，表/键缺失回退 48）；PUT /api/control/settings（仅 ADMIN，校验 1~720）
 const D = require('../../../db');
 const { logger } = require('../../../logger');

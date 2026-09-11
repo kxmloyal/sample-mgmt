@@ -1,5 +1,5 @@
 // subsystems/control/backend/flow-ops.js — 管制后端流程操作辅助（纯逻辑，供 routes-orders/routes-ncr/label 复用）
-// 权威依据：docs/superpowers/specs/2026-08-24-control-flow-design.md §8/§12
+// 权威依据：docs/archive/specs/2026-08-24-control-flow-design.md §8/§12
 // 职责：会签闸口/目标解析、状态机封装、状态中文、模板初始化、流转目标推导，均为纯函数（不依赖 DB）
 const { createStateMachine } = require('../../../shared/state-machine');
 const { SIGN_NODES, deriveProgress, calcReworkRemain, deptEquals } = require('./flow');

@@ -12,7 +12,7 @@ async function migrateSamplesSoftDelete(pool) {
 }
 
 // 领用/归还流程底座：samples 借出六列（2026-09-05，幂等，全列可空兼容存量）
-// 设计文档：docs/superpowers/specs/2026-09-05-samples-checkout-design.md
+// 设计文档：docs/archive/specs/2026-09-05-samples-checkout-design.md
 const CHECKOUT_COLUMNS = [
   ['checkout_user', 'VARCHAR(50) NULL DEFAULT NULL'],
   ['checkout_dept', 'VARCHAR(50) NULL DEFAULT NULL'],

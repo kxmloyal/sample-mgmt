@@ -1,5 +1,5 @@
 // subsystems/control/backend/routes-ncr.js — 不良品委托单(NCR) 子记录追加 + 聚合列表/导出
-// 权威依据：追加写入见 docs/superpowers/specs/2026-08-24-control-flow-design.md §6.3/§10.3；聚合检索见 2026-08-26-control-ncr-interaction-design.md §3.1
+// 权威依据：追加写入见 docs/archive/specs/2026-08-24-control-flow-design.md §6.3/§10.3；聚合检索见 2026-08-26-control-ncr-interaction-design.md §3.1
 // 职责：POST /api/control/orders/:id/ncr（QA/ADMIN）追加明细；GET /api/control/ncrs + /export 聚合检索（登录即可）
 const D = require('../../../db');
 const { logger } = require('../../../logger');

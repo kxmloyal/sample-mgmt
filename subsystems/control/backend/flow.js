@@ -1,5 +1,5 @@
 // subsystems/control/backend/flow.js — 管制流程派生纯逻辑模块（无副作用、无 DB 依赖）
-// 权威依据：docs/superpowers/specs/2026-08-24-control-flow-design.md
+// 权威依据：docs/archive/specs/2026-08-24-control-flow-design.md
 //   §5.2 进度派生表（11 步由 status + 子表/字段存在性实时派生，不落库）
 //   §6   报工结余 remain_qty = qty - good_qty - ng_qty - scrap_qty
 //   §8   2 个会签闸口（APPLY_SIGN 品保→研发→生管→生产→仓库 / DISPOSAL_SIGN 品保+研发）

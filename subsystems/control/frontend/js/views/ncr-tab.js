@@ -1,5 +1,5 @@
 // subsystems/control/frontend/js/views/ncr-tab.js — 不良品委托单明细「可展开记录卡」
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.2
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.2
 // 数据源：_ctlDetailAgg.ncrLogs（每条含 ncr_no/inspect_dept/handle_dept/form_template/created_by_name/created_at）
 // 展示：<details>/<summary> 展开卡，呈现比纯表格更全的字段；创建人姓名来自后端 users 左连返回的 created_by_name
 function renderNcrTab(rows) {

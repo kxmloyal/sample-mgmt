@@ -1,5 +1,5 @@
 // subsystems/control/backend/routes-label.js — 管制标签打印
-// 权威依据：docs/superpowers/specs/2026-08-24-control-flow-design.md §9
+// 权威依据：docs/archive/specs/2026-08-24-control-flow-design.md §9
 // 职责：GET /api/control/orders/:id/label（登录，可打印 HTML）、/label/print（自动打印）、/label/download（仅 ADMIN/QA/RD）
 // 原则：机制复用、文件自包含；标签实时派生自 control_orders，无独立存储/冗余快照；仅 QR LRU 缓存，缓存只依赖二维码内容
 const D = require('../../../db');
