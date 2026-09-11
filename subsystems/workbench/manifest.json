@@ -2,7 +2,7 @@
   "id": "workbench",
   "name": "全局工作台",
   "description": "跨部门项目进度监控，合并样品与治具待办积压视图",
-  "version": "1.0.0",
+  "version": "2.0.3",
   "icon": "chart",
   "route": {
     "prefix": "/api/workbench",

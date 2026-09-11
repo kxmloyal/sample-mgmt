@@ -2,7 +2,7 @@
   "id": "projects",
   "name": "项目追踪",
   "description": "多项目问题/任务追踪：看板、子任务、依赖、评论、附件、留痕、导出",
-  "version": "1.0.0",
+  "version": "2.0.3",
   "icon": "kanban",
   "route": {
     "prefix": "/api/projects",

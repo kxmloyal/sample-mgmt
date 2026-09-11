@@ -2,7 +2,7 @@
   "id": "fixtures",
   "name": "治具管理",
   "description": "覆盖治具申请→制作→验证移交→领用→维修→报废全流程",
-  "version": "1.0.0",
+  "version": "2.0.3",
   "deployed": true,
   "icon": "wrench",
   "route": {

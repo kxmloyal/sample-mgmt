@@ -1,6 +1,6 @@
 {
   "name": "sample-management",
-  "version": "0.1.0",
+  "version": "2.0.3",
   "description": "样品发行/确认/生命周期管理/分发 系统",
   "type": "commonjs",
   "main": "server.js",
