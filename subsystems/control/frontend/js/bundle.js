@@ -1,4 +1,4 @@
-/** BUNDLE vbmttfhpp7 — 25 files */
+/** BUNDLE vbmtwuntaz — 25 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -455,7 +455,7 @@ function controlRenderStageCards(agg) {
 
 /* --- subsystems/control/frontend/js/todo.js --- */
 // subsystems/control/frontend/js/todo.js — 角色待办派生与渲染（看板顶部待办区）
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.3
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.3
 // 纯前端派生，复用 constants.js 的 controlTransitionsOf（待我流转）；
 // 待我签核按列表接口注入的 pending 行（该单全部待签行的 role+dept）精准判定。
 // 2026-09-04 修复与收紧：①原「会签节点首步角色」近似导致非首步角色待办缺失（误导）；
@@ -523,7 +523,7 @@ function ctlTodoHtml(orders, role) {
 
 /* --- subsystems/control/frontend/js/settings.js --- */
 // subsystems/control/frontend/js/settings.js — 超期滞留阈值设置（仅 ADMIN 可调整）
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.1.2
 // 依赖：shared modal.js(openModal/closeModal)、api-base.js(api/showToast)、views/dashboard.js(renderDashboard 重渲染)
 // 后端：GET/PUT /api/control/settings（PUT 仅 ADMIN，写 control_settings 全局生效）
 
@@ -981,7 +981,7 @@ function ctlValidateNew(p) {
 
 /* --- subsystems/control/frontend/js/views/ncr-tab.js --- */
 // subsystems/control/frontend/js/views/ncr-tab.js — 不良品委托单明细「可展开记录卡」
-// 权威依据：docs/superpowers/specs/2026-08-26-control-dashboard-todo-design.md §3.2
+// 权威依据：docs/archive/specs/2026-08-26-control-dashboard-todo-design.md §3.2
 // 数据源：_ctlDetailAgg.ncrLogs（每条含 ncr_no/inspect_dept/handle_dept/form_template/created_by_name/created_at）
 // 展示：<details>/<summary> 展开卡，呈现比纯表格更全的字段；创建人姓名来自后端 users 左连返回的 created_by_name
 function renderNcrTab(rows) {
@@ -1021,7 +1021,7 @@ function ctlFocusNcrCard(ncrNo) {
 
 /* --- subsystems/control/frontend/js/views/ncr-list.js --- */
 // subsystems/control/frontend/js/views/ncr-list.js — 不良品委托单(NCR) 聚合列表
-// 权威依据：docs/superpowers/specs/2026-08-26-control-ncr-interaction-design.md §3.2
+// 权威依据：docs/archive/specs/2026-08-26-control-ncr-interaction-design.md §3.2
 // 数据源：GET /api/control/ncrs（跨单聚合，登录即可）；行点击回跳所属管制单详情并定位该张 NCR。
 // 能力：筛选（单号/所属管制单/检验部门/处理部门/创建人/日期区间）+ 分页 + 导出 CSV（AGENTS.md §21）。
 
