@@ -88,7 +88,8 @@ async function loadSamples() {
 }
 
 async function deleteSample(id) {
-  if (!confirm('确认取消该样品？此操作不可撤销，将同时删除关联日志。')) return;
+  // 2026-09-11 修订：原确认文案误称会删除关联日志，与实现不符（软删除、日志全量保留），并补编号占用分层口径
+  if (!confirm('确认取消该样品？此操作不可撤销（软删除，操作日志保留）。\n编号占用：取消「待制作」样品的编号会被释放、可被后续新样品复用；取消「制作完成」样品的编号仍占用、永不复用。')) return;
   try {
     await api('DELETE', '/api/samples/' + id);
     toast('样品已取消', 'ok');
