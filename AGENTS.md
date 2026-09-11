@@ -91,7 +91,7 @@
 │   ├── label-card-standard.md         # 标签/标示卡标准
 │   ├── sample-code-encoding.md        # 样品编号编码与占用口径
 │   ├── fixtures-flow-report.md / fixtures-model-view-2026-09-03.md / projects-review-2026-09-03.md  # 专项报告(带日期快照)
-│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md  # 发布说明
+│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md / RELEASE-v2.0.3.md  # 发布说明
 │   ├── 账号收集模板.xlsx / 通用项目追踪模板.xlsx  # 表格模板
 │   ├── archive/           # 已完成迭代的设计文档与实现计划归档
 │   └── superpowers/       # 当前有效规范与计划
@@ -330,6 +330,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 接口文档(docs/api.md 或 Swagger 注释,若有)
 - 依赖说明(版本变更原因与兼容性影响)
 - 提供**变更记录**:文件/接口/配置清单 + 兼容性影响 + 部署/回滚步骤
+- **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（当前 **2.0.3**）；发版时四处 MUST 同步更新
 
 ## 14. 当前已知技术债
 
@@ -345,9 +346,12 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
 - ~~`db/migrations.js` 顶层函数 11 个~~ **已解决**：2026-09-02 B3-T2 已拆分为 `db/migrations/`（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 现为薄转发
 - `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
-- `subsystems/samples/db/dao.js` **2026-09-11 复核：167 行 / 9961 字符（≈49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前最接近红线者：`README.md` 498 行 / 19678 字符（98.4%）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17840 字符（89.2%）、`public/css/app.css`（见下条，已超线）
+- `subsystems/samples/db/dao.js` **2026-09-11 复核：167 行 / 9961 字符（≈49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前最接近红线者：`README.md` 497 行 / 20248 字符（**101.2%，已越 20000 兜底线**；用户 2026-09-11 决定暂不拆分，新增内容前须先等量精简）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17840 字符（89.2%）、`public/css/app.css`（见下条，已超线）
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
+
+- `subsystems/control/backend/flow-ops.js` **2026-09-11 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / 5231 字符（26.2%）；建议按「NCR 域 / 重工域 / 出货结余域」拆分（同 2026-09-08 `dao-*` 拆分风格），拆分前先补回归
+- **探测表清理与迁移哨兵（2026-09-11）**：生产 `_tz_probe`、测试 `_upd_probe` 已 DROP（均 0 行、零代码引用）；**`_migr_sample_deleted_tz` 绝不可删**——它是 `migrateSamplesDeletedAtTz` 的防重入哨兵，删除会使迁移重跑并对 `deleted_at` 二次 `+8h`，属数据损坏级操作
 
 ## 15. 禁止行为黑名单
 

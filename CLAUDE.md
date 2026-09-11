@@ -163,7 +163,7 @@
 - 70%:停止新增业务,输出拆分方案
 - 90%:仅允许精简/重构,禁追加新功能
 
-**本行已过时（2026-09-11 复核）**——实际已触发/超出预警：`public/css/app.css` 21,910 字符（**109.6%，已超 20000 红线**）、`README.md` 19,678 字符（98.4%）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）。容量现状以第 11 节与每次修改报告为准。
+**本行已过时（2026-09-11 复核）**——实际已触发/超出预警：`public/css/app.css` 21,910 字符（**109.6%，已超 20000 红线**）、`README.md` 20,248 字符（**101.2%，已越 20000 兜底线；用户 2026-09-11 决定暂不拆分**）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）。容量现状以第 11 节与每次修改报告为准。
 
 ## 7. 修改完成强制报告
 
@@ -227,7 +227,8 @@
 - 管制子系统已拆分（2026-09-08）：`routes-orders.js` 薄入口（crud+flow 两域）、`dao.js` 薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；看板新增「会签超时」统计卡（stats.signOverdue + 列表 sign_overdue=1）；manifest 删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边与「单据详情」导航项（深链 #/detail?id= 保留）
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 - `public/css/app.css` **2026-09-11 复核：21,910 字符（109.6%）已超 20000 字符红线**（旧记录 94% 过时）；建议门户块拆独立样式文件（需三系统回归）
-- `subsystems/samples/db/dao.js` **2026-09-11 复核已回落**至 167 行 / 9961 字符（≈49.8%），旧记录 ≈90% 过时；当前最接近红线：`README.md` ≈98%、`routes-samples.js` ≈89%
+- `subsystems/samples/db/dao.js` **2026-09-11 复核已回落**至 167 行 / 9961 字符（≈49.8%），旧记录 ≈90% 过时；当前最接近红线：`README.md` ≈101%（已越线，用户决定不拆分）、`routes-samples.js` ≈89%
+- `subsystems/control/backend/flow-ops.js` **2026-09-11 复核：顶层函数 12 个（超 §7.2 上限 10）**，建议按 NCR / 重工 / 出货结余三域拆分
 - 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
 ## 12. 验证清单(提交前自检)
