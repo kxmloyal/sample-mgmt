@@ -179,6 +179,8 @@ curl http://localhost:4000/health
 curl http://localhost:4000/api/subsystems
 ```
 
+> **修订说明（2026-09-11）**：第 3 步的 `pm2 restart sample-mgmt` 是 v2.0.0 发布当时的口径，**现已作废**。自 2026-08-24 起本项目执行**单一启动入口**原则（AGENTS.md §23）：启停一律由运维在**宝塔面板 → Node 项目 → 停止 → 启动**执行，**禁止** AI 或文档使用者手工执行 `pm2 restart` / `npm start` / `node server.js`（会造出走离实例与 PID 错位）。第 4 步的验证命令与本文其余内容仍然有效。
+
 ---
 
 ## 新增子系统快速指南
