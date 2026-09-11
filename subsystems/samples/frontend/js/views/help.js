@@ -4,7 +4,7 @@
 // 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）
 var HELP_PAGE_MAP={
   dashboard:null, samples:'list', new:'create', scan:'scan',
-  logs:null, users:'users'
+  logs:null, users:'users', wall:'wall', storagemap:'storagemap'
 };
 var HELP_PAGE_TIPS={
   dashboard:'样品看板：查看统计数据和待办事项',
@@ -12,7 +12,9 @@ var HELP_PAGE_TIPS={
   new:'新建样品：填写信息后自动生成编号和标签',
   scan:'扫码台：扫描样品二维码驱动状态流转',
   logs:'操作日志：系统全局操作记录',
-  users:'用户管理：管理账号和角色'
+  users:'用户管理：管理账号和角色',
+  wall:'机型视图：按机型聚合的样品卡片墙（点卡片按机型筛列表）',
+  storagemap:'柜位视图：样品柜数字孪生，点格位看该格样品'
 };
 
 // 渲染右下角浮动「?」按钮（登录后调用一次）
