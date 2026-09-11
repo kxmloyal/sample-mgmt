@@ -278,7 +278,8 @@ describe('samples 详情弹窗迁移（DM-3）契约', () => {
     const callers = [];
     ids.forEach(id => {
       const arr = sources[id] || [];
-      const calls = arr.filter(f => read(f).indexOf('openDetailModal(') !== -1);
+      // 排除组件自身（其函数定义与用法注释里也含 openDetailModal( 字样）
+      const calls = arr.filter(f => f !== SHARED && read(f).indexOf('openDetailModal(') !== -1);
       if (calls.length) {
         callers.push(id);
         expect(arr).toContain(SHARED);
