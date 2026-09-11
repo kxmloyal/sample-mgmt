@@ -105,6 +105,8 @@ module.exports = function createDao(deps) {
   }
 
   // T13 软删除：deleted_at 置位 + version 推进；scan_logs 保留（审计不断链）
+  // 编号口径（2026-09-11 修订）：软删的 NEW 样品其流水号视为可复用（sample-code.js USED_SQL），
+  // 软删的 PRODUCED 及以后仍占用；唯一索引已由 migrateSamplesSampleNoRelease 改为「仅存活行唯一」
   // 时区口径（2026-09-09）：NOW() 与 created_at/updated_at 的 CURRENT_TIMESTAMP 同为会话墙钟（+08），
   // 原 UTC_TIMESTAMP() 与同行其他时间列差 8h，已统一；存量行由 migrateSamplesDeletedAtTz 一次性校正
   async function deleteSample(id) {

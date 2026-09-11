@@ -3,6 +3,10 @@
 
 CREATE TABLE IF NOT EXISTS samples (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  -- sample_no 的 UNIQUE 仅服务全新环境首次建表；启动迁移 migrateSamplesSampleNoRelease 会把它替换为
+  -- 「仅存活行唯一」的函数唯一索引（UNIQUE (IF(deleted_at IS NULL, sample_no, NULL))），使「已取消的
+  -- NEW 样品」编号可被复用。注意：deleted_at 列由迁移 migrateSamplesSoftDelete 添加，故函数索引
+  -- 不能声明在此 CREATE TABLE 内（建表时该列尚不存在），只能由迁移创建。
   sample_no VARCHAR(20) UNIQUE NOT NULL,
   name VARCHAR(200),
   spec VARCHAR(200),

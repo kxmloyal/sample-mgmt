@@ -45,4 +45,28 @@ async function migrateSamplesDeletedAtTz(pool) {
   await pool.execute("INSERT INTO _migr_sample_deleted_tz (id) VALUES (1)");
 }
 
-module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout, migrateSamplesDeletedAtTz };
+// 编号占用口径修订（2026-09-11）：取消「建样未制作(NEW)」样品后应释放其流水号供新样品复用
+// （占用口径见 subsystems/samples/db/sample-code.js 的 USED_SQL / RELEASABLE_ON_DELETE）。
+// 阻塞点：samples.sample_no 的原唯一索引（索引名 sample_no）会把软删行继续锁死——取号器即便放出该号，
+// 新样品 INSERT 也会撞唯一键。故改为「仅存活行唯一」的**函数唯一索引**：
+//   UNIQUE ( IF(deleted_at IS NULL, sample_no, NULL) )   —— NULL 之间不互斥，软删行不再阻塞复用
+// 实测（MySQL 8.0.45 + sample_mgmt_test）：软删行同号可共存、存活行可复用该号；两个存活行同号仍被
+// ER_DUP_ENTRY(1062) 拒绝，唯一性未削弱。
+// 前置：deleted_at 列由 migrateSamplesSoftDelete 添加，本迁移 MUST 在其之后执行（见 migrations/index.js 末位）。
+// 幂等：先探测索引现状再改，兼容 db.js init() 双跑；存量无需数据订正——口径改后已取消的 NEW 行自然不再
+// 占用序号（「回溯释放现存 6 条」即由此自动生效）。
+// 回滚：ALTER TABLE samples DROP INDEX uk_sample_no_live, ADD UNIQUE KEY sample_no (sample_no)
+// （回滚前须确认无同号并存行，否则因重复值失败）。
+async function migrateSamplesSampleNoRelease(pool) {
+  const [rows] = await pool.query(
+    "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='samples' AND INDEX_NAME IN ('sample_no','uk_sample_no_live') GROUP BY INDEX_NAME");
+  const has = new Set(rows.map(function (r) { return r.INDEX_NAME; }));
+  if (has.has('uk_sample_no_live') && !has.has('sample_no')) return; // 已是目标形态，防重入
+  const parts = [];
+  if (has.has('sample_no')) parts.push('DROP INDEX sample_no');
+  if (!has.has('uk_sample_no_live')) parts.push('ADD UNIQUE KEY uk_sample_no_live ((IF(deleted_at IS NULL, sample_no, NULL)))');
+  if (!parts.length) return;
+  await pool.execute('ALTER TABLE samples ' + parts.join(', '));
+}
+
+module.exports = { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout, migrateSamplesDeletedAtTz, migrateSamplesSampleNoRelease };

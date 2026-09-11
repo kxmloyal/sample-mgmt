@@ -280,7 +280,9 @@ function register(app) {
     }
   });
 
-  // 删除样品=软删除 deleted_at 置位（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行；T13 起日志保留、编号不复用）
+  // 删除样品=软删除 deleted_at 置位（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行；T13 起日志保留）
+  // 编号口径（2026-09-11 修订）：取消 NEW 样品（建样后未制作，无实物/无已贴标签）→ 释放其流水号供新样品复用；
+  // 取消 PRODUCED（已有实物，标签可能已打印在外）→ 编号仍占用、永不复用（占用口径见 db/sample-code.js）
   app.delete('/api/samples/:id', requireAuth, asyncHandler(async (req, res) => {
     const u = await currentUser(req);
     const s = await D.getSampleById(Number(req.params.id));
@@ -290,7 +292,8 @@ function register(app) {
     if (u.role !== 'ADMIN' && s.created_by !== u.id)
       return res.status(403).json({ error: '无权限：仅管理员或创建者可删除' });
     await D.deleteSample(s.id);
-    logger.info('样品已删除(软删除): '+s.sample_no+' by '+u.username);
+    // 审计留痕（无界面回收台账，仅日志）：标注该编号是已释放还是仍占用，便于事后追溯
+    logger.info('样品已删除(软删除): '+s.sample_no+' by '+u.username+(s.status === 'NEW' ? '（NEW：编号已释放，可复用）' : '（'+s.status+'：编号仍占用，不复用）'));
     res.json({ ok: true });
   }));
 

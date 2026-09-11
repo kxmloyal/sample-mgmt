@@ -41,17 +41,25 @@ describe('parseSampleCode', () => {
 describe('generateSampleCode（序列表 + 最小空档复用，机型级共享）', () => {
   // mock 环境：sample_seqs 序列表 {prefix: cur_seq} + samples 占用编号集合
   // addSample 模拟 createSample 插入成功后编号进入 samples（generateSampleCode 本身不写 samples）
-  function makeEnv(seedNos) {
+  function makeEnv(seedRows) {
     var seqs = {};
-    var samples = (seedNos || []).slice();
+    // 行模型：字符串=存活行（兼容既有用例）；对象 { no, deleted, status } 表达已取消行
+    var rows = (seedRows || []).map(function (r) {
+      return (typeof r === 'string') ? { no: r, deleted: false, status: 'NEW' } : r;
+    });
     return {
-      addSample: function (no) { samples.push(no); },
+      addSample: function (no) { rows.push({ no: no, deleted: false, status: 'NEW' }); },
       q: async function (sql, params) {
         var p = (params || [])[0];
+        var releasable = (params || [])[1];
         if (sql.indexOf('INSERT INTO sample_seqs') > -1) { if (!seqs[p]) seqs[p] = 0; return []; }
         if (sql.indexOf('SELECT cur_seq') > -1) { return [{ cur_seq: seqs[p] || 0 }]; }
         if (sql.indexOf('SELECT sample_no') > -1) {
-          return samples.filter(function (no) { return no.substring(2, 8) === p; }).map(function (no) { return { sample_no: no }; });
+          // 与 sample-code.js 的 USED_SQL 占用口径一致：存活行占用；已取消行仅当 status=releasable 时释放
+          return rows.filter(function (r) {
+            if (r.no.substring(2, 8) !== p) return false;
+            return (!r.deleted || r.status !== releasable);
+          }).map(function (r) { return { sample_no: r.no }; });
         }
         if (sql.indexOf('UPDATE sample_seqs') > -1) { seqs[p] = params[0]; return []; }
         return [];
@@ -82,6 +90,32 @@ describe('generateSampleCode（序列表 + 最小空档复用，机型级共享�
 
   it('删除尾部序号后释放：复用尾部空档', async () => {
     const env = makeEnv(['T-SF1225-S-001-01', 'T-SF1225-S-002-01']); // 003 已删除
+    expect(await gen(env)).toBe('T-SF1225-S-003-01');
+  });
+
+  it('取消(软删) NEW 样品：编号释放，新样品复用该号（2026-09-11 规则）', async () => {
+    // 002 建样后未制作(NEW)即被取消 → 无实物，其号应被复用
+    const env = makeEnv([
+      'T-SF1225-S-001-01',
+      { no: 'T-SF1225-S-002-01', deleted: true, status: 'NEW' },
+      'T-SF1225-S-003-01'
+    ]);
+    expect(await gen(env)).toBe('T-SF1225-S-002-01'); // 复用已取消 NEW 的 002
+    expect(await gen(env)).toBe('T-SF1225-S-004-01'); // 复用后继续递增
+  });
+
+  it('取消(软删) PRODUCED 样品：编号仍占用、不复用（防旧实物标签指向新样品）', async () => {
+    // 002 已制作完成(PRODUCED)后被取消 → 实物与标签可能在外，编号永不复用，新号跳到 004
+    const env = makeEnv([
+      'T-SF1225-S-001-01',
+      { no: 'T-SF1225-S-002-01', deleted: true, status: 'PRODUCED' },
+      'T-SF1225-S-003-01'
+    ]);
+    expect(await gen(env)).toBe('T-SF1225-S-004-01');
+  });
+
+  it('存活行一律占用：释放规则不影响未取消样品', async () => {
+    const env = makeEnv(['T-SF1225-S-001-01', 'T-SF1225-S-002-01']);
     expect(await gen(env)).toBe('T-SF1225-S-003-01');
   });
 
@@ -148,6 +182,20 @@ describe('previewSampleCode（只读预览，不消耗序号）', () => {
     const q = async function () { return [{ sample_no: 'G-SF9225-A-001-02' }, { sample_no: 'G-SF9225-A-003-02' }]; };
     const code = await previewSampleCode({ source_type: 'G', model: 'SF9225', station: '成品组', card_version: '02', query: q });
     expect(code).toBe('G-SF9225-A-002-02');
+  });
+
+  it('预览占用口径与取号一致：软删 NEW 号可复用，软删 PRODUCED 号仍占用', async () => {
+    const rows = [
+      { sample_no: 'G-SF9225-A-001-02', deleted_at: null, status: 'NEW' },
+      { sample_no: 'G-SF9225-A-002-02', deleted_at: '2026-09-11 10:00:00', status: 'NEW' },
+      { sample_no: 'G-SF9225-A-003-02', deleted_at: '2026-09-11 10:00:00', status: 'PRODUCED' }
+    ];
+    const q = async function (sql, params) {
+      const releasable = (params || [])[1];
+      return rows.filter(function (r) { return r.deleted_at === null || r.status !== releasable; });
+    };
+    const code = await previewSampleCode({ source_type: 'G', model: 'SF9225', station: '成品组', card_version: '02', query: q });
+    expect(code).toBe('G-SF9225-A-002-02'); // 002 已取消且为 NEW → 释放，预览即取 002
   });
 
   it('无空档时按存量续号', async () => {

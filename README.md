@@ -42,7 +42,7 @@ NEW → PRODUCED(制作完成) → RELEASED(已发行) → IN_CUSTODY(保管中)
 
 > 注：IN_CUSTODY 临期（距复检日 ≤7 天，含逾期）支持 QA「到期复检」自环（INSPECT_CUSTODY）——样品不脱离保管，复检通过后顺延复检日、标示卡版次自动 +1 并触发重打（2026-09-01 批次 1）。
 
-> 注：删除样品为**软删除**（`deleted_at` 置位，2026-09-01 批次 2 / T13）——样品行与操作日志全量保留（审计不断链），所有查询自动过滤已删样品；编号**不复用**（软删样品序号仍视为占用，防止旧实物 QR 扫码指向新样品）。
+> 注：删除样品为**软删除**（`deleted_at` 置位，2026-09-01 批次 2 / T13）——样品行与操作日志全量保留（审计不断链），所有查询自动过滤已删样品；编号占用口径（**2026-09-11 修订**）：**取消 NEW 样品（建样后未制作、无实物）→ 编号释放，可被新样品复用**；取消 PRODUCED 及以后（已有实物、标签可能已打印在外）→ **编号仍占用、永不复用**（防止旧实物 QR 扫码指向新样品）。
 
 ### 扫码台 — 三方扫码驱动状态机
 
@@ -326,7 +326,7 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples/batch` | POST | 是 | 批量新建样品（2026-09-07，对齐治具批量申请：RD/ADMIN、1~50 条、单事务整体回滚；批次级 model/source_type/station/card_version 共用，行级 name/notes/sample_type/limit_item/test_standard——限度样品信息按行填写；返回 id+编号清单供 `cards/print` 批量单页打印）|
 | `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
-| `/api/samples/:id` | DELETE | 是 | 删除样品=**软删除**（deleted_at 置位；仅 NEW/PRODUCED，仅创建者或管理员；操作日志保留、编号不复用）|
+| `/api/samples/:id` | DELETE | 是 | 删除样品=**软删除**（deleted_at 置位；仅 NEW/PRODUCED，仅创建者或管理员；操作日志保留；编号口径 2026-09-11：取消 NEW 释放编号、取消 PRODUCED 仍占用）|
 | `/api/samples/:id/qrcode` | GET | 是 | 样品二维码 |
 | `/api/samples/:id/qrcode/download` | GET | 是 | 下载高清二维码 |
 | `/api/samples/:id/label/download` | GET | 是 | 下载标签 HTML |

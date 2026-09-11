@@ -9,7 +9,7 @@ const { migrateProjectOaP2b } = require('./projects-oa-p2b');
 const { migrateProjectNotifications } = require('./projects-notif');
 const { migrateProjectTdUx } = require('./projects-td-ux');
 const { migrateProjectPlm } = require('./projects-plm');
-const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout, migrateSamplesDeletedAtTz } = require('./samples');
+const { migrateSamplesOptimisticLock, migrateSamplesSoftDelete, migrateSamplesCheckout, migrateSamplesDeletedAtTz, migrateSamplesSampleNoRelease } = require('./samples');
 const { migrateUserEnabled, migrateUsersSessionVersion } = require('./users');
 
 async function runMigrations(pool) {
@@ -35,6 +35,7 @@ async function runMigrations(pool) {
   await migrateSamplesCheckout(pool);
   await migrateSamplesDeletedAtTz(pool); // deleted_at 时区口径统一（2026-09-09，存量 -8h 校正，防重入）
   await migrateUsersSessionVersion(pool);
+  await migrateSamplesSampleNoRelease(pool); // 编号占用口径（2026-09-11）：唯一索引改「仅存活行唯一」，使已取消的 NEW 号可复用
 }
 
 module.exports = { runMigrations };

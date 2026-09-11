@@ -14,6 +14,17 @@ const STATION_GROUPS = Object.keys(GROUP_CODES);
 // 完整编号正则：^[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2}$
 const PATTERN = /^[CTG]-[A-Za-z0-9]{6}-[SMAQEI]-\d{3}-\d{2}$/;
 
+// 取消后释放编号的状态口径（2026-09-11 修订）：仅「建样后未制作」的 NEW 样品既无实物也无已贴标签，
+// 取消后其流水号可安全复用于新样品；status 为 PRODUCED 及以后的样品已有实物、标签可能已打印在外，
+// 取消后编号仍占用、永不复用。
+const RELEASABLE_ON_DELETE = 'NEW';
+
+// 序号占用判定（generateSampleCode / previewSampleCode 共用同一常量，保证预览与正式取号口径一致）：
+//   · 存活行（deleted_at IS NULL）→ 占用；
+//   · 已取消行（deleted_at IS NOT NULL）→ status 等于 RELEASABLE_ON_DELETE 时不占用，其余状态仍占用。
+// 参数顺序：[机型 6 位, RELEASABLE_ON_DELETE]
+const USED_SQL = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ? AND (deleted_at IS NULL OR status <> ?)';
+
 // 解析编号各段；非法返回 null
 function parseSampleCode(no) {
   if (!no || typeof no !== 'string' || !PATTERN.test(no)) return null;
@@ -29,9 +40,10 @@ function extractVersion(cardVersion) {
 }
 
 // 生成完整编号；流水号按 机型（6 位）级共享 001~999（跨提供处/组别同一序号空间）
-// 取号策略（T13 修订）：优先取「最小未占用序号」；软删除后编号不复用——软删样品行仍
-// 留在 samples 表，usedSql 刻意不加 deleted_at 过滤，已删序号仍视为占用（防止旧实物
-// QR 扫码指向新样品）；无空档时推进 sample_seqs.cur_seq（记录已分配最大值）。
+// 取号策略（2026-09-11 修订，取代 T13「软删一律不复用」）：优先取「最小未占用序号」；占用口径按
+// 样品状态分层——已取消的 NEW 行不占用（序号释放可复用），存活行与已取消的 PRODUCED 及以后仍占用
+// （二维码内容即 sample_no，见 routes-cards.js，复用会使旧实物标签扫码指向新样品）；无空档时推进
+// sample_seqs.cur_seq（记录已分配最大值；它只是水位、不是下限，本身不阻止空档复用）。
 // 并发安全：确保序列表行存在（no-op upsert）+ 行锁（FOR UPDATE）读 cur_seq + 锁定读
 // 占用序号，消除「先查后插」的重复取号竞态；必须与 createSample 同一事务（conn）调用，
 // SAVEPOINT 回滚时样品 INSERT 一并回滚，重试时重新取号不丢号。
@@ -48,24 +60,22 @@ async function generateSampleCode(opts) {
   // 确保序列表行存在（no-op upsert），随后行锁读已分配最大值
   const upsert = 'INSERT INTO sample_seqs (prefix, cur_seq) VALUES (?, 0) ON DUPLICATE KEY UPDATE cur_seq = cur_seq';
   const lockSel = 'SELECT cur_seq FROM sample_seqs WHERE prefix = ? FOR UPDATE';
-  // 该机型全部样品占用序号（含软删行，编号永不复用；编号第 3~8 位为机型 6 位）
-  const usedSql = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
 
   let curSeq, usedRows;
   if (opts.conn) {
     await opts.conn.execute(upsert, [prefix]);
     curSeq = Number((await opts.conn.execute(lockSel, [prefix]))[0][0].cur_seq);
-    usedRows = (await opts.conn.execute(usedSql, [prefix]))[0];
+    usedRows = (await opts.conn.execute(USED_SQL, [prefix, RELEASABLE_ON_DELETE]))[0];
   } else if (opts.query) {
     await opts.query(upsert, [prefix]);
     const rows = await opts.query(lockSel, [prefix]);
     curSeq = Number(rows && rows[0] ? rows[0].cur_seq : 0);
-    usedRows = await opts.query(usedSql, [prefix]);
+    usedRows = await opts.query(USED_SQL, [prefix, RELEASABLE_ON_DELETE]);
   } else {
     throw new Error('generateSampleCode 缺少 query 或 conn');
   }
 
-  // 找最小未占用序号：软删样品行仍在表内且 usedSql 不过滤 deleted_at（刻意），其序号仍算占用
+  // 找最小未占用序号：仅存活行与「已取消但已制作」的行计入占用，已取消的 NEW 号可复用
   const used = new Set();
   (usedRows || []).forEach(function (r) {
     const p = parseSampleCode(r.sample_no);
@@ -84,7 +94,7 @@ async function generateSampleCode(opts) {
 }
 
 // 编号预览：只读模拟（按存量样品找最小未占用序号），不写 sample_seqs，避免预览消耗序号
-// 仅供展示，实际编号以提交后 generateSampleCode 结果为准
+// 仅供展示，实际编号以提交后 generateSampleCode 结果为准；占用口径与 generateSampleCode 完全一致
 // opts: { source_type, model, station, card_version, conn?, query? }
 async function previewSampleCode(opts) {
   const source = String(opts.source_type || '').toUpperCase();
@@ -93,12 +103,11 @@ async function previewSampleCode(opts) {
   if (!groupCode) throw new Error('组别无效：' + opts.station);
   const modelCode = String(opts.model || '').slice(0, 6);
   if (modelCode.length < 6) throw new Error('机型编码至少 6 位');
-  const usedSql = 'SELECT sample_no FROM samples WHERE SUBSTRING(sample_no, 3, 6) = ?';
   let rows;
   if (opts.conn) {
-    rows = (await opts.conn.execute(usedSql, [modelCode]))[0];
+    rows = (await opts.conn.execute(USED_SQL, [modelCode, RELEASABLE_ON_DELETE]))[0];
   } else if (opts.query) {
-    rows = await opts.query(usedSql, [modelCode]);
+    rows = await opts.query(USED_SQL, [modelCode, RELEASABLE_ON_DELETE]);
   } else {
     throw new Error('previewSampleCode 缺少 query 或 conn');
   }
@@ -113,4 +122,4 @@ async function previewSampleCode(opts) {
   return source + '-' + modelCode + '-' + groupCode + '-' + String(next).padStart(3, '0') + '-' + extractVersion(opts.card_version);
 }
 
-module.exports = { SOURCE_CODES, GROUP_CODES, STATION_GROUPS, PATTERN, parseSampleCode, generateSampleCode, previewSampleCode };
+module.exports = { SOURCE_CODES, GROUP_CODES, STATION_GROUPS, PATTERN, RELEASABLE_ON_DELETE, parseSampleCode, generateSampleCode, previewSampleCode };
