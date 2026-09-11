@@ -1,13 +1,10 @@
 // detail-card.js — 样品详情弹窗·标示卡 Tab（编辑表单/保存CAS/409刷新/dirty 拦截）
-// 由 detail.js 拆出（D1 红线拆分，方案A）；bundle 拼接顺序：detail.js → detail-card.js
-var _detailDirty = false; // 标示卡未保存修改标记
+// 由 detail.js 拆出（D1 红线拆分，方案A）；bundle 拼接顺序：detail-modal.js → detail.js → detail-card.js
+// 2026-09-11 DM-3：Foot「关闭」按钮改由共享组件 `_sdm.close()` 统一处理（拦截文案见 detail.js 的 dirtyMsg.close）
+var _detailDirty = false; // 标示卡未保存修改标记（共享组件经 detail.js 的 isDirty 回调读取）
 
-// D1.5 关闭拦截（foot 按钮；遮罩点击见底部 capture 监听）
-function tryCloseDetail(mask) {
-  if (_detailDirty && !confirm('标示卡有未保存的修改，确定离开？')) return;
-  _detailDirty = false;
-  if (mask) closeModal(mask);
-}
+// D1.5 关闭拦截：foot 按钮与切 Tab 均走共享组件（文案：标示卡有未保存的修改，确定离开？/ 切换将丢失，继续？）；
+// 遮罩点击拦截见文件底部 document capture 监听
 
 // 标示卡 Tab 下拉回显（selected 属性在 FAST upgrade 时序下失效，须显式设 value）
 function applyDetailCardValues(s){
@@ -73,20 +70,15 @@ async function saveCard(id) {
 }
 
 // T6: 原地刷新详情弹窗（409 回调用，不重开弹窗避免遮罩堆叠）
+// 2026-09-11 DM-3：改为委托共享组件重渲当前 Tab（旧实现用文档级 body 查询直写 DOM，叠层时会命中
+// 底层弹窗的 body；当前 Tab 状态现由共享组件托管，本模块不再自行跟踪）
 async function reloadDetail(id) {
-  try {
-    var s = await api('GET', '/api/samples/' + id);
-    _detailSample = s;
-    _detailDirty = false; // 内容被重渲，旧编辑已失效
-    var body = document.querySelector('.modal-body');
-    if (!body) return;
-    body.innerHTML = _buildTabsHTML(s, id, _detailTab) + _buildTabContent(s, id, _detailTab);
-    if (_detailTab === 'card') applyDetailCardValues(s);
-  } catch (_) {}
+  _detailDirty = false; // 内容将被重渲，旧编辑已失效
+  if (_sdm && _sdm.isOpen()) await _sdm.reload();
 }
-// T6: 409 冲突时自动刷新详情
+// T6: 409 冲突时自动刷新详情（仅当样品详情弹窗确实打开时）
 onConflictRefresh(function() {
-  if (_detailSample && document.querySelector('.modal-mask')) reloadDetail(_detailSample.id);
+  if (_detailSample && _sdm && _sdm.isOpen()) reloadDetail(_detailSample.id);
 });
 
 // D1.5 遮罩点击拦截：document capture 抢先于 modal.js 关闭监听（mask 自身 capture 因注册顺序无法抢先）；命中遮罩且 dirty 时 stopPropagation + confirm
