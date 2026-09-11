@@ -2,6 +2,7 @@
 
 > 关联 spec：[2026-09-03-detail-modal-design-system.md](../specs/2026-09-03-detail-modal-design-system.md)
 > 覆盖：共享层（app.css、shared/frontend）+ samples + fixtures
+> 状态：已实施（DM-1~DM-5 全部完成，2026-09-11 归档；回归护栏 `tests/detail-modal-shared.test.js`）
 > 执行方式：orchestrator 直接执行（前端重构，无需重启，硬刷新生效）
 > 关键约束：app.css/shared 变更须多系统回归；改前端 JS 后重建 bundle
 

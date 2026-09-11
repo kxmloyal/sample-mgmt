@@ -860,7 +860,7 @@ module.exports = { register, initDB, seed };
 
 ## 18.6 详情弹窗设计系统（强制）
 
-> 完整规范见 `docs/superpowers/specs/2026-09-03-detail-modal-design-system.md`。
+> 完整规范见 `docs/archive/specs/2026-09-03-detail-modal-design-system.md`（该迭代已实施完成：共享组件缺陷修复 + fixtures/projects/samples 三子系统详情弹窗统一，设计文档于 2026-09-11 归档；行为回归护栏 `tests/detail-modal-shared.test.js`）。
 > 各子系统详情弹窗 MUST 复用 `shared/frontend/detail-modal.js` 的 `openDetailModal` 组件与 `public/css/app.css` 的共享样式（骨架屏/置顶Tab/密度自适应/未保存拦截/409刷新/日志时间线）。
 > 禁止各子系统重复实现弹窗交互骨架（违反 §15）；在 app.css 新增子系统专属详情弹窗样式同样禁止（应写子系统 module.css，但交互骨架样式应下沉共享）。
 

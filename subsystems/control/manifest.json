@@ -2,7 +2,7 @@
   "id": "control",
   "name": "管制流程管理",
   "description": "覆盖管制/不良品管制申请→会签→贴标入仓→NCR→处理会签→重工→入库出货全流程",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "deployed": true,
   "icon": "shield",
   "route": {
