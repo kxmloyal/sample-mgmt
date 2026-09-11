@@ -1,4 +1,4 @@
-/** BUNDLE vbmtwxradf — 30 files */
+/** BUNDLE vbmtwz7wtr — 31 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -258,6 +258,175 @@ function closeModal(mask){if(!mask)return;mask.remove();var all=document.querySe
 
   window.KbStats = { render: render, wrap: wrap, setActive: setActive };
 })();
+
+
+/* --- shared/frontend/detail-modal.js --- */
+// shared/frontend/detail-modal.js — 通用详情弹窗组件（设计系统 DM 规则：骨架屏/置顶Tab/密度自适应/dirty守卫/Tab懒渲染/409刷新）
+// 供各子系统详情弹窗复用；子系统只需提供渲染回调，交互骨架由本组件统一提供。
+//
+// 用法：
+//   var dm = openDetailModal({
+//     id: 'samples-67',
+//     fetchData: async function(id){ return await api('GET', '/api/samples/'+id); }, // 入参为 dm.open(id) 的 id（可选）
+//     buildHead: function(data){ return '<b>'+e(data.sample_no)+'</b>' + statusBadge(data); },
+//     tabs: function(data){ return [{key:'info',label:'信息',enabled:true}, {key:'logs',label:'日志',enabled:data.logs&&data.logs.length}]; },
+//     buildTabContent: function(data, key){ return renderContent(data, key); },  // 返回 HTML（不含 .dm-pad 外层，组件统一包裹）
+//     density: function(key){ return key==='info' ? 'd-high' : 'd-low'; },       // 可选，缺省见 DM_DENSITY_DEFAULT
+//     skeleton: function(key){ return '<div class="sk"></div>'; },               // 可选：懒渲染 Tab 的骨架 HTML（自带内边距，组件不再包 .dm-pad）
+//     lazyTabs: ['logs','image'],                                               // 可选：这些 Tab 先骨架一帧，下一帧再写真实内容
+//     onTabRendered: function(key, data){ if(key==='image') loadImageHistory(id); }, // 每次内容写入后回调（异步加载挂这里）
+//     isDirty: function(){ return _detailDirty; },                              // 可选：由子系统托管未保存态（优先于组件内部标记）
+//     dirtyMsg: { switch:'切换将丢失，继续？', close:'确定关闭？' },               // 可选：覆盖确认文案
+//     footer: function(data){ return '<fluent-button ... onclick="dm.close()">关闭</fluent-button>'; },
+//     toast: function(msg,type){ showToast(msg,type); },                        // 可选：加载失败提示
+//     onClosed: function(){ ... },                                              // 可选：关闭后回调
+//   });
+//   dm.open(id); dm.switchTab('logs'); dm.setDirty(true); dm.reload(); dm.close(); dm.getTab(); dm.isOpen();
+//
+// 依赖: openModal/closeModal (shared/frontend/modal.js)；statusBadge/e 由子系统注入，非本组件
+// 注意: 共享前端文件不使用 module.exports，openDetailModal 为全局函数（同 openModal/api 模式）
+//
+// 2026-09-11 修复（叠层弹窗缺陷，samples DM-3 迁移的前置条件）：
+//   1) 密度类与内容一律只写本实例自己的 mask —— 旧实现用文档级 querySelector 取「第一个」匹配
+//      （层级选择器取 dialog、类选择器取 body），在「柜位/格位清单 → 详情」叠层场景会把密度类与内容
+//      灌进底层弹窗（详情自身反而空白）；
+//   2) Tab 切换/关闭/置脏的 HTML 回调改为按 mask 定位实例（`mask.__dmApi`）—— 旧实现用
+//      `window.__dmSwitch` 等全局单例，叠层时后开实例会覆盖前者，点旧窗 Tab 会驱动新窗状态；
+//   3) 密度类名订正为真实生效的 `d-high/d-mid/d-low`（app.css `#fluent-modal.d-*::part(control)` 控制宽度）；
+//      旧默认值 `dm-high/dm-mid/dm-low` 在 app.css 中无任何规则 → 等于不生效（fixtures 密度设置长期空转）。
+
+var DM_TABS_CLASS = 'detail-tabs-top';
+// 各 Tab 默认密度（宽度）类：app.css 中 #fluent-modal.d-high=960px / .d-mid=800px / .d-low=640px
+var DM_DENSITY_DEFAULT = { info: 'd-high', card: 'd-mid', logs: 'd-low', image: 'd-low', overview: 'd-high', files: 'd-low' };
+var DM_DENSITY_ALL = ['d-high', 'd-mid', 'd-low'];
+
+function openDetailModal(cfg) {
+  cfg = cfg || {};
+  var data = null, currentTab = null, lastId = null, dirty = false, reqSeq = 0, renderSeq = 0, mask = null;
+
+  function topMask() { var ms = document.querySelectorAll('.modal-mask'); return ms.length ? ms[ms.length - 1] : null; }
+  // 本实例的弹窗节点（mask 已被关闭的极端时序下回退到最上层，避免抛错）
+  function myMask() { return (mask && mask.isConnected) ? mask : topMask(); }
+  function isDirty() { return cfg.isDirty ? !!cfg.isDirty() : dirty; }
+  function msgSwitch() { return (cfg.dirtyMsg && cfg.dirtyMsg.switch) || '有未保存的修改，切换将丢失，继续？'; }
+  function msgClose() { return (cfg.dirtyMsg && cfg.dirtyMsg.close) || '有未保存的修改，确定关闭？'; }
+
+  // 密度类：只作用本实例 dialog（叠层安全，不碰其它弹窗）
+  function applyDensity(key) {
+    var m = myMask();
+    var d = m ? m.querySelector('fluent-dialog') : null;
+    if (!d) return;
+    var cls = cfg.density ? cfg.density(key) : (DM_DENSITY_DEFAULT[key] || 'd-mid');
+    d.classList.add('dm-modal');
+    DM_DENSITY_ALL.forEach(function (c) { d.classList.remove(c); });
+    d.classList.add(cls);
+  }
+
+  function tabsHtml(activeKey) {
+    var ts = cfg.tabs ? cfg.tabs(data) : [];
+    if (!ts || !ts.length) return '';
+    var h = '<div class="' + DM_TABS_CLASS + '">';
+    ts.forEach(function (t) {
+      if (t.enabled === false) return;
+      // 传 this（.detail-tab 元素）→ 由 __dmSwitch 按 mask 反查实例，叠层时不串窗
+      h += '<div class="detail-tab' + (activeKey === t.key ? ' active' : '') + '" onclick="__dmSwitch(this,\'' + t.key + '\')">' + (t.label || t.key) + '</div>';
+    });
+    return h + '</div>';
+  }
+
+  function contentHtml(key) { return cfg.buildTabContent ? cfg.buildTabContent(data, key || 'info') : ''; }
+  function isLazy(key) { return !!(cfg.lazyTabs && key && cfg.lazyTabs.indexOf(key) !== -1 && cfg.skeleton); }
+
+  // 渲染当前 Tab：useSkeleton=true 时先只写骨架，下一帧再写真实内容（D2.2 懒渲染）
+  function renderBody(useSkeleton) {
+    var body = myMask() ? myMask().querySelector('.modal-body') : null;
+    if (!body) return;
+    var mySeq = ++renderSeq;
+    var key = currentTab;
+    if (useSkeleton) {
+      body.innerHTML = tabsHtml(key) + cfg.skeleton(key);
+      setTimeout(function () {
+        if (mySeq !== renderSeq || currentTab !== key) return; // 期间已切走/重渲，丢弃过期骨架
+        var b = myMask() ? myMask().querySelector('.modal-body') : null;
+        if (!b) return;
+        b.innerHTML = tabsHtml(key) + '<div class="dm-pad">' + contentHtml(key) + '</div>';
+        if (cfg.onTabRendered) cfg.onTabRendered(key, data);
+      }, 0);
+      return;
+    }
+    body.innerHTML = tabsHtml(key) + '<div class="dm-pad">' + contentHtml(key) + '</div>';
+    if (cfg.onTabRendered) cfg.onTabRendered(key, data);
+  }
+
+  function switchTab(key) {
+    if (isDirty() && !confirm(msgSwitch())) return;
+    if (!cfg.isDirty) dirty = false; // 子系统托管 dirty 时由其自行清理（如标示卡 Tab 重渲后重置）
+    currentTab = key;
+    applyDensity(key);
+    renderBody(isLazy(key));
+  }
+
+  function doClose() {
+    if (isDirty() && !confirm(msgClose())) return;
+    if (!cfg.isDirty) dirty = false;
+    closeModal(myMask());
+    if (cfg.onClosed) cfg.onClosed();
+  }
+
+  // 暴露到全局（HTML onclick 用）：按 mask 反查实例，多实例并存互不干扰
+  window.__dmSwitch = function (el, key) {
+    var m = el && el.closest ? el.closest('.modal-mask') : null;
+    if (m && m.__dmApi) m.__dmApi.switchTab(key);
+  };
+  window.__dmSetDirty = function (el) {
+    var m = el && el.closest ? el.closest('.modal-mask') : null;
+    if (m && m.__dmApi) m.__dmApi.setDirty(true);
+  };
+  window.__dmClose = function (el) {
+    var m = el && el.closest ? el.closest('.modal-mask') : null;
+    if (m && m.__dmApi) m.__dmApi.close();
+  };
+
+  var api = {
+    open: async function (id) {
+      reqSeq++;
+      var seq = reqSeq;
+      lastId = id; currentTab = null; dirty = false; renderSeq++;
+      var foot = '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>'; // 数据就绪前默认关闭按钮，加载后由 cfg.footer(data) 重设
+      var sk = '<div class="sk" style="height:20px;width:42%"></div><div class="overview-cards">' + '<div class="overview-card sk" style="height:130px"></div>'.repeat(4) + '</div>';
+      mask = openModal('', sk, { head: '<b>加载中…</b>', foot: foot });
+      mask.__dmApi = api; // 供 __dmSwitch/__dmSetDirty/__dmClose 反查本实例
+      var d;
+      try { d = await cfg.fetchData(id); } catch (err) {
+        if (seq === reqSeq) { if (cfg.toast) cfg.toast('详情加载失败', 'err'); closeModal(mask); }
+        return;
+      }
+      if (seq !== reqSeq) { closeModal(mask); return; }
+      data = d;
+      var head = cfg.buildHead ? cfg.buildHead(data) : '<b>' + (data && (data.sample_no || data.fixture_no || data.id)) + '</b>';
+      // 默认 Tab：首个 enabled；子系统返回空数组时 currentTab=null（不渲染 Tab 栏，内容按 info 兜底）
+      var ts = cfg.tabs ? cfg.tabs(data) : [];
+      var first = ts.find ? ts.find(function (t) { return t.enabled !== false; }) : ts[0];
+      currentTab = first ? first.key : null;
+      mask.querySelector('.modal-head').innerHTML = head;
+      if (cfg.footer) mask.querySelector('.modal-foot').innerHTML = cfg.footer(data); // 数据就绪后重设 foot（含操作按钮）
+      applyDensity(currentTab);
+      renderBody(isLazy(currentTab));
+    },
+    switchTab: switchTab,
+    setDirty: function (v) { dirty = (v === false) ? false : true; }, // 兼容无参调用（等价 true）
+    reload: async function () {
+      try { data = await cfg.fetchData(lastId); renderBody(false); } catch (err) {}
+    },
+    close: doClose,
+    getData: function () { return data; },
+    getTab: function () { return currentTab; },
+    isOpen: function () { return !!(mask && mask.isConnected); }
+  };
+  return api;
+}
+
+// 全局函数 openDetailModal 已定义（浏览器 bundle 中可直接调用）
 
 
 /* --- subsystems/samples/frontend/js/constants.js --- */
@@ -1355,26 +1524,51 @@ async function viewSampleModelWall() {
 // detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
 // D1: 骨架屏/Tab置顶(detail-tabs-top)/头部操作组/锁定引导/dirty拦截/密度类
-var _detailSample = null;
-var _detailTab = 'info';
-var _detailReqSeq = 0;
+// 2026-09-11 DM-3：交互骨架（骨架屏/置顶Tab/密度自适应/dirty守卫/Tab 懒渲染）改为复用
+//   shared/frontend/detail-modal.js 的 openDetailModal；本文件只保留业务渲染与回调。
+//   约束：bundle 顺序必须让 shared/frontend/detail-modal.js 排在 detail.js 之前（tools/bundle-sources.json）。
+var _detailSample = null;   // 当前弹窗的样品对象（标示卡保存/409 刷新/图片历史共用，detail-card.js 亦读取）
+var _detailId = null;       // 当前弹窗的样品 id（生成 HTML 里的 onclick 回调需要）
 
+var _sdm = openDetailModal({
+  id: 'sample-detail',
+  fetchData: async function (id) {
+    var s = await api('GET', '/api/samples/' + id);
+    _detailSample = s;
+    return s;
+  },
+  // D1.3 头部：编号 + 徽章 + 操作组（标示卡/标签/二维码/扫码操作）
+  buildHead: function (s) { return _buildHeadHTML(s, _detailId); },
+  tabs: function (s) { return _detailTabs(s); },
+  // D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式在 app.css，D2 进 module.css）
+  density: function (key) { return key === 'info' ? 'd-high' : key === 'card' ? 'd-mid' : 'd-low'; },
+  buildTabContent: function (s, key) { return _buildTabContent(s, _detailId, key); },
+  // D2.2 Tab 懒渲染：logs/image 先骨架一帧，下一帧再构建实际 DOM（先给视觉反馈）
+  skeleton: function (key) { return _buildTabSkeleton(key); },
+  lazyTabs: ['logs', 'image'],
+  onTabRendered: function (key, s) {
+    _detailDirty = false;                                  // D1.5 离开/重渲标示卡后重置未保存态
+    if (key === 'card') applyDetailCardValues(s);          // 显式回显下拉值（selected 属性在 FAST 下不生效）
+    else if (key === 'image') loadImageHistory(_detailId); // T14 大图 Tab 异步拉取历史照片
+  },
+  isDirty: function () { return _detailDirty; },           // 未保存态由标示卡表单托管（detail-card.js）
+  // D1.5 未保存拦截文案（原文案保持，含「标示卡」限定词）
+  dirtyMsg: { switch: '标示卡有未保存的修改，切换将丢失，继续？', close: '标示卡有未保存的修改，确定离开？' },
+  footer: function () { return '<fluent-button appearance="neutral" size="small" onclick="_sdm.close()">关闭</fluent-button>'; },
+  toast: function (m, t) { toast(m, t); },
+  onClosed: function () { _detailDirty = false; }
+});
+
+// 详情入口（列表/看板/柜位视图/机型视图等多处 onclick 调用，签名保持 viewDetail(id)）
 async function viewDetail(id) {
-  var seq = ++_detailReqSeq;
-  _detailTab = 'info'; _detailDirty = false;
-  // D1.1 先开骨架屏（标题条 + 4 卡片占位），数据到达后替换；失败 toast + 关窗
-  var foot = '<fluent-button appearance="neutral" size="small" onclick="tryCloseDetail(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
-  var sk = '<div class="sk" style="height:20px;width:42%"></div><div class="overview-cards">' + '<div class="overview-card sk" style="height:130px"></div>'.repeat(4) + '</div>';
-  var mask = openModal('', sk, { head: '<b>加载中…</b>', foot: foot });
-  _applyDetailDensity('info');
-  var s;
-  try { s = await api('GET', '/api/samples/' + id); }
-  catch (err) { if (seq === _detailReqSeq) { toast('详情加载失败', 'err'); closeModal(mask); } return; }
-  if (seq !== _detailReqSeq) { closeModal(mask); return; } // 防竞态：回收过期骨架弹窗
-  _detailSample = s;
-  mask.querySelector('.modal-head').innerHTML = _buildHeadHTML(s, id);
-  mask.querySelector('.modal-body').innerHTML = _buildTabsHTML(s, id, 'info') + _buildTabContent(s, id, 'info');
+  _detailId = id;
+  _detailDirty = false;
+  _sdm.open(id);
 }
+
+// 生成 HTML 内的 Tab 跳转入口（概览卡片图 / 「查看全部 N 条」/「← 返回详情」的 onclick 仍指向本函数）：
+// 转交共享组件切换，dirty 守卫与懒渲染由组件统一处理（id 参数保留兼容调用点）
+function renderTab(tab, id) { _sdm.switchTab(tab); }
 
 // D1.3 头部：编号 + 徽章 + 操作组
 // 2026-09-09 方案A：追加「扫码操作」——关弹窗后跳扫码台深链 #/scan?no=编号（viewScan 已支持自动填码
@@ -1398,56 +1592,7 @@ function _buildHeadHTML(s, id) {
     acts.map(function(a) { return '<button class="pv-icon-btn" title="' + a[1] + '" onclick="' + a[2] + '">' + a[0] + '</button>'; }).join('') + '</span>';
 }
 
-// D1.6 密度类：info→d-high / card→d-mid / logs·image→d-low（宽度样式 D2 进 module.css）
-// 2026-09-09 修复：叠层弹窗（柜位格位清单→详情）时 querySelector 命中 DOM 第一个 dialog（=底层清单窗），
-// 密度类误打到底层致其突然变宽、详情自身反而无密度类；改为取最上层 mask 的 dialog（详情自身）
-function _applyDetailDensity(tab) {
-  var ds = document.querySelectorAll('.modal-mask fluent-dialog');
-  var d = ds[ds.length - 1];
-  if (d) { d.classList.add('dm-modal'); d.classList.remove('d-high', 'd-mid', 'd-low'); d.classList.add(tab === 'info' ? 'd-high' : tab === 'card' ? 'd-mid' : 'd-low'); }
-}
-
-// D2.2 Tab 懒渲染：切 logs/image 先骨架一帧，setTimeout(0) 后再构建实际 DOM（先给视觉反馈）
-// 顶层弹窗引用（评审 P1 修复）：叠层（格位清单→详情）时 querySelector('.modal-body') 会命中
-// 底层清单窗的 body——内容灌错窗；统一取最上层 mask（DOM 末位）
-function _topBody() {
-  var ms = document.querySelectorAll('.modal-mask');
-  return ms.length ? ms[ms.length - 1].querySelector('.modal-body') : null;
-}
-
-// 顶层弹窗引用（评审 P2 修复同源）：goScanFromDetail 等关「详情自己」时须取最上层 mask
-function _topMask() {
-  var ms = document.querySelectorAll('.modal-mask');
-  return ms.length ? ms[ms.length - 1] : null;
-}
-
-// D2.2 Tab 切换（大图/日志懒渲染骨架先行；body 一律取顶层弹窗）
-function renderTab(tab, id) {
-  var s = (_detailSample && _detailSample.id === id) ? _detailSample : null;
-  if (!s) return;
-  if (_detailTab === 'card' && _detailDirty && !confirm('标示卡有未保存的修改，切换将丢失，继续？')) return; // D1.5 切Tab拦截
-  _detailDirty = false; // 离开/重渲标示卡后重置
-  _detailTab = tab;
-  var body = _topBody();
-  if (!body) return;
-  var tabsHTML = _buildTabsHTML(s, id, tab);
-  _applyDetailDensity(tab);
-  if (tab === 'logs' || tab === 'image') {
-    body.innerHTML = tabsHTML + _buildTabSkeleton(tab); // 骨架先行
-    setTimeout(function() {
-      if (!_detailSample || _detailTab !== tab) return; // 期间已切走，丢弃过期渲染
-      var b = _topBody();
-      if (!b) return;
-      b.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
-      if (tab === 'image') loadImageHistory(id); // 大图 Tab 异步历史照片（T14）调用时机保持
-    }, 0);
-    return;
-  }
-  body.innerHTML = tabsHTML + _buildTabContent(s, id, tab);
-  if (tab === 'card') applyDetailCardValues(s); // 显式回显下拉值（selected 属性在 FAST 下不生效）
-}
-
-// D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）
+// D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）；自带内边距，共享组件不再包 .dm-pad
 function _buildTabSkeleton(tab) {
   if (tab === 'logs') {
     var row = '<div style="display:flex;gap:10px;margin-bottom:14px"><div class="sk" style="width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px"></div><div style="flex:1"><div class="sk" style="height:13px;width:36%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:64%"></div></div></div>';
@@ -1456,30 +1601,28 @@ function _buildTabSkeleton(tab) {
   return '<div style="padding:16px"><div class="sk" style="height:240px;max-width:420px;margin:0 auto 12px"></div><div class="sk" style="height:14px;width:44%;margin:0 auto"></div></div>';
 }
 
-/** 构建 Tab 页面内容（不含 tab 栏） */
+/** 构建 Tab 页面内容（不含 tab 栏，也不含 .dm-pad 外层——由共享组件统一包裹） */
 function _buildTabContent(s, id, tab) {
+  var t = tab || 'info'; // 无可用 Tab 时组件传 null，等价于信息 Tab（与原实现一致）
   var html = '';
-  if (tab === 'info') html = _buildOverview(s, id);
-  else if (tab === 'logs') html = _buildLogsTab(s, id);
-  else if (tab === 'card') html = _buildCardTab(s, id);
-  else if (tab === 'image') html = _buildImageTab(s, id);
-  return '<div class="dm-pad">' + html + '</div>'; // 统一内容呼吸感（对齐预览稿）
+  if (t === 'info') html = _buildOverview(s, id);
+  else if (t === 'logs') html = _buildLogsTab(s, id);
+  else if (t === 'card') html = _buildCardTab(s, id);
+  else if (t === 'image') html = _buildImageTab(s, id);
+  return html;
 }
 
-function _buildTabsHTML(s, id, activeTab) {
+// Tab 清单（沿用原自建 Tab 栏的判定口径：信息/标示卡/全量日志/大图；三者皆无 → 无 Tab 栏，只显示信息页）
+function _detailTabs(s) {
   var hasImg = !!(s.produced_image || s.image || s.inspect_image);
   var hasLog = s.logs && s.logs.length > 0;
   var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data || s.test_standard);
-  if (!hasImg && !hasLog && !hasCrd) return '';
-
-  var on = 'renderTab(\'';
-  var h = '<div class="detail-tabs-top">';
-  h += '<div class="detail-tab' + (activeTab === 'info' ? ' active' : '') + '" onclick="' + on + 'info\',' + id + ')">信息</div>';
-  if (hasCrd) h += '<div class="detail-tab' + (activeTab === 'card' ? ' active' : '') + '" onclick="' + on + 'card\',' + id + ')">标示卡</div>';
-  if (hasLog) h += '<div class="detail-tab' + (activeTab === 'logs' ? ' active' : '') + '" onclick="' + on + 'logs\',' + id + ')">全量日志 (' + s.logs.length + ')</div>';
-  if (hasImg) h += '<div class="detail-tab' + (activeTab === 'image' ? ' active' : '') + '" onclick="' + on + 'image\',' + id + ')">大图</div>';
-  h += '</div>';
-  return h;
+  if (!hasImg && !hasLog && !hasCrd) return [];
+  var ts = [{ key: 'info', label: '信息' }];
+  if (hasCrd) ts.push({ key: 'card', label: '标示卡' });
+  if (hasLog) ts.push({ key: 'logs', label: '全量日志 (' + s.logs.length + ')' });
+  if (hasImg) ts.push({ key: 'image', label: '大图' });
+  return ts;
 }
 
 // ═══ 辅助：label/value ═══
@@ -1628,15 +1771,12 @@ function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getP
 
 /* --- subsystems/samples/frontend/js/views/detail-card.js --- */
 // detail-card.js — 样品详情弹窗·标示卡 Tab（编辑表单/保存CAS/409刷新/dirty 拦截）
-// 由 detail.js 拆出（D1 红线拆分，方案A）；bundle 拼接顺序：detail.js → detail-card.js
-var _detailDirty = false; // 标示卡未保存修改标记
+// 由 detail.js 拆出（D1 红线拆分，方案A）；bundle 拼接顺序：detail-modal.js → detail.js → detail-card.js
+// 2026-09-11 DM-3：Foot「关闭」按钮改由共享组件 `_sdm.close()` 统一处理（拦截文案见 detail.js 的 dirtyMsg.close）
+var _detailDirty = false; // 标示卡未保存修改标记（共享组件经 detail.js 的 isDirty 回调读取）
 
-// D1.5 关闭拦截（foot 按钮；遮罩点击见底部 capture 监听）
-function tryCloseDetail(mask) {
-  if (_detailDirty && !confirm('标示卡有未保存的修改，确定离开？')) return;
-  _detailDirty = false;
-  if (mask) closeModal(mask);
-}
+// D1.5 关闭拦截：foot 按钮与切 Tab 均走共享组件（文案：标示卡有未保存的修改，确定离开？/ 切换将丢失，继续？）；
+// 遮罩点击拦截见文件底部 document capture 监听
 
 // 标示卡 Tab 下拉回显（selected 属性在 FAST upgrade 时序下失效，须显式设 value）
 function applyDetailCardValues(s){
@@ -1702,20 +1842,15 @@ async function saveCard(id) {
 }
 
 // T6: 原地刷新详情弹窗（409 回调用，不重开弹窗避免遮罩堆叠）
+// 2026-09-11 DM-3：改为委托共享组件重渲当前 Tab（旧实现用文档级 body 查询直写 DOM，叠层时会命中
+// 底层弹窗的 body；当前 Tab 状态现由共享组件托管，本模块不再自行跟踪）
 async function reloadDetail(id) {
-  try {
-    var s = await api('GET', '/api/samples/' + id);
-    _detailSample = s;
-    _detailDirty = false; // 内容被重渲，旧编辑已失效
-    var body = document.querySelector('.modal-body');
-    if (!body) return;
-    body.innerHTML = _buildTabsHTML(s, id, _detailTab) + _buildTabContent(s, id, _detailTab);
-    if (_detailTab === 'card') applyDetailCardValues(s);
-  } catch (_) {}
+  _detailDirty = false; // 内容将被重渲，旧编辑已失效
+  if (_sdm && _sdm.isOpen()) await _sdm.reload();
 }
-// T6: 409 冲突时自动刷新详情
+// T6: 409 冲突时自动刷新详情（仅当样品详情弹窗确实打开时）
 onConflictRefresh(function() {
-  if (_detailSample && document.querySelector('.modal-mask')) reloadDetail(_detailSample.id);
+  if (_detailSample && _sdm && _sdm.isOpen()) reloadDetail(_detailSample.id);
 });
 
 // D1.5 遮罩点击拦截：document capture 抢先于 modal.js 关闭监听（mask 自身 capture 因注册顺序无法抢先）；命中遮罩且 dirty 时 stopPropagation + confirm
