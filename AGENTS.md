@@ -91,7 +91,7 @@
 │   ├── label-card-standard.md         # 标签/标示卡标准
 │   ├── sample-code-encoding.md        # 样品编号编码与占用口径
 │   ├── fixtures-flow-report.md / fixtures-model-view-2026-09-03.md / projects-review-2026-09-03.md  # 专项报告(带日期快照)
-│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md / RELEASE-v2.0.3.md  # 发布说明
+│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md / RELEASE-v2.0.3.md / RELEASE-v2.0.4.md  # 发布说明
 │   ├── 账号收集模板.xlsx / 通用项目追踪模板.xlsx  # 表格模板
 │   ├── archive/           # 已完成迭代的设计文档与实现计划归档
 │   └── superpowers/       # 当前有效规范与计划
@@ -330,7 +330,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 接口文档(docs/api.md 或 Swagger 注释,若有)
 - 依赖说明(版本变更原因与兼容性影响)
 - 提供**变更记录**:文件/接口/配置清单 + 兼容性影响 + 部署/回滚步骤
-- **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（当前 **2.0.3**）；发版时四处 MUST 同步更新
+- **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（当前 **2.0.4**）；发版时四处 MUST 同步更新
 
 ## 14. 当前已知技术债
 
