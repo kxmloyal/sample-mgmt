@@ -88,15 +88,20 @@ describe('孪生视图接线（前端/manifest/router）', () => {
     expect(view).toContain('if (ms.length) closeModal(ms[ms.length - 1]);');
     expect(view).not.toContain('pCloseModal');
   });
-  test('全链路评审 P1/P2：detail 叠层安全（topBody/topMask）——renderTab 不灌底层窗、扫码操作关全部窗', () => {
+  test('全链路评审 P1/P2：detail 叠层安全（已下沉共享组件，mask 作用域）——不灌底层窗、扫码操作关全部窗', () => {
     const detail = read('subsystems/samples/frontend/js/views/detail.js');
-    expect(detail).toContain('function _topBody');
-    expect(detail).toContain('function _topMask');
-    expect(detail).toContain('var body = _topBody();');
-    expect(detail).toContain('var b = _topBody();');
-    // 禁「裸 document.querySelector('.modal-body')」（叠层时命中底层清单窗）；
-    // mask.querySelector（有作用域）与 _topBody 内部的最后一层查询是合法的
+    const shared = read('shared/frontend/detail-modal.js');
+    // 2026-09-11 DM-3：详情弹窗改用共享组件，叠层取值（原 _topBody/_topMask）已下沉
+    // shared/frontend/detail-modal.js，组件按「本实例 mask」作用域读写；行为级回归见
+    // tests/detail-modal-shared.test.js（叠层不污染底层窗 + 多实例互不串窗）
+    expect(detail).toContain('openDetailModal({');
+    expect(detail).not.toContain('function _topBody');
+    expect(detail).not.toContain('function _topMask');
+    // 禁「裸 document.querySelector('.modal-body')」（叠层时命中底层清单窗）
     expect(detail).not.toContain("document.querySelector('.modal-body')");
+    expect(shared).not.toContain("document.querySelector('.modal-body')");
+    expect(shared).toContain("myMask().querySelector('.modal-body')"); // 只写本实例 mask
+    expect(shared).toContain('mask.__dmApi');                          // 回调按 mask 反查实例
     expect(detail).toContain('querySelectorAll(\'.modal-mask\')');
     const ms = detail.indexOf('querySelectorAll(\'.modal-mask\')');
     const hash = detail.indexOf("location.hash = '#/scan?no='");

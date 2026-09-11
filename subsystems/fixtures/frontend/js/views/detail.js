@@ -30,7 +30,9 @@ var _fixDm = openDetailModal({
     if (key === 'logs') return buildLogsTab();
     return buildFilesTab();
   },
-  density: function(key) { return key === 'overview' ? 'dm-high' : 'dm-low'; },
+  // 2026-09-11 修正：密度类名须为 app.css 真实生效的 d-high/d-mid/d-low
+  // （旧值 dm-high/dm-low 在 app.css 中无规则 → 概览/日志附件弹窗宽度一直未被设置）
+  density: function(key) { return key === 'overview' ? 'd-high' : 'd-low'; },
   footer: function(d) {
     return _buildActions(d.f) + '<fluent-button appearance="neutral" size="small" onclick="closeModal(this.closest(\'.modal-mask\'))">关闭</fluent-button>';
   },
