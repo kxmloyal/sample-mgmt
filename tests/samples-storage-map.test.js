@@ -72,6 +72,33 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     // 交互文案 emoji（U+2795 ➕）依用户 2026-09-14 决定「保留」，此处正向锁定以防再被以「非必要符号」误删
     expect(view).toContain('>➕ 新增柜</fluent-button>');
   });
+  test('工具栏分组（2026-09-14 方案 C）：信息组 + 竖分隔线 + 右操作组，且不越界污染其它视图', () => {
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    const css = read('subsystems/samples/frontend/css/module.css');
+    // 结构：左信息组 .sm-tb-info / 右操作组 .sm-tb-ops（组内首元素为 1px 竖分隔线）
+    expect(view).toContain('<div class="sm-tb-info">');
+    expect(view).toContain('<div class="sm-tb-ops">');
+    expect(view).toContain('<span class="sm-tb-sep"></span>');
+    // 顺序断言：分隔线在操作组「内部」（位于 ops 开标签之后）——否则换行时它会孤零零残留在上一行行尾
+    const iInfo = view.indexOf('<div class="sm-tb-info">');
+    const iOps = view.indexOf('<div class="sm-tb-ops">');
+    const iSep = view.indexOf('<span class="sm-tb-sep"></span>');
+    expect(iInfo).toBeGreaterThan(-1);
+    expect(iOps).toBeGreaterThan(iInfo);
+    expect(iSep).toBeGreaterThan(iOps);
+    // 样式：操作组用 auto 外边距整体右推；分隔线 1px 宽 22px 高
+    expect(css).toContain('.sm-tb-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}');
+    expect(css).toContain('.sm-tb-ops{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto}');
+    expect(css).toContain('.sm-tb-sep{width:1px;height:22px;background:var(--line,#e2e8f0);flex:0 0 auto}');
+    // 隔离护栏 1：共享 .filters 规则 MUST 保持原样（另有 4 个视图在使用它）
+    expect(read('public/css/app.css')).toContain('.filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}');
+    // 隔离护栏 2：另外 4 个 .filters 工具栏与储位弹窗标题栏（.sm-map-legend 容器）不得引用 sm-tb- 类
+    ['subsystems/samples/frontend/js/views/list.js',
+      'subsystems/samples/frontend/js/views/model-wall.js',
+      'subsystems/samples/frontend/js/views/models.js',
+      'subsystems/samples/frontend/js/views/storage-loc-picker.js'
+    ].forEach(f => expect(read(f)).not.toContain('sm-tb-'));
+  });
 });
 
 describe('孪生视图接线（前端/manifest/router）', () => {

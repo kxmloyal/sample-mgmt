@@ -26,12 +26,22 @@ async function viewStorageMap() {
       data.unknownLoc.map(function (s) { return e(s.sample_no) + '(' + e(s.storage_location) + ')'; }).join('</span><span class="sm-tag" style="background:#fff">') + '</span></div>'
     : '';
 
+  // 工具栏分组（2026-09-14 方案 C，用户拍板）：.sm-tb-info 左信息组 / 1px 竖分隔线 / .sm-tb-ops 右操作组。
+  // 操作组用 margin-left:auto 整体靠右；换行时该 auto 外边距吸收本行剩余空间，窄屏整组落第二行且仍靠右。
+  // 分隔线放在操作组「内部」而非两组之间——否则容器换行时它会孤零零残留在上一行行尾。
+  // 只在本调用处包组，smLegendHtml 本体未改：储位选择弹窗标题栏（storage-loc-picker.js:122，
+  // 容器为 .sm-map-legend）不共用本工具栏，故不受影响；其余 4 个 .filters 工具栏亦不涉及。
   v.innerHTML =
     '<div class="filters" style="align-items:center">' +
+    '<div class="sm-tb-info">' +
     '<b style="font-size:15px">样品柜数字孪生</b>' +
     smLegendHtml(true) +
+    '</div>' +
+    '<div class="sm-tb-ops">' +
+    '<span class="sm-tb-sep"></span>' +
     (me.role === 'ADMIN' ? '<fluent-button appearance="accent" size="small" onclick="smConfigCabinet(null,3,9)">➕ 新增柜</fluent-button>' : '') +
     '<fluent-button appearance="neutral" size="small" onclick="viewStorageMap()">刷新</fluent-button>' +
+    '</div>' +
     '</div>' + warnHtml + unknownHtml +
     '<div class="sm-grid">' + cabs.map(smRenderCabinet).join('') + '</div>';
 }

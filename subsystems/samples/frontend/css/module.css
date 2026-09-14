@@ -130,6 +130,14 @@
 /* 柜位配置弹窗表单（2026-09-14 修正：原标记错用 projects 私有类 .pk-form，samples 侧无该定义，
    导致 label 与输入框退化为行内流；改用本子系统 sm- 前缀并补齐纵向 flex 布局） */
 .sm-form{display:flex;flex-direction:column;gap:8px}
+/* 柜位视图工具栏分组（2026-09-14 方案 C，用户拍板）：左信息组 / 1px 竖分隔线 / 右操作组。
+   操作组用 margin-left:auto 整体靠右；换行时该 auto 外边距吸收本行剩余空间，
+   故窄屏下「分隔线+按钮」整组落到第二行且仍靠右、两按钮不被拆散。
+   分隔线置于 .sm-tb-ops 内部，避免换行时残留为上一行行尾的孤立竖线。
+   仅本工具栏使用（不改共享 .filters）；smLegendHtml 未改，储位选择弹窗标题栏不受影响。 */
+.sm-tb-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.sm-tb-ops{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto}
+.sm-tb-sep{width:1px;height:22px;background:var(--line,#e2e8f0);flex:0 0 auto}
 
 /* === 柜位图选择弹窗（方案B，2026-09-10）=== */
 /* 2026-09-10 滚动条根治版：app.css 弹窗主体预算 = 90vh − 头/尾（.modal-body overflow-y:auto），
