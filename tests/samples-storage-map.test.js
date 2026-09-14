@@ -57,6 +57,21 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     // 复用同一 PUT 接口（不新增端点）
     expect(view).toContain("await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(key)");
   });
+  test('工具栏布局（2026-09-14 修复）：容器复用共享 .filters，禁跨子系统 pk- 类名，emoji 保留', () => {
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    const css = read('subsystems/samples/frontend/css/module.css');
+    // 容器 MUST 用 app.css 的共享 .filters（此前误用 projects 私有 .pk-filters → 非 flex：
+    // 实测按钮间距 1px、align-items:center 静默失效、垂直中心差 5.5px、无 flex-wrap）
+    expect(view).toContain('<div class="filters" style="align-items:center">');
+    // 跨子系统类名零容忍：samples 侧不得再引用 projects 的 pk- 前缀类
+    expect(view).not.toContain('pk-filters');
+    expect(view).not.toContain('pk-form');
+    // 柜位配置弹窗表单改用本子系统 sm- 前缀 + 纵向 flex（此前 .pk-form 无定义 → 行内流）
+    expect(view).toContain('<div class="sm-form">');
+    expect(css).toContain('.sm-form{display:flex;flex-direction:column;gap:8px}');
+    // 交互文案 emoji（U+2795 ➕）依用户 2026-09-14 决定「保留」，此处正向锁定以防再被以「非必要符号」误删
+    expect(view).toContain('>➕ 新增柜</fluent-button>');
+  });
 });
 
 describe('孪生视图接线（前端/manifest/router）', () => {

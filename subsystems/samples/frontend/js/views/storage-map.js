@@ -27,7 +27,7 @@ async function viewStorageMap() {
     : '';
 
   v.innerHTML =
-    '<div class="pk-filters" style="align-items:center">' +
+    '<div class="filters" style="align-items:center">' +
     '<b style="font-size:15px">样品柜数字孪生</b>' +
     smLegendHtml(true) +
     (me.role === 'ADMIN' ? '<fluent-button appearance="accent" size="small" onclick="smConfigCabinet(null,3,9)">➕ 新增柜</fluent-button>' : '') +
@@ -121,7 +121,7 @@ function smConfigCabinet(key, cols, rows) {
     noHtml = '<label>柜号（数字，柜名 = 柜号 + #样品柜）</label>' +
       '<fluent-text-field id="sm-cfg-no" type="number" min="1" max="99" value="' + (maxNo + 1) + '"></fluent-text-field>';
   }
-  var html = '<div class="pk-form">' + noHtml +
+  var html = '<div class="sm-form">' + noHtml +
     '<label>列数（横向格位数）</label><fluent-text-field id="sm-cfg-cols" type="number" min="1" max="50" value="' + cols + '"></fluent-text-field>' +
     '<label>行数（纵向格位数）</label><fluent-text-field id="sm-cfg-rows" type="number" min="1" max="50" value="' + rows + '"></fluent-text-field>' +
     (isNew ? '<p class="muted" style="font-size:12px">创建后立即在柜位视图与扫码台「🗺 柜位图」中显示为空柜，可直接点选空位放样</p>' : '') +
