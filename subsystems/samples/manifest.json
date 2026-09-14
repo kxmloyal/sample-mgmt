@@ -125,6 +125,19 @@
       ]
     },
     {
+      "key": "report",
+      "label": "样品报表",
+      "icon": "chart",
+      "view": "viewReport",
+      "roles": [
+        "ADMIN",
+        "RD",
+        "QA",
+        "CUSTODY",
+        "ME"
+      ]
+    },
+    {
       "key": "logs",
       "label": "操作日志",
       "icon": "history",

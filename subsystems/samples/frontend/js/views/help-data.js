@@ -1,4 +1,4 @@
-// help-data.js — 帮助数据（14个功能模块），按模块组织
+// help-data.js — 帮助数据（15个功能模块），按模块组织
 var HELP_DATA=[
   {
     id:'dashboard', module:'看板', desc:'登录后的样品看板',
@@ -38,7 +38,16 @@ var HELP_DATA=[
     ]
   },
   {
-    id:'create', module:'新建样品', desc:'研发人员创建新样品',
+        id:'report', module:'样品报表', desc:'只读聚合：状态/机型/组别/柜位/我的待办',
+    items:[
+      {h:'入口',body:'左侧导航「样品报表」（地址栏 hash：#/report）\n只读页面：不新增接口、不写入任何数据、不改变样品状态'},
+      {h:'数据来源',body:'全部复用既有只读接口：\nGET /api/dashboard（状态与预警）\nGET /api/samples/models?view=wall（机型维度）\nGET /api/samples/storage-map（柜位占用）\nGET /api/samples?station=组别&limit=1（组别计数）'},
+      {h:'口径',body:'存活样品总量含已作废；在管总量 = 存活总量 − 已作废\n「已发行·待接收」是当前仍停留在该状态的滞留量，不是累计发行量\n状态分布按生命周期顺序排列，不按数量排序（小样本下数量差落在可辨阈以下）\n组别按 STATIONS 全集补零展示，零值组别保留'},
+      {h:'本期不含',body:'时间趋势、退回重做率、数据质量缺口、聚合 CSV 导出\n以上需后端聚合端点，属后续方案（乙/丙）范围'}
+    ]
+  },
+  {
+id:'create', module:'新建样品', desc:'研发人员创建新样品',
     items:[
       {h:'基本信息',body:'名称、机型、站别 — 必填\n规格、备注 — 选填'},
       {h:'限度样品字段',body:'样品类型：OK样品 / NG样品\n限度项目：26 项下拉选择\n来源：客供 / 元山 / 塔岗\n版次：发行自动01，重新发行+1（最高99）\n标准范围：如「震动≤0.5mm」'},
