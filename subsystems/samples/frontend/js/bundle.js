@@ -1,4 +1,4 @@
-/** BUNDLE vbmu2cu8zb — 33 files */
+/** BUNDLE vbmu2kg6y6 — 33 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1706,6 +1706,7 @@ var _LOG_FLOW = {
   RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
   RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
   RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废', RECREATE_REPLACED: '⬆ 已作废（自环）',
+  CLEAR_STORAGE: '⬆ 已作废（柜位释放·自环）',
   FORCE_REASSIGN: '⬆ 退回审核（改派）'
 };
 
@@ -1716,7 +1717,7 @@ function _buildLogsTab(s, id) {
     var note = (l.note || '').trim();
     var fold = note.length > 40; // 长备注默认折叠 1 行，点击切换展开/收起
     h += '<div class="tl-item">' +
-      '<div><span class="tl-act">' + (ACTION_CN[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
+      '<div><span class="tl-act">' + (ACTION_CN[l.action] || SCAN_ACTION_CN_EXT[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
       '<div class="tl-meta">' + fmt(l.created_at) + ' · ' + e(l.role || '—') + (l.dept ? '/' + e(l.dept) : '') + (l.location ? ' · ' + e(l.location) : '') + '</div>' +
       (note ? '<div class="tl-note' + (fold ? ' can-fold folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
       '</div>';
@@ -2384,6 +2385,13 @@ function renderReturnActions(action,s){
     return '<p style="font-size:12px;color:#dc2626">管理员兜底：退回审核流程卡死时，强制作废该样品（不可撤销，提交前将二次确认）</p>'+
       '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述强制作废原因"></textarea>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'FORCE_RETIRE\',this)">强制作废</fluent-button></div>';
+  }else if(action==='CLEAR_STORAGE'){
+    // 清柜释放储位（2026-09-15 档2）：作废样品实物已离柜时释放其占用的格位。
+    // 仅 RETIRED 状态可达（manifest 转移门 + 后端二次状态校验）；不可撤销，原储位写入操作日志 location 列留痕。
+    return '<p style="font-size:12px;color:#475569">清柜：释放该样品占用的柜位格（仅「已作废」且实物已离柜时执行）。原储位会写入操作日志留痕，格位随后变为空位，不可撤销。</p>'+
+      (s&&s.storage_location?'<p class="muted" style="font-size:12px">当前储位：<b>'+e(s.storage_location)+'</b></p>':'')+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：实物已退回研发/已报废离柜"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#475569" onclick="confirmScan(\'CLEAR_STORAGE\',this)">确认清柜释放格位</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+
@@ -2583,8 +2591,10 @@ function renderSmCandidates(kw) {
   var list = smSortedCells().filter(function (c) { return !k || c.label.indexOf(k) > -1 || c.key.indexOf(k) > -1; }).slice(0, 8);
   if (!list.length) { hideSmCandidates(); return; }
   panel.innerHTML = list.map(function (c) {
+    // 件数口径与柜位图对齐（2026-09-15 拆桶）：liv=真实占位，作废残留单列；纯作废格位显示「待清柜」而非「0件」
+    var liv = c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved, gn = c.occ.gone || 0;
     var badge = c.empty ? '<span class="co-badge co-badge-dept">空</span>'
-      : '<span class="co-badge">' + (c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved) + '件</span>';
+      : (liv ? '<span class="co-badge">' + liv + '件</span>' : '<span class="co-badge">待清柜</span>') + (gn && liv ? '<span class="co-badge">废' + gn + '</span>' : '');
     return '<div class="co-cand-item"><b title="' + e(c.label) + '" onmousedown="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
       '<span class="co-cand-dept">' + badge + '</span></div>';
   }).join('');
@@ -2650,7 +2660,7 @@ function smMapSelectCab(no) {
   for (var row = 1; row <= cab.rows; row++) {
     for (var col = 1; col <= cab.cols; col++) {
       var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0] ||
-        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } };
+        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] } };
       cellsHtml += smMapRenderCell(cab, cell);
     }
   }
@@ -2677,15 +2687,19 @@ function smMapSelectCab(no) {
 }
 
 // 储位选择场景的格位渲染：点格位直接选储位（与柜位视图的 smRenderCell 交互不同，不复用）
+// 2026-09-15 拆桶同步：作废残留（gone）不计入角标件数，但纯作废格位渲染为 sm-gone（占位不可选、也不显示成空位）
 function smMapRenderCell(cab, cell) {
   var occ = cell.occupancy;
+  var gone = occ.gone || 0;
   var total = occ.in + occ.out + occ.ret + occ.reserved;
   var cls = 'sm-empty';
   if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  if (!total && gone) cls = 'sm-gone';
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
   var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  if (gone) sub += '<span class="sm-sub sm-sub-gone">废' + gone + '</span>';
   return '<div class="sm-cell ' + cls + '" onclick="smMapPick(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
     '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
 }
@@ -2730,7 +2744,7 @@ function collectScanLoc(body, action) {
 /* --- subsystems/samples/frontend/js/views/scan.js --- */
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
-var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废'};
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废',CLEAR_STORAGE:'清柜释放储位'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -2960,7 +2974,7 @@ async function confirmScan(action,btn){
   // 2026-09-10 防误确认：储位校验抽至 storage-loc-picker.js（scan.js 超 70% 预警线只做薄调用）；
   // 校验失败 toast 并 return false，调用方中止提交
   if((action==='CUSTODY'||action==='EDIT_STORAGE')&&!collectScanLoc(body,action))return;
-  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'){
+  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'||action==='CLEAR_STORAGE'){
     var noteEl2=document.getElementById('scan-note');if(noteEl2&&noteEl2.value.trim())body.note=noteEl2.value.trim();
   }
   if(action==='RETIRE_RECREATE'){
@@ -2987,7 +3001,7 @@ async function confirmScan(action,btn){
     handleScanSuccess(r);
     // 时机评审修正②：储位类动作成功即失效格位缓存——该格位占用态已变（空→占用），
     // 缓存不失效会导致下一件样品的候选空位徽标过期误导；领用人列表无此问题不处理
-    if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;
+    if(action==='CUSTODY'||action==='EDIT_STORAGE'||action==='CLEAR_STORAGE')_smCache=null;
     if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
     if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
   }catch(e){toast(e.message,'err');}
@@ -3106,8 +3120,9 @@ var HELP_DATA=[
     id:'storagemap', module:'柜位视图', desc:'样品柜数字孪生：柜位占用与空位',
     items:[
       {h:'入口',body:'样品列表页「柜位视图」按钮，或左侧导航「柜位视图」（#/storagemap）\n新建/编辑样品选择储位时复用同一套柜位图（扫码台「🗺 柜位图」同源）'},
-      {h:'四色图例',body:'在柜：样品在柜内\n被领走(占位)：样品已领出，储位保留\n退回审核：样品处于退回审核中\n空位：可放样'},
+      {h:'五色图例',body:'在柜：样品在柜内\n被领走(占位)：样品已领出，储位保留\n退回审核：样品处于退回审核中\n已作废(待清柜)：样品已作废、实物已离柜，储位待释放（该格仍不可放样）\n空位：可放样'},
       {h:'点格位做什么',body:'点格位 → 弹出该格样品清单 → 点样品编号 → 打开该样品详情\n详情头部「📲 扫码操作」可直达领用/归还/复检等流转'},
+      {h:'清柜释放储位（保管/管理员）',body:'适用：样品已作废且实物已离柜，但柜位图仍显示其占用该格（格位带「废N」标记）\n操作：扫码台扫该样品 → 点「清柜释放储位」→ 确认（备注选填）\n结果：储位清空、该格立即变为空位；原储位写入操作日志留痕，不可撤销'},
       {h:'顶部告警区',body:'未入柜样品：已接收保管但没录入储位，需补录\n储位格式不规范：储位须为「N#样品柜C-R」（如 1#样品柜A-1），不符者会在顶部列出编号与当前值'},
       {h:'配置柜位（仅管理员）',body:'「➕ 新增柜」新增样品柜；柜位卡片上可调整行列数（默认 3 列 × 9 行）\n保存后立即生效，无需刷新页面'}
     ]
@@ -3337,7 +3352,7 @@ function dismissContextHint(pageKey){
 /* --- subsystems/samples/frontend/js/views/storage-map.js --- */
 // views/storage-map.js — 样品柜数字孪生视图（2026-09-09）
 // 入口：#/storagemap（导航「柜位视图」+ 列表页按钮，与机型视图同款 hash 跳转）
-// 数据：GET /api/samples/storage-map（聚合：在柜/领走=占用/退回审核/预占/空位/未入柜池）
+// 数据：GET /api/samples/storage-map（聚合：在柜/领走=占用/退回审核/预占/已作废(待清柜)/空位/未入柜池）
 // 交互：格位点击 → 弹该格样品清单 → 点样品 → viewSample 详情弹窗（详情头部可「📲扫码操作」直达流转）
 // 配置：ADMIN 在页内配置每柜行列（PUT cabinets/:key，默认 3 列×9 行）
 // 样式：写入本子系统 module.css（sm-cab-* 类），禁 app.css
@@ -3386,12 +3401,15 @@ async function viewStorageMap() {
 // 柜位图图例（2026-09-10 抽公共）：柜位视图顶栏与「储位选择弹窗」标题栏共用同一份标签，
 // 保证两处颜色说明永不漂移（§15.2 禁复制粘贴；此前弹窗漏搬图例，新用户分不清 4 色含义）。
 // 参数：withLabel=true 时前置「图例：」文案（柜位视图用）；弹窗标题栏空间紧，传 false。
-// 返回：4 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+// 返回：5 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+// 2026-09-15 补第 5 态「已作废(待清柜)」：作废件实物离柜后储位仍保留，此前无图例说明，
+// 格位仅靠「件数」角标体现且被误渲染为 sm-empty（看着是空位却能放样），用户现场易误判。
 function smLegendHtml(withLabel) {
   return (withLabel ? '<span class="muted" style="font-size:12px">图例：</span>' : '') +
     '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-gone"></span>已作废(待清柜)</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>';
 }
 
@@ -3401,7 +3419,7 @@ function smRenderCabinet(c) {
   for (var row = 1; row <= c.rows; row++) {
     for (var col = 1; col <= c.cols; col++) {
       var cell = c.cells.filter(function (x) { return x.col === col && x.row === row; })[0];
-      cellsHtml += smRenderCell(c, cell || { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } });
+      cellsHtml += smRenderCell(c, cell || { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] } });
     }
   }
   var cfgBtn = (me.role === 'ADMIN')
@@ -3417,16 +3435,21 @@ function smRenderCabinet(c) {
     '<div class="sm-cells" style="grid-template-columns:repeat(' + c.cols + ',1fr)">' + cellsHtml + '</div></div>';
 }
 
-// 渲染单格位：空=虚框灰点；占用=状态色+数量角标；点击弹清单
+// 渲染单格位：空=虚框灰点；占用=状态色+数量角标；作废残留=灰底+「废N」副标；点击弹清单
+// 2026-09-15 拆桶后口径：角标 total 只计真实占位（在柜/领走/退回/预占），已作废残留单列「废N」——
+// 修复此前作废件混入角标导致的件数虚高（实测 8 个受影响格位中 7 个虚高），并让纯作废格位不再套 sm-empty。
 function smRenderCell(cab, cell) {
   var occ = cell.occupancy;
+  var gone = occ.gone || 0; // 兼容旧后端（无 gone 字段 → 0，行为同改造前）
   var total = occ.in + occ.out + occ.ret + occ.reserved;
   var cls = 'sm-empty';
   if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  if (!total && gone) cls = 'sm-gone'; // 纯作废残留：不得渲染成空位（看着能放样，实际仍被数据占用）
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
   var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  if (gone) sub += '<span class="sm-sub sm-sub-gone">废' + gone + '</span>';
   return '<div class="sm-cell ' + cls + '" onclick="smCellSamples(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
     '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
 }
@@ -3444,7 +3467,10 @@ function smCellSamples(cabNo, col, row) {
   var occ = cell.occupancy;
   if (!occ.samples.length) { toast(col + '-' + row + ' 为空位', 'ok'); return; }
   var rows = occ.samples.map(function (s) {
-    var stCn = { IN_CUSTODY: '在柜', CHECKED_OUT: '被领走', RETURNING: '退回审核' }[s.status] || s.status;
+    // 状态中文化补全（2026-09-15）：原映射只覆盖在柜三态，作废件直接显示英文 RETIRED；
+    // 另补未制作/已制作/已发行三态——它们也会出现在预占格位里（有储位但未接收保管）。
+    var stCn = { IN_CUSTODY: '在柜', CHECKED_OUT: '被领走', RETURNING: '退回审核', RETIRED: '已作废(待清柜)',
+      NEW: '待制作', PRODUCED: '已制作', RELEASED: '已发行' }[s.status] || s.status;
     return '<div class="co-cand-item"><b title="' + e(s.sample_no) + '" onclick="viewDetail(' + s.id + ')">' + e(s.sample_no) + '</b>' +
       '<span class="co-cand-dept"><span class="co-dept-name">' + e(s.name || '') + '</span><span class="co-badge">' + stCn + '</span></span></div>';
   }).join('');
@@ -3518,7 +3544,7 @@ function smToggleUncab() {
 // 数据来源：全部复用既有只读端点，本视图**不新增任何接口、不写入任何数据、不触达状态机**：
 //   GET /api/dashboard                  → byStatus(7态) / total / overdue / dueSoon / myPending / checkoutOverdue
 //   GET /api/samples/models?view=wall   → 机型维度（样品数 / 复检逾期 / 领用超时 / 状态分布）
-//   GET /api/samples/storage-map        → 柜位占用（summary: total/inCustody/checkedOut/returning/reserved/empty）
+//   GET /api/samples/storage-map        → 柜位占用（summary: total/inCustody/checkedOut/returning/reserved/gone/empty）
 //   GET /api/samples?station=X&limit=1  → 组别维度（仅取 total 计数，忽略分页）
 // 样式：复用 app.css 共享 .filters / .kb-stats / .dash-bar；本页专属 .rpt-* 只写本子系统 module.css（AGENTS §18.5）
 // 命名：一律 RPT_ / rpt 前缀——bundle 为经典 script 拼接的**单一全局作用域**，顶层重名 = SyntaxError 致全站白屏
@@ -3741,13 +3767,15 @@ function rptRenderAlerts(R) {
     }).join('') + '</tbody></table></div></div>';
 }
 
-// 柜位占用：每柜总格位 / 在用 / 空位 / 占用率；在用 = 在柜 + 领走(占位) + 退回审核 + 预占
+// 柜位占用：每柜总格位 / 在用 / 空位 / 占用率；在用 = 在柜 + 领走(占位) + 退回审核 + 预占 + 作废残留(待清柜)
+// 2026-09-15 拆桶：作废残留（gone）从「预占」中分离单列——它仍占用格位（计入在用/不计数为空位），
+// 但语义是「实物已离柜、储位待清柜释放」，与提前占位防冲突的「预占」混计会让占用率口径含混。
 function rptRenderStorage(R) {
   var cabs = (R.smap.cabinets || []).slice().sort(function (a, b) { return (a.no || 0) - (b.no || 0); });
-  var acc = { total: 0, used: 0, empty: 0, inCustody: 0, checkedOut: 0, returning: 0, reserved: 0 };
+  var acc = { total: 0, used: 0, empty: 0, inCustody: 0, checkedOut: 0, returning: 0, reserved: 0, gone: 0 };
   cabs.forEach(function (c) {
     var s = c.summary || {};
-    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0);
+    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0) + (Number(s.gone) || 0);
     acc.total += Number(s.total) || 0;
     acc.used += used;
     acc.empty += Number(s.empty) || 0;
@@ -3755,12 +3783,13 @@ function rptRenderStorage(R) {
     acc.checkedOut += Number(s.checkedOut) || 0;
     acc.returning += Number(s.returning) || 0;
     acc.reserved += Number(s.reserved) || 0;
+    acc.gone += Number(s.gone) || 0;
   });
   var uncab = (R.smap.uncabineted || []).length;
   var unknown = (R.smap.unknownLoc || []).length;
   var rows = cabs.map(function (c) {
     var s = c.summary || {};
-    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0);
+    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0) + (Number(s.gone) || 0);
     var t = Number(s.total) || 0;
     return '<tr>' +
       '<td><b>' + e(c.key) + '</b>' + (c.configured ? '' : ' <span class="muted" style="font-size:11px">(未配置行列)</span>') + '</td>' +
@@ -3781,7 +3810,7 @@ function rptRenderStorage(R) {
       '<th>保管柜</th><th class="num">总格位</th><th class="num">在用</th><th class="num">空位</th><th class="num">占用率</th><th>占用</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="muted" style="font-size:11px;margin-top:8px">在用构成：在柜 ' + acc.inCustody + ' · 被领走(占位) ' + acc.checkedOut +
-      ' · 退回审核 ' + acc.returning + ' · 预占 ' + acc.reserved + '。领走不释放格位（用户 2026-09-09 确认）。</div>' +
+      ' · 退回审核 ' + acc.returning + ' · 预占 ' + acc.reserved + ' · 作废残留 ' + acc.gone + '（待清柜）。领走不释放格位（用户 2026-09-09 确认）。</div>' +
     warn + '</div></div>';
 }
 

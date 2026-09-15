@@ -227,6 +227,17 @@ async function applyAction(chosenAction, ctx) {
     updated.retired_reason = note.trim();
     updated.retire_assigned_rd = null;
     logData = { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
+  } else if (chosenAction === 'CLEAR_STORAGE') {
+    // 清柜（2026-09-15 新增，档2）：作废样品实物已离柜时释放其占用的柜位格。
+    // 可达性：仅 RETIRED（manifest 转移门 RETIRED→RETIRED 限定 ADMIN/CUSTODY/ME），下方再做一次状态兜底校验。
+    // 留痕：原储位写入日志 location 列，清柜后仍可在时间线/日志表追溯（这 26 件作废样品的 CUSTODY 日志 26/26 均带位置）。
+    // 副作用：storage_location 置空后，柜位图不再渲染该格（既不计占用也不进「未入柜」告警池，后者只收在柜三态）。
+    // 兼容：不删除任何字段；旧接口/旧前端不受影响。异常：非 RETIRED → 409；本就无储位 → 400（防重复提交零动作）。
+    if (s.status !== 'RETIRED') return { status: 409, error: '仅「已作废」样品可清柜释放格位' };
+    if (!s.storage_location) return { status: 400, error: '该样品当前无储位，无需清柜' };
+    const clearedLoc = s.storage_location;
+    updated.storage_location = null;
+    logData = { sample_id: s.id, action: 'CLEAR_STORAGE', role: u.role, user_id: u.id, dept: u.dept, location: clearedLoc, note: (note && note.trim()) ? note.trim() : ('清柜释放格位 ' + clearedLoc) };
   } else if (chosenAction === 'RETURN_REJECT') {
     if (!note || !note.trim()) return { status: 400, error: '请填写拒绝理由' };
     updated.status = 'IN_CUSTODY';

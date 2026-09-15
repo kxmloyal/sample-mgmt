@@ -1,6 +1,6 @@
 // views/storage-map.js — 样品柜数字孪生视图（2026-09-09）
 // 入口：#/storagemap（导航「柜位视图」+ 列表页按钮，与机型视图同款 hash 跳转）
-// 数据：GET /api/samples/storage-map（聚合：在柜/领走=占用/退回审核/预占/空位/未入柜池）
+// 数据：GET /api/samples/storage-map（聚合：在柜/领走=占用/退回审核/预占/已作废(待清柜)/空位/未入柜池）
 // 交互：格位点击 → 弹该格样品清单 → 点样品 → viewSample 详情弹窗（详情头部可「📲扫码操作」直达流转）
 // 配置：ADMIN 在页内配置每柜行列（PUT cabinets/:key，默认 3 列×9 行）
 // 样式：写入本子系统 module.css（sm-cab-* 类），禁 app.css
@@ -49,12 +49,15 @@ async function viewStorageMap() {
 // 柜位图图例（2026-09-10 抽公共）：柜位视图顶栏与「储位选择弹窗」标题栏共用同一份标签，
 // 保证两处颜色说明永不漂移（§15.2 禁复制粘贴；此前弹窗漏搬图例，新用户分不清 4 色含义）。
 // 参数：withLabel=true 时前置「图例：」文案（柜位视图用）；弹窗标题栏空间紧，传 false。
-// 返回：4 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+// 返回：5 段 .sm-legend HTML（.sm-dot 配色定义见 module.css）；不依赖任何全局状态，可安全重复调用。
+// 2026-09-15 补第 5 态「已作废(待清柜)」：作废件实物离柜后储位仍保留，此前无图例说明，
+// 格位仅靠「件数」角标体现且被误渲染为 sm-empty（看着是空位却能放样），用户现场易误判。
 function smLegendHtml(withLabel) {
   return (withLabel ? '<span class="muted" style="font-size:12px">图例：</span>' : '') +
     '<span class="sm-legend"><span class="sm-dot sm-in"></span>在柜</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-out"></span>被领走(占位)</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-ret"></span>退回审核</span>' +
+    '<span class="sm-legend"><span class="sm-dot sm-gone"></span>已作废(待清柜)</span>' +
     '<span class="sm-legend"><span class="sm-dot sm-empty"></span>空位</span>';
 }
 
@@ -64,7 +67,7 @@ function smRenderCabinet(c) {
   for (var row = 1; row <= c.rows; row++) {
     for (var col = 1; col <= c.cols; col++) {
       var cell = c.cells.filter(function (x) { return x.col === col && x.row === row; })[0];
-      cellsHtml += smRenderCell(c, cell || { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } });
+      cellsHtml += smRenderCell(c, cell || { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] } });
     }
   }
   var cfgBtn = (me.role === 'ADMIN')
@@ -80,16 +83,21 @@ function smRenderCabinet(c) {
     '<div class="sm-cells" style="grid-template-columns:repeat(' + c.cols + ',1fr)">' + cellsHtml + '</div></div>';
 }
 
-// 渲染单格位：空=虚框灰点；占用=状态色+数量角标；点击弹清单
+// 渲染单格位：空=虚框灰点；占用=状态色+数量角标；作废残留=灰底+「废N」副标；点击弹清单
+// 2026-09-15 拆桶后口径：角标 total 只计真实占位（在柜/领走/退回/预占），已作废残留单列「废N」——
+// 修复此前作废件混入角标导致的件数虚高（实测 8 个受影响格位中 7 个虚高），并让纯作废格位不再套 sm-empty。
 function smRenderCell(cab, cell) {
   var occ = cell.occupancy;
+  var gone = occ.gone || 0; // 兼容旧后端（无 gone 字段 → 0，行为同改造前）
   var total = occ.in + occ.out + occ.ret + occ.reserved;
   var cls = 'sm-empty';
   if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  if (!total && gone) cls = 'sm-gone'; // 纯作废残留：不得渲染成空位（看着能放样，实际仍被数据占用）
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
   var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  if (gone) sub += '<span class="sm-sub sm-sub-gone">废' + gone + '</span>';
   return '<div class="sm-cell ' + cls + '" onclick="smCellSamples(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
     '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
 }
@@ -107,7 +115,10 @@ function smCellSamples(cabNo, col, row) {
   var occ = cell.occupancy;
   if (!occ.samples.length) { toast(col + '-' + row + ' 为空位', 'ok'); return; }
   var rows = occ.samples.map(function (s) {
-    var stCn = { IN_CUSTODY: '在柜', CHECKED_OUT: '被领走', RETURNING: '退回审核' }[s.status] || s.status;
+    // 状态中文化补全（2026-09-15）：原映射只覆盖在柜三态，作废件直接显示英文 RETIRED；
+    // 另补未制作/已制作/已发行三态——它们也会出现在预占格位里（有储位但未接收保管）。
+    var stCn = { IN_CUSTODY: '在柜', CHECKED_OUT: '被领走', RETURNING: '退回审核', RETIRED: '已作废(待清柜)',
+      NEW: '待制作', PRODUCED: '已制作', RELEASED: '已发行' }[s.status] || s.status;
     return '<div class="co-cand-item"><b title="' + e(s.sample_no) + '" onclick="viewDetail(' + s.id + ')">' + e(s.sample_no) + '</b>' +
       '<span class="co-cand-dept"><span class="co-dept-name">' + e(s.name || '') + '</span><span class="co-badge">' + stCn + '</span></span></div>';
   }).join('');

@@ -29,6 +29,13 @@ function renderReturnActions(action,s){
     return '<p style="font-size:12px;color:#dc2626">管理员兜底：退回审核流程卡死时，强制作废该样品（不可撤销，提交前将二次确认）</p>'+
       '<label>作废原因 *</label><textarea id="scan-note" rows="3" style="resize:vertical;width:100%" placeholder="请描述强制作废原因"></textarea>'+
       '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#dc2626" onclick="confirmScan(\'FORCE_RETIRE\',this)">强制作废</fluent-button></div>';
+  }else if(action==='CLEAR_STORAGE'){
+    // 清柜释放储位（2026-09-15 档2）：作废样品实物已离柜时释放其占用的格位。
+    // 仅 RETIRED 状态可达（manifest 转移门 + 后端二次状态校验）；不可撤销，原储位写入操作日志 location 列留痕。
+    return '<p style="font-size:12px;color:#475569">清柜：释放该样品占用的柜位格（仅「已作废」且实物已离柜时执行）。原储位会写入操作日志留痕，格位随后变为空位，不可撤销。</p>'+
+      (s&&s.storage_location?'<p class="muted" style="font-size:12px">当前储位：<b>'+e(s.storage_location)+'</b></p>':'')+
+      '<label>备注</label><fluent-text-field id="scan-note" placeholder="如：实物已退回研发/已报废离柜"></fluent-text-field>'+
+      '<div style="margin-top:12px"><fluent-button appearance="accent" style="background:#475569" onclick="confirmScan(\'CLEAR_STORAGE\',this)">确认清柜释放格位</fluent-button></div>';
   }else if(action==='RECREATE'){
     return '<p class="muted">基于样品 <b>'+e(s.sample_no)+'</b>（'+e(s.name||'—')+'）创建替代品</p>'+
       '<p style="font-size:12px;color:#6b7280">将自动复制标示卡信息，新样品编号自动分配</p>'+

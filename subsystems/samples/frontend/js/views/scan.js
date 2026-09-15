@@ -1,6 +1,6 @@
 // scan.js — 扫码台核心逻辑（标示卡字段→card-fields.js，分步向导→scan-wizard.js，打印队列→print-queue.js，摄像头→scan-camera.js）
 // T8: ACTION_CN 定义在共享 api-base.js（本批不可改），本地补充 INSPECT_CUSTODY 中文名
-var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废'};
+var SCAN_ACTION_CN_EXT={INSPECT_CUSTODY:'到期复检',FORCE_REASSIGN:'强制改派',FORCE_RETIRE:'强制作废',CLEAR_STORAGE:'清柜释放储位'};
 function viewScan(){
   var v=$('#view');
   v.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'+
@@ -230,7 +230,7 @@ async function confirmScan(action,btn){
   // 2026-09-10 防误确认：储位校验抽至 storage-loc-picker.js（scan.js 超 70% 预警线只做薄调用）；
   // 校验失败 toast 并 return false，调用方中止提交
   if((action==='CUSTODY'||action==='EDIT_STORAGE')&&!collectScanLoc(body,action))return;
-  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'){
+  if(action==='RETURN_REQUEST'||action==='RETIRE_ONLY'||action==='RETURN_REJECT'||action==='CHECKOUT'||action==='RETURN_OUT'||action==='CLEAR_STORAGE'){
     var noteEl2=document.getElementById('scan-note');if(noteEl2&&noteEl2.value.trim())body.note=noteEl2.value.trim();
   }
   if(action==='RETIRE_RECREATE'){
@@ -257,7 +257,7 @@ async function confirmScan(action,btn){
     handleScanSuccess(r);
     // 时机评审修正②：储位类动作成功即失效格位缓存——该格位占用态已变（空→占用），
     // 缓存不失效会导致下一件样品的候选空位徽标过期误导；领用人列表无此问题不处理
-    if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;
+    if(action==='CUSTODY'||action==='EDIT_STORAGE'||action==='CLEAR_STORAGE')_smCache=null;
     if(r&&r.printCard&&r.sample&&r.sample.id)appendReprintBtn(r.sample.id); // T8.2 常驻重新打印兜底
     if(isWizard){wizardSample=null;unlockScanCode();} // 向导提交成功：清除向导状态并解锁编号输入框
   }catch(e){toast(e.message,'err');}

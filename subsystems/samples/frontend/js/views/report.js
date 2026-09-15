@@ -3,7 +3,7 @@
 // 数据来源：全部复用既有只读端点，本视图**不新增任何接口、不写入任何数据、不触达状态机**：
 //   GET /api/dashboard                  → byStatus(7态) / total / overdue / dueSoon / myPending / checkoutOverdue
 //   GET /api/samples/models?view=wall   → 机型维度（样品数 / 复检逾期 / 领用超时 / 状态分布）
-//   GET /api/samples/storage-map        → 柜位占用（summary: total/inCustody/checkedOut/returning/reserved/empty）
+//   GET /api/samples/storage-map        → 柜位占用（summary: total/inCustody/checkedOut/returning/reserved/gone/empty）
 //   GET /api/samples?station=X&limit=1  → 组别维度（仅取 total 计数，忽略分页）
 // 样式：复用 app.css 共享 .filters / .kb-stats / .dash-bar；本页专属 .rpt-* 只写本子系统 module.css（AGENTS §18.5）
 // 命名：一律 RPT_ / rpt 前缀——bundle 为经典 script 拼接的**单一全局作用域**，顶层重名 = SyntaxError 致全站白屏
@@ -226,13 +226,15 @@ function rptRenderAlerts(R) {
     }).join('') + '</tbody></table></div></div>';
 }
 
-// 柜位占用：每柜总格位 / 在用 / 空位 / 占用率；在用 = 在柜 + 领走(占位) + 退回审核 + 预占
+// 柜位占用：每柜总格位 / 在用 / 空位 / 占用率；在用 = 在柜 + 领走(占位) + 退回审核 + 预占 + 作废残留(待清柜)
+// 2026-09-15 拆桶：作废残留（gone）从「预占」中分离单列——它仍占用格位（计入在用/不计数为空位），
+// 但语义是「实物已离柜、储位待清柜释放」，与提前占位防冲突的「预占」混计会让占用率口径含混。
 function rptRenderStorage(R) {
   var cabs = (R.smap.cabinets || []).slice().sort(function (a, b) { return (a.no || 0) - (b.no || 0); });
-  var acc = { total: 0, used: 0, empty: 0, inCustody: 0, checkedOut: 0, returning: 0, reserved: 0 };
+  var acc = { total: 0, used: 0, empty: 0, inCustody: 0, checkedOut: 0, returning: 0, reserved: 0, gone: 0 };
   cabs.forEach(function (c) {
     var s = c.summary || {};
-    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0);
+    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0) + (Number(s.gone) || 0);
     acc.total += Number(s.total) || 0;
     acc.used += used;
     acc.empty += Number(s.empty) || 0;
@@ -240,12 +242,13 @@ function rptRenderStorage(R) {
     acc.checkedOut += Number(s.checkedOut) || 0;
     acc.returning += Number(s.returning) || 0;
     acc.reserved += Number(s.reserved) || 0;
+    acc.gone += Number(s.gone) || 0;
   });
   var uncab = (R.smap.uncabineted || []).length;
   var unknown = (R.smap.unknownLoc || []).length;
   var rows = cabs.map(function (c) {
     var s = c.summary || {};
-    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0);
+    var used = (Number(s.inCustody) || 0) + (Number(s.checkedOut) || 0) + (Number(s.returning) || 0) + (Number(s.reserved) || 0) + (Number(s.gone) || 0);
     var t = Number(s.total) || 0;
     return '<tr>' +
       '<td><b>' + e(c.key) + '</b>' + (c.configured ? '' : ' <span class="muted" style="font-size:11px">(未配置行列)</span>') + '</td>' +
@@ -266,7 +269,7 @@ function rptRenderStorage(R) {
       '<th>保管柜</th><th class="num">总格位</th><th class="num">在用</th><th class="num">空位</th><th class="num">占用率</th><th>占用</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="muted" style="font-size:11px;margin-top:8px">在用构成：在柜 ' + acc.inCustody + ' · 被领走(占位) ' + acc.checkedOut +
-      ' · 退回审核 ' + acc.returning + ' · 预占 ' + acc.reserved + '。领走不释放格位（用户 2026-09-09 确认）。</div>' +
+      ' · 退回审核 ' + acc.returning + ' · 预占 ' + acc.reserved + ' · 作废残留 ' + acc.gone + '（待清柜）。领走不释放格位（用户 2026-09-09 确认）。</div>' +
     warn + '</div></div>';
 }
 

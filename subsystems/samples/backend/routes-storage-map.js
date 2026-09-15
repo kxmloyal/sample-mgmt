@@ -1,6 +1,8 @@
 // subsystems/samples/backend/routes-storage-map.js — 样品柜数字孪生（2026-09-09）
 // GET /api/samples/storage-map：聚合各保管柜的格位占用状态（只读，登录即可）
 //   样品侧：status='IN_CUSTODY'→在柜(蓝)；'CHECKED_OUT'→领走=占用(橙，用户确认不释放格位)；'RETURNING'→退回审核(黄，占用)
+//   2026-09-15 拆桶：非在柜三态但仍有储位的样品分两桶——'RETIRED'→gone(已作废残留·待清柜)、其余(未制作/未发行)→reserved(预占)
+//     两桶都计入占用（储位仍有数据指向该格，清柜前不得被他人占用），但展示与报表口径分开，不再混称「预占」
 //   空位 = 配置全集(rows×columns) − 占用；未配置柜的柜体不渲染全集空位（只显示已出现格位）
 //   storage_location 为空 → uncabineted 未入柜池（不在柜体图渲染，顶部警示）
 // 柜配置表 sample_storage_cabinets（rows/columns 可配置，本文件幂等建表）：
@@ -16,7 +18,8 @@ function parseLoc(loc) {
   return m ? { key: m[1] + '#样品柜', no: Number(m[1]), col: Number(m[2]), row: Number(m[3]) } : null;
 }
 
-// 状态归类：in=在柜 / out=领走(占用) / ret=退回审核(占用)；其余状态（未制作/未发行/已作废）不占格位
+// 状态归类：in=在柜 / out=领走(占用) / ret=退回审核(占用)；其余状态（未制作/未发行/已作废）返回 null。
+// 注意：返回 null ≠ 不占格位——调用方对 null 仍按「有储位即有指向」归入 gone/reserved 两桶，避免数据指向被静默忽略
 function stateOf(status) {
   if (status === 'IN_CUSTODY') return 'in';
   if (status === 'CHECKED_OUT') return 'out';
@@ -63,7 +66,7 @@ function register(app) {
       for (const s of rows) {
         const st = stateOf(s.status);
         if (!s.storage_location) { if (st === 'in' || st === 'out' || st === 'ret') uncabineted.push(s); continue; }
-        // 有储位但状态不在三态（如 NEW 制作中）→ 记预占（占格显示灰点，防两人同格）
+        // 有储位但状态不在三态 → 分两桶：已作废记 gone（实物离柜后的残留，待清柜释放）；未制作/未发行的提前占位记 reserved（防两人同格）
         const p = parseLoc(s.storage_location);
         if (!p) { unknownLoc.push(s); continue; }
         if (!cabinets[p.key]) {
@@ -73,10 +76,13 @@ function register(app) {
         const c = cabinets[p.key];
         c.cols = Math.max(c.cols, p.col); c.rows = Math.max(c.rows, p.row); // 数据出现超出配置的格位 → 扩界展示
         const cellKey = p.col + '-' + p.row;
-        if (!c.cells[cellKey]) c.cells[cellKey] = { col: p.col, row: p.row, in: 0, out: 0, ret: 0, reserved: 0, samples: [] };
+        if (!c.cells[cellKey]) c.cells[cellKey] = { col: p.col, row: p.row, in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] };
         const cell = c.cells[cellKey];
-        if (st) { cell[st]++; cell.samples.push({ id: s.id, sample_no: s.sample_no, name: s.name, model: s.model, station: s.station, status: s.status }); }
-        else { cell.reserved++; cell.samples.push({ id: s.id, sample_no: s.sample_no, name: s.name, model: s.model, station: s.station, status: s.status }); }
+        // 拆桶依据（2026-09-15 实测）：线上 26 件作废样品 100% 保留储位，与 reserved 混计使 8 个受影响格位中 7 个
+        // 「件数」角标虚高（如 4#样品柜3-4 显示 16 件而实际在柜仅 10 件）；且作废件实物通常已离柜，与「预占」语义相反。
+        const snap = { id: s.id, sample_no: s.sample_no, name: s.name, model: s.model, station: s.station, status: s.status };
+        if (st) cell[st]++; else if (s.status === 'RETIRED') cell.gone++; else cell.reserved++;
+        cell.samples.push(snap);
       }
 
       // 输出：每柜展开完整格位矩阵（配置全集），空位标记 empty=true
@@ -85,13 +91,15 @@ function register(app) {
         for (let col = 1; col <= c.cols; col++) {
           for (let row = 1; row <= c.rows; row++) {
             const k = col + '-' + row;
-            const cell = c.cells[k] || { col: col, row: row, in: 0, out: 0, ret: 0, reserved: 0, samples: [] };
-            const occupied = cell.in + cell.out + cell.ret + cell.reserved;
+            const cell = c.cells[k] || { col: col, row: row, in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] };
+            // 空位判定含 gone：该格储位仍有数据指向，清柜（释放储位）前不得被他人占用——数据与现场一致性优先
+            const occupied = cell.in + cell.out + cell.ret + cell.reserved + cell.gone;
             cells.push({ col: col, row: row, label: col + '-' + row, empty: occupied === 0, occupancy: cell });
           }
         }
-        const sum = cells.reduce((a, x) => ({ in: a.in + x.occupancy.in, out: a.out + x.occupancy.out, ret: a.ret + x.occupancy.ret, reserved: a.reserved + x.occupancy.reserved, empty: a.empty + (x.empty ? 1 : 0) }), { in: 0, out: 0, ret: 0, reserved: 0, empty: 0 });
-        return { key: c.key, no: c.no, cols: c.cols, rows: c.rows, configured: c.configured, cells: cells, summary: { total: c.cols * c.rows, inCustody: sum.in, checkedOut: sum.out, returning: sum.ret, reserved: sum.reserved, empty: sum.empty } };
+        const sum = cells.reduce((a, x) => ({ in: a.in + x.occupancy.in, out: a.out + x.occupancy.out, ret: a.ret + x.occupancy.ret, reserved: a.reserved + x.occupancy.reserved, gone: a.gone + x.occupancy.gone, empty: a.empty + (x.empty ? 1 : 0) }), { in: 0, out: 0, ret: 0, reserved: 0, gone: 0, empty: 0 });
+        // summary 新增 gone（已作废残留）：纯增量字段，旧前端不读即忽略（§11 出入参兼容，不删旧字段）
+        return { key: c.key, no: c.no, cols: c.cols, rows: c.rows, configured: c.configured, cells: cells, summary: { total: c.cols * c.rows, inCustody: sum.in, checkedOut: sum.out, returning: sum.ret, reserved: sum.reserved, gone: sum.gone, empty: sum.empty } };
       });
       res.json({ cabinets: list, unknownLoc: unknownLoc.map(s => ({ id: s.id, sample_no: s.sample_no, storage_location: s.storage_location })), uncabineted: uncabineted.map(s => ({ id: s.id, sample_no: s.sample_no, name: s.name, status: s.status })) });
     } catch (e) { res.status(500).json({ error: e.message }); }

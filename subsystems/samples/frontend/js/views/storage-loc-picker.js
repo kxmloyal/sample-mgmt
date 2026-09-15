@@ -67,8 +67,10 @@ function renderSmCandidates(kw) {
   var list = smSortedCells().filter(function (c) { return !k || c.label.indexOf(k) > -1 || c.key.indexOf(k) > -1; }).slice(0, 8);
   if (!list.length) { hideSmCandidates(); return; }
   panel.innerHTML = list.map(function (c) {
+    // 件数口径与柜位图对齐（2026-09-15 拆桶）：liv=真实占位，作废残留单列；纯作废格位显示「待清柜」而非「0件」
+    var liv = c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved, gn = c.occ.gone || 0;
     var badge = c.empty ? '<span class="co-badge co-badge-dept">空</span>'
-      : '<span class="co-badge">' + (c.occ.in + c.occ.out + c.occ.ret + c.occ.reserved) + '件</span>';
+      : (liv ? '<span class="co-badge">' + liv + '件</span>' : '<span class="co-badge">待清柜</span>') + (gn && liv ? '<span class="co-badge">废' + gn + '</span>' : '');
     return '<div class="co-cand-item"><b title="' + e(c.label) + '" onmousedown="pickStorageLoc(\'' + e(c.label) + '\')">' + e(c.label) + '</b>' +
       '<span class="co-cand-dept">' + badge + '</span></div>';
   }).join('');
@@ -134,7 +136,7 @@ function smMapSelectCab(no) {
   for (var row = 1; row <= cab.rows; row++) {
     for (var col = 1; col <= cab.cols; col++) {
       var cell = cab.cells.filter(function (x) { return x.col === col && x.row === row; })[0] ||
-        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, samples: [] } };
+        { col: col, row: row, empty: true, occupancy: { in: 0, out: 0, ret: 0, reserved: 0, gone: 0, samples: [] } };
       cellsHtml += smMapRenderCell(cab, cell);
     }
   }
@@ -161,15 +163,19 @@ function smMapSelectCab(no) {
 }
 
 // 储位选择场景的格位渲染：点格位直接选储位（与柜位视图的 smRenderCell 交互不同，不复用）
+// 2026-09-15 拆桶同步：作废残留（gone）不计入角标件数，但纯作废格位渲染为 sm-gone（占位不可选、也不显示成空位）
 function smMapRenderCell(cab, cell) {
   var occ = cell.occupancy;
+  var gone = occ.gone || 0;
   var total = occ.in + occ.out + occ.ret + occ.reserved;
   var cls = 'sm-empty';
   if (occ.in) cls = 'sm-in';
   if (occ.ret) cls = 'sm-ret';
   if (occ.out && !occ.in && !occ.ret) cls = 'sm-out';
+  if (!total && gone) cls = 'sm-gone';
   var badge = total ? '<span class="sm-badge">' + total + '</span>' : '';
   var sub = occ.out ? '<span class="sm-sub">领' + occ.out + '</span>' : (occ.ret ? '<span class="sm-sub">退' + occ.ret + '</span>' : '');
+  if (gone) sub += '<span class="sm-sub sm-sub-gone">废' + gone + '</span>';
   return '<div class="sm-cell ' + cls + '" onclick="smMapPick(' + JSON.stringify(cab.no) + ',' + cell.col + ',' + cell.row + ')" title="' + cell.label + '">' +
     '<span class="sm-pos">' + cell.label + '</span>' + badge + sub + '</div>';
 }

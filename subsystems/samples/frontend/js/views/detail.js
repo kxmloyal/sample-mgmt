@@ -183,6 +183,7 @@ var _LOG_FLOW = {
   RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
   RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
   RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废', RECREATE_REPLACED: '⬆ 已作废（自环）',
+  CLEAR_STORAGE: '⬆ 已作废（柜位释放·自环）',
   FORCE_REASSIGN: '⬆ 退回审核（改派）'
 };
 
@@ -193,7 +194,7 @@ function _buildLogsTab(s, id) {
     var note = (l.note || '').trim();
     var fold = note.length > 40; // 长备注默认折叠 1 行，点击切换展开/收起
     h += '<div class="tl-item">' +
-      '<div><span class="tl-act">' + (ACTION_CN[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
+      '<div><span class="tl-act">' + (ACTION_CN[l.action] || SCAN_ACTION_CN_EXT[l.action] || l.action) + '</span><span class="tl-flow">' + (_LOG_FLOW[l.action] || '') + '</span></div>' +
       '<div class="tl-meta">' + fmt(l.created_at) + ' · ' + e(l.role || '—') + (l.dept ? '/' + e(l.dept) : '') + (l.location ? ' · ' + e(l.location) : '') + '</div>' +
       (note ? '<div class="tl-note' + (fold ? ' can-fold folded' : '') + '"' + (fold ? ' title="点击展开/收起" onclick="this.classList.toggle(\'folded\')"' : '') + '>' + e(note) + '</div>' : '') +
       '</div>';

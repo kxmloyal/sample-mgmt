@@ -337,6 +337,17 @@
         "label": "创建替代品"
       },
       {
+        "from": "RETIRED",
+        "to": "RETIRED",
+        "action": "CLEAR_STORAGE",
+        "role": [
+          "ADMIN",
+          "CUSTODY",
+          "ME"
+        ],
+        "label": "清柜释放储位"
+      },
+      {
         "from": "IN_CUSTODY",
         "to": "IN_CUSTODY",
         "action": "INSPECT_CUSTODY",
