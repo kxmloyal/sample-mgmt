@@ -155,32 +155,9 @@
 .sm-map-matrix .sm-sub{font-size:9px;line-height:1.2}
 .sm-map-matrix.sm-map-tight .sm-sub{display:none}
 
-/* ═══ 样品报表（2026-09-14｜方案甲：纯前端只读聚合；rpt-* 独立前缀，不与 sm-*/nf-*/nb-* 混用） ═══ */
-/* 工具栏：复用共享 .filters 容器（同柜位视图）——左信息组 + 右操作组（margin-left:auto 靠右，换行时整组仍靠右） */
-.rpt-tb-info{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
-.rpt-tb-ops{margin-left:auto;display:flex;align-items:center;gap:8px}
-.rpt-sec{margin-top:18px}
-.rpt-h3{margin:0 0 10px;font-size:14px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.rpt-note{color:var(--muted);font-size:11px;font-weight:400}
-.rpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:18px}
-.rpt-card{background:var(--panel);border:var(--card-border);border-radius:var(--card-radius);padding:var(--card-pad)}
-.rpt-grid .rpt-card h3.rpt-h3{margin-top:0}
-.rpt-table{width:100%;border-collapse:collapse;font-size:13px}
-.rpt-table th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
-.rpt-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
-.rpt-table tbody tr:last-child td{border-bottom:none}
-.rpt-table .num{text-align:right;font-variant-numeric:tabular-nums}
-/* 行内占比微条：纯 CSS，零图表库、零新增依赖（宽度以行内最大值为基准，小样本下仍可读） */
-.rpt-bar{display:block;height:9px;border-radius:5px;background:var(--bg);overflow:hidden;min-width:60px}
-.rpt-bar-fill{display:block;height:100%;border-radius:5px}
-.rpt-zero td{color:var(--muted)}
-.rpt-todo{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer;flex-wrap:wrap}
-.rpt-todo:hover{background:rgba(20,30,50,.04)}
-.rpt-todo .rpt-no{font-weight:600}
-.rpt-foot{margin-top:18px;padding:12px 14px;background:var(--chip);border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:12px;line-height:1.8}
-.rpt-foot b{color:var(--text)}
-.rpt-foot code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
-@media(max-width:767px){.rpt-grid{grid-template-columns:1fr}.rpt-tb-ops{margin-left:0;width:100%;justify-content:flex-end}}
+/* 样品报表样式（rpt- 前缀）已于 2026-09-15 外迁至同目录 report.css：module.css 在「报表块 + 替代链块」合并后达 71.8%，
+   触 AGENTS.md §7.1 的 70% 预警线（「达 70% MUST 停止新增业务逻辑，输出拆分方案」）。本文件不再承载报表样式，
+   新增报表规则 MUST 写入 report.css，禁止在此重新添加该类选择器。 */
 
 /* 样品替代链 Tab（2026-09-14）：链节点是列表行而非标准卡片，故不使用 --card-pad，仅复用 --card-radius/--card-border token；不新增配色 */
 .sm-chain{padding:14px 16px}

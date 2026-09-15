@@ -67,12 +67,15 @@ fs.writeFileSync(path.join(ROOT, 'tools', '.bundle-ver'), BUNDLE_VER);
 
 // 2026-09-09：同步刷新各子系统 index.html 的 module.css 版本号（此前只刷 bundle ?v=，
 // CSS 改动后浏览器长期吃旧缓存——实证：module.css 固定 v=202609071807，右侧候选面板样式不生效）
-// 策略：仅替换 module.css?v= 的值，无该引用的子系统自动跳过（零风险幂等）
+// 2026-09-15 扩大范围：一个子系统可有多个自有 CSS（samples 于 2026-09-15 拆出 report.css，
+// 因 module.css 达 71.8% 触 AGENTS §7.1 的 70% 预警线）。若仍只刷 module.css，report.css 会长期吃旧缓存。
+// 策略：仅替换 /subsystems/<id>/frontend/css/<name>.css?v= 的值（路径限定在子系统自有 CSS，
+// 不触及共享 /css/app.css —— 后者使用独立的 v=20260805b 版本体系）；无该引用的子系统自动跳过（零风险幂等）
 for (const id of Object.keys(sources)) {
   const htmlPath = path.join(ROOT, 'subsystems', id, 'frontend', 'index.html');
   if (!fs.existsSync(htmlPath)) continue;
   let html = fs.readFileSync(htmlPath, 'utf-8');
-  const re = new RegExp('(module\\.css\\?v=)([A-Za-z0-9]+)');
+  const re = new RegExp('(/subsystems/[a-z0-9-]+/frontend/css/[a-z0-9-]+\\.css\\?v=)([A-Za-z0-9]+)', 'g');
   if (re.test(html)) {
     html = html.replace(re, '$1' + BUNDLE_VER);
     fs.writeFileSync(htmlPath, html, 'utf-8');

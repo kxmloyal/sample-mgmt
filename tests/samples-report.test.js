@@ -76,10 +76,15 @@ describe('样品报表 前端接线（方案甲 · 纯前端只读）', () => {
     expect(read('subsystems/samples/frontend/js/views/help-data.js')).toContain("id:'report'");
   });
 
-  test('样式归属：.rpt-* 只写本子系统 module.css，禁写 app.css', () => {
-    expect(read('subsystems/samples/frontend/css/module.css')).toContain('.rpt-card{');
-    expect(read('subsystems/samples/frontend/css/module.css')).toContain('.rpt-bar{');
+  test('样式归属：.rpt-* 只写本子系统 CSS（2026-09-15 外迁 report.css），禁写 app.css', () => {
+    expect(read('subsystems/samples/frontend/css/report.css')).toContain('.rpt-card{');
+    expect(read('subsystems/samples/frontend/css/report.css')).toContain('.rpt-bar{');
+    expect(read('subsystems/samples/frontend/css/module.css')).not.toContain('.rpt-');
     expect(read('public/css/app.css')).not.toContain('.rpt-');
+    // 拆分后 MUST 在 module.css 之后引入 report.css，否则层叠顺序变化会导致报表样式被覆盖
+    const html = read('subsystems/samples/frontend/index.html');
+    expect(html).toContain('report.css?v=');
+    expect(html.indexOf('css/module.css')).toBeLessThan(html.indexOf('css/report.css'));
   });
 
   test('版本三处一致：bundle 头 = index.html 的 bundle.js?v= = module.css?v=，且文件数与构建清单一致', () => {
