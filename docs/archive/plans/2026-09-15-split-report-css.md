@@ -63,3 +63,32 @@
 - 不改任何选择器命名、不改颜色/尺寸/断点数值（纯物理搬迁）。
 - 不动 `public/css/app.css`（该文件已 109.6%，超 20000 字符红线）。
 - 不合并 `.sm-chain*`（留待第 2 批）。
+
+## 7. 实施记录（2026-09-15 完成）
+
+| 项 | 实施前 | 实施后 |
+|---|---|---|
+| `css/module.css` | 202 行 / 14,355 字符（**71.8%**，越 §7.1 预警线）| **179 行 / 12,476 字符（62.4%）** |
+| `css/report.css` | 不存在 | **33 行 / 2,470 字符（12.4%）** |
+| `index.html` 样式引用 | 1 个自有 CSS | 2 个（在 `module.css` **之后**追加 `report.css`，层叠顺序不变）|
+| samples 资源版本 | `bmu2aignx` | **`bmu2cu8zb`**（重建 bundle，头部逐行与旧版仅差版本号）|
+
+**改动文件（6 个）**：新增 `subsystems/samples/frontend/css/report.css`；修改 `css/module.css`（移除原 L158-183 报表块 26 行，替换为指针注释）、`frontend/index.html`（新增 `<link>` + 三处 `?v=`）、`tools/build-bundles.js`（CSS 版本刷新正则扩面）、`tests/samples-report.test.js`（样式归属断言改指 report.css + 新增顺序断言）、`js/bundle.js`（重建）。
+
+**验收对照（第 4 节）**
+
+| id | 标准 | 实测 | 结论 |
+|---|---|---|---|
+| A1 | `module.css` ≤ 13,000 字符（≤65%）| 12,476（62.4%）| **PASS** |
+| A2 | 报表渲染契约 9 项仍 PASS | 三套件 **38/38** 全绿 | **PASS** |
+| A3 | `index.html` 仍恰好 2 个 `<script>` | 2 | **PASS** |
+| A4 | 报表页视觉与拆分前一致 | 纯搬迁，未改选择器/视觉值；**待人工截图复核** | 待人工 |
+| A5 | `.rpt-` 未进入 `app.css` 或其它子系统 | `app.css` 0 处；仅 samples 的 `report.css` 有 28 处 | **PASS** |
+
+**等价性证据**：搬迁前原块 26 行逐行核对，**未出现在 `report.css` 的行数 = 0**；`report.css` 中 `.rpt-` 出现 **28 次**，与原 `module.css` 完全一致；花括号平衡（`module.css` 130/130、`report.css` 25/25）；新 bundle 与 HEAD 版**逐行仅差头部版本号 1 行**，`[MISSING]`=0。
+
+**工具变更理由（`tools/build-bundles.js`）**：原正则 `(module\.css\?v=)` 只刷新 `module.css`，拆分后 `report.css` 会长期吃旧缓存 —— 而这正是该机制 2026-09-09 诞生的原因（旧实证：`module.css` 固定 `v=` 导致候选面板样式不生效）。新正则把范围限定为「子系统自有 CSS」：`(/subsystems/[a-z0-9-]+/frontend/css/[a-z0-9-]+\.css\?v=)([A-Za-z0-9]+)`（加 `g`），**不触及共享 `/css/app.css`**（后者使用独立的 `v=20260805b` 体系）。实测：脚本运行后 samples 的 **`module.css` 与 `report.css` 同时**刷新为新 VER；其余 4 个子系统的 `index.html` 被脚本刷新后已按 §6.1 隔离原则**回退**，其版本仍为旧值，未受本次影响。
+
+**回归影响面**：`tests/samples-report-render.test.js`（9 项）**不读取 CSS 文件**，不受影响；`views/report.js` 的 42 处 `rpt-` 均为类名使用，零改动；后端与数据库零改动（纯前端样式搬迁）。
+
+**遗留（需用户授权后处理）**：`AGENTS.md` §3 目录树与 §17.2 将子系统 CSS 描述为「`frontend/css/module.css`」单文件，未涵盖「一个子系统可有多个自有 CSS」。规则文件禁擅自修改，建议后续单独一次文档同步提交：把该处改为 `css/*.css`（可多个）或在树中补 `report.css`。
