@@ -66,7 +66,9 @@ describe('样品报表 前端接线（方案甲 · 纯前端只读）', () => {
     expect(nav[0].roles).toEqual(['ADMIN', 'RD', 'QA', 'CUSTODY', 'ME']);
     expect(m.deployed).toBe(true);
     // 报表不得被写进 navigation 之外改变状态机
-    expect((m.stateMachine.transitions || []).length).toBe(17);
+    // 2026-09-15：17 → 18 —— 新增 RETIRED→RETIRED 的 CLEAR_STORAGE（清柜释放储位，经用户确认的「档2」），
+    // 属有意变更；本守卫的作用就是拦住任何未申报的状态机改动，故随之更新计数。
+    expect((m.stateMachine.transitions || []).length).toBe(18);
   });
 
   test('帮助接线：HELP_PAGE_MAP / HELP_PAGE_TIPS / HELP_DATA 三处均含 report', () => {

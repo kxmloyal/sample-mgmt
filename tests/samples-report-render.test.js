@@ -24,7 +24,7 @@ const FIX = {
     { code: 'BD5315', full_name: 'BD5315 机种', sample_count: 1, overdue_count: 0, checkout_overdue_count: 0, status_stats: {}, cover: null }
   ],
   smap: {
-    cabinets: [{ key: '1#样品柜', no: 1, cols: 3, rows: 9, configured: true, cells: [], summary: { total: 27, inCustody: 5, checkedOut: 0, returning: 1, reserved: 0, empty: 21 } }],
+    cabinets: [{ key: '1#样品柜', no: 1, cols: 3, rows: 9, configured: true, cells: [], summary: { total: 27, inCustody: 5, checkedOut: 0, returning: 1, reserved: 0, gone: 2, empty: 19 } }],
     uncabineted: [{ id: 9, sample_no: 'G-YD9015-Q-009-01' }],
     unknownLoc: []
   },
@@ -118,8 +118,9 @@ describe('样品报表 运行时渲染契约（方案甲）', () => {
     expect((html.match(/<td>(马达组|扇叶组|成品组|品保部|SMT|供应商)<\/td>/g) || []).length).toBe(6);
   });
 
-  test('柜位占用：在用 = 在柜+领走+退回+预占，占用率与未入柜告警正常', function () {
-    expect(html).toContain('22.2%');        // (5+0+1+0)/27
+  test('柜位占用：在用 = 在柜+领走+退回+预占+作废残留，占用率与未入柜告警正常', function () {
+    expect(html).toContain('29.6%');        // (5+0+1+0+2)/27；gone 缺失时 Number(undefined)||0=0 → 旧后端响应仍按原口径
+    expect(html).toContain('作废残留 2');    // 2026-09-15 拆桶：作废残留从「预占」中分离单列
     expect(html).toContain('未录入储位');    // 文案锁定
     expect(html).toContain('1#样品柜');
   });

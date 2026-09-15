@@ -57,6 +57,58 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
     // 复用同一 PUT 接口（不新增端点）
     expect(view).toContain("await api('PUT', '/api/samples/storage-map/cabinets/' + encodeURIComponent(key)");
   });
+  test('作废残留与预占分桶（2026-09-15）：RETIRED→gone、其余非三态→reserved，两桶都阻断空位', () => {
+    // 背景：线上 26 件作废样品 100% 保留储位，与 reserved 混计致 8 个受影响格位中 7 个件数角标虚高
+    expect(src).toContain("s.status === 'RETIRED'");
+    expect(src).toContain('cell.gone++');
+    expect(src).toContain('cell.reserved++');
+    // 空位判定须含 gone：储位仍有数据指向该格，清柜前不得被他人占用
+    expect(src).toContain('const occupied = cell.in + cell.out + cell.ret + cell.reserved + cell.gone;');
+    // summary 新增 gone 且保留旧字段（§11 出入参兼容）
+    expect(src).toContain('gone: sum.gone');
+    expect(src).toContain('reserved: sum.reserved');
+    // 格位快照对象三处构造均带 gone:0（缺字段会让前端 occ.gone 为 undefined）
+    expect((src.match(/gone: 0, samples: \[\]/g) || []).length).toBe(2);
+    const view = read('subsystems/samples/frontend/js/views/storage-map.js');
+    expect(view).toContain('sm-dot sm-gone');
+    expect(view).toContain('已作废(待清柜)');
+    expect(view).toContain("if (!total && gone) cls = 'sm-gone';");
+    expect(view).toContain('sm-sub-gone');
+    expect(view).toContain("RETIRED: '已作废(待清柜)'");   // 弹窗状态中文化（原样输出英文 RETIRED）
+    // 报表口径同步：在用含 gone，构成文案列出作废残留
+    const rpt = read('subsystems/samples/frontend/js/views/report.js');
+    expect(rpt).toContain('Number(s.gone) || 0');
+    expect(rpt).toContain('作废残留');
+    // 选位弹窗同源：纯作废格位同款 sm-gone（图例经 smLegendHtml 自动继承第 5 态）
+    const picker = read('subsystems/samples/frontend/js/views/storage-loc-picker.js');
+    expect(picker).toContain("if (!total && gone) cls = 'sm-gone';");
+    expect(picker).toContain('待清柜');
+  });
+  test('清柜释放储位（2026-09-15）：manifest 声明 + 仅 RETIRED 可达 + 原储位留痕 + 前端接线', () => {
+    const man = require('../subsystems/samples/manifest.json');
+    const t = man.stateMachine.transitions.filter(x => x.action === 'CLEAR_STORAGE');
+    expect(t.length).toBe(1);
+    expect(t[0].from).toBe('RETIRED');
+    expect(t[0].to).toBe('RETIRED');            // 状态自环：仅释放储位，不改状态
+    expect(t[0].role).toEqual(['ADMIN', 'CUSTODY', 'ME']);
+    const act = read('subsystems/samples/backend/scan-actions.js');
+    expect(act).toContain("chosenAction === 'CLEAR_STORAGE'");
+    expect(act).toContain("if (s.status !== 'RETIRED') return { status: 409");  // 状态兜底（防绕过 manifest 门）
+    expect(act).toContain("if (!s.storage_location) return { status: 400");     // 防无储位零动作重复提交
+    expect(act).toContain('updated.storage_location = null;');
+    expect(act).toContain('location: clearedLoc');                              // 清空后仍可从日志追溯原储位
+    const scan = read('subsystems/samples/frontend/js/views/scan.js');
+    expect(scan).toContain("CLEAR_STORAGE:'清柜释放储位'");                      // samples 本地 ext 映射（不动共享 api-base.js）
+    expect(scan).toContain("action==='EDIT_STORAGE'||action==='CLEAR_STORAGE'"); // 储位类动作成功须失效格位缓存
+    const sra = read('subsystems/samples/frontend/js/views/scan-return-actions.js');
+    expect(sra).toContain("action==='CLEAR_STORAGE'");
+    expect(sra).toContain('确认清柜释放格位');
+    expect(read('subsystems/samples/frontend/js/views/detail.js')).toContain('CLEAR_STORAGE:');
+    // 已落地 bundle MUST 含本次改动（§19.4：改了源码不重建 bundle＝线上无此功能）
+    const bundle = read('subsystems/samples/frontend/js/bundle.js');
+    expect(bundle).toContain("CLEAR_STORAGE:'清柜释放储位'");
+    expect(bundle).toContain('sm-sub-gone');
+  });
   test('工具栏布局（2026-09-14 修复）：容器复用共享 .filters，禁跨子系统 pk- 类名，emoji 保留', () => {
     const view = read('subsystems/samples/frontend/js/views/storage-map.js');
     const css = read('subsystems/samples/frontend/css/module.css');
