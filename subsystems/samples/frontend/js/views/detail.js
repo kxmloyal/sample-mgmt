@@ -1,4 +1,4 @@
-// detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
+// detail.js — 样品详情弹窗（信息/替代链/标示卡/日志/大图 五Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
 // D1: 骨架屏/Tab置顶(detail-tabs-top)/头部操作组/锁定引导/dirty拦截/密度类
 // 2026-09-11 DM-3：交互骨架（骨架屏/置顶Tab/密度自适应/dirty守卫/Tab 懒渲染）改为复用
@@ -22,11 +22,12 @@ var _sdm = openDetailModal({
   buildTabContent: function (s, key) { return _buildTabContent(s, _detailId, key); },
   // D2.2 Tab 懒渲染：logs/image 先骨架一帧，下一帧再构建实际 DOM（先给视觉反馈）
   skeleton: function (key) { return _buildTabSkeleton(key); },
-  lazyTabs: ['logs', 'image'],
+  lazyTabs: ['logs', 'image', 'chain'],
   onTabRendered: function (key, s) {
     _detailDirty = false;                                  // D1.5 离开/重渲标示卡后重置未保存态
     if (key === 'card') applyDetailCardValues(s);          // 显式回显下拉值（selected 属性在 FAST 下不生效）
     else if (key === 'image') loadImageHistory(_detailId); // T14 大图 Tab 异步拉取历史照片
+    else if (key === 'chain') loadSampleChain(_detailId);  // 2026-09-14 替代链（渲染在 chain.js）
   },
   isDirty: function () { return _detailDirty; },           // 未保存态由标示卡表单托管（detail-card.js）
   // D1.5 未保存拦截文案（原文案保持，含「标示卡」限定词）
@@ -71,6 +72,7 @@ function _buildHeadHTML(s, id) {
 
 // D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）；自带内边距，共享组件不再包 .dm-pad
 function _buildTabSkeleton(tab) {
+  if (tab === 'chain') return _chainSkeleton(); // 骨架在 chain.js
   if (tab === 'logs') {
     var row = '<div style="display:flex;gap:10px;margin-bottom:14px"><div class="sk" style="width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px"></div><div style="flex:1"><div class="sk" style="height:13px;width:36%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:64%"></div></div></div>';
     return '<div style="padding:14px 16px">' + row.repeat(5) + '</div>';
@@ -86,16 +88,20 @@ function _buildTabContent(s, id, tab) {
   else if (t === 'logs') html = _buildLogsTab(s, id);
   else if (t === 'card') html = _buildCardTab(s, id);
   else if (t === 'image') html = _buildImageTab(s, id);
+  else if (t === 'chain') html = _buildChainTab(s, id);
   return html;
 }
 
-// Tab 清单（沿用原自建 Tab 栏的判定口径：信息/标示卡/全量日志/大图；三者皆无 → 无 Tab 栏，只显示信息页）
+// Tab 清单（沿用原自建 Tab 栏的判定口径：信息/替代链/标示卡/全量日志/大图；全无 → 无 Tab 栏，只显示信息页）
 function _detailTabs(s) {
   var hasImg = !!(s.produced_image || s.image || s.inspect_image);
   var hasLog = s.logs && s.logs.length > 0;
   var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data || s.test_standard);
-  if (!hasImg && !hasLog && !hasCrd) return [];
+  // 替代链：字段已在详情响应内，无需额外请求
+  var hasChain = !!(s.replaced_by || s.replaces);
+  if (!hasImg && !hasLog && !hasCrd && !hasChain) return [];
   var ts = [{ key: 'info', label: '信息' }];
+  if (hasChain) ts.push({ key: 'chain', label: '替代链' });
   if (hasCrd) ts.push({ key: 'card', label: '标示卡' });
   if (hasLog) ts.push({ key: 'logs', label: '全量日志 (' + s.logs.length + ')' });
   if (hasImg) ts.push({ key: 'image', label: '大图' });
@@ -176,7 +182,7 @@ var _LOG_FLOW = {
   RE_RELEASE: '⬆ 退回审核 ➜ 已发行',
   RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
   RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
-  RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废',
+  RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废', RECREATE_REPLACED: '⬆ 已作废（自环）',
   FORCE_REASSIGN: '⬆ 退回审核（改派）'
 };
 

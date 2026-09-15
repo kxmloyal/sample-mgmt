@@ -1,5 +1,5 @@
 // subsystems/samples/db/dao-list.js — 样品查询域 DAO（2026-09-07 自 dao.js 按域拆分；2026-09-05 首次拆分实现经 revert 后复用）
-// 覆盖：列表筛选/计数/看板预警清单/我的待办/机型墙聚合；写入域（建样/状态机/日志/机型主数据写）仍在 dao.js
+// 覆盖：列表筛选/计数/看板预警清单/我的待办/机型墙聚合/替代链查询；写入域（建样/状态机/日志/机型主数据写）仍在 dao.js
 const { generateSampleCode } = require('./sample-code');
 
 module.exports = function createDaoList(deps) {
@@ -138,5 +138,30 @@ module.exports = function createDaoList(deps) {
     });
   }
 
-  return { listSamples, countAllSamples, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, roleTodoWhere: _roleTodoWhere, aggregateModelsWall };
+  // 替代链查询（2026-09-14 新增，只读）
+  //   功能：给定样品编号，沿 replaces / replaced_by 双向递归，一次取回该样品所在整条替代链
+  //   参数：sampleNo {string} 样品编号——链路两端以编号互指（replaces/replaced_by 存编号而非 id），故入口用编号
+  //   返回：Promise<Array> 每行 = samples 全部列 + ord（负数=更早/链首方向，0=当前样品，正数=更新/链尾方向），按 ord 升序
+  //   兼容：纯新增只读查询，不改动既有查询/索引/写入路径；存量替代关系由 RECREATE 动作早已成对写入
+  //   异常：空入参直接返回空数组（不发查询）；脏数据成环由 |ord| 上限 20 收敛，不触发 cte_max_recursion_depth 报错
+  //   边界：软删节点不过滤（替代链是历史事实，不因软删断链）；递归连接列必须是 replaces/replaced_by
+  //         （仅 RECREATE 动作成对写入），不用 sample_no 等值匹配，故「已取消 NEW 编号被复用」不会产生伪链
+  function listSampleChain(sampleNo) {
+    if (!sampleNo) return Promise.resolve([]);
+    return q(
+      'WITH RECURSIVE newer AS (' +
+      ' SELECT s.*, 1 AS ord FROM samples s WHERE s.replaces = ?' +
+      ' UNION ALL' +
+      ' SELECT s.*, n.ord + 1 FROM samples s JOIN newer n ON s.replaces = n.sample_no WHERE n.ord < 20' +
+      '), older AS (' +
+      ' SELECT s.*, -1 AS ord FROM samples s WHERE s.replaced_by = ?' +
+      ' UNION ALL' +
+      ' SELECT s.*, o.ord - 1 FROM samples s JOIN older o ON s.replaced_by = o.sample_no WHERE o.ord > -20' +
+      '), origin AS (' +
+      ' SELECT s.*, 0 AS ord FROM samples s WHERE s.sample_no = ? AND s.deleted_at IS NULL LIMIT 1' +
+      ') SELECT * FROM older UNION ALL SELECT * FROM origin UNION ALL SELECT * FROM newer ORDER BY ord',
+      [sampleNo, sampleNo, sampleNo]);
+  }
+
+  return { listSamples, countAllSamples, countSamplesByStatus, listOverdueSamples, listDueSoonSamples, listReturningOverdue, listCheckoutOverdue, listMyPendingSamples, listSampleChain, roleTodoWhere: _roleTodoWhere, aggregateModelsWall };
 };

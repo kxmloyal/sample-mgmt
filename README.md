@@ -321,10 +321,10 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/me` | GET | 是 | 当前用户信息 |
 | `/api/config` | GET | 否 | 公共配置（demoMode 演示账号开关，登录页使用）|
 | `/api/change-password` | POST | 是 | 自助修改密码（校验原密码，新密码≥6位，成功后销毁会话重新登录）|
-| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT、`pending=role` 角色待办——与看板我的待办同口径，仅非 ADMIN 生效）|
+| `/api/samples` | GET | 是 | 样品列表（筛选/排序/逾期/分页；支持 status=CHECKED_OUT、`pending=role` 角色待办，仅非 ADMIN 生效）|
 | `/api/samples` | POST | 是 | 新建样品（含限度字段）|
-| `/api/samples/batch` | POST | 是 | 批量新建样品（2026-09-07，对齐治具批量申请：RD/ADMIN、1~50 条、单事务整体回滚；批次级 model/source_type/station/card_version 共用，行级 name/notes/sample_type/limit_item/test_standard——限度样品信息按行填写；返回 id+编号清单供 `cards/print` 批量单页打印）|
-| `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志 |
+| `/api/samples/batch` | POST | 是 | 批量新建样品（RD/ADMIN、1~50 条、单事务回滚；批次级 model/source_type/station/card_version 共用，行级 name/notes/sample_type/limit_item/test_standard；返回 id+清单供 `cards/print` 打印）|
+| `/api/samples/:id` | GET | 是 | 样品详情 + 操作日志；替代链见 `/api/samples/:id/chain`（只读整链）|
 | `/api/samples/:id` | PUT | 是 | 更新样品（可选携带 version 乐观锁，版本冲突返回 409）|
 | `/api/samples/:id` | DELETE | 是 | 删除样品=**软删除**（deleted_at 置位；仅 NEW/PRODUCED，仅创建者或管理员；操作日志保留；编号口径 2026-09-11：取消 NEW 释放编号、取消 PRODUCED 仍占用）|
 | `/api/samples/:id/qrcode` | GET | 是 | 样品二维码 |
@@ -333,8 +333,8 @@ npm start            # 启动，访问 http://localhost:4000（需先配置 .env
 | `/api/samples/:id/card/print` | GET | 是 | 打印标示卡 |
 | `/api/samples/cards/print` | GET | 是 | 批量打印标示卡（ids 逗号分隔、一次 ≤50，单页多卡 + @page 分页）|
 | `/api/samples/:id/images` | GET | 是 | 样品历史照片列表（制作/复检全量留痕，时间倒序）|
-| `/api/samples/export` | GET | 是 | 样品列表导出 CSV（复用筛选参数，忽略分页）|
-| `/api/samples/models` | GET | 是 | 机型 CRUD 列表；`?view=wall` 返回机型墙聚合（各状态计数/复检逾期/超时未还/封面，60s 缓存，2026-09-05）|
+| `/api/samples/export` | GET | 是 | 样品列表导出 CSV（复用筛选参数）|
+| `/api/samples/models` | GET | 是 | 机型 CRUD 列表；`?view=wall` 返回机型墙聚合（各状态计数/复检逾期/超时未还/封面，60s 缓存）|
 | `/api/fixtures` | GET | 是 | 治具列表（筛选/排序/分页）|
 | `/api/fixtures/export` | GET | 是 | 治具清单导出 CSV（复用筛选/排序参数，忽略分页）|
 | `/api/fixtures` | POST | 是 | 新建治具申请 |

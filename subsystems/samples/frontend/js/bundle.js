@@ -1,4 +1,4 @@
-/** BUNDLE vbmu1gjh4b — 32 files */
+/** BUNDLE vbmu2aignx — 33 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1521,7 +1521,7 @@ async function viewSampleModelWall() {
 
 
 /* --- subsystems/samples/frontend/js/views/detail.js --- */
-// detail.js — 样品详情弹窗（信息/标示卡/日志/大图 四Tab）
+// detail.js — 样品详情弹窗（信息/替代链/标示卡/日志/大图 五Tab）
 // 重构: CSS Grid 卡片布局 + Tab 内联渲染，架构与 fixture-detail.js 对齐
 // D1: 骨架屏/Tab置顶(detail-tabs-top)/头部操作组/锁定引导/dirty拦截/密度类
 // 2026-09-11 DM-3：交互骨架（骨架屏/置顶Tab/密度自适应/dirty守卫/Tab 懒渲染）改为复用
@@ -1545,11 +1545,12 @@ var _sdm = openDetailModal({
   buildTabContent: function (s, key) { return _buildTabContent(s, _detailId, key); },
   // D2.2 Tab 懒渲染：logs/image 先骨架一帧，下一帧再构建实际 DOM（先给视觉反馈）
   skeleton: function (key) { return _buildTabSkeleton(key); },
-  lazyTabs: ['logs', 'image'],
+  lazyTabs: ['logs', 'image', 'chain'],
   onTabRendered: function (key, s) {
     _detailDirty = false;                                  // D1.5 离开/重渲标示卡后重置未保存态
     if (key === 'card') applyDetailCardValues(s);          // 显式回显下拉值（selected 属性在 FAST 下不生效）
     else if (key === 'image') loadImageHistory(_detailId); // T14 大图 Tab 异步拉取历史照片
+    else if (key === 'chain') loadSampleChain(_detailId);  // 2026-09-14 替代链（渲染在 chain.js）
   },
   isDirty: function () { return _detailDirty; },           // 未保存态由标示卡表单托管（detail-card.js）
   // D1.5 未保存拦截文案（原文案保持，含「标示卡」限定词）
@@ -1594,6 +1595,7 @@ function _buildHeadHTML(s, id) {
 
 // D2.2 懒渲染骨架占位块（logs 时间线条 / image 图块）；自带内边距，共享组件不再包 .dm-pad
 function _buildTabSkeleton(tab) {
+  if (tab === 'chain') return _chainSkeleton(); // 骨架在 chain.js
   if (tab === 'logs') {
     var row = '<div style="display:flex;gap:10px;margin-bottom:14px"><div class="sk" style="width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px"></div><div style="flex:1"><div class="sk" style="height:13px;width:36%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:64%"></div></div></div>';
     return '<div style="padding:14px 16px">' + row.repeat(5) + '</div>';
@@ -1609,16 +1611,20 @@ function _buildTabContent(s, id, tab) {
   else if (t === 'logs') html = _buildLogsTab(s, id);
   else if (t === 'card') html = _buildCardTab(s, id);
   else if (t === 'image') html = _buildImageTab(s, id);
+  else if (t === 'chain') html = _buildChainTab(s, id);
   return html;
 }
 
-// Tab 清单（沿用原自建 Tab 栏的判定口径：信息/标示卡/全量日志/大图；三者皆无 → 无 Tab 栏，只显示信息页）
+// Tab 清单（沿用原自建 Tab 栏的判定口径：信息/替代链/标示卡/全量日志/大图；全无 → 无 Tab 栏，只显示信息页）
 function _detailTabs(s) {
   var hasImg = !!(s.produced_image || s.image || s.inspect_image);
   var hasLog = s.logs && s.logs.length > 0;
   var hasCrd = !!(s.sample_type || s.limit_item || s.source_type || s.card_version || s.test_data || s.test_standard);
-  if (!hasImg && !hasLog && !hasCrd) return [];
+  // 替代链：字段已在详情响应内，无需额外请求
+  var hasChain = !!(s.replaced_by || s.replaces);
+  if (!hasImg && !hasLog && !hasCrd && !hasChain) return [];
   var ts = [{ key: 'info', label: '信息' }];
+  if (hasChain) ts.push({ key: 'chain', label: '替代链' });
   if (hasCrd) ts.push({ key: 'card', label: '标示卡' });
   if (hasLog) ts.push({ key: 'logs', label: '全量日志 (' + s.logs.length + ')' });
   if (hasImg) ts.push({ key: 'image', label: '大图' });
@@ -1699,7 +1705,7 @@ var _LOG_FLOW = {
   RE_RELEASE: '⬆ 退回审核 ➜ 已发行',
   RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
   RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
-  RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废',
+  RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废', RECREATE_REPLACED: '⬆ 已作废（自环）',
   FORCE_REASSIGN: '⬆ 退回审核（改派）'
 };
 
@@ -1767,6 +1773,74 @@ function showImageView(src) {
 }
 
 function printCard(id) { window.open('/api/samples/' + id + '/card/print' + getPrintSizeQuery(), '_blank'); }
+
+
+/* --- subsystems/samples/frontend/js/views/chain.js --- */
+// subsystems/samples/frontend/js/views/chain.js — 样品替代链 Tab（2026-09-14 新增）
+// 数据来源：GET /api/samples/:id/chain（只读；后端沿 samples.replaces / replaced_by 双向递归，一次取回整链并按 ord 升序）
+// 挂载方式：detail.js 把 'chain' 登记进 openDetailModal 的 lazyTabs，并在此 Tab 渲染完成后调 loadSampleChain 惰性拉取
+// 依赖（bundle 顺序保证已定义）：e()（shared/utils.js）、api()（api-base.js）、statusBadge()（本子系统 api.js）、
+//   _sdm / viewDetail() / _detailDirty（detail.js）。函数声明在拼接后的单一 bundle 内提升，故文件顺序不影响调用。
+// 边界：length<2 显示「无替代关系」；truncated 显示截断提示；软删节点标「已删除」；请求失败显示失败态；Tab 已切走丢弃过期渲染
+
+// 骨架（chain 已在 detail.js 的 lazyTabs 中，先给骨骼一帧再构建实际 DOM）
+function _chainSkeleton() {
+  var row = '<div style="display:flex;gap:10px;margin-bottom:12px"><div class="sk" style="width:22px;height:22px;border-radius:50%;flex:none"></div><div style="flex:1"><div class="sk" style="height:13px;width:42%;margin-bottom:6px"></div><div class="sk" style="height:11px;width:66%"></div></div></div>';
+  return '<div style="padding:14px 16px">' + row.repeat(3) + '</div>';
+}
+
+// Tab 容器（内容由 loadSampleChain 异步填充）
+function _buildChainTab(s, id) {
+  return '<div id="detail-chain" class="sm-chain"><div class="muted">加载替代链…</div></div>';
+}
+
+// 单节点渲染：序号 + 编号（非当前节点可点击跳转）+ 状态徽标 + 标记 + 时间/原因
+function _chainNode(n, idx) {
+  var cls = 'sm-chain-node' + (n.isCurrent ? ' current' : '') + (n.soft_deleted ? ' gone' : '');
+  var h = '<div class="' + cls + '"><span class="sm-chain-idx">' + idx + '</span><div class="sm-chain-main">';
+  h += '<div class="sm-chain-head">';
+  h += n.isCurrent ? '<b>' + e(n.sample_no) + '</b>'
+    : '<a class="link" onclick="chainNodeJump(' + n.id + ')">' + e(n.sample_no) + '</a>';
+  h += statusBadge(n);
+  if (n.isCurrent) h += '<span class="sm-chain-cur">当前</span>';
+  if (n.soft_deleted) h += '<span class="sm-chain-gone">已删除</span>';
+  h += '</div><div class="sm-chain-meta">' + _chainMeta(n) + '</div></div></div>';
+  return h;
+}
+
+// 节点副信息：优先「发行日期 + 作废原因」，二者皆无时退回创建日期
+function _chainMeta(n) {
+  var parts = [];
+  if (n.released_at) parts.push('发行 ' + String(n.released_at).slice(0, 10));
+  if (n.retired_reason) parts.push('作废原因：' + e(n.retired_reason));
+  if (!parts.length && n.created_at) parts.push('创建 ' + String(n.created_at).slice(0, 10));
+  return parts.length ? parts.join(' · ') : '—';
+}
+
+// 替代链加载与渲染（onTabRendered 触发）
+async function loadSampleChain(id) {
+  if (!document.getElementById('detail-chain')) return;
+  var data = null, failed = false;
+  try { data = await api('GET', '/api/samples/' + id + '/chain'); } catch (err) { failed = true; }
+  var box = document.getElementById('detail-chain');
+  if (!box) return;                                    // 响应到达时 Tab 已切换，丢弃过期渲染
+  if (failed) { box.innerHTML = '<div class="muted">替代链加载失败</div>'; return; }
+  var list = (data && data.chain) || [];
+  if (list.length < 2) { box.innerHTML = '<div class="muted">该样品当前没有替代关系</div>'; return; }
+  var h = data.truncated ? '<div class="sm-chain-warn">链条过长，仅显示前 20 节</div>' : '';
+  for (var i = 0; i < list.length; i++) {
+    if (i) h += '<div class="sm-chain-link"><span>被替代</span></div>';
+    h += _chainNode(list[i], i + 1);
+  }
+  box.innerHTML = h;
+}
+
+// 链节点点击：先清未保存态并关掉当前弹窗（避免叠层，同 goScanFromDetail 的清栈思路），再开目标样品详情
+function chainNodeJump(id) {
+  _detailDirty = false;
+  _sdm.close();
+  viewDetail(id);
+}
 
 
 /* --- subsystems/samples/frontend/js/views/detail-card.js --- */

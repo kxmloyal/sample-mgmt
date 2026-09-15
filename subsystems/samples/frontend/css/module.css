@@ -181,3 +181,22 @@
 .rpt-foot b{color:var(--text)}
 .rpt-foot code{background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
 @media(max-width:767px){.rpt-grid{grid-template-columns:1fr}.rpt-tb-ops{margin-left:0;width:100%;justify-content:flex-end}}
+
+/* 样品替代链 Tab（2026-09-14）：链节点是列表行而非标准卡片，故不使用 --card-pad，仅复用 --card-radius/--card-border token；不新增配色 */
+.sm-chain{padding:14px 16px}
+.sm-chain-node{display:flex;gap:10px;align-items:flex-start;border:var(--card-border,1px solid #e2e8f0);border-radius:var(--card-radius,12px);padding:10px 12px;background:#fff}
+.sm-chain-node.current{border-color:var(--brand,#2563eb);background:#eff6ff}
+.sm-chain-node.gone{opacity:.6}
+.sm-chain-idx{flex:none;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#f1f5f9;color:#475569;font-size:12px;font-weight:600}
+.sm-chain-node.current .sm-chain-idx{background:var(--brand,#2563eb);color:#fff}
+.sm-chain-main{flex:1;min-width:0}
+.sm-chain-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sm-chain-meta{margin-top:4px;font-size:12px;color:var(--muted,#64748b);word-break:break-all}
+.sm-chain-link{display:flex;align-items:center;gap:6px;padding:2px 0 2px 10px}
+.sm-chain-link::before{content:'';width:1px;height:14px;background:var(--line,#e2e8f0)}
+.sm-chain-link span{font-size:11px;color:var(--muted,#64748b)}
+.sm-chain-cur{font-size:11px;background:var(--brand,#2563eb);color:#fff;border-radius:4px;padding:1px 5px}
+.sm-chain-gone{font-size:11px;background:#e2e8f0;color:#64748b;border-radius:4px;padding:1px 5px}
+.sm-chain-warn{margin-bottom:8px;font-size:12px;color:var(--warn,#b45309)}
+@media (max-width:575px){.sm-chain-node{padding:8px 10px}.sm-chain-meta{font-size:11px}}
+

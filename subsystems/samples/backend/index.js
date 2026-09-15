@@ -18,6 +18,7 @@ function register(app) {
   require('./routes-checkout-users').register(app); // 领用人候选（2026-09-09 方案A，只读轻接口）
   require('./routes-storage-map').register(app);    // 柜位数字孪生（2026-09-09，聚合+ADMIN柜配置）
   require('./routes-samples').register(app);
+  require('./routes-chain').register(app);          // 样品替代链只读（2026-09-14）：三段路径 /api/samples/:id/chain，不会被 :id 捕获，无顺序约束
   require('./routes-scan').register(app);
   require('./routes-cards').register(app);
 }
