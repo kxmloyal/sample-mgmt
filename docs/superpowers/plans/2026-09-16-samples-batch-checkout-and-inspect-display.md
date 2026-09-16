@@ -26,25 +26,29 @@
 
 ### T1（需求 2 前端）复检适用状态判定 + `na` 态
 
+> 状态：**已完成**（2026-09-16 本地提交，待运维重启发布）
+
 | 项 | 内容 |
 |---|---|
-| 改动 1 | `subsystems/samples/frontend/js/views/list-inspect.js`：新增适用集合常量；`inspectState` 增加守卫「`s.status` 存在且在**不适用集合**（`RETIRED`/`RETURNING`/`NEW`/`PRODUCED`）→ `'na'`」，顺序在 `!s.next_inspect_at` 判定之前；`inspectBadge` 增加 `na` 分支 → 灰字「不适用」+ 按状态给 `title`（作废原因取 `s.retired_reason`）；「无计划」保持「—」+ 新增 `title="未设置复检计划"` |
-| 改动 2 | `views/list-render.js:34-37`：「复检到期」列在 `na` 状态输出灰字「不适用」 |
-| 改动 3 | `views/detail.js:132-133`：复检行改为按 `inspectState(s)` 分支——`na` → 「复检 不适用（已作废/退回审核中/领用中/未发行）」，其余保持现状 |
+| 改动 1 | `subsystems/samples/frontend/js/views/list-inspect.js`：新增 `INSPECT_NA_STATUSES`（`RETURNING`/`RETIRED`/`NEW`/`PRODUCED`）与 `INSPECT_GREY_STATUSES`（`RELEASED`/`CHECKED_OUT`）；`inspectState` 增加守卫「`s.status` 存在且在**不适用集合** → `'na'`」，顺序在 `!s.next_inspect_at` 判定之前；另抽 `inspectReason`（title 文案）/`inspectText`（展示文案）/`inspectTone`（灰化·红徽章）三个纯函数，供列表徽章、复检到期列、详情行共用同一口径；「无计划」保持「—」+ 新增 `title="未设置复检计划"` |
+| 改动 2 | `views/list-render.js:34-40`：「复检到期」列复用 `inspectTone`/`inspectText`——`na` 输出灰字「不适用」、`CHECKED_OUT` 输出「领用中·暂停复检」、`RELEASED` 灰化不出红；逾期判定不再自行比较时间，改走 `inspectState` 单一口径 |
+| 改动 3 | `views/detail.js:132-134`：复检行改为按 `inspectState`/`inspectTone` 分支——`na` → 「复检 不适用（已作废/退回审核中/未发行）」、`CHECKED_OUT` → 「复检 领用中·暂停复检」、`RELEASED` 灰化不出红，其余保持现状（原先自算 `overdue(s)` 的调用已移除） |
 | 兼容红线 | 守卫必须写成「**status 存在**且不适用 → `na`」，不得改变 `inspectState()`/`inspectState({})` 的 `none` 行为（`tests/inspect-state.test.js:19-25`、`:53-56` 必须保持绿） |
-| 测试 | `tests/inspect-state.test.js` 增用例：`RETIRED` + 未来日期 → `'na'`；`RETIRED` + 无日期 → `'na'`；`RETURNING`/`NEW`/`PRODUCED` → `'na'`；`inspectBadge` 对 `na` 含「不适用」且**不含** `b-overdue`/`b-inspect-ok` |
+| 测试 | `tests/inspect-state.test.js` 增 3 组用例：①不适用集合（日期在过去/未来/无日期/缺字段）→ `'na'`；②`CHECKED_OUT`/`RELEASED` 灰化且不含 `b-overdue`、`IN_CUSTODY` 逾期仍为红徽章；③`inspectBadge` 的 `title`（作废原因 / 未发行 / 领用中 / 未设置复检计划） |
 | 重建 | 必须重建 bundle + 更新 `subsystems/samples/frontend/index.html` 的 `?v=` |
 | 验收 | 设计文档 §8.2 的 C1~C3、C6、C7 |
 | 提交 | `fix(samples): 复检状态按状态判定适用性，作废/退回中样品不再显示“正常”` |
 
 ### T2（需求 2 后端）导出口径同源 + 容量合规
 
+> 状态：**已完成**（2026-09-16 本地提交，待运维重启发布）
+
 | 项 | 内容 |
 |---|---|
-| 改动 1 | 新建 `subsystems/samples/backend/inspect-state-cn.js`：导出适用集合常量 + `inspectStateCn(row)`（含 `na` → 「不适用」分支） |
-| 改动 2 | `backend/routes-samples.js:78-85` 删除本地 `inspectStateCn`，改为 require 引用新文件（`:117` 的列定义调用点不变）→ 文件字符数**净减**（89.2% → ≈88%） |
+| 改动 1 | 新建 `subsystems/samples/backend/inspect-state-cn.js`（**实测 28 行 / 1,233 字符 / 6.2%**）：导出 `inspectStateCn(row)` + 不适用/灰化集合常量 |
+| 改动 2 | `backend/routes-samples.js:78-85` 删除本地 `inspectStateCn` 与 `INSPECT_SOON_DAYS`，顶部 require 新文件（列定义调用点不变）→ **实测净减 312 字符 / 9 行**（17,840 / 89.2% → **17,528 / 87.6%**） |
 | 不做 | 不动 `db/dao-list.js` 的 SQL 过滤（逾期/近 7 天/机型墙计数口径零变化） |
-| 测试 | 新增/补充导出单测：`RETIRED` 行导出「不适用」；`IN_CUSTODY` 三态文本不变；CSV 列顺序不变 |
+| 测试 | 新建 `tests/inspect-state-cn.test.js`（纯函数，无 DB 依赖）：不适用集合 → 「不适用」；`CHECKED_OUT` → 「领用中·暂停复检」；`IN_CUSTODY` 三态与 `ceil` 取整不变；`RELEASED` 保留三态文字；空行/空字段 → 「—」；另加两条源码契约（不再就地定义 `inspectStateCn`、CSV 列序 状态→复检状态→制作时间） |
 | 验收 | 设计文档 §8.2 的 C4、C5 |
 | 提交 | `fix(samples): 导出复检状态与前端同口径（外迁 inspect-state-cn 至独立文件）` |
 
@@ -164,3 +168,17 @@
 4. 不统一后端 SQL 逾期口径；5. 不做列表多选批量（二期）；6. 不放开批量到图片类动作；
 7. 不新增 `scan_logs` 列/表（`batchId` 记在 `note` 尾部，列化留待观察）；8. 不改状态机与共享层；9. 不改规则文件（未授权时）；
 10. AI 不执行任何重启/停服。
+
+---
+
+## 7. 实施记录（批次一 T1 / T2，2026-09-16）
+
+| 项 | 实测 |
+|---|---|
+| 变更文件（容量为 AGENTS §7.1 权威口径 LF 归一字符数） | `views/list-inspect.js` 26→**71 行 / 3,085 字符（15.4%）**；`views/list-render.js` 94→96 / 5,734（28.7%）；`views/detail.js` 14,071→**14,342（71.7%）**；`backend/routes-samples.js` 353→**344 / 17,528（87.6%，净减 312）**；**新增** `backend/inspect-state-cn.js` 28 / 1,233（6.2%）；`frontend/js/bundle.js` 重建（`?v=bmu4aj9bb`）；`frontend/index.html` 3 处版本号 |
+| 测试文件 | `tests/inspect-state.test.js` 79→165 行；**新增** `tests/inspect-state-cn.test.js` 66 行 |
+| 验收 | 本地等价验收脚本 **35/35 PASS**（C1/C2/C3/C5 + 既有断言 + 三处接线检查）；`npx jest` 全量须在服务器执行（本地镜像无 `node_modules`） |
+| 口径定稿 | 方案 A（2026-09-16 用户确认，已写入设计 §6.1 决策行）：`CHECKED_OUT` → 灰字「领用中·暂停复检」；`RELEASED` → 保留三态文字但灰化不出红；两者**均不进**「不适用」集合 |
+| 踩坑留档 | `pwsh Get-Content -Raw` + `Set-Content -Encoding utf8` 往返会把 `index.html` 中文写成乱码并加 BOM（实测 48 行全变）——已 `git restore` 该文件后改用 node 以 UTF-8 安全替换，diff 收敛为 3 行版本号。**今后 HTML/中文文本一律用 node 或 `edit` 工具改，禁止 pwsh 文本往返** |
+| 未做 | 未改 `db/dao-list.js` 的 SQL（看板 overdue/dueSoon、机型墙计数零变化 = C4）；未改 `scan-actions.js`；未改规则文件容量台账（T6 标注需授权） |
+| 待办 | 服务器 `git pull` → 运维面板重启（后端新增 require 文件必须重启才生效）→ 只读验收 + 双系统 `.b-overdue` 回归（C7） |
