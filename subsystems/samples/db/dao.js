@@ -147,6 +147,13 @@ module.exports = function createDao(deps) {
     return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON l.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
   }
 
+  // 批量领用/归还的幂等探测（2026-09-16，设计文档 §5.5）：batchId 记在 scan_logs.note 尾部 ' [batch:<id>]'（零 DDL）。
+  // 只防「同批重复提交」——返回该批次已落库的样例（sample_no 供前端标「已生效」）；跨批并发仍由 updateSample 的 CAS 兜底。
+  // 代价提示：note 前置通配符走全表扫描，故每批仅调用 1 次并由调用方 LIMIT 1 判定命中；实测耗时由路由记入响应 probeMs。
+  function listBatchLogs(batchId) {
+    return q("SELECT l.sample_id, s.sample_no FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id WHERE l.note LIKE CONCAT('%[batch:', ?, ']%') LIMIT 200", [batchId]);
+  }
+
   // 机型主数据
   function listModels() { return q('SELECT * FROM sample_models ORDER BY code ASC'); }
   function getModelById(id) { return one('SELECT * FROM sample_models WHERE id = ?', [id]); }
@@ -161,7 +168,7 @@ module.exports = function createDao(deps) {
 
   return Object.assign({
     nextSampleNo, createSample, getSampleById, getSampleByNo, getSampleByToken, updateSample, deleteSample,
-    addLog, listLogsBySample, listLogs, listCheckoutReturnLogs,
+    addLog, listLogsBySample, listLogs, listCheckoutReturnLogs, listBatchLogs,
     listModels, getModelById, getModelByCode, createModel, deleteModel, countSamplesByModel, listLegacyModels
   }, daoList);
 };
