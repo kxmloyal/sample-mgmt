@@ -1,8 +1,8 @@
-# RELEASE v2.0.9 — 启动加固（并发 DDL 事故根因修复）+ scan.js 拆分瘦身 + 版本号文档校正
+# RELEASE v2.0.9 — 启动加固（并发 DDL 事故根因修复）+ scan.js 拆分瘦身 + 版本号文档校正 + 测试环境稳定性修复
 
 > 发布日期：2026-09-16
 > 上一版：[RELEASE-v2.0.8.md](./RELEASE-v2.0.8.md)（作废即清柜）
-> 本版性质：**稳定性加固（fix）+ 容量瘦身（refactor）+ 文档校正（docs）**，无业务语义变更、无状态机变更、无接口出入参变更。
+> 本版性质：**稳定性加固（fix）+ 容量瘦身（refactor）+ 文档校正（docs）+ 测试环境稳定性（fix，见 §9）**，无业务语义变更、无状态机变更、无接口出入参变更。
 
 ---
 
@@ -61,8 +61,10 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 
 | 文件 | 行数 | 字符 | 占比 | 顶层函数 |
 |---|---|---|---|---|
-| `scan.js`（改后） | 242 | 17,109 | **85.5%**（原 96.6%） | 6（原 10） |
-| `scan-payload.js`（新增） | 53 | 2,685 | 13.4% | 4 |
+| `scan.js`（改后） | 244 | 17,109 | **85.5%**（原 96.6%） | 6（原 10） |
+| `scan-payload.js`（新增） | 51 | 2,685 | 13.4% | 4 |
+
+> 容量口径：服务器端 LF 文本 + `String.length`（字符）与 `wc -l`（行）实测值。
 
 **行为保持依据**：bundle 为按 `tools/bundle-sources.json` 顺序**拼接的单一作用域**，4 个函数的依赖 `_coPick`（`checkout-user-picker.js:9` 顶层 `var`）、`wizardSample`（`scan-wizard.js:4` 顶层 `var`）、`toast`/`fmt`（shared）在该作用域内仍可见；调用点全部留在 `scan.js`（表单 `oninput="previewCheckoutDue()"` 与 `confirmScan` 的 3 处校验链）；`scan-payload.js` 已登记于 `bundle-sources.json` 且**顺序在 `scan.js` 之前**（索引 25 < 26）。bundle 内 4 个函数各出现 **1 次**，无重复定义。
 
@@ -79,6 +81,12 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 - `AGENTS.md` §13 版本号约定：`（当前 **2.0.6**）` → `（2026-09-16 复核：当前 **2.0.9**）`。
 - `CLAUDE.md` / `README.md` 无版本号硬编码，经检索无需改动。
 
+### 2.4 测试环境稳定性修复（验证期新增，详见 §9）
+
+- `tests/setup-env.js` 新增**编码表预热**：消除多测试文件全量运行时的 `cesu8` 致命中断，全量套件首次能跑完并打印汇总。
+- `package.json` 新增依赖锁定 `overrides: { mysql2: { iconv-lite: 0.6.3 } }`（方案 A，实测对 `cesu8` 无效，保留现状，见 §9.1 备注）。
+- `tests/detail-modal-shared.test.js`、`tests/samples-picker-timing.test.js` 各同步 1 处陈旧断言（E/F）。
+
 ---
 
 ## 3. 全链路关联依赖清单（5 维度）
@@ -87,9 +95,10 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 |---|---|---|
 | 代码 | `db.js`（框架共享）、`db/migrations/index.js`、`server.js`；`subsystems/samples/frontend/js/views/scan.js`、新增 `scan-payload.js`；`tools/bundle-sources.json` | 已改；`db/migrations.js` 薄转发不变（新增导出为超集，兼容） |
 | SQL | 无表/字段/索引变更；启动 DDL 执行路径与顺序变化（同一进程内串行化） | 迁移文件本身未改；`_migr_*` 哨兵语义未变 |
-| 配置 | 无新增环境变量；锁定名 `sample_mgmt_ddl`、等待 30s、重试 3 次为代码内常量 | 无需运维配置 |
+| 配置 | 无新增环境变量；锁定名 `sample_mgmt_ddl`、等待 30s、重试 3 次为代码内常量；**新增依赖锁定** `overrides: mysql2 → iconv-lite 0.6.3`（§9.1） | 需在重启窗口执行 `sudo -u www npm install`（已执行：`changed 1 package`，`npm ls` 退出码 0） |
 | 接口 | 无 API 出入参变更；`module.exports.ready = init()` 语义保持（seeds/tools/tests 链路不变） | 兼容 |
 | 文档 | `docs/RELEASE-v2.0.9.md`（新增）、`AGENTS.md` §3/§13 | 已改；`README.md`/`CLAUDE.md` 无需改 |
+| 测试 | `tests/db-startup-guard.test.js`、`tests/samples-scan-payload-split.test.js`（新增）；`tests/setup-env.js`（编码表预热，B）；`tests/detail-modal-shared.test.js:247`（E）、`tests/samples-picker-timing.test.js:20`（F） | 已改；断言强度不变（E）或增强（F） |
 
 **跨模块/跨子系统**：`db.js`/`server.js`/`db/migrations/index.js` 属**框架共享**文件（§6.1/§15.4 双系统回归强制）⇒ 需 samples + fixtures 双向只读回归。
 
@@ -104,9 +113,25 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 - **拆分断言 22 项全 PASS**（4 函数归属与唯一性、调用点留存、清单顺序 25 < 26、三处版本号一致、34 文件计数、容量与函数数）。
 - 新增单元测试：`tests/db-startup-guard.test.js`（4 用例：单飞同一 promise、错误码真值表、`withDdlLock` 串行化、`runDdlWithRetry` 重试成功/非瞬时错误立即抛出）。
 
-### 4.2 服务器端全量测试
+### 4.2 服务器端全量测试（三阶段实测对比）
 
-以服务器 jest 为准（本地镜像无 `node_modules`），结论见部署记录。
+| 阶段 | 命令 | 套件结果 | 用例结果 | `cesu8` 致命异常 |
+|---|---|---|---|---|
+| 修复前 | `npx jest --maxWorkers=2 --forceExit` | 11 PASS / 2 FAIL（进程中断，仅跑到 13 个套件） | 无汇总行 | **3 次**，进程致命退出 |
+| 修复前（串行对照） | `npx jest --runInBand` | 11 PASS / 2 FAIL | 无汇总行 | **3 次**（与 worker 数无关） |
+| 预热修复后（B） | `npx jest --maxWorkers=2 --forceExit` | 35 PASS / 3 FAIL / 7 skipped（45 套件） | **505 passed / 6 failed / 10 skipped** | **0 次**，正常打印汇总 |
+
+> 修复前全量只能跑到 13 个套件即中断，故 45 个套件中的多数用例长期未被真正执行；预热修复后首次获得完整测试信号（这也是 F 直到本次才暴露的原因）。
+
+**失败套件定性（均为既存问题，非本版引入，详见 §9）**：
+
+| 套件 | 现象 | A/B 对照（旧提交 `9996b69` vs 本版，同命令同用例） |
+|---|---|---|
+| `tests/users.test.js` | 4 项失败：`Lock wait timeout exceeded`（`db/dao.js:65` 的 `pool.execute`）+ 2 项 30s 用例超时 | 旧 6 项失败 / 新 4 项失败（旧不优于新） |
+| `tests/detail-modal-shared.test.js` | 1 项：`lazyTabs` 断言陈旧（E） | 双向一致 `1 failed, 11 passed`；本版已修 |
+| `tests/samples-picker-timing.test.js` | 1 项：`_smCache` 失效条件断言陈旧（F） | 双向一致 `1 failed, 7 passed`；本版已修 |
+
+**本次新增测试**：`tests/db-startup-guard.test.js` **PASS**（9.18s）、`tests/samples-scan-payload-split.test.js` **PASS**。
 
 ### 4.3 双系统只读回归（§6.1 强制）
 
@@ -124,6 +149,8 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 - **重试边界**：仅重试 3 类瞬时错误；其余错误（如重复列 `ER_DUP_FIELDNAME`）立即抛出，避免掩盖真实迁移缺陷。
 - **启动耗时**：启动 DDL 实测约 15–18s（v2.0.8 观测值），本次不改变执行内容，仅消除重复执行 ⇒ 启动期间**不再重复做一遍 DDL**。
 - **前端**：4 个函数搬迁后全局可见性不变，页面行为与 v2.0.8 一致；bundle 版本号更新仅用于缓存失效。
+- **依赖**：仅 1 个嵌套包变更（`mysql2` 的 `iconv-lite` 0.7.3 → 0.6.3，`npm ls` 退出码 0，无连带升级）；生产运行路径经 245/245 连接探针验证无变化。
+- **测试环境**：`tests/setup-env.js` 新增编码表预热，仅作用于测试进程（生产为纯 node 运行，不经该惰性加载路径）。
 - **无破坏性变更**：无字段/接口/常量删除，无需兼容过渡期。
 
 ---
@@ -135,16 +162,20 @@ AGENTS.md §13「版本号约定」原记录「当前 **2.0.6**」已滞后两�
 ```bash
 # 1) 服务器拉取（项目目录属主 www）
 cd /www/wwwroot/sample-mgmt && sudo -u www git pull --ff-only
-# 2) 生效范围
+# 2) 依赖同步（本版 package.json / package-lock.json 有变更：iconv-lite override）
+sudo -u www npm install --no-audit --no-fund
+# 3) 生效范围
 #    - 前端：subsystems/samples/frontend/{index.html,js/bundle.js} 刷新浏览器即生效
 #    - 版本号/manifest：ff-pull 即生效
 #    - 后端：db.js / db/migrations/index.js / server.js 属启动期加载，MUST 由运维在宝塔面板「重启」后生效
-# 3) 重启后只读验收
+# 4) 重启后只读验收
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4000/health
 grep -c '子系统 schema 已加载' /www/wwwlogs/nodejs/sample_mgmt.log   # 每个子系统应仅 1 次（不再成对交错）
 grep -n '数据库已连接: MySQL' /www/wwwlogs/nodejs/sample_mgmt.log
 grep -n '启动失败，进程退出' /www/wwwlogs/nodejs/sample_mgmt.log      # 应无输出
 ```
+
+> 步骤 2 已于 2026-09-16 由本次验证执行完毕（`changed 1 package`）；若后续回退依赖再按 §6.3 重装。
 
 ### 6.2 重启申请（§23.2）
 
@@ -161,9 +192,13 @@ cd /www/wwwroot/sample-mgmt && sudo -u www git checkout v2.0.8 -- \
   subsystems/samples/frontend/js/views/scan-payload.js
 # 后端回滚（回滚后同样需要运维重启）
 sudo -u www git checkout v2.0.8 -- db.js db/migrations/index.js server.js
+# 测试侧回滚（§9 的 B/E/F 三个测试文件）
+sudo -u www git checkout v2.0.8 -- tests/setup-env.js tests/detail-modal-shared.test.js tests/samples-picker-timing.test.js
+# 依赖回滚（§9.1 方案 A 去留；回退后需重装依赖）
+sudo -u www git revert fea2b13 && sudo -u www npm install --no-audit --no-fund
 ```
 
-回滚后：`db.js` 恢复「模块加载即 `init()` + `server.js` 再 `init()`」的旧行为（并发 DDL 风险回归），故**回滚仅在加固引入新问题时使用**，并应立即上报。
+回滚后：`db.js` 恢复「模块加载即 `init()` + `server.js` 再 `init()`」的旧行为（并发 DDL 风险回归），故**回滚仅在加固引入新问题时使用**，并应立即上报。测试侧回滚会使全量套件重新出现 `cesu8` 致命中断（§9.1）。
 
 ---
 
@@ -177,11 +212,93 @@ sudo -u www git checkout v2.0.8 -- db.js db/migrations/index.js server.js
 | 错误日志 | `"level":"error"` 计数为 0（除既有业务告警） | 1–3 周期 |
 | 迁移哨兵 | `_migr_*` 哨兵表存在，迁移未重跑（`deleted_at` 无二次 +8h） | 1–3 周期 |
 | 前端 | 扫码台领用/接收保管/复检表单提交正常（拆分文件生效） | 首个业务日 |
+| 握手编码（测试环境） | 全量 `npx jest` 正常打印汇总、`cesu8` 出现 **0 次** | 每次回归 |
 
 ---
 
 ## 8. 遗留与拆分方案（容量体检）
 
 - `subsystems/samples/frontend/js/views/scan.js` 拆分后 **85.5%**，仍高于 70% 预警线：后续如需继续瘦身，可把 `renderScanAction`/`showScanActionForm` 渲染块抽为 `scan-form.js`（本次未做，避免一次改动过大）。
-- 未处理容量项（既有技术债）：`report.js` 78.1%/16 顶层函数、`detail.js` 19 函数、`storage-loc-picker.js` 12 函数、`docs/operation-manual.md` 124.6%、`applyAction` 199 行、`smRenderCell`/`smMapRenderCell` 可合并。
+- 未处理容量项（既有技术债）已由用户确认为**下一迭代目标**，清单见 §10.1。
 - `tools/build-bundles.js` 会刷新全部 5 个子系统的 `module.css?v=`（本次已回退 4 个），建议后续为脚本增加「仅刷新指定子系统」参数以免反复产生跨子系统噪声。
+
+---
+
+## 9. 验证期发现与修复（D/E/F）
+
+> 本节记录**服务器端回归验证过程中新发现**的问题。三项均经 A/B 对照（旧提交 `9996b69` 与本版同命令、同用例）确认**非本版引入**。
+
+### 9.1 D：数据库握手 `cesu8` 致命异常（高优先级，已修复）
+
+**现象**：全量 `npx jest` 运行中被 `Error: Encoding not recognized: 'cesu8' (searched as: 'cesu8')` 终止（`{ fatal: true }`），**不打印 Tests 汇总行**；单套件运行时表现为连接失败 / `Lock wait timeout exceeded` / 用例 30s 超时，极易误判为数据库故障。
+
+**完整栈（服务器实测）**：
+
+```
+iconv-lite/lib/index.js  getCodec → throw "Encoding not recognized: 'cesu8'"
+mysql2/lib/parsers/string.js:20              decode
+mysql2/lib/packets/packet.js:444             readNullTerminatedString
+mysql2/lib/packets/handshake.js:63           readNullTerminatedString('cesu8')   ← mysql2 硬编码
+mysql2/lib/commands/client_handshake.js:261  handshakeInit
+mysql2/lib/base/connection.js:111            Socket.<anonymous> → TCP.onStreamRead   { fatal: true }
+```
+
+**根因链（每步均有实测证据）**：
+
+1. `mysql2/lib/packets/handshake.js:63` 以**硬编码 `'cesu8'`** 解析服务端版本串 ⇒ 每次连接握手都会请求该编码。
+2. `iconv-lite` 首次使用某编码时才**惰性载入编码表**：`iconv-lite/lib/index.js:63`（0.6.3）= `if (!iconv.encodings) iconv.encodings = require("../encodings");`（**无 try/catch**）。
+3. 多测试文件的全量运行中，该惰性 `require` 在**连接回调期（模块注册表生命周期边界）**取不到完整编码表 ⇒ `encodings['cesu8']` 为 `undefined` ⇒ `switch` 落到 `default` 分支抛出「Encoding not recognized」——**真实加载异常被伪装成「编码不支持」**（0.6.3 抛错点 `lib/index.js:104`、0.7.3 为 `:108`，行号随版本偏移而错误文案不变，可佐证同一分支）。
+4. 异常发生在 socket 数据回调内、无上层 try/catch ⇒ **进程致命退出**；若发生在启动 DDL 内则被 `withDdlLock` 的 fail-open 捕获并记录（日志可见 `[db] 获取 DDL 锁失败，退化为无锁执行: ... cesu8`）。
+
+**证据矩阵**：
+
+| 验证项 | 结果 | 结论 |
+|---|---|---|
+| 纯 node 探针（不含仓库代码）：串行 30 次 + 池化 15 次 + 并发 200 次连接（含生产库与测试库、含/不含 charset） | **245/245 成功** | 生产运行路径与连接配置无缺陷 |
+| `iconv-lite` 版本对比：`getCodec('cesu8')` 在 0.6.3 与 0.7.3 下（纯 node） | 两者均成功 | **版本不是变量** |
+| 方案 A（`overrides` 锁 `iconv-lite@0.6.3`）安装后全量运行 | `cesu8` 仍 **3 次**；栈行号由 0.7.3 的 108 变为 0.6.3 的 104 | **A 无效**（已实施、无副作用） |
+| 单测试文件运行（`--runInBand` 单文件） | `cesu8` **0 次** | 触发条件与「多测试文件」相关 |
+| 全量串行 `--runInBand` | `cesu8` **3 次** | 与 worker 数量无关 |
+| jest 内探针：`require(内嵌 iconv-lite)` 后 `encodingsLoaded=false`、`getCodec('cesu8')` 成功 | 同步调用可触发惰性载入 | 惰性载入点在「注册表存活期内」可正常工作 |
+| 方案 B（`tests/setup-env.js` 预热编码表）后全量运行 | `cesu8` **0 次**，首次打印汇总（505 passed） | **B 有效** |
+
+**方案 A 备注（保留现状）**：`package.json` 的 `overrides` 已实施并安装（`npm install` 仅变更 1 个包、`npm ls` 退出码 0），对 `cesu8` 症状**无实际作用**；但 `iconv-lite@0.6.3` 是 mysql2 长期依赖版本、无兼容风险，故**默认保留**。如需最小化依赖改动，可按 §6.3 用 `git revert + npm install` 回退。
+
+**影响面**：仅**测试环境**。生产为纯 node 运行、不经该惰性加载路径（245/245 探针为证），服务 `/health` 全程 200，生产进程未受影响。
+
+### 9.2 E：`lazyTabs` 断言未同步「替代链」Tab（已修复）
+
+`tests/detail-modal-shared.test.js:247` 断言 `lazyTabs: ['logs', 'image']`，而 `subsystems/samples/frontend/js/views/detail.js:25` 自 `c3b75e7`（2026-09-15 新增替代链 Tab；`docs/RELEASE-v2.0.6.md:47` 明确「懒加载（`lazyTabs` 增加 `chain`）」）起为 `['logs', 'image', 'chain']`；`tests/samples-replacement-chain.test.js:104` 已按新值断言 ⇒ **测试未同步、代码正确**。修法：按「新增替代链 Tab」将断言同步为三元素（断言强度不变）。
+
+### 9.3 F：`_smCache` 失效条件断言未同步广义化（已修复）
+
+`tests/samples-picker-timing.test.js:20` 断言 `if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;`，而 `subsystems/samples/frontend/js/views/scan.js:6,219` 已改为广义机制 `_SM_LOC_ACTIONS`（`CUSTODY/EDIT_STORAGE/RETIRE_ONLY/RETIRE_RECREATE/FORCE_RETIRE/RECREATE`，注释明确为 2026-09-16 扩入作废/重做类）⇒ 断言陈旧。修法：断言同步为机制校验（覆盖面**强于**原字面量的 2 个动作）。该套件此前从未被真正执行（全量运行在 `cesu8` 处中断）⇒ **新暴露的既存问题**。
+
+### 9.4 遗留：`tests/users.test.js` 4 项失败（环境性，本次未修）
+
+失败形态为 `Lock wait timeout exceeded`（`db/dao.js:65` 的 `pool.execute`）与 2 项 30s 用例超时，伴随数据库侧慢查询（实测单请求 22–24s）；测试库残留连接数 0，MySQL 侧配置正常（`max_connections=500`、`max_user_connections=0`、`Threads_connected=44`）。A/B 显示旧提交失败**更多**（6 项）⇒ 非本版引入，属测试库负载/慢查询导致的既存环境性失败，建议独立排查（不属本版范围）。
+
+---
+
+## 10. 下一迭代目标（用户 2026-09-16 确认）
+
+### 10.1 容量瘦身（§7.1 / §7.2）
+
+| 目标 | 现状 | 建议动作 |
+|---|---|---|
+| `subsystems/samples/frontend/js/views/report.js` | 78.1%，16 个顶层函数 | 拆「统计 / 明细」两域，函数数降至 ≤10 |
+| `subsystems/samples/frontend/js/views/detail.js` | 19 个顶层函数（超 §7.2 上限 10） | 按 Tab 域拆分 |
+| `subsystems/samples/frontend/js/views/storage-loc-picker.js` | 12 个顶层函数 | 拆「候选渲染 / 取值」两域 |
+| `docs/operation-manual.md` | 124.6% 字符红线 | 下沉至已有 5 份子系统分册 |
+| `applyAction` | 199 行（超 §7.2 单函数 60 行） | 按动作类型拆子函数 |
+| `smRenderCell` / `smMapRenderCell` | 逻辑重复 | 合并 |
+| `public/css/app.css` | 109.6%（已超 20000 字符红线） | 门户块拆独立样式文件（需三系统回归） |
+| `README.md` | 101.2% | 用户 2026-09-11 决定暂不拆分 |
+| `subsystems/samples/backend/routes-samples.js` | 89.2% | 后续拆分候选 |
+| `scan.js` | 85.5%（本版已由 96.6% 降低） | 如需继续：`renderScanAction`/`showScanActionForm` 抽 `scan-form.js` |
+| `tools/build-bundles.js` | 会刷新全部 5 个子系统 `module.css?v=` | 增加「仅刷新指定子系统」参数 |
+
+### 10.2 其他
+
+- 测试环境：`tests/users.test.js` 的 `Lock wait timeout` 环境性失败需独立排查（§9.4）。
+- 方案 A 去留（§9.1 备注）：建议保留 `iconv-lite@0.6.3` override（无副作用，符合 mysql2 长期依赖组合）。
