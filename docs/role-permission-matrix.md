@@ -1,6 +1,6 @@
 # 角色权限对照表（Role-Permission Matrix）
 
-> 数据来源：各子系统 `manifest.json` 的 `stateMachine.transitions` 与 `navigation.roles`（单一事实来源，AGENTS.md §17.3）。
+> 数据来源：各子系统 `manifest.json` 的 `stateMachine.transitions` 与 `navigation.roles`（单一事实来源，AGENTS.md §17.3；正文见 `docs/agents-plugin-protocol.md`）。
 > 更新方式：修改 manifest 后同步本表；本表仅供查阅，不参与运行时校验。
 > 最近同步日期：2026-09-05（样品领用 CHECKED_OUT + 机型视图导航；补 2026-09-04 多角色架构、SUBMIT+QA、会签按部门、管制全量）
 

@@ -5,7 +5,7 @@
 
 ## 1. 项目一句话
 
-制造品质管理系统:Node.js + Express + **MySQL 8.0.13+**(不支持 MariaDB/5.7) + 原生 HTML 单页,含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 AGENTS.md 第 17 节）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
+制造品质管理系统:Node.js + Express + **MySQL 8.0.13+**(不支持 MariaDB/5.7) + 原生 HTML 单页,含管制流程管理、样品管理、治具管理、全局工作台与项目追踪五大子系统,统一门户入口 portal.html。**架构基础：子系统插件协议（见 `docs/agents-plugin-protocol.md`，即 AGENTS.md 参考卷 A 的 §17）**，新增子系统通过 manifest.json + 标准接口即可接入框架。
 
 **子系统清单**(由 `node tools/sync-subsystem-docs.js` 自动维护):
 
@@ -268,7 +268,7 @@
 
 ## 15. 子系统插件协议（Claude 实施指引）
 
-> 完整协议定义见 [AGENTS.md 第 17 节](./AGENTS.md#17-子系统插件协议核心架构)。
+> 完整协议定义见 [AGENTS.md 参考卷 A](./docs/agents-plugin-protocol.md)（即原 AGENTS.md §17，编号不变；主文件 §17 保留摘要与指针）。
 > Claude 在涉及子系统的任务中 MUST 遵循本指引。
 
 ### 15.1 核心判断：新功能放哪里
@@ -345,7 +345,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 ## 16. 卡片设计系统（Claude 实施指引）
 
-> 完整规范见 [docs/archive/specs/2026-08-04-card-design-system.md](./docs/archive/specs/2026-08-04-card-design-system.md)（已实施并归档）与 [AGENTS.md 第 18 节](./AGENTS.md#18-卡片设计系统规范强制)。
+> 完整规范见 [docs/archive/specs/2026-08-04-card-design-system.md](./docs/archive/specs/2026-08-04-card-design-system.md)（已实施并归档）与 [AGENTS.md 参考卷 B](./docs/agents-ui-standards.md)（原 §18，编号不变）。
 
 ### 16.1 核心要点
 
@@ -419,7 +419,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 
 ## 19. 标签与标示卡标准化规则（Claude 实施指引）
 
-> 完整规范见 `docs/label-card-standard.md`，与 AGENTS.md 第 24 节一致。适用于样品子系统中「标签」与「标示卡」的代码/文档变更。
+> 完整规范见 `docs/label-card-standard.md`，与 `docs/agents-ui-standards.md`（原 AGENTS.md §24，编号不变）一致。适用于样品子系统中「标签」与「标示卡」的代码/文档变更。
 
 ### 19.1 核心要点
 
