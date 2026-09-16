@@ -70,9 +70,11 @@ describe('批量入参解析（parseBatchBody）', () => {
   test('批次内去重：首件为准，重复项与空值进 skipped', () => {
     const d = B.dedupCodes(['A', 'B', 'A', '', '  ', 'B', 'C']);
     expect(d.list).toEqual(['A', 'B', 'C']);
-    expect(d.skipped.map(x => x.code)).toEqual(['A', '', 'B']);
-    expect(d.skipped[0].reason).toContain('重复');
-    expect(d.skipped[1].reason).toBe('输入为空');
+    // 空串与纯空白各自独立成一条跳过项（都归一为 code:''），重复项记原编号
+    expect(d.skipped.map(x => x.code)).toEqual(['A', '', '', 'B']);
+    expect(d.skipped.map(x => x.reason)).toEqual([
+      '本批队列内重复（首件为准）', '输入为空', '输入为空', '本批队列内重复（首件为准）'
+    ]);
     // 前后空白归一后再判重
     expect(B.dedupCodes([' A ', 'A']).list).toEqual(['A']);
   });
