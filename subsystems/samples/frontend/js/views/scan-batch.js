@@ -158,16 +158,31 @@ function sbQueueOp(op, code) {
   sbPaint();
 }
 
+// 重试入口（T5，由结果面板的 sbRetryFailed / sbRetryRejected 调用）：
+// 把指定编号的失败项退回 pending（仅这些件），换新幂等键后重新提交。
+// keepKey=true 用于「预校验整批被拒」——该情形后端零副作用、旧键未被占用，复用旧键即可（设计 §4.4）
+function sbRetryQueue(codes, btn, keepKey) {
+  codes.forEach(function (c) { _sbQueue.forEach(function (x) { if (x.code === c) x.state = 'pending'; }); });
+  _sbResult = null;
+  sbPaint();
+  return sbSubmit(btn, codes, !keepKey);
+}
+
 // 提交：① 复用 collectCheckoutPayload 收集公共项（与单件路径同一份校验）→ ② 生成/复用 batchId →
 //      ③ 静默调用批量接口（silent：不弹全局 toast、不触发单件刷新，逐件错误由结果面板承载）→ ④ 按 HTTP 语义分流
-async function sbSubmit(btn) {
-  var codes = _sbQueue.filter(function (x) { return x.state === 'pending' || x.state === 'failed'; }).map(function (x) { return x.code; });
+// only（可选，T5 重试用）：仅提交这些编号（其余件保持原状态位不被触碰，故已成功项绝不会被再次提交）
+// freshKey（可选，T5 重试用）：强制换新幂等键——上次提交已落库时旧键会被判 BATCH_DUPLICATE，
+//   但预校验被拒（零副作用）情形必须**复用**旧键，故由调用方显式决定
+async function sbSubmit(btn, only, freshKey) {
+  var pool = _sbQueue.filter(function (x) { return !only || only.indexOf(x.code) > -1; });
+  var codes = pool.filter(function (x) { return x.state === 'pending' || x.state === 'failed'; }).map(function (x) { return x.code; });
   if (!codes.length) { toast('队列中无可提交项', 'err'); return; }
   var body = { action: _sbAction, codes: codes };
   if (_sbAction === 'CHECKOUT' && !collectCheckoutPayload(body)) return; // scan-payload.js：领用人必填 + 时长 1~8760 软校验
   var noteEl = document.getElementById('sb-note');
   if (noteEl && noteEl.value.trim()) body.note = noteEl.value.trim();
   // 幂等键：本次提交首次生成后固定；网络异常（未知态）重试复用同一值，后端据此判 BATCH_DUPLICATE 防重复执行
+  if (freshKey) _sbBatchId = null;
   if (!_sbBatchId) _sbBatchId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
     : ('b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   body.batchId = _sbBatchId;

@@ -13,14 +13,25 @@ const readSrc = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const count = (s, n) => s.split(n).length - 1;
 const SB = 'subsystems/samples/frontend/js/views/scan-batch.js';
 
-// 假 DOM：只实现本文件用到的 getElementById / innerHTML
+// 假 DOM：只实现本文件用到的 getElementById / innerHTML / createElement / body（T5 的下载与复制路径）
 function fakeDom() {
   const els = {};
+  const created = [];
+  const body = { children: [], appendChild(n) { this.children.push(n); }, removeChild(n) { const i = this.children.indexOf(n); if (i > -1) this.children.splice(i, 1); } };
   return {
     els,
+    created,
+    body,
     document: {
-      getElementById: id => (els[id] = els[id] || { id, innerHTML: '', style: {}, value: '', setAttribute() {} }),
-      addEventListener() {}
+      getElementById: id => (els[id] = els[id] || { id, innerHTML: '', style: {}, value: '', textContent: '', setAttribute() {} }),
+      addEventListener() {},
+      createElement(tag) {
+        const el = { tag, style: {}, downloaded: null, clicked: 0, select() {}, click() { this.clicked++; } };
+        created.push(el);
+        return el;
+      },
+      execCommand: () => true,
+      body
     }
   };
 }
@@ -30,6 +41,7 @@ function fakeDom() {
 function loadBatch(opts) {
   const dom = fakeDom();
   const store = (opts && opts.store) || {};
+  let uuidSeq = 0; // 每次 loadBatch 重置：randomUUID 递增返回，使「换新幂等键」可被断言区分
   const localStorage = {
     getItem: k => (k in store ? store[k] : null),
     setItem: (k, v) => { store[k] = String(v); },
@@ -44,10 +56,13 @@ function loadBatch(opts) {
     return { ok: [], failed: [], skipped: [] };
   };
   const sandbox = {
-    document: dom.document, localStorage, window: {}, crypto: { randomUUID: () => 'uuid-fixed-0001' },
+    document: dom.document, localStorage, window: {}, crypto: { randomUUID: () => 'uuid-' + (++uuidSeq) },
     me: opts.me || { id: 7, role: 'CUSTODY', dept: '制造部' }, STATUS: { IN_CUSTODY: '保管中', CHECKED_OUT: '领用中' },
-    api, toast: (m, k) => toasts.push({ m, k }), console,
+    api, toast: (m, k) => toasts.push({ m, k }), console, setTimeout: fn => fn(),
     e: s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), // shared/frontend/shared/utils.js 同款
+    Blob: function (parts, o) { this.parts = parts; this.type = o && o.type; this.text = parts.join(''); },
+    URL: { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} },
+    navigator: opts.navigator || {},
     // 单件路径的公共项收集（scan-payload.js 同款契约：读 #scan-co-* 填 body，失败返回 false）
     collectCheckoutPayload: b => {
       const u = dom.document.getElementById('scan-co-user').value.trim();
@@ -139,8 +154,8 @@ describe('批量队列模型（scan-batch.js 真跑）', () => {
   test('提交成功：逐件状态位落 ok/failed，幂等键在落库后作废，公共项按单件同款收集', async () => {
     const { s, calls } = loadBatch({
       handlers: {
-        '/api/samples/batch-action': () => ({
-          action: 'CHECKOUT', batchId: 'uuid-fixed-0001',
+        '/api/samples/batch-action': (body) => ({
+          action: 'CHECKOUT', batchId: body.batchId,
           ok: [{ code: 'A', id: 1, sample_no: 'A', status: 'CHECKED_OUT' }],
           failed: [{ code: 'B', ok: false, code_: 'VERSION_CONFLICT', reason: '该样品刚被他人操作，请刷新后重试', retryable: true }],
           skipped: [{ code: 'A', reason: '本批队列内重复（首件为准）' }]
@@ -154,7 +169,7 @@ describe('批量队列模型（scan-batch.js 真跑）', () => {
     const body = calls.find(c => c.url === '/api/samples/batch-action').body;
     expect(body.action).toBe('CHECKOUT');
     expect(body.codes).toEqual(['A', 'B']);
-    expect(body.batchId).toBe('uuid-fixed-0001');       // crypto.randomUUID 生成的幂等键
+    expect(body.batchId).toMatch(/^uuid-\d+$/);         // crypto.randomUUID 生成的幂等键
     expect(body.checkout_user).toBe('张三');            // 复用 collectCheckoutPayload
     expect(body.durationHours).toBe(24);
     expect(s._sbQueue.map(x => x.state)).toEqual(['ok', 'failed']);
@@ -240,6 +255,119 @@ describe('批量队列模型（scan-batch.js 真跑）', () => {
     const chk = calls.find(c => c.url === '/api/samples/batch-resolve');
     expect(chk.body.codes).toEqual(['A', 'B']);
     expect(chk.body.action).toBe('CHECKOUT');
+  });
+});
+
+describe('失败重试与清单导出（T5，scan-batch-result.js 真跑）', () => {
+  // 共用：造一次「部分成功」的提交（A 成功、B 可重试失败、C 需人工失败）
+  const partialHandlers = () => ({
+    '/api/samples/batch-action': (body, n) => {
+      if (n === 1) return { action: body.action, batchId: body.batchId,
+        ok: [{ code: 'A', id: 1, sample_no: 'A', status: 'CHECKED_OUT' }],
+        failed: [
+          { code: 'B', ok: false, code_: 'VERSION_CONFLICT', reason: '该样品刚被他人操作，请刷新后重试', retryable: true },
+          { code: 'C', ok: false, code_: 'ACTION_NOT_ALLOWED', reason: '当前状态不可执行', retryable: false }],
+        skipped: [] };
+      return { action: body.action, batchId: body.batchId, ok: [{ code: 'B', id: 2, sample_no: 'B', status: 'CHECKED_OUT' }], failed: [], skipped: [] };
+    }
+  });
+
+  test('重试只重交可重试的失败项：成功项与「需人工」项不被再次提交，且换新幂等键', async () => {
+    const { s, calls } = loadBatch({ handlers: partialHandlers() });
+    s.document.getElementById('scan-batch');
+    s.sbEnqueue({ sample_no: 'A' }); s.sbEnqueue({ sample_no: 'B' }); s.sbEnqueue({ sample_no: 'C' });
+    s.document.getElementById('scan-co-user').value = '张三';
+    await s.sbSubmit(null);
+    expect(s._sbQueue.map(x => x.state)).toEqual(['ok', 'failed', 'failed']);
+    expect(s._sbResult.failed.filter(f => f.retryable).length).toBe(1);
+    const firstKey = calls[0].body.batchId;
+    await s.sbRetryFailed(null);
+    expect(calls.length).toBe(2);
+    expect(calls[1].body.codes).toEqual(['B']);             // 只重交可重试项
+    expect(calls[1].body.batchId).not.toBe(firstKey);       // 上一批已落库 → 必须换新键
+    expect(s._sbQueue.map(x => x.state)).toEqual(['ok', 'ok', 'failed']); // A 原样保留 ok，C 未被重试
+  });
+
+  test('预校验被拒后重交：复用同一幂等键（零副作用，旧键未被占用）', async () => {
+    let n = 0;
+    const { s, calls } = loadBatch({ handlers: { '/api/samples/batch-action': (body) => {
+      n++;
+      if (n === 1) { const e = new Error('预校验未通过，整批已取消（未执行任何操作）'); e.status = 422;
+        e.data = { code: 'PRECHECK_FAILED', rejected: [{ code: 'A', code_: 'ACTION_NOT_ALLOWED', status: 'CHECKED_OUT', reason: 'r' }], skipped: [] }; throw e; }
+      return { action: body.action, batchId: body.batchId, ok: [{ code: 'A', status: 'CHECKED_OUT' }], failed: [], skipped: [] };
+    } } });
+    s.document.getElementById('scan-batch');
+    s.sbEnqueue({ sample_no: 'A' });
+    s.document.getElementById('scan-co-user').value = '张三';
+    await s.sbSubmit(null);
+    const key1 = calls[0].body.batchId;
+    expect(s._sbResult.kind).toBe('rejected');
+    await s.sbRetryRejected(null);
+    expect(calls.length).toBe(2);
+    expect(calls[1].body.batchId).toBe(key1);               // 复用旧键
+    expect(s._sbResult.kind).toBe('done');
+    // 预校验被拒的面板文案不得再误导用户「须换新批次」
+    expect(s.sbResultHtml()).not.toContain('换用新的批次');
+  });
+
+  test('导出失败清单 CSV：BOM + 表头 + 中文状态 + 逗号/引号/换行转义 + 文件名带时间戳', async () => {
+    const { s, dom, calls } = loadBatch({ handlers: partialHandlers() });
+    s.document.getElementById('scan-batch');
+    s.sbEnqueue({ sample_no: 'A' }); s.sbEnqueue({ sample_no: 'B' });
+    s.sbEnqueue({ sample_no: 'C' });
+    s.document.getElementById('scan-co-user').value = '张三';
+    await s.sbSubmit(null);
+    // 注入一条含逗号/引号/换行的原因，验证 §21 的 CSV 转义约定
+    s._sbResult.failed[0].reason = '含,逗号与"引号"\n换行';
+    expect(s.sbResultHtml()).toContain('导出失败清单 CSV');
+    calls.length = 0;
+    s.sbExportFailed();
+    const blob = dom.created.find(el => el.tag === 'a');
+    expect(blob).toBeTruthy();
+    expect(blob.clicked).toBe(1);                            // 触发下载
+    expect(blob.download).toMatch(/^batch-failed-\d{8}-\d{4}\.csv$/);
+    expect(blob.href).toBe('blob:fake');
+    // 通过再次导出取回 CSV 文本（Blob 假实现把 parts 存下来）
+    const BlobCls = s.Blob;
+    const parts = [];
+    const OrigBlob = s.Blob;
+    s.Blob = function (p, o) { parts.push(p.join('')); return new OrigBlob(p, o); };
+    s.sbExportFailed();
+    s.Blob = OrigBlob;
+    const csv = parts[0];
+    expect(csv.charCodeAt(0)).toBe(0xFEFF);                  // BOM（Excel 双击不乱码）
+    const lines = csv.slice(1).split('\r\n');
+    expect(lines[0]).toBe('编号,样品号,现状态,原因,可重试');
+    expect(lines[1]).toContain('B,,');                       // 队列项无 status → 现状态留空
+    expect(csv).toContain('"含,逗号与""引号""\n换行"');      // 逗号/引号转义为双写
+    expect(lines[lines.length - 1]).toBe('');                // CRLF 收尾
+    expect(s._sbResult.failed.find(f => f.code === 'C').retryable).toBe(false);
+    expect(BlobCls).toBeTruthy();
+  });
+
+  test('复制失败编号：Clipboard 不可用（http 局域网）时降级为 textarea + execCommand', () => {
+    const { s, dom, toasts } = loadBatch({ handlers: partialHandlers() });
+    s._sbResult = { kind: 'done', ok: [], failed: [{ code: 'B', retryable: true, reason: 'r' }, { code: 'C', retryable: false, reason: 'r' }], skipped: [] };
+    s.sbCopyFailed();                                        // navigator.clipboard 未注入 → 走降级
+    const ta = dom.created.find(el => el.tag === 'textarea');
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe('B\nC');
+    expect(dom.body.children.length).toBe(0);                // 临时节点已清理
+    expect(toasts.some(t => /已复制（2 个）/.test(t.m))).toBe(true);
+  });
+
+  test('底部动作条按结果种类给出按钮，无失败项时不渲染空壳入口', () => {
+    const { s } = loadBatch({});
+    s._sbResult = { kind: 'done', ok: [], failed: [], skipped: [{ code: 'A', reason: '重复' }] };
+    const h = s.sbResultHtml();
+    expect(h).not.toContain('sbRetryFailed');
+    expect(h).not.toContain('sbCopyFailed');
+    expect(h).not.toContain('sbExportFailed');
+    expect(h).toContain("sbQueueOp('clear')");               // 「清空并开始新一批」始终可用
+    s._sbResult = { kind: 'done', ok: [], failed: [{ code: 'B', retryable: true, reason: 'r' }], skipped: [] };
+    expect(s.sbResultHtml()).toContain('sbRetryFailed(this)');
+    expect(s.sbResultHtml()).toContain('sbCopyFailed()');
+    expect(s.sbResultHtml()).toContain('sbExportFailed()');
   });
 });
 

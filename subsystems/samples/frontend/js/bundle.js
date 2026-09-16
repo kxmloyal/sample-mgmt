@@ -1,4 +1,4 @@
-/** BUNDLE vbmu4em54f — 37 files */
+/** BUNDLE vbmu4g7w4d — 37 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -2938,7 +2938,7 @@ function showScanActionForm(action){
 // 队列状态机与提交流程仍留在 scan-batch.js。
 // 依赖均为 bundle 单作用域内的全局符号：e（shared/frontend/shared/utils.js）、STATUS（constants.js）、_sbResult（scan-batch.js）。
 // 结果面板（设计 §4.3 三段式 IA）：结论条 + 成功/失败/跳过三组 + 底部动作条
-// 注：失败重试、复制编号、导出失败清单 CSV 属 T5 范围，本文件暂不提供对应按钮（避免空壳入口）
+// 底部动作条（T5）：重试全部可重试项 / 复制失败编号 / 导出失败清单 CSV（§21 列与格式约定）/ 清空并开始新一批
 function sbResultHtml() {
   var R = _sbResult;
   if (!R) return '';
@@ -2959,17 +2959,86 @@ function sbResultHtml() {
       R.skipped.map(function (s) { return '<div class="muted sb-skip">' + e(s.code || '（空）') + ' — ' + e(s.reason || '') + '</div>'; }).join('') + '</div>';
   } else if (R.kind === 'rejected') {
     h += '<div class="sb-concl sb-bad"><b>整批未执行</b>：' + R.rejected.length +
-      ' 件预校验未通过，已整批取消（零副作用，样品状态未变）<div class="muted sb-sub">修正不合格项后重新提交；提交时请换用新的批次（本批已被后端记为未执行）。</div></div>' +
+      ' 件预校验未通过，已整批取消（零副作用，样品状态未变）<div class="muted sb-sub">修正不合格项后直接重新提交即可——本批未写入任何日志，幂等键仍可复用。</div></div>' +
       '<table class="sb-table"><thead><tr><th>编号</th><th>当前状态</th><th>原因</th></tr></thead><tbody>' +
       R.rejected.map(function (x) { return '<tr><td class="sb-mono">' + e(x.code) + '</td><td>' + e(STATUS[x.status] || x.status || '—') + '</td><td>' + e(x.reason || '') + '</td></tr>'; }).join('') +
       '</tbody></table>';
   } else {
     h += '<div class="sb-concl"><b>该批次此前已提交过（幂等命中）</b>：本次未执行任何操作' +
       '<div class="muted sb-sub">后端已生效编号：' + e((R.applied || []).join('、') || '—') +
-      '；列表中已标「已生效」的项无需重交，其余项可用新批次提交。</div></div>';
+      '；列表中已标「已生效」的项无需重交，其余项已被重置为待提交，可直接用新批次重交。</div></div>';
   }
-  h += '<div class="sb-foot"><fluent-button appearance="neutral" size="small" onclick="sbQueueOp(\'clear\')">清空并开始新一批</fluent-button></div></div>';
+  // 底部动作条：按结果种类给出可用动作（无失败项时不渲染空壳按钮）
+  var canRetry = R.kind === 'done' && (R.failed || []).some(function (f) { return f.retryable; });
+  var hasFailed = R.kind === 'done' && (R.failed || []).length > 0;
+  h += '<div class="sb-foot">' +
+    (canRetry ? '<fluent-button appearance="accent" size="small" onclick="sbRetryFailed(this)">重试全部可重试项</fluent-button>' : '') +
+    (hasFailed ? '<fluent-button appearance="neutral" size="small" onclick="sbCopyFailed()">复制失败编号</fluent-button>' : '') +
+    (hasFailed ? '<fluent-button appearance="neutral" size="small" onclick="sbExportFailed()">导出失败清单 CSV</fluent-button>' : '') +
+    (R.kind === 'rejected' ? '<fluent-button appearance="accent" size="small" onclick="sbRetryRejected(this)">修正后重交整批</fluent-button>' : '') +
+    '<fluent-button appearance="neutral" size="small" onclick="sbQueueOp(\'clear\')">清空并开始新一批</fluent-button></div></div>';
   return h;
+}
+
+// 重试全部可重试项（T5）：只把**可重试的失败项**退回待提交，成功/跳过/需人工项原样保留在队列中，
+// 由 sbRetryQueue 负责换新幂等键后重新提交——已成功项绝不会被再次提交（防重复执行）
+// 返回 Promise（透传 sbSubmit）：调用方/测试须 await 才能观察到重交结果
+function sbRetryFailed(btn) {
+  var keep = ( _sbResult && _sbResult.failed || []).filter(function (f) { return f.retryable; }).map(function (f) { return f.code; });
+  if (!keep.length) { toast('没有可重试的失败项', 'err'); return; }
+  return sbRetryQueue(keep, btn);
+}
+
+// 预校验整批被拒后重交（T5）：本批零副作用、batchId 未被占用，故**复用同一幂等键**重交整批（设计 §4.4）
+function sbRetryRejected(btn) {
+  var codes = _sbQueue.filter(function (x) { return x.state === 'failed' || x.state === 'pending'; }).map(function (x) { return x.code; });
+  if (!codes.length) { toast('队列中无可重交项', 'err'); return; }
+  return sbRetryQueue(codes, btn, true);
+}
+
+// 复制失败编号（T5）：优先 Clipboard API，非安全上下文（http 局域网常见）降级为临时 textarea + execCommand
+function sbCopyFailed() {
+  var txt = (_sbResult && _sbResult.failed || []).map(function (f) { return f.code; }).join('\n');
+  if (!txt) return;
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    toast(ok ? '失败编号已复制（' + txt.split('\n').length + ' 个）' : '复制失败，请手动选择表格中的编号', ok ? 'ok' : 'err');
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function () { toast('失败编号已复制（' + txt.split('\n').length + ' 个）', 'ok'); }, fallback);
+  } else fallback();
+}
+
+// 导出失败清单 CSV（T5）：复用 AGENTS §21 的导出约定——BOM UTF-8（Excel 直接双击不乱码）、
+// CRLF 行尾、含逗号/引号/换行的字段双引号转义；列 = 编号/样品号/现状态/原因/可重试（状态输出中文）
+function sbExportFailed() {
+  var R = _sbResult || {};
+  var rows = (R.failed || []).map(function (f) {
+    var st = '';
+    var it = _sbQueue.filter(function (x) { return x.code === f.code; })[0];
+    if (it && it.sample) st = STATUS[it.sample.status] || it.sample.status || '';
+    return [f.code, (it && it.sample && it.sample.sample_no) || '', st, f.reason || '', f.retryable ? '是' : '否'];
+  });
+  if (!rows.length) { toast('没有失败项可导出', 'err'); return; }
+  var esc = function (v) {
+    var s = (v === null || v === undefined) ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  var csv = '\uFEFF' + ['编号,样品号,现状态,原因,可重试'].concat(rows.map(function (r) { return r.map(esc).join(','); })).join('\r\n') + '\r\n';
+  var d = new Date();
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var name = 'batch-failed-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.csv';
+  var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  var a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  toast('已导出失败清单：' + name + '（' + rows.length + ' 行）', 'ok');
 }
 
 
@@ -3134,16 +3203,31 @@ function sbQueueOp(op, code) {
   sbPaint();
 }
 
+// 重试入口（T5，由结果面板的 sbRetryFailed / sbRetryRejected 调用）：
+// 把指定编号的失败项退回 pending（仅这些件），换新幂等键后重新提交。
+// keepKey=true 用于「预校验整批被拒」——该情形后端零副作用、旧键未被占用，复用旧键即可（设计 §4.4）
+function sbRetryQueue(codes, btn, keepKey) {
+  codes.forEach(function (c) { _sbQueue.forEach(function (x) { if (x.code === c) x.state = 'pending'; }); });
+  _sbResult = null;
+  sbPaint();
+  return sbSubmit(btn, codes, !keepKey);
+}
+
 // 提交：① 复用 collectCheckoutPayload 收集公共项（与单件路径同一份校验）→ ② 生成/复用 batchId →
 //      ③ 静默调用批量接口（silent：不弹全局 toast、不触发单件刷新，逐件错误由结果面板承载）→ ④ 按 HTTP 语义分流
-async function sbSubmit(btn) {
-  var codes = _sbQueue.filter(function (x) { return x.state === 'pending' || x.state === 'failed'; }).map(function (x) { return x.code; });
+// only（可选，T5 重试用）：仅提交这些编号（其余件保持原状态位不被触碰，故已成功项绝不会被再次提交）
+// freshKey（可选，T5 重试用）：强制换新幂等键——上次提交已落库时旧键会被判 BATCH_DUPLICATE，
+//   但预校验被拒（零副作用）情形必须**复用**旧键，故由调用方显式决定
+async function sbSubmit(btn, only, freshKey) {
+  var pool = _sbQueue.filter(function (x) { return !only || only.indexOf(x.code) > -1; });
+  var codes = pool.filter(function (x) { return x.state === 'pending' || x.state === 'failed'; }).map(function (x) { return x.code; });
   if (!codes.length) { toast('队列中无可提交项', 'err'); return; }
   var body = { action: _sbAction, codes: codes };
   if (_sbAction === 'CHECKOUT' && !collectCheckoutPayload(body)) return; // scan-payload.js：领用人必填 + 时长 1~8760 软校验
   var noteEl = document.getElementById('sb-note');
   if (noteEl && noteEl.value.trim()) body.note = noteEl.value.trim();
   // 幂等键：本次提交首次生成后固定；网络异常（未知态）重试复用同一值，后端据此判 BATCH_DUPLICATE 防重复执行
+  if (freshKey) _sbBatchId = null;
   if (!_sbBatchId) _sbBatchId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
     : ('b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
   body.batchId = _sbBatchId;
