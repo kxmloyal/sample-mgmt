@@ -41,8 +41,9 @@ describe('领用人选择器 前端接线', () => {
     expect(picker).toContain('co-cand-item');
   });
   test('提交链路：点选用户部门兜底（防中途清空）', () => {
-    const scan = read('subsystems/samples/frontend/js/views/scan.js');
-    expect(scan).toContain('_coPick&&_coPick.dept');
+    // 2026-09-16：collectCheckoutPayload 拆至 scan-payload.js（scan.js 超 §7.1 的 90% 线，仅允许精简）
+    const payload = read('subsystems/samples/frontend/js/views/scan-payload.js');
+    expect(payload).toContain('_coPick&&_coPick.dept');
   });
   test('候选面板 fixed 定位挂 body（防触发 modal 滚动容器滚动条）', () => {
     const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');

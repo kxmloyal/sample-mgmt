@@ -72,8 +72,9 @@ describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
     expect(picker).toContain('请填写储位（点选候选 / 柜位图 / 直接输入）');
     expect(picker).toContain('新储位与当前储位相同');
     expect(picker).toContain("el.getAttribute('data-cur')");
-    // 领用人空值拦截仍在（collectCheckoutPayload 原有校验）
-    expect(scan).toContain("if(!user){toast('请填写领用人','err');return false;}");
+    // 领用人空值拦截仍在（collectCheckoutPayload 校验；2026-09-16 该函数拆至 scan-payload.js）
+    const payload = read('subsystems/samples/frontend/js/views/scan-payload.js');
+    expect(payload).toContain("if(!user){toast('请填写领用人','err');return false;}");
   });
   test('柜位图弹窗图例（2026-09-10 用户反馈）：与柜位视图共用 smLegendHtml，标签唯一来源', () => {
     // 图例函数单一来源在 storage-map.js，弹窗复用（不各自硬编码）
