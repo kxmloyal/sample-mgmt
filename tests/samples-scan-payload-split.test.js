@@ -40,6 +40,7 @@ describe('scan.js 载荷收集拆分（scan-payload.js）', () => {
     expect(scanOnly.length).toBeLessThan(20000);
     expect(read(SCAN_FORMS).length).toBeLessThan(20000);
     expect(payload.length).toBeLessThan(20000);
-    expect(scanOnly.length / 20000).toBeLessThan(0.5); // T0 外迁后由 85.5% 降至 49.7%
+    // T0 外迁（纯删除）后 85.5% → 49.7%；批次二 T4 又为其挂上批量模式开关与入队分流 → 53.2%（实测 10,648 字符）
+    expect(scanOnly.length / 20000).toBeLessThan(0.6);
   });
 });
