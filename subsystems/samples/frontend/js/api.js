@@ -39,6 +39,8 @@ function _gotoLogin(){
 }
 
 // 状态码感知的请求封装（行为与 shared/api-base.js 的 api() 一致，额外携带 err.status 供统一错误处理）
+// 2026-09-16（批量领用/归还）新增 err.data：422/409 的业务载荷（rejected/applied/code）不止有 error 文案，
+// 批量结果面板需按件渲染原因，故把解析后的响应体挂到错误对象上（纯新增属性，旧调用方仍只读 message/status，零破坏）
 async function _apiFetch(method,url,body){
   var opt={method:method,credentials:'include',headers:{}};
   if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body);}
@@ -46,16 +48,20 @@ async function _apiFetch(method,url,body){
   var text=await r.text();
   var data={};
   try{data=JSON.parse(text);}catch(e){data={};}
-  if(!r.ok){var err=new Error(data.error||('错误 '+r.status));err.status=r.status;throw err;}
+  if(!r.ok){var err=new Error(data.error||('错误 '+r.status));err.status=r.status;err.data=data;throw err;}
   return data;
 }
 // 包装 shared/api-base.js 的 api()（不动共享层，仅本子系统 bundle 生效）：
 // 409 → toast 后端冲突文案 + 触发各视图注册的刷新回调；401 → 统一跳登录；其余错误原样抛出，不破坏现有处理路径
-api=async function(method,url,body){
+// opts.silent（2026-09-16，仅批量通道使用）：抑制 409 的全局 toast 与刷新回调——批量提交的逐件失败改由结果面板承载，
+// 且批量 409 是「整批重复」语义（BATCH_DUPLICATE），不能触发单件扫码台的刷新；401 仍照常跳登录（会话失效与业务无关）。
+// 注：以第 4 个可选参数实现，**不新增顶层函数**（本文件顶层函数已达 §7.2 上限 10 个）。
+api=async function(method,url,body,opts){
+  var silent=opts&&opts.silent;
   try{return await _apiFetch(method,url,body);}
   catch(err){
-    if(err&&err.status===409){showToast(err.message||'数据已被他人修改，请刷新后重试','err');_notifyConflict();}
-    else if(err&&err.status===401){_gotoLogin();}
+    if(err&&err.status===401){_gotoLogin();}
+    else if(!silent&&err&&err.status===409){showToast(err.message||'数据已被他人修改，请刷新后重试','err');_notifyConflict();}
     throw err;
   }
 };

@@ -1,0 +1,40 @@
+/* subsystems/samples/frontend/css/batch.css — 扫码台批量领用/归还样式（2026-09-16 需求 1）
+   拆分原因：新增本批样式后 module.css 由 62.4% 升至 72.2%，越过 AGENTS §7.1 的 70% 预警线
+   （该线要求停止新增业务并输出拆分方案）→ 沿用 2026-09-15 report.css 的同一先例，把本功能的样式
+   独立成文件，module.css 回落 62.4%。仍属「子系统自有 CSS」，未写入共享 app.css（§18.6 禁令）。
+   引用：subsystems/samples/frontend/index.html 的 <link ... batch.css?v=...>（与 module/report 同版本号） */
+.sb-panel{margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid var(--line,#e2e8f0);border-radius:8px}
+.sb-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+.sb-hint{font-size:11px;color:var(--muted,#64748b)}
+.sb-spacer{flex:1}
+.sb-form{margin-top:8px}
+.sb-form label{display:block;margin-top:6px}
+.sb-empty{font-size:12px;margin:8px 0 0}
+.sb-queue{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line,#e2e8f0)}
+.sb-queue-head{display:flex;align-items:center;gap:6px;font-size:12px}
+.sb-chips{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.sb-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#fff;border:1px solid #bfdbfe;border-radius:4px;padding:1px 5px}
+.sb-chip-ok{border-color:#86efac;background:#f0fdf4}
+.sb-chip-failed{border-color:#fecaca;background:#fef2f2}
+.sb-chip-skipped{opacity:.6}
+.sb-chip-submitting{opacity:.6}
+.sb-chip-manual{border-color:#fcd34d;background:#fffbeb}
+.sb-chip-st{font-size:10px;color:var(--muted,#64748b)}
+.sb-chip-x{color:#dc2626;text-decoration:none}
+.sb-warn{color:var(--warn,#b45309);font-size:11px}
+.sb-result{margin-top:10px}
+.sb-concl{padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:13px}
+.sb-concl.sb-bad{background:#fef2f2;border-color:#fecaca}
+.sb-sub{margin-top:4px;font-size:12px}
+.sb-group{margin-top:8px}
+.sb-group-h{font-size:12px;font-weight:600;margin-bottom:4px}
+.sb-group-h.sb-ok{color:var(--ok,#16a34a)}
+.sb-group-h.sb-bad{color:var(--bad,#dc2626)}
+.sb-group-h.sb-muted{color:var(--muted,#64748b)}
+.sb-table{width:100%;font-size:12px;border-collapse:collapse}
+.sb-table th,.sb-table td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--line,#e2e8f0);word-break:break-all}
+.sb-table th{color:var(--muted,#64748b);font-weight:400}
+.sb-mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.sb-skip{font-size:12px;padding:2px 0}
+.sb-foot{margin-top:8px}
+@media (max-width:575px){.sb-head{font-size:12px}.sb-chip{font-size:11px}}

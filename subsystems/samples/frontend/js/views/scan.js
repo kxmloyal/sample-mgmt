@@ -19,17 +19,21 @@ function viewScan(){
         '<label class="muted" style="margin-left:12px;font-size:13px;cursor:pointer">'+
           '<input type="checkbox" id="scan-cont" onchange="refocusScan()"/> 连续扫码（自动清空并聚焦，适合扫码枪批量作业）'+
         '</label>'+
+        '<fluent-button id="sb-mode-btn" appearance="neutral" size="small" style="margin-left:12px" onclick="sbToggleMode()">批量领用/归还</fluent-button>'+
       '</div>'+
       '<div id="scan-status" class="muted" style="font-size:12px;margin-top:8px;color:var(--ok)">● 已就绪，等待扫码枪…</div>'+
       '<hr style="margin:16px 0;border:none;border-top:1px dashed var(--line)"/>'+
       renderCameraSection()+
     '</div>'+
+    '<div id="scan-batch" style="display:none"></div>'+
     '<div id="scan-result"></div>'+
     '<div id="scan-print-queue"></div>'+
   '</div>';
   bindScanInput();
   refocusScan();
   injectWizardCSS();
+  // 批量模式跨视图保持：离开再回到扫码台时按当前开关状态恢复容器与队列（scan-batch.js）
+  if(_sbMode&&$('#scan-batch')){$('#scan-batch').style.display='';sbRender();$('#sb-mode-btn').setAttribute('appearance','accent');}
   // 支持 #/scan?no=SM-000011 直达预填（工作台下钻跳转用）
   var m = (location.hash || '').match(/[?&]no=([^&]+)/);
   if (m) { $('#scan-code').value = decodeURIComponent(m[1]); doScan(); }
@@ -47,6 +51,14 @@ async function doScan(){
   try{
     var data=await api('GET','/api/resolve?code='+encodeURIComponent(code));
     if(seq!==_scanReqSeq)return; // 已有更新的扫码请求，丢弃过期响应（防竞态）
+    // 批量模式（2026-09-16，需求 1）：扫码即入队，不弹单件动作表单——资格判定统一在提交时由后端阶段 1 预校验整批裁定
+    //（设计 §5.2 全或无：这样「扫错一件」不会立刻中断连扫，提交时一次性列出全部不合格项且零副作用）
+    if(_sbMode){
+      box.innerHTML='';
+      sbEnqueue(data.sample, data.allowedActions);
+      $('#scan-code').value='';refocusScan(); // 与「连续扫码」同款体感：立即清空并聚焦，供扫码枪连续作业
+      return;
+    }
     window._scanRdUsers=data.rdUsers||[];
     renderScanAction(data.sample,data.allowedActions);
   }catch(err){if(seq!==_scanReqSeq)return;box.innerHTML='<div class="card sample-card" style="border-color:#fecaca"><p style="color:var(--bad)">'+e(err.message)+'</p></div>';}
