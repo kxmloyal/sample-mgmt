@@ -191,6 +191,12 @@ npm start           # 启动,访问 http://localhost:4000(端口可通过 .env �
 - 达 70% 上限:MUST 停止新增业务逻辑,输出拆分方案
 - 达 90% 上限:MUST 仅允许精简/重构,禁止追加新功能
 
+**容量数字口径（2026-09-16 明确,MUST 遵照）**:
+- **权威口径 = LF 归一字符数**：`fs.readFileSync(p,'utf8').replace(/\r/g,'').length`；行数 = 换行符个数（末行换行不计）。
+- **台账旧口径 = LF 值 + 行数**：历史数字用 CRLF 检出下的 `Get-Content -Raw` / `String.Length` 统计，每行多计 1 个 CR，故比权威值大「行数」个字符。例：`subsystems/control/backend/flow-ops.js` 台账 5,231 = LF 5,112 + 119 行。
+- 判定是否越线、以及每次修改报告 MUST 用**权威口径**；引用旧台账数字 MUST 标注口径，**禁止**据台账值判定越线（2026-09-16 曾因此误判 `scan.js` 为 90.9%，实为 85.5%）。
+- `pwsh Get-Content` 另有无 `-Encoding utf8` 时的 UTF-8 误码问题，不可用于容量测量。
+
 ### 7.2 元素数量
 
 - 单文件顶层函数 MUST ≤10
@@ -341,22 +347,22 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 
 ## 14. 当前已知技术债
 
-- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 4 个 action helper 拆分后仍偏大），后续治具迭代需关注拆分
+- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 4 个 action helper 拆分后仍偏大），后续治具迭代需关注拆分。**2026-09-16 LF 归一实测：368 行 / 19,403 字符（97.0%）——已超 §7.1 的 90% 线，按规则该文件仅允许精简/重构，禁止追加新功能。**
 - 管制子系统（2026-09-03 全链路修复）：control_orders 加乐观锁 CAS、会签并行化（闸口① 不再强制串行）、出货前结余校验、会签超时 DAO 已落地。**2026-09-08 已拆分**：`routes-orders.js` 为薄入口（crud + flow 两域），`dao.js` 为薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；会签超时已接入看板「会签超时」统计卡（stats 接口 `signOverdue` + 列表 `sign_overdue=1`）；manifest 已物理删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边并移除「单据详情」导航项、补声明 control_files 表
-- `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分
-- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
+- `subsystems/samples/frontend/js/views/list-render.js` 承担列表渲染 + 列宽拖拽，若继续膨胀建议再拆分（2026-09-16 LF 归一实测：94 行 / 5,593 字符，28.0%，容量充足）
+- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 **6 个**（≤10；2026-09-16 以 `^(async )?function ` 正则复核，旧记录「8 个」为过时值），阈值弹窗已抽独立 `threshold.js`
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，不再列为技术债
-- `public/css/app.css` **2026-09-11 复核：300 行 / 21,910 字符（109.6%，已超 20000 字符红线）**（2026-08-06 记录的 94% 已过时）——按 §7.1 该文件**仅允许精简/重构**，建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
-- `routes-samples.js` 已拆分（2026-09-02 B3-T1）：机型路由拆至 `routes-samples-models.js`、图片保存拆至 `sample-images.js`，主文件降至 65.7% 红线内
+- `public/css/app.css` **2026-09-16 LF 归一复核：300 行 / 21,910 字符（109.5%，已超 20000 字符红线）**（2026-08-06 记录的 94% 已过时）——按 §7.1 该文件**仅允许精简/重构**，建议将门户块拆分至独立样式文件（拆分需三系统回归，§18.5）
+- `routes-samples.js` 已拆分（2026-09-02 B3-T1）：机型路由拆至 `routes-samples-models.js`、图片保存拆至 `sample-images.js`，主文件降至 65.7% 红线内。**2026-09-16 LF 归一实测：353 行 / 17,840 字符（89.2%）——已逼近 90% 线，新增内容前 MUST 先等量精简。**
 - `db/migrations.js` 已拆分（2026-09-02 B3-T2）：迁移按子系统拆至 `db/migrations/` 目录（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 为薄转发，接口不变
-- `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），2026-09-08 v3 迭代后降至 13.6k（tabs 拆分/空态收敛），持续观察；`backend/routes-tasks.js` 已于 v3 拆分（22.6k→14.8k，编辑/删除/批量域迁至 routes-task-edit.js）；`frontend/js/views/task-detail.js`、`kanban.js`（15.0k）均在红线内，后续迭代仍需关注容量
-- `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）：routes-scan.js 降至 94 行 / 5119 字符（纯编排层），action 逻辑抽至 `scan-actions.js`（258 行 / 16721 字符，≈83.6% 字符红线，已越过 70% 预警线）——保留观察条目，后续批次改动 scan 逻辑前需评估 scan-actions.js 再拆分
+- `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），2026-09-08 v3 迭代后降至 13.6k（tabs 拆分/空态收敛）；**2026-09-16 LF 归一实测：`task-detail.js` 193 行 / 13,219 字符（66.1%）、`backend/routes-tasks.js` 271 行 / 14,315 字符（71.6%，已过 70% 预警线）**；`kanban.js`（15.0k，2026-09-08 记录）在红线内，后续迭代仍需关注容量
+- `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）为纯编排层；**2026-09-16 LF 归一实测：`routes-scan.js` 98 行 / 4,694 字符（23.5%）；`scan-actions.js` 312 行 / 17,615 字符（88.1%，已越过 70% 预警线）**——后续批次改动 scan 逻辑前 MUST 先评估 `scan-actions.js` 再拆分，禁止继续向其中堆入业务
 - ~~`db/migrations.js` 顶层函数 11 个~~ **已解决**：2026-09-02 B3-T2 已拆分为 `db/migrations/`（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 现为薄转发
-- `subsystems/samples/frontend/js/views/scan.js` 批次 1 后约 14.9k 字符（≈74% 字符上限，2026-09-01 记录），已越过 70% 预警线，后续批次需关注拆分
-- `subsystems/samples/db/dao.js` **2026-09-11 复核：167 行 / 9961 字符（≈49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前最接近红线者：`README.md` 497 行 / 20248 字符（**101.2%，已越 20000 兜底线**；用户 2026-09-11 决定暂不拆分，新增内容前须先等量精简）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17840 字符（89.2%）、`public/css/app.css`（见下条，已超线）
+- `subsystems/samples/frontend/js/views/scan.js` **2026-09-16 LF 归一实测：244 行 / 17,109 字符（85.5%）**（2026-09-01 记录的 ≈74% 已过时）——已越过 70% 预警线，后续批次 MUST 先把动作表单构造外迁至独立文件再挂钩（方案见 `docs/superpowers/specs/2026-09-16-samples-batch-checkout-and-inspect-display-design.md` 的 T0）
+- `subsystems/samples/db/dao.js` **2026-09-16 LF 归一复核：167 行 / 9,961 字符（49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前已越线/最接近红线者：`subsystems/fixtures/backend/routes-fixtures.js` 368 行 / 19,403 字符（**97.0%，仅允许精简**）、`public/css/app.css` 300 行 / 21,910 字符（**109.5%，已超 20000 兜底线**）、`README.md` 497 行 / **LF 19,714 字符（98.6%）**（台账口径 20,211 = LF 值 + 行数，101.1%；2026-09-15 已立项拆分外迁 `docs/api.md`，计划见 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 312 行 / 17,615 字符（88.1%）、`subsystems/samples/frontend/js/views/scan.js` 244 行 / 17,109 字符（85.5%）
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
-- `subsystems/control/backend/flow-ops.js` **2026-09-11 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / 5231 字符（26.2%）；建议按「NCR 域 / 重工域 / 出货结余域」拆分（同 2026-09-08 `dao-*` 拆分风格），拆分前先补回归
+- `subsystems/control/backend/flow-ops.js` **2026-09-16 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / **LF 5,112 字符（25.6%）**（台账旧值 5,231 = LF 值 + 119 行）；建议按「NCR 域 / 重工域 / 出货结余域」拆分（同 2026-09-08 `dao-*` 拆分风格），拆分前先补回归
 - **探测表清理与迁移哨兵（2026-09-11）**：生产 `_tz_probe`、测试 `_upd_probe` 已 DROP（均 0 行、零代码引用）；**`_migr_sample_deleted_tz` 绝不可删**——它是 `migrateSamplesDeletedAtTz` 的防重入哨兵，删除会使迁移重跑并对 `deleted_at` 二次 `+8h`，属数据损坏级操作
 
 ## 15. 禁止行为黑名单
@@ -889,16 +895,16 @@ node tools/build-bundles.js
 4. 将 `bundle.js` 输出到 `/tmp`（避免 `subsystems/` 目录权限问题）
 5. 生成唯一版本号（`b`+时间戳），写入 `tools/.bundle-ver`
 
-**输出**：
-| 子系统 | 原始文件数 | bundle 大小 |
-|---|---|---|
-| control | 25 → 1 | ~102KB |
-| fixtures | 20 → 1 | ~102KB |
-| projects | 28 → 1 | ~165KB |
-| samples | 30 → 1 | ~172KB |
-| workbench | 10 → 1 | ~47KB |
+**输出**（2026-09-16 LF 归一实测）：
+| 子系统 | 原始文件数 | bundle 字符数 | bundle 大小 |
+|---|---|---|---|
+| control | 25 → 1 | 103,978 | ~102KB |
+| fixtures | 20 → 1 | 108,542 | ~106KB |
+| projects | 29 → 1 | 177,250 | ~173KB |
+| samples | 34 → 1 | 207,039 | ~202KB |
+| workbench | 10 → 1 | 48,200 | ~47KB |
 
-> 上表为 2026-09-11 重建实测值：「原始文件数」= `tools/bundle-sources.json` 中该子系统的条目数（含 `shared/frontend/*` 共享模块），「bundle 大小」= 构建脚本输出的字符数（`out.length/1024`，非字节）。
+> 「原始文件数」= `tools/bundle-sources.json` 中该子系统的条目数（含 `shared/frontend/*` 共享模块；2026-09-11 记录的 projects 28 / samples 30 已过时）；「bundle 字符数」= 磁盘上 `bundle.js` 的 LF 归一字符数（构建脚本按同一源码集拼接，`out.length` 与之相等，「bundle 大小」= 字符数 / 1024，非字节）。
 
 ### 19.2 部署步骤
 

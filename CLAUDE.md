@@ -163,7 +163,7 @@
 - 70%:停止新增业务,输出拆分方案
 - 90%:仅允许精简/重构,禁追加新功能
 
-**本行已过时（2026-09-11 复核）**——实际已触发/超出预警：`public/css/app.css` 21,910 字符（**109.6%，已超 20000 红线**）、`README.md` 20,248 字符（**101.2%，已越 20000 兜底线；用户 2026-09-11 决定暂不拆分**）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）。容量现状以第 11 节与每次修改报告为准。
+**2026-09-16 LF 归一复核（权威口径，见 AGENTS.md 第 7.1 节）**——实际已触发/超出预警：`subsystems/fixtures/backend/routes-fixtures.js` 19,403 字符（**97.0%，仅允许精简/重构**）、`public/css/app.css` 21,910 字符（**109.5%，已超 20000 红线**）、`README.md` LF 19,714 字符（**98.6%**；台账口径 20,211 = LF 值 + 行数，101.1%；2026-09-15 已立项拆分外迁 `docs/api.md`）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 17,615 字符（88.1%）、`subsystems/samples/frontend/js/views/scan.js` 17,109 字符（85.5%）。容量现状以第 11 节与每次修改报告为准。
 
 ## 7. 修改完成强制报告
 
@@ -222,13 +222,13 @@
 
 ## 11. 当前技术债(新增功能前评估)
 
-- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 action helper 拆分后仍偏大），后续治具迭代需关注
-- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 8 个（≤10），阈值弹窗已抽独立 `threshold.js`
+- `subsystems/fixtures/backend/routes-fixtures.js` 状态机分支多（含 action helper 拆分后仍偏大），后续治具迭代需关注。**2026-09-16 LF 归一实测：368 行 / 19,403 字符（97.0%）——已超 90% 线，仅允许精简/重构。**
+- `subsystems/workbench/frontend/js/views/dashboard.js` 顶层函数 **6 个**（≤10；2026-09-16 以 `^(async )?function ` 正则复核，旧记录「8 个」过时），阈值弹窗已抽独立 `threshold.js`
 - 管制子系统已拆分（2026-09-08）：`routes-orders.js` 薄入口（crud+flow 两域）、`dao.js` 薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；看板新增「会签超时」统计卡（stats.signOverdue + 列表 sign_overdue=1）；manifest 删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边与「单据详情」导航项（深链 #/detail?id= 保留）
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
-- `public/css/app.css` **2026-09-11 复核：21,910 字符（109.6%）已超 20000 字符红线**（旧记录 94% 过时）；建议门户块拆独立样式文件（需三系统回归）
-- `subsystems/samples/db/dao.js` **2026-09-11 复核已回落**至 167 行 / 9961 字符（≈49.8%），旧记录 ≈90% 过时；当前最接近红线：`README.md` ≈101%（已越线，用户决定不拆分）、`routes-samples.js` ≈89%
-- `subsystems/control/backend/flow-ops.js` **2026-09-11 复核：顶层函数 12 个（超 §7.2 上限 10）**，建议按 NCR / 重工 / 出货结余三域拆分
+- `public/css/app.css` **2026-09-16 LF 归一复核：300 行 / 21,910 字符（109.5%）已超 20000 字符红线**（旧记录 94% / 109.6% 以本次为准）；建议门户块拆独立样式文件（需三系统回归）
+- `subsystems/samples/db/dao.js` **2026-09-16 LF 归一复核已回落**至 167 行 / 9,961 字符（49.8%），旧记录 ≈90% 过时；当前已越线/最接近红线：`routes-fixtures.js` 97.0%、`public/css/app.css` 109.5%、`README.md` LF 98.6%（台账口径 101.1%，2026-09-15 已立项拆分）、`routes-samples.js` 89.2%、`scan-actions.js` 88.1%、`samples scan.js` 85.5%
+- `subsystems/control/backend/flow-ops.js` **2026-09-16 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / LF 5,112 字符（25.6%，台账旧值 5,231 = LF 值 + 行数），建议按 NCR / 重工 / 出货结余三域拆分
 - 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
 ## 12. 验证清单(提交前自检)
@@ -364,7 +364,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 ## 17. JS 合并构建（Claude 实施指引）
 
 > 完整规范见 [AGENTS.md 第 19 节](./AGENTS.md#19-js-合并构建规范强制)。
-> 每个子系统前端仅 1 个 `bundle.js`（control 25→1 / fixtures 20→1 / projects 28→1 / samples 30→1 / workbench 10→1），defer 加载。
+> 每个子系统前端仅 1 个 `bundle.js`（control 25→1 / fixtures 20→1 / projects 29→1 / samples 34→1 / workbench 10→1，2026-09-16 LF 归一实测），defer 加载。
 
 ### 17.1 Claude MUST 遵守
 
