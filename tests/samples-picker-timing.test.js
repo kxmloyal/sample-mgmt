@@ -17,7 +17,10 @@ describe('候选框时机修正', () => {
   });
 
   test('②CUSTODY/EDIT_STORAGE 成功后失效 _smCache（防空位徽标过期误导）', () => {
-    expect(scan).toContain("if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;");
+    // 2026-09-16：代码把失效条件广义化为 _SM_LOC_ACTIONS（扩入作废/重做类动作，它们同样改变柜位占用），
+    // 断言同步为机制校验；覆盖面较原字面量（仅 2 个动作）更强，护栏强度不降低。
+    expect(scan).toContain("var _SM_LOC_ACTIONS=['CUSTODY','EDIT_STORAGE','RETIRE_ONLY','RETIRE_RECREATE','FORCE_RETIRE','RECREATE'];");
+    expect(scan).toContain('if(_SM_LOC_ACTIONS.indexOf(action)>=0)_smCache=null;');
   });
 
   test('③候选点选用 onmousedown（先于 blur，杜绝 200ms 竞态）', () => {
