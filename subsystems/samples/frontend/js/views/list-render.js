@@ -33,8 +33,10 @@ function _sampleRowHtml(s, isOverdue, i) {
     actions = '<a class="link" style="margin-right:8px;color:var(--bad)" onclick="event.stopPropagation();deleteSample(' + s.id + ')">取消</a>' + actions;
   var overdueCell = '';
   if (isOverdue) {
-    var overdue = s.next_inspect_at && new Date(s.next_inspect_at).getTime() < Date.now();
-    overdueCell = '<td data-label="复检到期" class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>';
+    // 2026-09-16：逾期判定与文案复用 inspectState/inspectText 单一口径；不适用态与领用中显示灰字说明，已发行未接收保管灰化不出红（§6.1）
+    var ist = inspectState(s);
+    var showTxt = ist === 'na' || s.status === 'CHECKED_OUT';
+    overdueCell = '<td data-label="复检到期" class="' + (inspectTone(s) === 'red' ? 'b-overdue' : 'muted') + '">' + (showTxt ? inspectText(s) : fmt(s.next_inspect_at)) + '</td>';
   }
   return '<tr>' +
     '<td data-label="序号" class="muted">' + (typeof i !== 'undefined' ? (samplePager.offset + i + 1) : '') + '</td>' +

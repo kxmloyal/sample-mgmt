@@ -129,8 +129,10 @@ function _cardInfo(s) {
   } else if (s.returned_at) {
     h += kv('最近归还', fmt(s.returned_at));
   }
-  var ov = overdue(s);
-  h += '<span class="label">复检</span><span class="' + (ov ? 'b-overdue' : '') + '" style="font-weight:600">' + (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at) + '</span>';
+  var ist = inspectState(s), itone = ist === 'none' ? '' : inspectTone(s);
+  var itxt = ist === 'na' ? '不适用（' + (s.status === 'RETIRED' ? '已作废' : s.status === 'RETURNING' ? '退回审核中' : '未发行') + '）'
+    : (s.status === 'CHECKED_OUT' ? '领用中·暂停复检' : (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at));
+  h += '<span class="label">复检</span><span class="' + (itone === 'red' ? 'b-overdue' : itone === 'grey' ? 'muted' : '') + '" style="font-weight:600">' + itxt + '</span>';
   h += kv('备注', e(s.notes));
   var img = s.produced_image || s.image;
   if (img) h += '<div style="margin-top:8px;grid-column:1/-1"><img src="' + e(img) + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px"/></div>';

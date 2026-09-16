@@ -1,4 +1,4 @@
-/** BUNDLE vbmu3wqo7w — 34 files */
+/** BUNDLE vbmu4aj9bb — 34 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -517,31 +517,76 @@ api=async function(method,url,body){
 
 
 /* --- subsystems/samples/frontend/js/views/list-inspect.js --- */
-// list-inspect.js — 样品复检状态计算与徽章渲染
-// 三态：ok 正常 / soon 近7天到期 / overdue 已逾期；无复检计划显示占位符（none）
+// list-inspect.js — 样品复检状态计算、展示文案与徽章渲染
+// 展示态：ok 正常 / soon 近7天到期 / overdue 已逾期 / na 不适用（状态层面无复检语义）/ none 无计划（状态适用但字段为空）
 // 阈值与列表快捷筛选「近7天」（overdue=7）保持一致
 // 逾期天数统一 Math.ceil 向上取整（与治具看板/详情一致）：刚超期即显示 1 天
+// 2026-09-16（用户确认方案 A）：新增「不适用」判定；RELEASED / CHECKED_OUT 保留文字但灰化，不出红色逾期徽章
+//   —— 领用中样品复检日到期不再显示「逾期N天」（.b-overdue 带 1.5s 无限脉冲动画，持续红闪等于仍在报警）
 
 var INSPECT_SOON_DAYS = 7;
 
-/** 计算复检状态：'none'|'ok'|'soon'|'overdue'（s 为空或无 next_inspect_at 返回 none） */
+// 不适用集合：状态层面不存在复检语义（未发行 / 退回审核中 / 已作废）
+var INSPECT_NA_STATUSES = ['RETURNING', 'RETIRED', 'NEW', 'PRODUCED'];
+
+// 灰化集合：有复检语义但不出红色徽章（已发行未接收保管 / 领用中计时暂停）
+var INSPECT_GREY_STATUSES = ['RELEASED', 'CHECKED_OUT'];
+
+/** 计算复检状态：'none'|'na'|'ok'|'soon'|'overdue'
+ *  判定顺序：① s 为空 → none；② status 存在且属不适用集合 → na；③ 无 next_inspect_at → none；④ 三态。
+ *  注意：守卫必须是「status 存在且不适用」，不可写成「无 status → na」——tests/inspect-state.test.js 锁定空对象 → none */
 function inspectState(s) {
-  if (!s || !s.next_inspect_at) return 'none';
+  if (!s) return 'none';
+  if (s.status && INSPECT_NA_STATUSES.indexOf(s.status) >= 0) return 'na';
+  if (!s.next_inspect_at) return 'none';
   var t = new Date(s.next_inspect_at).getTime();
   if (t < Date.now()) return 'overdue';
   if (t <= Date.now() + INSPECT_SOON_DAYS * 86400000) return 'soon';
   return 'ok';
 }
 
-/** 渲染复检状态徽章 HTML（none 显示灰色占位符，徽章带复检日期悬停提示） */
+/** 悬停说明 title：不适用态给状态原因、无计划态给「未设置复检计划」，其余态返回 ''（沿用徽章的复检日期提示） */
+function inspectReason(s) {
+  if (!s) return '';
+  if (s.status === 'RETIRED') return '已作废，复检计划不适用（原因：' + (s.retired_reason || '—') + '）';
+  if (s.status === 'RETURNING') return '退回审核中，复检计划已顺延';
+  if (s.status === 'NEW' || s.status === 'PRODUCED') return '未发行，无复检计划';
+  if (s.status === 'CHECKED_OUT') return '领用中，复检计划暂停';
+  if (inspectState(s) === 'none') return '未设置复检计划';
+  return '';
+}
+
+/** 展示文案：列表「复检状态」列 / 「复检到期」列 / 详情复检行 的唯一口径 */
+function inspectText(s) {
+  var st = inspectState(s);
+  if (st === 'na') return '不适用';
+  if (s && s.status === 'CHECKED_OUT') return '领用中·暂停复检';
+  if (st === 'none') return '—';
+  if (st === 'ok') return '正常';
+  if (st === 'soon') return '近7天到期';
+  return '逾期' + Math.ceil((Date.now() - new Date(s.next_inspect_at).getTime()) / 86400000) + '天';
+}
+
+/** 徽章色调：'grey' 灰字（不适用/无计划/领用中/已发行未接收保管）/ 'red' 红色逾期徽章 / '' 普通徽章（ok、soon） */
+function inspectTone(s) {
+  var st = inspectState(s);
+  if (st === 'na' || st === 'none') return 'grey';
+  if (s && INSPECT_GREY_STATUSES.indexOf(s.status) >= 0) return 'grey';
+  return st === 'overdue' ? 'red' : '';
+}
+
+/** 渲染复检状态徽章 HTML（灰化态输出 .muted ＋ 原因 title；不适用态 MUST NOT 继承 .b-overdue 红脉冲） */
 function inspectBadge(s) {
   var st = inspectState(s);
-  if (st === 'none') return '<span class="muted">—</span>';
+  var txt = inspectText(s);
+  var reason = inspectReason(s);
+  if (st === 'na' || st === 'none' || (s && s.status === 'CHECKED_OUT'))
+    return '<span class="muted"' + (reason ? ' title="' + reason + '"' : '') + '>' + txt + '</span>';
   var tip = s.next_inspect_at ? ' title="复检日期：' + fmt(s.next_inspect_at) + '"' : '';
+  if (inspectTone(s) === 'grey') return '<span class="muted"' + tip + '>' + txt + '</span>';
   if (st === 'ok') return '<span class="badge b-inspect-ok"' + tip + '>正常</span>';
   if (st === 'soon') return '<span class="badge b-inspect-soon"' + tip + '>近7天到期</span>';
-  var days = Math.ceil((Date.now() - new Date(s.next_inspect_at).getTime()) / 86400000);
-  return '<span class="badge b-overdue"' + tip + '>逾期' + days + '天</span>';
+  return '<span class="badge b-overdue"' + tip + '>' + txt + '</span>';
 }
 
 
@@ -1342,8 +1387,10 @@ function _sampleRowHtml(s, isOverdue, i) {
     actions = '<a class="link" style="margin-right:8px;color:var(--bad)" onclick="event.stopPropagation();deleteSample(' + s.id + ')">取消</a>' + actions;
   var overdueCell = '';
   if (isOverdue) {
-    var overdue = s.next_inspect_at && new Date(s.next_inspect_at).getTime() < Date.now();
-    overdueCell = '<td data-label="复检到期" class="' + (overdue ? 'b-overdue' : 'muted') + '">' + fmt(s.next_inspect_at) + '</td>';
+    // 2026-09-16：逾期判定与文案复用 inspectState/inspectText 单一口径；不适用态与领用中显示灰字说明，已发行未接收保管灰化不出红（§6.1）
+    var ist = inspectState(s);
+    var showTxt = ist === 'na' || s.status === 'CHECKED_OUT';
+    overdueCell = '<td data-label="复检到期" class="' + (inspectTone(s) === 'red' ? 'b-overdue' : 'muted') + '">' + (showTxt ? inspectText(s) : fmt(s.next_inspect_at)) + '</td>';
   }
   return '<tr>' +
     '<td data-label="序号" class="muted">' + (typeof i !== 'undefined' ? (samplePager.offset + i + 1) : '') + '</td>' +
@@ -1652,8 +1699,10 @@ function _cardInfo(s) {
   } else if (s.returned_at) {
     h += kv('最近归还', fmt(s.returned_at));
   }
-  var ov = overdue(s);
-  h += '<span class="label">复检</span><span class="' + (ov ? 'b-overdue' : '') + '" style="font-weight:600">' + (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at) + '</span>';
+  var ist = inspectState(s), itone = ist === 'none' ? '' : inspectTone(s);
+  var itxt = ist === 'na' ? '不适用（' + (s.status === 'RETIRED' ? '已作废' : s.status === 'RETURNING' ? '退回审核中' : '未发行') + '）'
+    : (s.status === 'CHECKED_OUT' ? '领用中·暂停复检' : (s.release_cycle_days ? s.release_cycle_days + '天' : '—') + ' / ' + fmt(s.next_inspect_at));
+  h += '<span class="label">复检</span><span class="' + (itone === 'red' ? 'b-overdue' : itone === 'grey' ? 'muted' : '') + '" style="font-weight:600">' + itxt + '</span>';
   h += kv('备注', e(s.notes));
   var img = s.produced_image || s.image;
   if (img) h += '<div style="margin-top:8px;grid-column:1/-1"><img src="' + e(img) + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px"/></div>';
