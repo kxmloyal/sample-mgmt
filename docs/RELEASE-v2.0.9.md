@@ -297,6 +297,7 @@ mysql2/lib/base/connection.js:111            Socket.<anonymous> → TCP.onStream
 | `subsystems/samples/backend/routes-samples.js` | 89.2% | 后续拆分候选 |
 | `scan.js` | 85.5%（本版已由 96.6% 降低） | 如需继续：`renderScanAction`/`showScanActionForm` 抽 `scan-form.js` |
 | `tools/build-bundles.js` | 会刷新全部 5 个子系统 `module.css?v=` | 增加「仅刷新指定子系统」参数 |
+| 本文件 `docs/RELEASE-v2.0.9.md` | 304 行 / 15,710 字符（**78.5%**，已过 70% 预警线；该数值为新增本行前的实测值） | 后续发布说明精简为「本版变更 + 回归证据」，§9 级根因证据链下沉 `docs/archive/` |
 
 ### 10.2 其他
 
