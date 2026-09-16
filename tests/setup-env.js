@@ -20,6 +20,8 @@
 // db.js 会以空密码建池，连库即 Access denied（实测报错 "using password: NO"）。
 require('dotenv').config();
 
+const path = require('path');
+
 const TEST_DB_NAME = process.env.TEST_DB_NAME || 'sample_mgmt_test';
 if (!/_test$/.test(TEST_DB_NAME)) {
   throw new Error('[tests/setup-env] TEST_DB_NAME="' + TEST_DB_NAME + '" 非法：测试库名 MUST 以 _test 结尾（禁止指向生产库）');
@@ -32,3 +34,22 @@ if (prev && prev !== TEST_DB_NAME) {
   // 醒目提示：用于在 CI/终端日志中追溯「原值被强制改写」，也是「测试不再连生产库」的可观测证据
   console.warn('[tests/setup-env] DB_NAME 由 "' + prev + '" 强制改写为测试库 "' + TEST_DB_NAME + '"（禁止测试连生产库）');
 }
+
+// ── mysql2 握手编码预热（2026-09-16；见 docs/RELEASE-v2.0.9.md §9.1）──────────────
+// 现象：多测试文件的全量 jest 运行中，数据库连接握手抛
+//   "Encoding not recognized: 'cesu8'"（iconv-lite getCodec 的 default 分支）；该异常发生在
+//   socket 数据回调内且无外层 try/catch，直接终止 jest 进程（表现为不打印 Tests 汇总行，
+//   单个套件则表现为连接失败/锁等待超时，极易误判为数据库故障）。
+// 根因：mysql2 以硬编码 'cesu8' 解析握手版本串（mysql2/lib/packets/handshake.js:63），而
+//   iconv-lite 首次用到某编码时才惰性载入编码表（iconv-lite/lib/index.js:63：
+//   `if (!iconv.encodings) iconv.encodings = require("../encodings");`）；该惰性载入在连接
+//   回调期取到不完整编码表时 'cesu8' 查不到，即落到 default 分支抛出上述错误——真实加载
+//   异常被伪装成「编码不支持」。故锁定 iconv-lite 版本无法消除（0.6.3 / 0.7.3 均复现）。
+// 处理：在 setupFiles（每个测试文件模块加载之前、其模块注册表存活期内）显式触发一次编码表载入。
+// 实测：预热后全量套件 cesu8 出现次数 3 → 0，且首次打印 Tests 汇总（§9.1）。
+// 影响面：仅测试进程；生产为纯 node 运行，不经此路径；依赖缺失或结构变化时静默跳过。
+['iconv-lite', 'mysql2/node_modules/iconv-lite', 'express-mysql-session/node_modules/iconv-lite'].forEach((rel) => {
+  try {
+    require(path.join(__dirname, '..', 'node_modules', rel)).getCodec('cesu8');
+  } catch (e) { /* 不影响测试主体 */ }
+});
