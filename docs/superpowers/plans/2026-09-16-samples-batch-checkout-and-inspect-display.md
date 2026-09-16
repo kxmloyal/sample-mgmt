@@ -2,11 +2,11 @@
 
 | 项 | 内容 |
 |---|---|
-| 立项日期 | 2026-09-16（用户确认 4 项决策） |
+| 立项日期 | 2026-09-16（用户确认 4 项设计决策 + 7 项业务决策，见设计文档 §11） |
 | 状态 | **未开始（待实现授权）** |
 | 设计依据 | `docs/superpowers/specs/2026-09-16-samples-batch-checkout-and-inspect-display-design.md` |
 | 目标版本 | `2.1.0`（`package.json.version` + 5 个 `subsystems/*/manifest.json.version` + `docs/RELEASE-v2.1.0.md` 四处同步） |
-| 交付边界 | 需求 2 与需求 1 **可分成两个批次发布**（需求 2 独立、零数据风险、可先发） |
+| 交付边界 | **已确认分两批发布**（Q7）：批次一＝需求 2（独立、零数据风险、可先发），批次二＝需求 1；两批各自可独立上线与回滚 |
 | 硬约束 | 不改状态机、不清数据、不做单事务整批回滚、不写 `app.css`、不新增 `scan_logs` 列、前端改后必须重建 bundle |
 
 ---
@@ -55,17 +55,17 @@
 | 改动 1 | 新建 `subsystems/samples/backend/batch-scan.js`（`register(app)`）：`POST /api/samples/batch-resolve`（只读，≤50）、`POST /api/samples/batch-action`（两阶段：全量预校验→全通过才逐件执行；逐件复用 `scan-actions.js` 的 `applyAction` + `D.withTransaction`/`updateSample`(CAS)/`addLog`） |
 | 改动 2 | `backend/index.js`：`require('./batch-scan').register(app)` **置于 `routes-samples` 之前**（`:16-21` 的 `:id` 贪婪捕获教训） |
 | 改动 3 | `backend/routes-scan.js:66-69`、`:91-92`：409 响应体增量补 `code`（`ACTION_NOT_ALLOWED` / `VERSION_CONFLICT`）与 `status`，**保留**原 `error` 文案与 `sample` 字段 |
-| 约束 | 上限 50（超出 400）；批次内重复编号去重进 `skipped`；`note` 与单件格式**逐字节一致**（含「领用人 X（部门）」「应还 …」——`routes-checkout-users.js:19-26` 依赖该正则）；仅支持 `CHECKOUT`/`RETURN_OUT`；`scan-actions.js` 零改动 |
-| 测试 | 测试库 `sample_mgmt_test`：全通过执行、预校验拒绝（整批零执行）、执行期 CAS 冲突、越权逐件 409、超上限 400、重复编号跳过、日志 note 与单件路径逐字段比对 |
+| 约束 | 上限 50（超出 400）；批次内重复编号去重进 `skipped`；`batchId` **必填**（缺失/非法 400）并写入 `note` 尾部 ` [batch:<id>]`（单件原文逐字节不变，含「领用人 X（部门）」「应还 …」——`routes-checkout-users.js:19-26` 依赖该正则）；执行前幂等探测命中 → 409 `BATCH_DUPLICATE` 零副作用（设计 §5.5）；仅支持 `CHECKOUT`/`RETURN_OUT`；`scan-actions.js` 零改动 |
+| 测试 | 测试库 `sample_mgmt_test`：全通过执行、预校验拒绝（整批零执行）、执行期 CAS 冲突、越权逐件 409、超上限 400、重复编号跳过、日志 note 与单件路径逐字段比对、同一 `batchId` 二次提交 → 409 `BATCH_DUPLICATE` 且 `scan_logs` 零新增、缺 `batchId` → 400；**实测 `note LIKE` 幂等探测耗时与 `scan_logs` 行数并记入容量报告**（>50ms 按设计 §5.5 改精确后缀匹配） |
 | 护栏 | `samples` 已 `deployed:true`：写库类用例必须走测试库，生产只读（`tests/helpers/deployed.js`） |
-| 验收 | 设计文档 §8.1 的 B3、B4、B6、B7、B8、B9 |
+| 验收 | 设计文档 §8.1 的 B3、B4、B6、B7、B8、B9、B10、B11 |
 | 提交 | `feat(samples): 新增批量领用/归还接口（预校验全或无 + 执行期逐件结果）` |
 
 ### T4（需求 1 前端）扫码队列 + 公共设置 + 结果面板
 
 | 项 | 内容 |
 |---|---|
-| 改动 1 | 新建 `subsystems/samples/frontend/js/views/scan-batch.js`：队列模型（按 `sample_no` 去重、上限 50、localStorage + 班次隔离、项状态位）、公共设置表单（领用人复用 `checkout-user-picker.js`、时长、部门、备注）、结果面板（三段式 IA，见设计 §4.3）、重试与幂等命中判定 |
+| 改动 1 | 新建 `subsystems/samples/frontend/js/views/scan-batch.js`：队列模型（按 `sample_no` 去重、上限 50、localStorage + 班次隔离、项状态位）、公共设置表单（领用人复用 `checkout-user-picker.js`、时长、部门、备注）、结果面板（三段式 IA，见设计 §4.3）、每次提交生成 `batchId`（`crypto.randomUUID()`，重试复用同一值）、`BATCH_DUPLICATE` 命中后的「已生效 / 换新 id 重交」分流 |
 | 改动 2 | `views/scan.js`：改造既有「连续扫码」开关语义为批量模式（`:20-21`），`viewScan` 增加队列容器，`doScan` 在批量模式改走入队（薄挂钩，T0 后有余量） |
 | 改动 3 | `frontend/js/api.js:42-61`：为批量通道增加「静默」能力（不弹逐件 toast、不触发单件刷新），**不得新增顶层函数**（现 10 个，已达上限） |
 | 改动 4 | `views/scan-payload.js`：公共项载荷收集复用 `collectCheckoutPayload`（`:28-41`） |
@@ -80,7 +80,7 @@
 | 项 | 内容 |
 |---|---|
 | 改动 | `views/scan-batch.js`：失败项单独重试、复制失败编号、导出失败清单 CSV（复用 `shared/csv.js` 约定）、「清空并开始新一批」显式动作 |
-| 验收 | 重试不重复提交成功项；重复提交命中「已生效（无需重试）」 |
+| 验收 | 重试复用同一 `batchId`（不重复执行成功项）；命中 `BATCH_DUPLICATE` 后已生效件标「已生效」，其余件换**新 `batchId`** 重交且零重复执行 |
 | 提交 | `feat(samples): 批量结果面板失败重试与清单导出` |
 
 ### T6 回归、文档同步与容量报告
@@ -110,6 +110,8 @@
 批次一（需求 2，可独立发布）：T1 → T2 → T6(部分) → 发布
 批次二（需求 1）：T0 → T3 → T4 → T5 → T6 → 发布
 ```
+
+> 2026-09-16 用户确认（Q7）：按上述两批划分发布，两批各自独立上线与回滚。
 
 - T0 必须先于 T4（容量红线），且**独立提交**便于单独回滚；
 - T1/T2 同批（前后端同口径必须同时上线，否则出现「列表不适用、导出逾期」的新漂移）；
@@ -149,7 +151,7 @@
 - [ ] 文件臃肿检测报告已输出（容量 / 元素数量 / 冗余）
 - [ ] 回归验证步骤已列出并通过
 - [ ] 子系统隔离已验证（双系统只读回归）
-- [ ] 兼容性影响已说明（409 只加字段；`api()` 默认行为不变；`inspectState` 既有断言不破）
+- [ ] 兼容性影响已说明（409 只加字段；`api()` 默认行为不变；`inspectState` 既有断言不破；单件 `note` 不带 `batchId` 后缀、逐字节不变）
 - [ ] 部署 / 回滚步骤已提供
 - [ ] 上线监控提示已给出（1~3 周期）
 - [ ] 文档已同步（操作说明 + 发布说明；规则文件改动另需授权）
@@ -160,5 +162,5 @@
 
 1. 不做单事务整批回滚；2. 不清 `next_inspect_at`/`valid_until`；3. 不做存量数据订正；
 4. 不统一后端 SQL 逾期口径；5. 不做列表多选批量（二期）；6. 不放开批量到图片类动作；
-7. 不新增 `scan_logs` 列/表；8. 不改状态机与共享层；9. 不改规则文件（未授权时）；
+7. 不新增 `scan_logs` 列/表（`batchId` 记在 `note` 尾部，列化留待观察）；8. 不改状态机与共享层；9. 不改规则文件（未授权时）；
 10. AI 不执行任何重启/停服。
