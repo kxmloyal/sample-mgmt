@@ -182,3 +182,20 @@
 | 踩坑留档 | `pwsh Get-Content -Raw` + `Set-Content -Encoding utf8` 往返会把 `index.html` 中文写成乱码并加 BOM（实测 48 行全变）——已 `git restore` 该文件后改用 node 以 UTF-8 安全替换，diff 收敛为 3 行版本号。**今后 HTML/中文文本一律用 node 或 `edit` 工具改，禁止 pwsh 文本往返** |
 | 未做 | 未改 `db/dao-list.js` 的 SQL（看板 overdue/dueSoon、机型墙计数零变化 = C4）；未改 `scan-actions.js`；未改规则文件容量台账（T6 标注需授权） |
 | 待办 | 服务器 `git pull` → 运维面板重启（后端新增 require 文件必须重启才生效）→ 只读验收 + 双系统 `.b-overdue` 回归（C7） |
+
+### 线上验收结果（2026-09-16 23:5x 推送拉取 + 2026-09-17 01:00 运维重启后，全程只读）
+
+| 项 | 实测 |
+|---|---|
+| 服务 | `ss -ltnp \| grep :4000` → PID **2317087**，属主 `www`，`node /www/wwwroot/sample-mgmt/server.js`，启动 `Thu Sep 17 01:00:02 2026`；`/health` **200** `{status:ok, db:connected}`；版本 **2.0.9** |
+| 服务器版本 | `git log` = `85d4986`（与本地/远端一致），18 files / +1456−576，工作树干净 |
+| 目标用例 | **2 suites / 25 tests 全绿**（含 `Tests:` 完整摘要） |
+| 全量用例 | `1 failed, 7 skipped, 38 passed`；`4 failed, 10 skipped, 523 passed, 537 total`；`Encoding not recognized` **0**；失败仅 `tests/users.test.js` 4 条 `Lock wait timeout exceeded`（环境性，与修复前基线一致） |
+| C5 导出（真实数据） | `RETIRED` 26 行 → 「不适用」26/26；`CHECKED_OUT` 53 行 → 「领用中·暂停复检」53/53；`IN_CUSTODY` 45 行 → 「正常」45/45；列序 状态@6 / 复检状态@7 / 复检到期@17 **未变** |
+| C1/C2 页面渲染（用线上 `list-inspect.js` + 线上列表 JSON 实渲染） | `RETIRED` 26 → 「不适用」26/26、红徽章 **0**；`CHECKED_OUT` 53 → 「领用中·暂停复检」53/53、红徽章 **0**；`IN_CUSTODY` 45 → 「正常」45/45 |
+| 存量口径澄清 | 26 件 `RETIRED` + 53 件 `CHECKED_OUT` 的 `next_inspect_at` **全为未来日期** ⇒ 修复前显示**绿色「正常」**（C1 的真实失效点），非红脉冲（详见设计 §6.2 校正） |
+| C4 看板计数 | `/api/dashboard` 200：`{NEW:2, IN_CUSTODY:45, CHECKED_OUT:53, RETIRED:26, total:126}`，`overdue:[]`、`dueSoon:[]`；SQL 未改（`git diff` 无 `dao-list.js`） |
+| C7 双系统回归 | `/api/fixtures?limit=1` 200、`/api/fixtures/dashboard` 200；共享 `public/css/app.css` 与 `shared/` **零改动**，`.b-overdue` 定义未动 |
+| 前端资源 | 线上 `index.html` → `bundle.js?v=bmu4aj9bb`；线上 bundle 含 `INSPECT_NA_STATUSES`（grep 命中 2 处） |
+| 监控基线（1~3 周期对账用） | total 126 / IN_CUSTODY 45 / CHECKED_OUT 53 / RETIRED 26 / NEW 2 / overdue 0 / dueSoon 0 |
+| 过程事故（已处置） | ① 本地 `pwsh` 文本往返曾把 `index.html` 写成乱码，已 `git restore` 后改用 node 修复（见上表踩坑行）；② 以 root 跑 jest 产生 11 个 root 属主文件（当日日志 + 上传测试件），已 `chown www:www` 复原，复核剩余 0；③ 验收前一度发现 4000 端口无监听（PID 文件不存在），经只读排查确认非本次代码所致（`node --check` 与模块 require 均通过，且新代码曾在 2243874 实例上 `/health` 200），已由运维面板重启恢复 |
