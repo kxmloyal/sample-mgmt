@@ -87,4 +87,5 @@
 | 线上部署 | 服务器 HEAD `1534e91`、工作区干净；`bundle.js?v=` = `module.css?v=` = `bmu2kg6y6`；`bundle` 内含 `CLEAR_STORAGE`/`sm-sub-gone`/`清柜释放储位`；`/health` 200；端口 4000 单实例 |
 | 版本号 | `package.json` v2.0.7 + 5 manifest v2.0.7 + 本发布说明；`AGENTS.md` §13/§3 **未改**（CLAUDE §14.6），已登记待授权 |
 | 数据订正 | 26 件作废样品释放储位（单事务 + `@n=26` 精确守卫，实测 26/26）；全库备份 `/www/backup/sample-mgmt/retired-cabinet-release-20260916-081933/`；26 条 `CLEAR_STORAGE` 日志（`id 716–741`）留痕；其它状态 53 + 45 条储位零触碰 |
+| 重启前基线 | 2026-09-16 只读：`GET /api/samples/storage-map` 200，响应含 `"gone"` **0 处**（旧逻辑）；合计 总格位 452 / 在柜 45 / 领走 53 / 退回 0 / 预占·残留 **0** / 空位 **423**。注：§1 的 91/7 为 2026-09-15 快照，至 09-16 在柜·领走分布已因真实领还活动变为 **45/53**（26 件作废行未变）；8 格中仅 `1#样品柜 3-7` 为纯残留格 → 空位仅 +1 |
 | 遗留 | `scan.js` **95.4%**（越 90% 线，改动前即 95.0%）、`scan-actions.js` 86.4%（`applyAction` 202 行）、`report.js` 79.3%（顶层函数 16）、`storage-loc-picker.js` 12 个顶层函数、`routes-storage-map.js` `register` 92 行、`operation-manual.md` 126.9% —— 拆分方案见 `docs/RELEASE-v2.0.7.md` §7 |

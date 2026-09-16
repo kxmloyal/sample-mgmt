@@ -91,6 +91,7 @@
 | manifest | 5 个 `require` 加载通过；所有转移 `from`/`to` 均存在于 `states`；`CLEAR_STORAGE` 计数 = 1 |
 | bundle 落地自证 | 服务端 `bundle.js` 含 `CLEAR_STORAGE`(6 处) / `sm-sub-gone`(2) / `清柜释放储位`(3)；头 `BUNDLE vbmu2kg6y6 — 33 files`；入口 `bundle.js?v=` = `module.css?v=` = `bmu2kg6y6` |
 | 部署只读验收 | `/health` 200；端口 4000 单实例（PID `1742892`，重启前旧进程）；服务器 HEAD = `e240198`，工作区干净，`samples manifest v2.0.7 transitions=18` |
+| 重启前基线（2026-09-16，admin 只读）| `GET /api/samples/storage-map` **200**；响应含 `"gone"` **0 处**、`summary` 字段为 `total,inCustody,checkedOut,returning,reserved,empty`（= 旧逻辑，证明重启必要性）；合计：总格位 **452** / 在柜 **45** / 领走 **53** / 退回 **0** / 预占·残留 **0** / 空位 **423** —— 残留清零已即时生效，`gone` 分桶待重启出现 |
 
 ### 3.3 手工回归清单（需人眼确认，重启后执行）
 
@@ -111,7 +112,7 @@
 | 安全性 | 单事务 + **精确计数守卫**（`@n = 26`）：数量不为 26 时 INSERT 与 UPDATE 均 0 行（整体不动作）；`ROW_COUNT()` 实测 `inserted_logs=26`、`updated_samples=26` |
 | 变更后 | `RETIRED` 且储位非空 = **0**；`RETIRED` 合计仍 **26**（状态与样品编号完好）；`CHECKED_OUT` 53 / `IN_CUSTODY` 45 **零触碰**；26 件逐条留痕（`scan_logs.id 716–741`，`action='CLEAR_STORAGE'`、`role='ADMIN'`、`user_id=1`（admin）、`dept='系统'`、`location`=原储位、`note` 含「一次性订正…v2.0.7」）|
 | 写入契约 | 完全对齐应用自身写入（`subsystems/samples/db/dao.js:118`）：`INSERT INTO scan_logs (sample_id,action,role,user_id,dept,location,note)`，`target_type` 走列默认值 `'sample'` |
-| 效果 | 8 个受影响格位（`1#样品柜 3-7` / `1#样品柜3-8` / `1#样品柜3-9` / `2#样品柜5-1` / `2#样品柜5-2` / `4#样品柜3-11` / `4#样品柜3-4` / `4#样品柜3-8`）全部变回空位，可正常放样 |
+| 效果 | 8 个受影响格位中**仅 `1#样品柜 3-7`（0 在柜 / 3 作废）为纯残留格 → 变回空位**；其余 7 格仍有实物在柜，残留清零后**角标回落至真实在柜数**（如 `4#样品柜3-4` 16 → 10）|
 
 ## 5. 部署与回滚
 
@@ -138,7 +139,7 @@
 ## 6. 上线后监控（1–3 周期）
 
 - `GET /api/samples/storage-map` 的 5xx 计数与响应中 `summary.gone` 是否为**数字**（重启后应为 `0`）
-- 8 个已释放格位在柜位图与报表「在用」中的回落是否正确（在用 −26、空位 +8）
+- 8 个受影响格位在柜位图与报表「在用」中的回落是否正确（**在用 −26，空位 +1**——8 格中仅 `1#样品柜 3-7` 为纯残留格，其余 7 格只表现为角标回落）
 - 扫码台对 `RETIRED` 样品的清柜可用性与拦截（无储位 → 400；QA/RD 不可见）
 - 详情时间线对 `CLEAR_STORAGE` 的渲染（本次 26 件订正 + 后续人工清柜）
 
