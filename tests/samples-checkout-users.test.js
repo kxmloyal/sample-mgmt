@@ -27,8 +27,11 @@ describe('领用人候选 端点（routes-checkout-users.js）', () => {
 });
 
 describe('领用人选择器 前端接线', () => {
+  // 扫码台 = scan.js + scan-forms.js（2026-09-16 批次二 T0：动作表单构造外迁至 scan-forms.js，
+  // 领用人候选面板容器 #scan-co-cand 与 checkout 表单的 onblur 随之外迁）→ 取两文件合并视图，
+  // 护栏意图（领用表单确有候选面板 + 事件接线）不变。
+  const scan = read('subsystems/samples/frontend/js/views/scan.js') + read('subsystems/samples/frontend/js/views/scan-forms.js');
   test('领用表单含候选面板容器与失焦收起', () => {
-    const scan = read('subsystems/samples/frontend/js/views/scan.js');
     expect(scan).toContain('id="scan-co-cand"');
     expect(scan).toContain('initCheckoutUserPicker');
     expect(scan).toContain('onblur');
@@ -47,9 +50,8 @@ describe('领用人选择器 前端接线', () => {
   });
   test('候选面板 fixed 定位挂 body（防触发 modal 滚动容器滚动条）', () => {
     const picker = read('subsystems/samples/frontend/js/views/checkout-user-picker.js');
-    const scan = read('subsystems/samples/frontend/js/views/scan.js');
     const css = read('subsystems/samples/frontend/css/module.css');
-    expect(scan).toContain('co-cand-fixed');
+    expect(scan).toContain('co-cand-fixed'); // scan 为扫码台两文件合并视图（见本 describe 顶部说明）
     expect(scan).toContain('hideCoCandidates');
     expect(picker).toContain('document.body.appendChild(panel)');
     expect(picker).toContain('positionCoPanel');

@@ -6,19 +6,25 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 const SCAN = 'subsystems/samples/frontend/js/views/scan.js';
+const SCAN_FORMS = 'subsystems/samples/frontend/js/views/scan-forms.js';
 const PAYLOAD = 'subsystems/samples/frontend/js/views/scan-payload.js';
 const FNS = ['collectCustodyCycle', 'previewCheckoutDue', 'collectCheckoutPayload', 'collectWizardPayload'];
 
 describe('scan.js 载荷收集拆分（scan-payload.js）', () => {
-  const scan = read(SCAN);
+  // 扫码台 = scan.js + scan-forms.js（2026-09-16 批次二 T0 把动作表单构造外迁至 scan-forms.js）。
+  // 本套件校验「载荷函数的调用点仍在扫码台」，故取两文件的合并视图——护栏强度不降低，
+  // 且对未来继续拆分保持稳健（只看「扫码台整体是否仍有该调用点」，不绑定具体文件）。
+  const scan = read(SCAN) + read(SCAN_FORMS);
+  const scanOnly = read(SCAN);
   const payload = read(PAYLOAD);
-  test('4 个载荷函数定义在 scan-payload.js，且不再定义于 scan.js', () => {
+  test('4 个载荷函数定义在 scan-payload.js，且不再定义于扫码台任一文件', () => {
     FNS.forEach((fn) => {
       expect(payload).toContain('function ' + fn + '(');
-      expect(scan).not.toContain('function ' + fn + '(');
+      expect(read(SCAN)).not.toContain('function ' + fn + '(');
+      expect(read(SCAN_FORMS)).not.toContain('function ' + fn + '(');
     });
   });
-  test('调用点仍在 scan.js（表单 oninput 与 confirmScan 校验链未断）', () => {
+  test('调用点仍在扫码台（表单 oninput 与 confirmScan 校验链未断）', () => {
     ['previewCheckoutDue()', 'collectCustodyCycle(body)', 'collectCheckoutPayload(body)', 'collectWizardPayload(body)']
       .forEach((call) => expect(scan).toContain(call));
   });
@@ -31,8 +37,9 @@ describe('scan.js 载荷收集拆分（scan-payload.js）', () => {
     expect(iPayload).toBeLessThan(iScan);
   });
   test('两文件均在 §7.1 兜底线内，scan.js 已退出 90% 禁区', () => {
-    expect(scan.length).toBeLessThan(20000);
+    expect(scanOnly.length).toBeLessThan(20000);
+    expect(read(SCAN_FORMS).length).toBeLessThan(20000);
     expect(payload.length).toBeLessThan(20000);
-    expect(scan.length / 20000).toBeLessThan(0.9);
+    expect(scanOnly.length / 20000).toBeLessThan(0.5); // T0 外迁后由 85.5% 降至 49.7%
   });
 });

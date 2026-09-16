@@ -5,7 +5,10 @@ const root = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 
 describe('储位选择器（CUSTODY/EDIT_STORAGE 表单）', () => {
-  const scan = read('subsystems/samples/frontend/js/views/scan.js');
+  // 扫码台 = scan.js + scan-forms.js（2026-09-16 批次二 T0：动作表单构造外迁至 scan-forms.js，
+  // CUSTODY/EDIT_STORAGE 两处表单的候选面板与「柜位图」按钮随之外迁）→ 取两文件合并视图，
+  // 护栏意图（两处表单均挂候选面板 + 事件接线）不变，且对未来继续拆分稳健。
+  const scan = read('subsystems/samples/frontend/js/views/scan.js') + read('subsystems/samples/frontend/js/views/scan-forms.js');
   const picker = read('subsystems/samples/frontend/js/views/storage-loc-picker.js');
   const css = read('subsystems/samples/frontend/css/module.css');
   const map = read('subsystems/samples/frontend/js/views/storage-map.js');
