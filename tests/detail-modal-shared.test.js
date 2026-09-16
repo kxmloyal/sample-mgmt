@@ -244,7 +244,7 @@ describe('samples 详情弹窗迁移（DM-3）契约', () => {
   test('detail.js 已改用共享组件，旧交互外壳已移除', () => {
     expect(detail).toContain('openDetailModal({');
     expect(detail).toContain('isDirty: function () { return _detailDirty; }');
-    expect(detail).toContain("lazyTabs: ['logs', 'image']");
+    expect(detail).toContain("lazyTabs: ['logs', 'image', 'chain']");
     ['_applyDetailDensity', '_topBody', '_topMask', '_buildTabsHTML', '_detailReqSeq'].forEach(x => expect(detail).not.toContain(x));
   });
 
