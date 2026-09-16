@@ -98,7 +98,7 @@
 | **已知行为 1** | `RETIRE_RECREATE` 后状态仍为 `RETURNING` 且已无储位 → 该样品在研发创建替代品前会出现在顶部「未入柜样品」告警区（该池只收在柜三态）。属用户决策的必然结果，已在帮助指南写明 |
 | **已知行为 2** | 上述窗口内若被「拒绝退回」驳回 → 样品回保管中但**无储位**，需保管用「修改储位」重新登记（可恢复，无数据丢失）|
 | 可逆性 | 释放动作**不可撤销**（与作废本身同为终局操作）；但原储位已写入日志 `location` 列，可据日志人工复原 |
-| 回滚 | 见 §6.2 |
+| 回滚 | 见 §6.3 |
 
 ## 6. 部署与回滚
 
@@ -114,7 +114,7 @@
 4. **服务器侧回归**：`cd /www/wwwroot/sample-mgmt && npx jest tests/samples-storage-map.test.js tests/samples-report.test.js tests/samples-report-render.test.js --forceExit` → 期望全绿（本地镜像是纯 clone 无依赖，故此项只能在服务器执行）。
 5. **人工冒烟**：§4 的 6 步（步骤 1–4 属数据写入，需在**真实业务样品**上顺带验证或经你明确授权；samples 已上线，禁止造数；步骤 5–6 可只读核对）。
 
-### 6.1 实际部署时序（2026-09-16 实测，重要）
+### 6.2 实际部署时序与上线验收（2026-09-16 实测，重要）
 
 | 时刻 | 事件 | 结果 |
 |---|---|---|
@@ -122,7 +122,8 @@
 | 11:19 前后 | `git push origin main` → 服务器 `sudo -u www git pull --ff-only` | 服务器 HEAD `7811cd2`；磁盘 `samples/manifest.json` = `2.0.8` / **17** 转移；前端 `bundle.js?v=` = **`bmu3he1a0`**；26 文件 `+416 −239` |
 | 同上 | 服务器侧回归 | `npx jest` 三项样品测试 **42 passed / 42 total，exit=0**（其中 `samples-storage-map.test.js` 22 条含本版新增 7 条全绿）|
 | 同上 | 运行态判别（只读）| `GET /api/samples/storage-map` 响应仍含 `"gone"` **457 处** → **运行中进程确为 v2.0.7 代码**（`GET /api/subsystems` 的 `2.0.8` 是每请求读磁盘，**不能**代表进程内状态机）|
-| 待办 | **第二次重启** | 激活本版 `releaseCabinet` 自动释放；在此之前后端仍无自动释放，且 v2.0.8 前端已不提供清柜入口 → **窗口内请勿执行作废/退回研发重做**（否则柜位不释放；该样品 `samples.storage_location` 仍保留原值，重启后可由一次性 SQL 订正，无需担心丢失）|
+| 11:31:45–47 | 第二次重启（运维执行）| 旧进程 `1986303` 收 SIGTERM；新进程在 `D.init()` 迁移阶段崩溃（`ALTER TABLE fixtures ADD COLUMN improve_note TEXT` 报 **`ER_LOCK_DEADLOCK`**，`server.js:170` 的 async IIFE **无 try/catch** → 未捕获拒绝退出，**从未 listen**）→ **服务停机约 37 分钟**；与本次变更无关（崩溃点在治具迁移，早于 samples 任何路径，且日志显示 5 子系统已全部加载 v2.0.8）|
+| **12:08:07** | **第三次启动（运维执行）** | 进程 **`2007225`**；`12:08:08` 5 子系统全部加载 **v2.0.8**；**`12:08:23` 日志出现「制造品质管理系统已启动: http://localhost:4000」→ 本版自动释放正式生效** |
 
 **只读核对命令（重启后执行）**
 
@@ -134,12 +135,30 @@ grep -o '"version": "[0-9.]*"' subsystems/samples/manifest.json | head -1   # �
 curl -s -b /tmp/_c.txt http://127.0.0.1:4000/api/samples/storage-map | grep -c gone   # 期望 0
 ```
 
-### 6.2 回滚
+**上线验收结果（2026-09-16 12:08 起，全部只读实测）**
+
+| 判别项 | 方法 | 实测结果 |
+|---|---|---|
+| 服务存活 | 端口 4000 / `/health` | 单实例 **PID `2007225`**（12:08:07 启动，命令行含服务绝对路径）；`/health` **200** |
+| **后端代码已换新** | `GET /api/samples/storage-map` 统计 `gone` 出现次数 | **0 次**（重启前为 **457** 次）→ `gone` 分桶确已下线 |
+| **状态机已换新** | `GET /api/resolve` 对 RETIRED 样品取 `allowedActions` | `[]` 且**不含 `CLEAR_STORAGE`**（v2.0.7 下会返回该动作）|
+| 状态机完整性 | v2.0.7（`89c8d9c`）与 v2.0.8 的 manifest 逐条转移 diff | 18 → 17，**差异仅 `CLEAR_STORAGE :: RETIRED → RETIRED :: ["ADMIN","CUSTODY","ME"]` 一条**，其余 **16 条逐字相同** |
+| 4 出口角色 | manifest 转移表 | `RETIRE_ONLY`=QA、`FORCE_RETIRE`=ADMIN、`RETIRE_RECREATE`=QA、`RECREATE`=RD（与 §2.1 一致）；`RETIRE_RECREATE` 的 `to` 仍为 `RETURNING` |
+| 数据状态 | 只读 SQL | samples **133** 行（CHECKED_OUT 53 / IN_CUSTODY 45 / RETIRED 26）；**作废残留 0** |
+| 前端下发（端到端）| HTTP 取真实 `bundle.js`（248,857 B，http 200）| 含 `retiredReleaseHint` **5** 处、「将同步释放」**1** 处；`sm-gone` **0**、「确认清柜释放格位」**0** |
+| **内容一致性** | 两端 `git rev-parse HEAD:<path>`（git blob SHA）| 7 个关键文件 **7/7 完全相同**（本地 md5 差异纯因 Windows `core.autocrlf=true` 的 CRLF：服务器 CR 行数 **0**，字节数 = 本地字节 − CR 数）|
+| 运行期错误 | `logs/app-2026-09-16.log` 中 `"level":"error"` 计数 | **0** |
+| 服务器侧测试 | `npx jest` 三项样品测试 | **42 passed / 42 total，exit=0** |
+
+> **口径澄清（避免误判为回归）**：`GET /api/resolve` 对 `ADMIN` 在 `IN_CUSTODY` / `CHECKED_OUT` / `RETIRED` 均返回 `allowedActions=[]` 属**既有设计**——这三个状态的转移角色里没有 `ADMIN`（`IN_CUSTODY` 的 4 个动作角色为 `CUSTODY`/`ME`/`QA`），且上述 diff 证明两版转移集合除 `CLEAR_STORAGE` 外逐条相同。ADMIN 在扫码台的可达动作为 `RETURNING` 状态的 `FORCE_REASSIGN` / `FORCE_RETIRE`。
+
+### 6.3 回滚
 
 | 场景 | 操作 |
 |---|---|
-| 前端异常 | 将 `subsystems/samples/frontend/{index.html,js/bundle.js,js/views/*,css/module.css}` 回退到 `3ff5547^`（即 `89c8d9c`）后 `git checkout` 该路径并刷新；**无需重启** |
-| 后端异常 | `git revert 8e96a8e 3ff5547`（保留历史，禁 `reset --hard`）→ 再走一次运维重启 |
+| 前端异常 | 将 `subsystems/samples/frontend/{index.html,js/bundle.js,js/views/*,css/module.css}` 回退到 `89c8d9c`（v2.0.7 前端）后 `git checkout` 该路径并刷新；**无需重启** |
+| 后端异常 | `git revert 5cc5548 4b066f4`（保留历史，禁 `reset --hard`）→ 再走一次运维重启（宝塔面板「停止 → 启动」）|
+| 启动期迁移死锁复发 | 迁移已幂等（列已存在 → 静默跳过），**直接再启一次**即可；若反复复发见 §8 第 8 条加固建议 |
 | 仅需禁用自动释放 | 把 `releaseCabinet` 内的 `target.storage_location = null;` 注释并重启（等价恢复 v2.0.6 行为）|
 | 数据修复 | 从 `scan_logs.location`（含被释放的原储位）恢复 `samples.storage_location`；备份基线见 v2.0.7 §4 |
 
@@ -183,3 +202,4 @@ curl -s -b /tmp/_c.txt http://127.0.0.1:4000/api/samples/storage-map | grep -c g
 5. `docs/operation-manual.md` 124.6%：建议把「治具/管制/项目/工作台」四章迁至各分册，总说明书只保留样品+索引。
 6. `routes-storage-map.js` 的 `register` 92 行（既存）→ 按端点拆子注册函数。
 7. `AGENTS.md` §13 现值/§3 发布清单仍为 `2.0.6`（连续两版待授权）。
+8. **启动期迁移健壮性（2026-09-16 停机事件暴露，待你授权后另立迭代）**：① `server.js:170` 的 `D.init()` 包 try/catch + 对 `ER_LOCK_DEADLOCK`/`ER_LOCK_WAIT_TIMEOUT` 做**有界退避重试**（MySQL 原话即「try restarting transaction」），失败落错误日志而非静默退出；② 在 `db.js` 的 `runMigrations` 外层用 MySQL 命名锁 `SELECT GET_LOCK('sample_mgmt_migrate', 30)` 串行化，避免停/启重叠时**两进程并发 DDL**（**不修改 `sample_mgmt_start.sh`**，遵 §20/§23 硬约束）；③ `app.listen` 的 `error` 事件捕获 `EADDRINUSE` 并明确落日志，使多实例可见化。
