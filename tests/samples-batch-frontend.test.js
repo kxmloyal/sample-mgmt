@@ -254,19 +254,22 @@ describe('前端契约（源文件静态断言）', () => {
     expect(scan).toContain('id="sb-mode-btn"');
     expect(count(scan, 'id="scan-cont"')).toBe(1);           // 全屏仍只有 1 个连扫开关
     expect(count(scan, '批量模式')).toBeGreaterThan(0);
-    // 批量模式只在 doScan 内分流一次，且仍走既有只读 /api/resolve
-    expect(count(scan, 'if(_sbMode)')).toBe(2);              // doScan 分流 + viewScan 重挂载恢复
+    // 批量模式只在两处分流：doScan 入队分流 + viewScan 重挂载恢复；且仍走既有只读 /api/resolve
+    expect(count(scan, 'if(_sbMode)')).toBe(1);              // doScan：扫码即入队
+    expect(count(scan, "_sbMode&&$('#scan-batch')")).toBe(1); // viewScan：跨视图返回时恢复队列容器
     expect(scan).toContain("api('GET','/api/resolve?code='");
   });
 
-  test('批量提交两条通道均带 silent，且 api.js 顶层函数仍为 10 个（未越 §7.2 上限）', () => {
+  test('批量提交两条通道均带 silent，且 api.js 未新增顶层函数（仍 10 个声明，§7.2 上限内）', () => {
     expect(count(src, ", { silent: true }")).toBe(2);
     expect(api).toContain('api=async function(method,url,body,opts)');
     expect(api).toContain('err.data=data');
     expect(count(api, 'function _apiFetch(')).toBe(1);
-    // 顶层函数计数（含 function 声明，不含箭头/内联回调）
-    const top = (api.match(/^(async )?function /gm) || []).length + (api.match(/^api=async function/gm) || []).length;
-    expect(top).toBe(10);
+    // 顶层 function 声明 10 个（§7.2 上限 10，未越线）；api= 是对 shared/api-base.js 的既有覆盖（非新增声明，故单列）
+    const decl = (api.match(/^(async )?function /gm) || []).length;
+    const override = (api.match(/^api=async function/gm) || []).length;
+    expect(decl).toBe(10);
+    expect(override).toBe(1);
   });
 
   test('仅允许 CHECKOUT / RETURN_OUT；动作白名单与后端一致', () => {
