@@ -199,3 +199,83 @@
 | 前端资源 | 线上 `index.html` → `bundle.js?v=bmu4aj9bb`；线上 bundle 含 `INSPECT_NA_STATUSES`（grep 命中 2 处） |
 | 监控基线（1~3 周期对账用） | total 126 / IN_CUSTODY 45 / CHECKED_OUT 53 / RETIRED 26 / NEW 2 / overdue 0 / dueSoon 0 |
 | 过程事故（已处置） | ① 本地 `pwsh` 文本往返曾把 `index.html` 写成乱码，已 `git restore` 后改用 node 修复（见上表踩坑行）；② 以 root 跑 jest 产生 11 个 root 属主文件（当日日志 + 上传测试件），已 `chown www:www` 复原，复核剩余 0；③ 验收前一度发现 4000 端口无监听（PID 文件不存在），经只读排查确认非本次代码所致（`node --check` 与模块 require 均通过，且新代码曾在 2243874 实例上 `/health` 200），已由运维面板重启恢复 |
+
+---
+
+## 8. 实施记录（批次二 T0 / T3 / T4 / T5 / T6，2026-09-17）
+
+### 8.1 提交链（每个 Task 一个 commit，均已 push）
+
+| 提交 | Task | 说明 |
+|---|---|---|
+| `8a77ea1` | T0 | `refactor(samples)`：动作表单构造外迁 `scan-forms.js`（行为零变化、独立提交便于单独回滚） |
+| `e9726eb` | T4 | `feat(samples)`：批量领用/归还（连扫入队 + 公共设置 + 结果面板） |
+| `1fc79d2` | T4 | `test`：修正前端契约断言计数（`_sbMode` 两处分流 / `api.js` 声明数口径） |
+| `6b2279d` | T0 | `test`：三处既有扫码台护栏改为「`scan.js` + `scan-forms.js` 合并视图」 |
+| `a796d11` | T4 | `test`：修正 `scan.js` 容量断言阈值（T4 挂钩后 53.2%） |
+| `0599290` | T5 | `feat(samples)`：失败重试与失败清单 CSV 导出 |
+| `dc01306` | T6 | `docs`：使用人员版 + 总操作说明书增补 |
+| `60024a0` | T6 | `chore(release)`：v2.1.0 版本号 6 处统一 + `RELEASE-v2.1.0.md` |
+| `6671794` | T6 | `docs(release)`：回填幂等探测成本基线 |
+
+> T3（后端批量通道）已在 `f28397d` / `349141f` 完成（见前次记录）。
+
+### 8.2 容量（AGENTS §7.1 权威口径 = LF 归一字符数）
+
+| 文件 | 行 | 字符 | 占比 | 顶层函数 | 判定 |
+|---|---|---|---|---|---|
+| `backend/batch-scan.js`（新增） | 178 | 9,955 | 49.8% | 8 | 合规 |
+| `backend/scan-allowed.js`（新增） | 29 | 1,480 | 7.4% | — | 合规 |
+| `backend/routes-scan.js` | 82 | 3,968 | 19.8% | — | 合规（原 98/4,694/23.5%） |
+| `backend/index.js` | 50 | 1,601 | 8.0% | — | 合规 |
+| `db/dao.js` | 174 | 10,441 | 52.2% | — | 合规 |
+| `views/scan-batch.js`（新增） | 238 | 12,708 | 63.5% | 10 | 合规（顶层函数**恰达** §7.2 上限，后续不可再加） |
+| `views/scan-batch-result.js`（新增） | 107 | 6,801 | 34.0% | 5 | 合规 |
+| `views/scan-forms.js`（新增，T0） | 83 | 7,832 | 39.2% | 1 | 合规 |
+| `views/scan.js` | 182 | 10,648 | 53.2% | 5 | 合规（T0 前 244/17,109/**85.5%**） |
+| `js/api.js` | 67 | 3,407 | 17.0% | 10 | 合规（顶层函数 10，已达上限） |
+| `css/batch.css`（新增） | 40 | 2,400 | 12.0% | — | 合规 |
+| `css/module.css` | 181 | 12,608 | 63.0% | — | 合规（加入 `.sb-*` 曾达 72.2%，故拆出） |
+
+### 8.3 测试
+
+| 文件 | 行 | 字符 | 类型 |
+|---|---|---|---|
+| `tests/samples-batch-scan.test.js` | 120 | 5,798 | 纯函数 + 源文件契约 |
+| `tests/samples-batch-scan-e2e.test.js` | 251 | 12,105 | DB 真跑（独立测试库 + 守卫跳过） |
+| `tests/samples-batch-frontend.test.js` | 442 | 20,923 | 假 DOM `vm` 真跑 + 源文件契约（单元测试豁免 ≤1000 行） |
+
+批次二 3 套件 = **39 用例全绿**；全量 = `1 failed, 7 skipped, 41 passed` / `4 failed, 10 skipped, 562 passed, 576 total`；`Encoding not recognized` **0**。
+
+### 8.4 两处对计划文本的偏离（兼容优先）
+
+| 计划原文 | 实际做法 | 原因 |
+|---|---|---|
+| T4 改动 2：「改造既有『连续扫码』开关语义为批量模式」 | 新增**独立开关** `#sb-mode-btn`，不改 `#scan-cont` | `#scan-cont` 同时驱动标示卡打印队列累积（`views/scan-camera.js` 的 `enqueuePrintCard`），改造会静默改变单件路径行为（§6 兼容优先） |
+| 样式写入 `module.css` | 新建 `css/batch.css` | 写入后 `module.css` 达 **72.2%**，越 §7.1 的 70% 线；沿用 2026-09-15 `report.css` 先例。仍是子系统自有 CSS，未写共享 `app.css`（§18 禁令） |
+
+### 8.5 全链路排查遗漏（已补齐，重要留档）
+
+T0 把动作表单构造外迁到 `scan-forms.js` 后，**三个既有前端护栏**因从 `scan.js` 单文件读取标记而失败：
+
+- `tests/samples-scan-payload-split.test.js`（4 个载荷函数调用点）
+- `tests/samples-checkout-users.test.js`（领用人候选面板容器 / 失焦收起 / fixed 定位）
+- `tests/samples-storage-loc-picker.test.js`（CUSTODY/EDIT_STORAGE 两处储位表单 / 柜位图按钮 / 防误确认）
+
+**修法**：改为读取「扫码台两文件合并视图」，断言逐条不变——护栏强度不降反增。**教训**：外迁代码时必须跑该文件对应的既有护栏，不能只看目标套件。
+
+### 8.6 幂等探测成本基线（部署前只读实测）
+
+`scan_logs` **747 行** / 数据 112 KB / 索引 16 KB；索引仅 `PRIMARY(id)`、`idx_logs_sample(sample_id)`，`note` **无索引**。探测 SQL 100 次批量法扣除客户端基线后 **约 0.4~0.6 ms/次**；`EXPLAIN` = `type=ALL`、`rows=723`、`Using where`（前导通配全表扫描，符合设计预期）。后续优化触发阈值：`scan_logs` 超 10 万行，或 `probeMs` 持续 > 50 ms。
+
+### 8.7 共享面与双系统回归
+
+`git diff --stat 349141f HEAD -- shared/ public/css/app.css server.js db.js public/portal.html public/js/` **输出为空** ⇒ 共享面零变更。`.b-overdue` 仍在 `public/css/app.css:85` / `:197`；治具入口 `200`（2776 B）、治具 `bundle.js` `200`（119,866 B）、样品入口 `200`（3036 B）。
+
+### 8.8 待办（T7 发布）
+
+服务器已 `git pull` 到 `6671794`，工作树干净，版本号 6 处均为 **2.1.0**；服务 **未中断**（PID 2317087，`www` 属主，已运行 2:07:44）。因新增后端路由文件**不热挂载**（§17），`POST /api/samples/batch-resolve` 当前返回 **404**（正常），**待运维在宝塔面板重启后生效**（见《重启申请》）。规则文件 `AGENTS.md §13/§14`、`CLAUDE.md §6·§11` 容量台账更新**待用户授权**。
+
+### 8.9 与本次变更无关的既有失败（不影响验收）
+
+`tests/users.test.js` 4 例失败（`POST /api/users/batch` ×3 + `POST /api/users/import` ×1）。**已排除本次变更嫌疑**：① 批次二提交区间 `349141f..HEAD` 未触碰 `routes/`、`db/`、`shared/`、`server.js`、`tests/helpers/`、`tests/users*`；② 单独运行 `tests/users.test.js`（无并行竞争）**同样失败**，表现为 `Lock wait timeout exceeded` 与 30s 测试超时；③ `GET_LOCK('sample_mgmt_ddl')` 返回 `NULL`（DDL 命名锁未被占用）；④ 与批次一基线**同项同因**。建议列为独立排查项。
