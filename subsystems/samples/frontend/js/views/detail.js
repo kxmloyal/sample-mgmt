@@ -160,7 +160,7 @@ function _cardLogs(s, id) {
   var logs = s.logs || [];
   var h = '<div class="overview-card"><div class="title">操作日志</div>';
   if (logs.length) {
-    h += '<div class="log-list">' + logs.slice(0, 2).map(function(l) { return '<div><span class="muted">' + fmt(l.created_at) + '</span> · ' + (ACTION_CN[l.action] || l.action) + ' · ' + (l.role || '') + '/' + (l.dept || '') + '</div>'; }).join('') + '</div>';
+    h += '<div class="log-list">' + logs.slice(0, 2).map(function(l) { return '<div><span class="muted">' + fmt(l.created_at) + '</span> · ' + (ACTION_CN[l.action] || SCAN_ACTION_CN_EXT[l.action] || l.action) + ' · ' + (l.role || '') + '/' + (l.dept || '') + '</div>'; }).join('') + '</div>';
   } else {
     h += '<div class="muted">暂无日志</div>';
   }
@@ -183,8 +183,10 @@ var _LOG_FLOW = {
   RETIRE_RECREATE: '⬆ 退回审核 ➜ 已作废',
   RETURN_REJECT: '⬆ 退回审核 ➜ 保管中',
   RETIRE_ONLY: '⬆ 已作废', RECREATE: '⬆ 已作废', FORCE_RETIRE: '⬆ 已作废', RECREATE_REPLACED: '⬆ 已作废（自环）',
-  CLEAR_STORAGE: '⬆ 已作废（柜位释放·自环）',
-  FORCE_REASSIGN: '⬆ 退回审核（改派）'
+  FORCE_REASSIGN: '⬆ 退回审核（改派）',
+  // 历史兼容（2026-09-16）：CLEAR_STORAGE 动作已于 2.0.8 下线（改为「作废即清柜」自动释放），
+  // 但 2026-09-16 一次性订正产生的 26 条日志仍引用该 action，保留流向与中文名以保证时间线可读（§6.3）
+  CLEAR_STORAGE: '⬆ 已作废（柜位释放·历史）'
 };
 
 function _buildLogsTab(s, id) {

@@ -91,6 +91,24 @@ function applyReleaseFields(req, s, updated, ts, cyc, typeErrMsg) {
   return null;
 }
 
+// 作废即清柜（2026-09-16 用户业务规则）：样品进入作废/重做通道时，同步释放其占用的柜位格。
+// 背景：作废样品实物已退回研发/报废离柜，柜位不应再被占（此前 26 件存量残留靠一次性 SQL 订正清零）。
+// 参数：target = 待提交对象（主事务的 updated 或 RECREATE 分支的 oldUpdated）——就地置空其 storage_location
+//       s = 变更前的样品行（读原储位）；log = 该动作的日志对象（可为空）
+// 返回：处理后的日志——原储位写入 location 列、note 追加「，同步释放柜位 X」，清柜因此可追溯且不额外造日志条目
+// 兼容：无储位时原样返回（不多写字段，旧日志格式不变）；仅动 storage_location，不动 custody_dept（保管口径报表不受影响）
+// 异常：不抛错（纯内存改写）；落库由调用方 CAS 事务负责
+function releaseCabinet(target, s, log) {
+  if (!s.storage_location) return log;
+  const released = s.storage_location;
+  target.storage_location = null;
+  if (log) {
+    log.location = released;
+    log.note = (log.note || '') + '，同步释放柜位 ' + released;
+  }
+  return log;
+}
+
 // action 执行入口：按 chosenAction 就地改写 updated 并给出 logData/respond
 // ctx: { req, s, updated, ts, u, D, saveSampleImage }
 async function applyAction(chosenAction, ctx) {
@@ -220,24 +238,15 @@ async function applyAction(chosenAction, ctx) {
     updated.retired_reason = note || '退回研发重新制作';
     updated.retire_assigned_rd = assignedRd;
     const assignedLabel = assignedUser.display_name || assignedUser.username;
-    logData = { sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel };
+    // 作废即清柜（2026-09-16）：指派重做即实物随研发离柜，同步释放柜位（状态仍为 RETURNING，见发布说明 §已知行为）
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel });
   } else if (chosenAction === 'RETIRE_ONLY') {
     if (!note || !note.trim()) return { status: 400, error: '请填写作废原因' };
     updated.status = 'RETIRED';
     updated.retired_reason = note.trim();
     updated.retire_assigned_rd = null;
-    logData = { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
-  } else if (chosenAction === 'CLEAR_STORAGE') {
-    // 清柜（2026-09-15 新增，档2）：作废样品实物已离柜时释放其占用的柜位格。
-    // 可达性：仅 RETIRED（manifest 转移门 RETIRED→RETIRED 限定 ADMIN/CUSTODY/ME），下方再做一次状态兜底校验。
-    // 留痕：原储位写入日志 location 列，清柜后仍可在时间线/日志表追溯（这 26 件作废样品的 CUSTODY 日志 26/26 均带位置）。
-    // 副作用：storage_location 置空后，柜位图不再渲染该格（既不计占用也不进「未入柜」告警池，后者只收在柜三态）。
-    // 兼容：不删除任何字段；旧接口/旧前端不受影响。异常：非 RETIRED → 409；本就无储位 → 400（防重复提交零动作）。
-    if (s.status !== 'RETIRED') return { status: 409, error: '仅「已作废」样品可清柜释放格位' };
-    if (!s.storage_location) return { status: 400, error: '该样品当前无储位，无需清柜' };
-    const clearedLoc = s.storage_location;
-    updated.storage_location = null;
-    logData = { sample_id: s.id, action: 'CLEAR_STORAGE', role: u.role, user_id: u.id, dept: u.dept, location: clearedLoc, note: (note && note.trim()) ? note.trim() : ('清柜释放格位 ' + clearedLoc) };
+    // 作废即清柜（2026-09-16）：状态落 RETIRED 时同步释放柜位，原储位写入日志 location 列留痕
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
   } else if (chosenAction === 'RETURN_REJECT') {
     if (!note || !note.trim()) return { status: 400, error: '请填写拒绝理由' };
     updated.status = 'IN_CUSTODY';
@@ -272,7 +281,8 @@ async function applyAction(chosenAction, ctx) {
     updated.status = 'RETIRED';
     updated.retired_reason = note.trim();
     updated.retire_assigned_rd = null;
-    logData = { sample_id: s.id, action: 'FORCE_RETIRE', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制作废：' + note.trim() };
+    // 作废即清柜（2026-09-16）：同 RETIRE_ONLY，强制作废亦同步释放柜位
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'FORCE_RETIRE', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制作废：' + note.trim() });
   } else if (chosenAction === 'RECREATE') {
     // 4 步写事务：createSample(新) + updateSample(旧→RETIRED) + 2 addLog
     const newSample = await D.withTransaction(async conn => {
@@ -285,8 +295,11 @@ async function applyAction(chosenAction, ctx) {
       }, conn);
       // updated_at 由 TIMESTAMP 列 ON UPDATE 自动维护（updateSample 列清单不含它），2026-09-09 清理死赋值
       const oldUpdated = { ...s, status: 'RETIRED', replaced_by: ns.sample_no };
+      // 作废即清柜（2026-09-16）：原样品转 RETIRED 同步释放柜位；替代品不继承储位（需重新走接收保管入柜）。
+      // 注意顺序：必须在 updateSample 之前调用，releaseCabinet 就地改写 oldUpdated.storage_location。
+      const oldLog = releaseCabinet(oldUpdated, s, { sample_id: s.id, action: 'RECREATE_REPLACED', role: u.role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' });
       await D.updateSample(oldUpdated, conn, s.version);
-      await D.addLog({ sample_id: s.id, action: 'RECREATE_REPLACED', role: u.role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' }, conn);
+      await D.addLog(oldLog, conn);
       await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '替代 ' + s.sample_no }, conn);
       return ns;
     });
