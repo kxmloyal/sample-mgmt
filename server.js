@@ -167,10 +167,22 @@ app.use((err, req, res, next) => {
 // 测试模式下不自动 listen（由 supertest 接管端口），生产/开发模式正常启动
 if (!process.env.TEST_MODE) {
   (async () => {
-    await D.init();
-    logger.info('数据库已连接: MariaDB @ ' + (process.env.DB_HOST || '127.0.0.1'));
+    try {
+      await D.init();
+      logger.info('数据库已连接: MySQL @ ' + (process.env.DB_HOST || '127.0.0.1'));
+    } catch (e) {
+      // 2026-09-16 加固：此前 init/迁移抛错时无任何兜底 → 进程未 listen 即退出、面板与日志均无原因。
+      // 现显式记录错误后退出（进程生命周期仍完全由宝塔面板管理，未新增任何自启/守护逻辑，见 AGENTS §23）
+      logger.error('启动失败，进程退出: ' + (e && e.code ? e.code + ' — ' : '') + (e && e.message ? e.message : e));
+      process.exit(1);
+    }
     const server = app.listen(PORT, () => {
       logger.info('制造品质管理系统已启动: http://localhost:' + PORT);
+    });
+    // 监听失败（如 EADDRINUSE 端口被占）必须落日志：旧写法无 error 处理，异常会静默吞掉
+    server.on('error', (e) => {
+      logger.error('HTTP 服务监听失败: ' + (e && e.code ? e.code + ' — ' : '') + (e && e.message ? e.message : e));
+      process.exit(1);
     });
     const shutdown = (signal) => {
       logger.info('收到 ' + signal + '，正在关闭服务...');

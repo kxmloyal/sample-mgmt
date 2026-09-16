@@ -1,5 +1,5 @@
 const mysql = require('mysql2/promise');
-const { runMigrations } = require('./db/migrations');
+const { runStartupDdl } = require('./db/migrations');
 const { withTransaction: txWithTransaction } = require('./db/tx');
 const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
@@ -13,6 +13,7 @@ const dbConfig = {
   queueLimit: 0
 };
 let pool = null;
+let initPromise = null; // ★ 单飞（2026-09-16）：并发调用共享同一次初始化，避免「两套并发 DDL + 两个连接池」
 
 function nowISO() { return new Date().toISOString(); }
 
@@ -21,60 +22,19 @@ function getPool() {
   return pool;
 }
 
-async function init() {
+// 单飞入口（2026-09-16 加固）：并发调用（server.js 的 await D.init() 与模块加载期 ready = init()）
+// 返回同一 promise；失败后清空以便调用方重试。旧实现每次调用都新建连接池并重跑 schema + 全部迁移，
+// 实测导致同进程两套并发 DDL（面板日志中每个子系统 schema 各打印 2 次），在 ALTER TABLE 上互锁致启动失败。
+function init() {
+  if (!initPromise) initPromise = _init().catch((e) => { initPromise = null; throw e; });
+  return initPromise;
+}
+
+async function _init() {
   pool = mysql.createPool(dbConfig);
-  const conn = await pool.getConnection();
-  try {
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(20) NOT NULL,
-        dept VARCHAR(50),
-        display_name VARCHAR(50),
-        enabled TINYINT(1) NOT NULL DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    // ★ 门户卡片排序偏好表（框架级，AGENTS.md §22 门户个性化）
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS user_portal_prefs (
-        user_id INT PRIMARY KEY,
-        portal_order JSON NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        CONSTRAINT fk_portal_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
-    // ★ 子系统 DDL 已迁移至 subsystems/*/db/schema.sql，由下方自动扫描加载
-  } finally {
-    conn.release();
-  }
-
-  // ★ Phase 4: 自动扫描 subsystems/*/db/schema.sql 并执行建表（幂等，追加到已有表之后）
-  const fs = require('fs');
-  const path = require('path');
-  const subsystemsDir = path.join(__dirname, 'subsystems');
-  if (fs.existsSync(subsystemsDir)) {
-    const subEntries = fs.readdirSync(subsystemsDir, { withFileTypes: true });
-    for (const subEntry of subEntries) {
-      if (!subEntry.isDirectory()) continue;
-      const schemaPath = path.join(subsystemsDir, subEntry.name, 'db', 'schema.sql');
-      if (!fs.existsSync(schemaPath)) continue;
-      try {
-        const sql = fs.readFileSync(schemaPath, 'utf8');
-        const statements = sql.split(';').filter(s => s.trim());
-        for (const stmt of statements) {
-          await pool.execute(stmt);
-        }
-        console.log('[db] 子系统 schema 已加载: ' + subEntry.name);
-      } catch (e) {
-        console.error('[db] 加载子系统 schema 失败: ' + subEntry.name, e.message);
-      }
-    }
-  }
-
-  await runMigrations(pool);
+  // 启动期 DDL（框架表 → 子系统 schema.sql → 增量迁移）统一由 db/migrations 的启动入口执行：
+  // 全程持 MySQL 命名锁串行 + 对瞬时锁冲突退避重试（2026-09-16 加固，见 docs/RELEASE-v2.0.9.md）
+  await runStartupDdl(pool);
   return true;
 }
 
