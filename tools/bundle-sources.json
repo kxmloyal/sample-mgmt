@@ -26,6 +26,7 @@
     "subsystems/samples/frontend/js/views/checkout-user-picker.js",
     "subsystems/samples/frontend/js/views/storage-loc-picker.js",
     "subsystems/samples/frontend/js/views/scan-payload.js",
+    "subsystems/samples/frontend/js/views/scan-forms.js",
     "subsystems/samples/frontend/js/views/scan.js",
     "subsystems/samples/frontend/js/views/logs.js",
     "subsystems/samples/frontend/js/views/models.js",
