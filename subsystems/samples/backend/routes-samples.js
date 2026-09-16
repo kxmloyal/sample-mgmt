@@ -7,6 +7,7 @@ const { logger } = require('../../../logger');
 const { asyncHandler } = require('./async-handler');
 const { toCsv, sendCsv } = require('../../../shared/csv');
 const { saveSampleImage, UPLOAD_DIR } = require('./sample-images');
+const { inspectStateCn } = require('./inspect-state-cn'); // 复检状态中文（导出列口径唯一落点，2026-09-16 外迁）
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -59,7 +60,6 @@ function register(app) {
   // 导出列表 CSV（复用列表筛选参数，忽略分页取全量；AGENTS.md §21 列表导出标准）
   // 注意：须注册在 GET /api/samples/:id 之前，避免 'export' 被 :id 捕获
   const SAMPLE_STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
-  const INSPECT_SOON_DAYS = 7;
 
   /** 时间列格式化：统一转北京时间(+08)后取 YYYY-MM-DD HH:mm；null/空 → ''。
    *  2026-09-09 修复：原实现直接 slice UTC ISO 串，CSV 导出的归还/领出/更新等时间列整体慢 8h；
@@ -73,15 +73,6 @@ function register(app) {
     if (isNaN(dt.getTime())) return s.slice(0, 16).replace('T', ' ');
     const b = new Date(dt.getTime() + 8 * 3600000); // UTC → 北京时间
     return b.toISOString().slice(0, 16).replace('T', ' ');
-  }
-
-  /** 复检状态中文（与前端 list-inspect.js 判定一致：正常/近7天到期/逾期N天/—） */
-  function inspectStateCn(row) {
-    if (!row || !row.next_inspect_at) return '—';
-    const t = new Date(row.next_inspect_at).getTime();
-    if (t < Date.now()) return '逾期' + Math.ceil((Date.now() - t) / 86400000) + '天';
-    if (t <= Date.now() + INSPECT_SOON_DAYS * 86400000) return '近7天到期';
-    return '正常';
   }
 
   app.get('/api/samples/export', requireAuth, asyncHandler(async (req, res) => {
