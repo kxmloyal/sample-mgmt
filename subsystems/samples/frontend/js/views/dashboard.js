@@ -14,8 +14,16 @@ var _dashCheckoutData = [];
 // 即**已发行但保管部尚未接收**的待办滞留量，不是「累计发行量」。实测同口径差异很大
 // （累计曾发行 released_at 非空 = 61 件，该卡显示 31 件），标签若写作「已发行」会被读成累计数，
 // 故卡片与比例条图例统一改为「已发行·待接收」；列表筛选/导出等状态名场景仍保留「已发行」。
+// 2026-09-17 口径修正（用户反馈：确认某机种正式发行数量时「多的数据」）：
+// /api/dashboard 的 total 是「存活样品总数」（只排软删、**含 RETIRED 已废弃**）。原先总数卡直接显示 total，
+// 用户按「在用」读取时会误判为多算（实测：total 135 = 在用 109 + 已废弃 26，全部 26 件集中在 BD7620D）。
+// 现总数卡主数字改为「在管总量 = total - RETIRED」——术语与报表 report.js:125-126 / help-data.js:46
+// 既有的权威口径「存活样品总量 / 在管总量 = 存活总量 − 已作废」统一，避免同一系统出现两套词；
+// 标签补「（已废弃 N）」，使「存活 = 在管 + 已废弃」两数可直接读出。
+// 兼容性：比例条仍以 total 为分母（分段加总恒为 100%）；_kbStats 的键仍为 'total'，
+// 故 dashboard-todo.js「总数卡=不筛选全部待办」的语义不变；retired=0 时行为与修正前逐字一致。
 var DASH_STATS = [
-  { label: '总数', key: 'total', color: 'var(--brand)', countByStatus: false },
+  { label: '在管总量', key: 'total', color: 'var(--brand)', countByStatus: false },
   { label: '新建·待制作', key: 'NEW', color: 'var(--muted)', countByStatus: true },
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
   { label: '已发行·待接收', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
@@ -67,14 +75,20 @@ async function viewDashboard() {
 // 统计卡片组 + CSS 比例条（DASH_STATS 配置驱动，按角色优先级排序）
 function _renderStats(d) {
   var s = d.byStatus || {}, total = d.total || 0;
+  // 在管总量 = 存活总数 − 已废弃（RETIRED 不计入「在管」）；retired=0 时 active===total，行为与修正前逐字一致
+  var retired = s['RETIRED'] || 0;
+  var active = total - retired;
   var order = STAT_ORDER[me.role] || STAT_ORDER.ADMIN;
   var sorted = DASH_STATS.slice().sort(function(a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
-  // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]
-  _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? total : (s[cfg.key] || 0), cfg.key]; });
+  // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]（键仍为 'total'，筛选语义不变）
+  _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? active : (s[cfg.key] || 0), cfg.key]; });
   var cards = sorted.map(function(cfg, idx) {
-    var count = cfg.key === 'total' ? total : (s[cfg.key] || 0);
-    var href = cfg.key === 'total' ? '#/samples' : '#/samples?status=' + cfg.key;
-    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
+    var isTotal = cfg.key === 'total';
+    var count = isTotal ? active : (s[cfg.key] || 0);
+    var href = isTotal ? '#/samples' : '#/samples?status=' + cfg.key;
+    // 总数卡口径自带说明：主数字 = 在管总量，标签补「（已废弃 N）」，使「存活 = 在管 + 已废弃」可直接读出
+    var label = isTotal && retired > 0 ? cfg.label + '（已废弃 ' + retired + '）' : cfg.label;
+    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + label + '</div></fluent-card>';
   }).join('');
   // 比例条
   var barHtml = '';

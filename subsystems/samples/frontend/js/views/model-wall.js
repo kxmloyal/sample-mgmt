@@ -3,7 +3,14 @@
 //       机型写操作即时失效）；旧后端（未重启、忽略 view 参数）返回纯主数据数组 → 自动回退一期并发计数渲染，行为兼容
 // 跳转：#/samples?model=<code>（viewSamples 深链预选 f-model 下拉，chips 自动出现机型筛选）
 // 入口：样品列表页「机型视图」按钮 + 导航（hash 路由切换，勿直调本函数——直调不改 hash 会导致后续切换失效，与治具同款坑）
-// 状态徽章口径：IN_CUSTODY 保管中 / CHECKED_OUT 领用中 / RETURNING 退回审核中（流转态）；逾期红标与看板/列表逾期口径一致
+// 状态徽章口径：IN_CUSTODY 保管中 / CHECKED_OUT 领用中 / RETURNING 退回审核中（流转态）/ RETIRED 已废弃；
+//       逾期红标与看板/列表逾期口径一致
+// 2026-09-17 口径修正（用户反馈：确认某机种正式发行数量时「多的数据」）：
+//   卡片 sample_count 是「该机型样品总数」（后端 aggregateModelsWall 的 COUNT(*) ，只排除软删、含已废弃），
+//   原先徽章只渲染 3 个流转态、不含 RETIRED，数字与徽章之和不可对账（实测 BD7620D：卡片 86 vs 三态合计 60，
+//   差 26 件已废弃），按「在用」读取时会误判为多算。现补齐 RETIRED 徽章并在数字后标注「（含已废弃 N）」，
+//   使「各徽章之和 = 卡片数字」恒成立、口径自带说明。注意：sample_count ≠ 累计发行量
+//   （累计发行量口径为 samples.released_at 非空，两者对本机型恰好相等，新机型会不等）。
 async function viewSampleModelWall() {
   var v = $('#view');
   v.innerHTML = '<div class="muted" style="text-align:center;padding:40px">加载中…</div>';
@@ -37,21 +44,23 @@ async function viewSampleModelWall() {
   var kwMatch = (location.hash || '').match(/[?&]kw=([^&]+)/);
   if (kwMatch) kw = decodeURIComponent(kwMatch[1]);
 
-  var totalSamples = 0, unknown = 0, overdueTotal = 0, checkoutOverdueTotal = 0;
+  var totalSamples = 0, unknown = 0, overdueTotal = 0, checkoutOverdueTotal = 0, retiredTotal = 0;
   models.forEach(function (m) {
     if (m.sample_count === null || m.sample_count === undefined) unknown++;
     else totalSamples += m.sample_count;
     overdueTotal += (m.overdue_count || 0);
     checkoutOverdueTotal += (m.checkout_overdue_count || 0);
+    retiredTotal += ((m.status_stats && m.status_stats.RETIRED) || 0);
   });
 
-  var WALL_STATUSES = ['IN_CUSTODY', 'CHECKED_OUT', 'RETURNING'];
-  var WALL_LABELS = { IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中' };
+  var WALL_STATUSES = ['IN_CUSTODY', 'CHECKED_OUT', 'RETURNING', 'RETIRED'];
+  var WALL_LABELS = { IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃' };
 
   var html = '<div class="filters" style="justify-content:space-between">' +
     '<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
     '<fluent-button appearance="accent" size="small" onclick="location.hash=\'#/samples\'">列表视图</fluent-button>' +
     '<span class="muted">共 <b>' + models.length + '</b> 个机型 · <b>' + totalSamples + '</b> 件样品' +
+    (retiredTotal > 0 ? '（含已废弃 <b>' + retiredTotal + '</b>）' : '') +
     (overdueTotal > 0 ? ' · <span style="color:#b91c1c">复检逾期 ' + overdueTotal + '</span>' : '') +
     (checkoutOverdueTotal > 0 ? ' · <span style="color:#c2410c">领用超时 ' + checkoutOverdueTotal + '</span>' : '') +
     (unknown > 0 ? ' · <span title="部分机型计数查询失败">' + unknown + ' 个机型计数不可用</span>' : '') + '</span></span>' +
@@ -68,6 +77,8 @@ async function viewSampleModelWall() {
   window._smwData = models;
   window._smwKeyword = kw;
   window.smwCard = rich ? function (m) {
+    // 已废弃件数随徽章一起渲染，保证「各徽章之和 = 卡片数字」
+    var retired = (m.status_stats && m.status_stats.RETIRED) || 0;
     var badges = WALL_STATUSES.filter(function (k) { return m.status_stats && m.status_stats[k]; })
       .map(function (k) { return '<span class="smw-badge">' + WALL_LABELS[k] + ' ' + m.status_stats[k] + '</span>'; }).join('');
     var cover = m.cover
@@ -79,10 +90,12 @@ async function viewSampleModelWall() {
       '<div class="smw-body"><div class="smw-code"><b>' + e(m.code) + '</b>' +
       (m.checkout_overdue_count > 0 ? '<span class="smw-flag-inline">超时未还 ' + m.checkout_overdue_count + '</span>' : '') + '</div>' +
       '<div class="smw-name" title="' + e(m.full_name) + '">' + e(m.full_name || '—') + '</div>' +
-      '<div class="smw-count">样品 <b>' + (m.sample_count || 0) + '</b> 件</div>' +
+      '<div class="smw-count">样品 <b>' + (m.sample_count || 0) + '</b> 件' +
+      (retired > 0 ? '<span class="muted">（含已废弃 ' + retired + '）</span>' : '') + '</div>' +
       (badges ? '<div class="smw-badges">' + badges + '</div>' : '') +
       '</div></div>';
   } : function (m) {
+    // 一期回退：旧后端不提供 status_stats，无法拆分已废弃，数字沿用列表 total（同为「含已废弃」口径）
     var count = (m.sample_count === null) ? '—' : m.sample_count;
     return '<div class="smw-card" onclick="location.hash=\'#/samples?model=' + encodeURIComponent(m.code) + '\'" title="查看该机型全部样品">' +
       '<div class="smw-cover">▦</div>' +
