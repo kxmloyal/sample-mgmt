@@ -356,7 +356,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 
 代码修改完成后 MUST 同步更新文档(AGENTS.md/CLAUDE.md 除非用户明确要求):
 - README.md 中受影响的功能说明、配置项、使用示例
-- 接口文档(docs/api.md 或 Swagger 注释,若有)
+- 接口文档（**`docs/api.md` 为接口清单的规范载体**，2026-09-17 起由 README 外迁；README「API 一览」保留标题与指针）
 - 依赖说明(版本变更原因与兼容性影响)
 - 提供**变更记录**:文件/接口/配置清单 + 兼容性影响 + 部署/回滚步骤
 - **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（**2026-09-17 复核：当前 2.1.0**，对应 `docs/RELEASE-v2.1.0.md`；上一版 2.0.9）；发版时四处 MUST 同步更新
@@ -375,7 +375,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）为纯编排层；**2026-09-17 LF 归一实测：`routes-scan.js` 82 行 / 3,968 字符（19.8%，批次二抽取 `scan-allowed.js` 后净减）；`scan-actions.js` 312 行 / 17,615 字符（88.1%，已越过 70% 预警线，批次二零变更）**——后续批次改动 scan 逻辑前 MUST 先评估 `scan-actions.js` 再拆分，禁止继续向其中堆入业务
 - ~~`db/migrations.js` 顶层函数 11 个~~ **已解决**：2026-09-02 B3-T2 已拆分为 `db/migrations/`（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 现为薄转发
 - `subsystems/samples/frontend/js/views/scan.js` **2026-09-17 LF 归一实测：182 行 / 10,648 字符（53.2%，已退出预警区）**——批次二 T0 先把动作表单构造外迁至 `views/scan-forms.js`（83 行 / 7,832 字符 / 39.2%）后由 85.5% 降至 49.7%，T4 再挂钩批量模式开关与入队分流至 53.2%。**该文件仍有约 9,300 字符余量，但后续挂钩前 MUST 复核同一批新增文件**：`views/scan-batch.js` 238 行 / 12,708 字符（63.5%，**顶层函数 10 个已达 §7.2 上限，不可再加**）、`views/scan-batch-result.js` 107 行 / 6,801 字符（34.0%）、`backend/batch-scan.js` 178 行 / 9,955 字符（49.8%）
-- `subsystems/samples/db/dao.js` **2026-09-17 LF 归一复核：174 行 / 10,441 字符（52.2%），在红线内**（批次二新增 `listBatchLogs` 用于 `batchId` 幂等探测，+7 行 / +480 字符）。当前已越线/最接近红线者：`subsystems/fixtures/backend/routes-fixtures.js` 368 行 / 19,403 字符（**97.0%，仅允许精简**）、`public/css/app.css` 300 行 / 21,910 字符（**109.5%，已超 20000 兜底线**）、`README.md` 497 行 / **LF 19,714 字符（98.6%）**（台账口径 20,211 = LF 值 + 行数，101.1%；2026-09-15 已立项拆分外迁 `docs/api.md`，计划见 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 312 行 / 17,615 字符（88.1%）。**注：`views/scan.js` 已于批次二退出该清单（85.5% → 53.2%）**
+- `subsystems/samples/db/dao.js` **2026-09-17 LF 归一复核：174 行 / 10,441 字符（52.2%），在红线内**（批次二新增 `listBatchLogs` 用于 `batchId` 幂等探测，+7 行 / +480 字符）。当前已越线/最接近红线者：`subsystems/fixtures/backend/routes-fixtures.js` 368 行 / 19,403 字符（**97.0%，仅允许精简**）、`public/css/app.css` 300 行 / 21,910 字符（**109.5%，已超 20000 兜底线**）、~~`README.md` 497 行 / LF 19,714 字符（98.6%）~~ **已解决（2026-09-17）：`## API 一览` 外迁 `docs/api.md`，README 现 435 行 / LF 15,525 字符（77.6%，台账口径 15,960），已退出预警区**（计划 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 312 行 / 17,615 字符（88.1%）。**注：`views/scan.js` 已于批次二退出该清单（85.5% → 53.2%）**
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
 - `subsystems/control/backend/flow-ops.js` **2026-09-16 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / **LF 5,112 字符（25.6%）**（台账旧值 5,231 = LF 值 + 119 行）；建议按「NCR 域 / 重工域 / 出货结余域」拆分（同 2026-09-08 `dao-*` 拆分风格），拆分前先补回归
