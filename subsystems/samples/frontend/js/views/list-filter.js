@@ -54,19 +54,21 @@ function loadSamplesOverdue(v) {
   _quickFilterType = v === '1' ? 'overdue' : 'soon';
   _sampleIsOverdue = true;
   _roleScopeApplied = false;
-  $('#f-status').value = ''; $('#f-dept').value = '';
+  var stBox = $('#f-status'); if (stBox) stBox.value = ''; $('#f-dept').value = '';
   _sampleBuildParams = function() { return _buildQueryParams('overdue=' + v); };
   _fetchSamplePage(true);
 }
 
 function renderChips() {
-  var chips = $('#f-chips'); if (!chips) return;
+  // 2026-09-17 修复 P1-3：不适用 `if (!chips) return;` 提前返回——标签排（#f-status-bar）与 chips（#f-chips）是
+  // 两个互不依赖的容器，标签排同步 MUST NOT 被 chips 容器缺失短路；故改为 chips 存在才写 innerHTML，最后统一同步标签排。
+  var chips = $('#f-chips');
   var html = '', st = $('#f-status').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
   var stn = $('#f-station') ? $('#f-station').value : '';
-  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
+  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="smSetStatusValue(\'\');loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
@@ -77,12 +79,13 @@ function renderChips() {
   if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
   if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
-  chips.innerHTML = html;
+  if (chips) chips.innerHTML = html;
   smSyncStatusBar(); // 状态多选标签排同步（单一事实来源 = #f-status.value）：深链/chips 清除/快捷筛选等写入点都经此收敛
 }
 
 function clearQuickFilter() {
   _quickFilterType = null;
-  $('#f-status').value = ''; $('#f-dept').value = '';
+  smSetStatusValue(''); // 统一经安全写入口（P1-7 核查项）
+  $('#f-dept').value = '';
   loadSamples();
 }

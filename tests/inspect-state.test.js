@@ -3,18 +3,27 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC_PATH = path.join(__dirname, '../subsystems/samples/frontend/js/views/list-inspect.js');
+const UTILS_PATH = path.join(__dirname, '../shared/frontend/shared/utils.js');
+
+// 2026-09-17 修复 P1-1 后，list-inspect.js 的 inspectReason/inspectBadge 改为经 e() 中和数据（§25.2.2），
+// 故 node 环境必须注入 e()。此处直接取共享模块的真实实现，避免在测试内复制一份转义逻辑（副本会漂移）。
+const E = new Function(fs.readFileSync(UTILS_PATH, 'utf8') + '\n;return e;')();
 
 // 在 node 环境加载浏览器脚本（顶层 function/var 均入 new Function 作用域）
-function loadInspect() {
+// returns: 要导出的函数名列表（逗号分隔）；e 与 fmt 一并注入为浏览器全局占位
+function loadInspect(returns) {
   const src = fs.readFileSync(SRC_PATH, 'utf8');
-  return new Function(src + '\n;return { inspectState, inspectBadge, inspectText, inspectTone, inspectReason };')();
+  return new Function(
+    'e',
+    'var fmt = function(d){ return String(d).slice(0,10); };' + src + '\n;return {' + returns + '};'
+  )(E);
 }
 
 describe('inspectState 复检状态三态计算', () => {
   const DAY = 86400000;
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
-  const { inspectState } = loadInspect();
+  const { inspectState } = loadInspect('inspectState');
 
   it('无 next_inspect_at / 空对象 → none', () => {
     expect(inspectState()).toBe('none');
@@ -44,11 +53,8 @@ describe('inspectBadge 徽章渲染', () => {
   const DAY = 86400000;
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
-  // 注入浏览器全局 fmt 占位，使 inspectBadge 可在 node 环境运行
-  const src = fs.readFileSync(SRC_PATH, 'utf8');
-  const { inspectBadge } = new Function(
-    'var fmt = function(d){ return String(d).slice(0,10); };' + src + '\n;return { inspectBadge };'
-  )();
+  // 注入浏览器全局 e()/fmt 占位，使 inspectBadge 可在 node 环境运行
+  const { inspectBadge } = loadInspect('inspectBadge');
 
   it('none → 灰色占位符', () => {
     expect(inspectBadge({})).toContain('class="muted"');
@@ -82,7 +88,7 @@ describe('inspectState 不适用态（2026-09-16 新增，验收 C1/C2）', () =
   const DAY = 86400000;
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
-  const { inspectState, inspectTone } = loadInspect();
+  const { inspectState, inspectTone } = loadInspect('inspectState, inspectTone');
 
   it('RETIRED/RETURNING/NEW/PRODUCED → na，无论日期在过去/未来/为空', () => {
     for (const status of ['RETIRED', 'RETURNING', 'NEW', 'PRODUCED']) {
@@ -113,10 +119,7 @@ describe('inspectBadge 不适用态与灰化渲染（验收 C1/C2/C6）', () => 
   const DAY = 86400000;
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
-  const src = fs.readFileSync(SRC_PATH, 'utf8');
-  const { inspectBadge, inspectText } = new Function(
-    'var fmt = function(d){ return String(d).slice(0,10); };' + src + '\n;return { inspectBadge, inspectText };'
-  )();
+  const { inspectBadge, inspectText } = loadInspect('inspectBadge, inspectText');
 
   it('RETIRED → 灰字「不适用」+ 作废原因 title，不出红徽章', () => {
     const h = inspectBadge({ status: 'RETIRED', retired_reason: '客户取消', next_inspect_at: iso(now - 30 * DAY) });

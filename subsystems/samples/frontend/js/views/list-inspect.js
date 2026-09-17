@@ -26,10 +26,13 @@ function inspectState(s) {
   return 'ok';
 }
 
-/** 悬停说明 title：不适用态给状态原因、无计划态给「未设置复检计划」，其余态返回 ''（沿用徽章的复检日期提示） */
+/** 悬停说明 title：不适用态给状态原因、无计划态给「未设置复检计划」，其余态返回 ''（沿用徽章的复检日期提示）。
+ *  2026-09-17 修复 P1-1：返回值语义已收紧为「只含字面量常量与安全文本，可直接进双引号属性」。
+ *  原因值属非本函数产出的数据，在数据层先经 e() 中和 < > " ' &（§25.2.2-1），属性拼接处再兜一层 e()（§25.2.2-3）。
+ *  双重转义不改变最终显示：属性值在解析时被解码一次，故页面显示仍是原始原因文本（& 显示为 &、< 显示为 <）。 */
 function inspectReason(s) {
   if (!s) return '';
-  if (s.status === 'RETIRED') return '已作废，复检计划不适用（原因：' + (s.retired_reason || '—') + '）';
+  if (s.status === 'RETIRED') return '已作废，复检计划不适用（原因：' + e(s.retired_reason || '—') + '）';
   if (s.status === 'RETURNING') return '退回审核中，复检计划已顺延';
   if (s.status === 'NEW' || s.status === 'PRODUCED') return '未发行，无复检计划';
   if (s.status === 'CHECKED_OUT') return '领用中，复检计划暂停';
@@ -62,7 +65,8 @@ function inspectBadge(s) {
   var txt = inspectText(s);
   var reason = inspectReason(s);
   if (st === 'na' || st === 'none' || (s && s.status === 'CHECKED_OUT'))
-    return '<span class="muted"' + (reason ? ' title="' + reason + '"' : '') + '>' + txt + '</span>';
+    // title 为双引号属性上下文，reason 再经 e() 兜底（P1-1 第二层防御）；纯字面量 reason 不含 < > " ' 与 &，e() 为空操作
+    return '<span class="muted"' + (reason ? ' title="' + e(reason) + '"' : '') + '>' + txt + '</span>';
   var tip = s.next_inspect_at ? ' title="复检日期：' + fmt(s.next_inspect_at) + '"' : '';
   if (inspectTone(s) === 'grey') return '<span class="muted"' + tip + '>' + txt + '</span>';
   if (st === 'ok') return '<span class="badge b-inspect-ok"' + tip + '>正常</span>';

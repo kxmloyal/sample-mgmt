@@ -23,6 +23,9 @@ function smStatusValues() {
   return String((el && el.value) || '').split(',').filter(function(s) { return s; });
 }
 
+/** #f-status 值载体唯一安全写入口：元素存在性守卫（写点可能早于 list.js 渲染该元素，裸写会抛错） */
+function smSetStatusValue(v) { var el = $('#f-status'); if (el) el.value = v; }
+
 /** 渲染状态标签排。选中态由 #f-status.value 反推，故深链赋值、chips 清除、快捷筛选置空后都能自动跟上。 */
 function smSyncStatusBar() {
   var bar = $('#f-status-bar'); if (!bar) return;
@@ -36,19 +39,22 @@ function smSyncStatusBar() {
 }
 
 /** 切换单个状态（未选则加入，已选则移除）；移除最后一个后值载体为空串 = 回到「全部状态」。
- *  随后走既有 loadSamples 链路，参数构建/渲染/分页/导出全部复用，无重复实现。 */
+ *  随后走既有 loadSamples 链路，参数构建/渲染/分页/导出全部复用，无重复实现。
+ *  P1-7：改完值先本地同步高亮再发请求，不等网络往返。 */
 function smToggleStatus(k) {
   var sel = smStatusValues();
   var i = sel.indexOf(k);
   if (i >= 0) sel.splice(i, 1); else sel.push(k);
-  $('#f-status').value = sel.join(',');
+  smSetStatusValue(sel.join(','));
+  smSyncStatusBar();
   loadSamples();
 }
 
-/** 「在用（不含已作废）」预设：未全选则一次选中 6 个状态；已全选则清空（再点取消，回到全部状态）。 */
+/** 「在用（不含已作废）」预设：未全选则一次选中 6 个状态；已全选则清空（再点取消，回到全部状态）。同样先本地同步高亮（P1-7）。 */
 function smToggleActivePreset() {
   var sel = smStatusValues();
   var allActive = sel.length === _ACTIVE_STATUSES.length && _ACTIVE_STATUSES.every(function(k) { return sel.indexOf(k) >= 0; });
-  $('#f-status').value = allActive ? '' : _ACTIVE_STATUSES.join(',');
+  smSetStatusValue(allActive ? '' : _ACTIVE_STATUSES.join(','));
+  smSyncStatusBar();
   loadSamples();
 }

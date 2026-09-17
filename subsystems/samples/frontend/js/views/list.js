@@ -1,8 +1,9 @@
 // samples.js — 样品列表：状态管理、导航、删除
 // 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js
 
-/** 样品类型标签（OK/NG） */
-function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
+/** 样品类型标签（OK/NG）。2026-09-17 修复 P1-2：未知值 MUST NOT 原样透传（§25.2.2-2），
+ *  兜底与空值统一返回安全常量「—」，与类型列为空时的占位一致；本函数返回值进 HTML，故不含任何转义层。 */
+function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':'—'; }
 
 /** 角色相关置顶（2026-09-07 排序版）：scope=role 时后端按会话角色把相关样品排前（数据全可见、无空态），默认即全量无需提示/清除 */
 var _roleScopeApplied = false; // 兼容保留：标记本次进入是否带 scope（无 UI 含义）
@@ -27,7 +28,8 @@ async function viewSamples() {
   // 2026-09-08 方案C：保管/生技日常以「看板待接收 + 列表查找」为主，高级筛选（类型/项目/来源/机型/排序）默认隐藏精简首屏（保留 DOM 仅折叠，避免 chips/参数构建空引用；devtools 可展开无副作用）
   var hideAdv = (me.role === 'CUSTODY' || me.role === 'ME') ? ' style="display:none"' : '';
   // 2026-09-17 状态多选：原 fluent-select 单选下拉改为下方 status-bar 标签排（多选 + 「在用（不含已作废）」预设）；
-  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动
+  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动；
+  // 写点不变量（P1-7 核查）：写 #f-status.value 前 MUST 守卫元素存在（见 list-status-bar.js 的 smSetStatusValue）
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<input type="hidden" id="f-status" />' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +

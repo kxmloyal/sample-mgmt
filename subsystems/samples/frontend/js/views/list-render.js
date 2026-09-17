@@ -23,7 +23,7 @@ function _sampleRowHtml(s, isOverdue, i) {
   var img = s.produced_image || s.image
     ? '<img src="' + e(s.produced_image || s.image) + '" width="40" style="border-radius:4px"/>' : '—';
   var typeCell = s.sample_type
-    ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + sampleTypeLabel(s.sample_type) + '</span>'
+    ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + e(sampleTypeLabel(s.sample_type)) + '</span>'
     : '—';
   var actions = '<a class="link" onclick="viewDetail(' + s.id + ')">详情</a>';
   if (s.status === 'NEW')
@@ -66,7 +66,11 @@ function _fetchSamplePage(resetOffset) {
     samplePager.total = data.total || 0;
     _renderSampleList(data.samples || [], _sampleIsOverdue, samplePager);
     renderChips();
-  }).catch(function(e) { $('#s-list').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>'; });
+  }).catch(function(e) { $('#s-list').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+    // 2026-09-17 修复 P1-7：失败路径也要同步 chips 与状态标签排（P1-3 已解耦自 chips 容器），
+    // 否则标签排/参数源显示「筛了 X」而列表是错误文案，点「导出 CSV」仍按 #f-status 真值导出，显示与导出口径不一致。
+    // 仅同步视图，不动任何筛选状态（_sampleIsOverdue/_quickFilterType/#f-* 全部保持原值）。
+    if (typeof renderChips === 'function') renderChips(); });
 }
 
 function goSamplePage(page) {
