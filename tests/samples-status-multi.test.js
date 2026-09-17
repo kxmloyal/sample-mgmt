@@ -32,8 +32,11 @@ describe('样品列表状态多选（前端源码）', () => {
   it('预设口径 = 除 RETIRED 外的 6 个状态（与看板「在管总量」同口径）', () => {
     const src = read(BAR);
     expect(src).toContain("var _ACTIVE_STATUSES = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'CHECKED_OUT', 'RETURNING'];");
-    // 防止后人误把 RETIRED 加进预设，导致「在用」口径失真
-    expect(src).not.toContain("'CHECKED_OUT', 'RETURNING', 'RETIRED']");
+    // 防止后人误把 RETIRED 加进预设，导致「在用」口径失真。
+    // 只校验预设行本身：_STATUS_LIST 全集本来就以 'RETIRED'] 结尾，用全文件 not.toContain 会误伤。
+    const activeLine = src.split('\n').find(l => l.includes('var _ACTIVE_STATUSES'));
+    expect(activeLine).toBeDefined();
+    expect(activeLine).not.toContain('RETIRED');
   });
 
   it('选中态单一事实来源 = #f-status.value（深链/chips 清除/快捷筛选后自动同步）', () => {
