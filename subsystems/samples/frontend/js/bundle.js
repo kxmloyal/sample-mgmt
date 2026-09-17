@@ -1,4 +1,4 @@
-/** BUNDLE vbmu5j4sm0 — 38 files */
+/** BUNDLE vbmu5s2bz4 — 38 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -49,31 +49,47 @@ function fixGridColumns(container) {
   } else { apply(); }
 }
 
-/** 列宽拖拽调整 — 拖拽 th 右侧的 .col-rsz 把手修改对应 col 宽度（样品/治具共用） */
+// P1-8 修复：document 级 mousemove/mouseup 改为模块级单例（全页只注册 1 组，与表格列数无关）；
+// 拖动目标（表/列/起始 x/起始宽度）在 mousedown 时记录、mouseup 时清空，
+// 故表格被 innerHTML 重渲后不再残留监听器与游离 DOM（原先 12 列 × 每次渲染 = +24 个 document 监听器）。
+var _colRszState = null, _colRszBound = false;
+
+/** 注册 document 级拖拽监听（幂等，只成功注册一次） */
+function _bindColRszDoc() {
+  if (_colRszBound) return;
+  _colRszBound = true;
+  document.addEventListener('mousemove', function(e) {
+    if (!_colRszState) return;
+    if (_colRszState.col) _colRszState.col.style.width = Math.max(36, _colRszState.startW + (e.pageX - _colRszState.startX)) + 'px';
+  });
+  document.addEventListener('mouseup', function() {
+    if (!_colRszState) return;
+    _colRszState = null;
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+  });
+}
+
+/** 列宽拖拽调整 — 拖拽 th 右侧的 .col-rsz 把手修改对应 col 宽度（样品/治具共用）
+ *  事件委托：mousedown 挂在表格自身（随表格 DOM 一同销毁），document 监听走 _bindColRszDoc 单例；
+ *  函数名与签名 (table) 保持不变，全部既有调用点无需改动，对外行为不可区分。
+ */
 function _initColResize(table) {
-  if (!table) return;
-  var cols = table.querySelectorAll('colgroup col');
-  var ths = table.querySelectorAll('thead th');
-  ths.forEach(function(th, i) {
-    var handle = th.querySelector('.col-rsz');
+  if (!table || table._colRszBound) return; // 同一表格重复初始化直接跳过
+  table._colRszBound = 1;
+  table.addEventListener('mousedown', function(e) {
+    var handle = e.target && e.target.classList && e.target.classList.contains('col-rsz') ? e.target : null;
     if (!handle) return;
-    var dragging = false, startX, startW;
-    handle.addEventListener('mousedown', function(e) {
-      e.preventDefault(); e.stopPropagation();
-      dragging = true; startX = e.pageX;
-      startW = cols[i] ? parseInt(cols[i].style.width || getComputedStyle(cols[i]).width) : th.offsetWidth;
-      document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!dragging) return;
-      var w = Math.max(36, startW + (e.pageX - startX));
-      if (cols[i]) cols[i].style.width = w + 'px';
-    });
-    document.addEventListener('mouseup', function() {
-      if (!dragging) return;
-      dragging = false;
-      document.body.style.cursor = ''; document.body.style.userSelect = '';
-    });
+    var th = handle.parentNode;
+    while (th && th.tagName !== 'TH') th = th.parentNode;
+    if (!th) return;
+    var i = Array.prototype.indexOf.call(table.querySelectorAll('thead th'), th);
+    if (i < 0) return;
+    var cols = table.querySelectorAll('colgroup col');
+    e.preventDefault(); e.stopPropagation();
+    _colRszState = { col: cols[i] || null, startX: e.pageX,
+      startW: cols[i] ? parseInt(cols[i].style.width || getComputedStyle(cols[i]).width) : th.offsetWidth };
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+    _bindColRszDoc();
   });
 }
 
@@ -551,10 +567,13 @@ function inspectState(s) {
   return 'ok';
 }
 
-/** 悬停说明 title：不适用态给状态原因、无计划态给「未设置复检计划」，其余态返回 ''（沿用徽章的复检日期提示） */
+/** 悬停说明 title：不适用态给状态原因、无计划态给「未设置复检计划」，其余态返回 ''（沿用徽章的复检日期提示）。
+ *  2026-09-17 修复 P1-1：返回值语义已收紧为「只含字面量常量与安全文本，可直接进双引号属性」。
+ *  原因值属非本函数产出的数据，在数据层先经 e() 中和 < > " ' &（§25.2.2-1），属性拼接处再兜一层 e()（§25.2.2-3）。
+ *  双重转义不改变最终显示：属性值在解析时被解码一次，故页面显示仍是原始原因文本（& 显示为 &、< 显示为 <）。 */
 function inspectReason(s) {
   if (!s) return '';
-  if (s.status === 'RETIRED') return '已作废，复检计划不适用（原因：' + (s.retired_reason || '—') + '）';
+  if (s.status === 'RETIRED') return '已作废，复检计划不适用（原因：' + e(s.retired_reason || '—') + '）';
   if (s.status === 'RETURNING') return '退回审核中，复检计划已顺延';
   if (s.status === 'NEW' || s.status === 'PRODUCED') return '未发行，无复检计划';
   if (s.status === 'CHECKED_OUT') return '领用中，复检计划暂停';
@@ -587,7 +606,8 @@ function inspectBadge(s) {
   var txt = inspectText(s);
   var reason = inspectReason(s);
   if (st === 'na' || st === 'none' || (s && s.status === 'CHECKED_OUT'))
-    return '<span class="muted"' + (reason ? ' title="' + reason + '"' : '') + '>' + txt + '</span>';
+    // title 为双引号属性上下文，reason 再经 e() 兜底（P1-1 第二层防御）；纯字面量 reason 不含 < > " ' 与 &，e() 为空操作
+    return '<span class="muted"' + (reason ? ' title="' + e(reason) + '"' : '') + '>' + txt + '</span>';
   var tip = s.next_inspect_at ? ' title="复检日期：' + fmt(s.next_inspect_at) + '"' : '';
   if (inspectTone(s) === 'grey') return '<span class="muted"' + tip + '>' + txt + '</span>';
   if (st === 'ok') return '<span class="badge b-inspect-ok"' + tip + '>正常</span>';
@@ -1178,8 +1198,9 @@ function downloadQR(id){
 // samples.js — 样品列表：状态管理、导航、删除
 // 渲染逻辑 → sample-list-render.js | 筛选逻辑 → sample-filter.js
 
-/** 样品类型标签（OK/NG） */
-function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':v; }
+/** 样品类型标签（OK/NG）。2026-09-17 修复 P1-2：未知值 MUST NOT 原样透传（§25.2.2-2），
+ *  兜底与空值统一返回安全常量「—」，与类型列为空时的占位一致；本函数返回值进 HTML，故不含任何转义层。 */
+function sampleTypeLabel(v) { return v==='OK'?'OK样品':v==='NG'?'NG样品':'—'; }
 
 /** 角色相关置顶（2026-09-07 排序版）：scope=role 时后端按会话角色把相关样品排前（数据全可见、无空态），默认即全量无需提示/清除 */
 var _roleScopeApplied = false; // 兼容保留：标记本次进入是否带 scope（无 UI 含义）
@@ -1204,7 +1225,8 @@ async function viewSamples() {
   // 2026-09-08 方案C：保管/生技日常以「看板待接收 + 列表查找」为主，高级筛选（类型/项目/来源/机型/排序）默认隐藏精简首屏（保留 DOM 仅折叠，避免 chips/参数构建空引用；devtools 可展开无副作用）
   var hideAdv = (me.role === 'CUSTODY' || me.role === 'ME') ? ' style="display:none"' : '';
   // 2026-09-17 状态多选：原 fluent-select 单选下拉改为下方 status-bar 标签排（多选 + 「在用（不含已作废）」预设）；
-  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动
+  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动；
+  // 写点不变量（P1-7 核查）：写 #f-status.value 前 MUST 守卫元素存在（见 list-status-bar.js 的 smSetStatusValue）
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
     '<input type="hidden" id="f-status" />' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
@@ -1312,6 +1334,9 @@ function smStatusValues() {
   return String((el && el.value) || '').split(',').filter(function(s) { return s; });
 }
 
+/** #f-status 值载体唯一安全写入口：元素存在性守卫（写点可能早于 list.js 渲染该元素，裸写会抛错） */
+function smSetStatusValue(v) { var el = $('#f-status'); if (el) el.value = v; }
+
 /** 渲染状态标签排。选中态由 #f-status.value 反推，故深链赋值、chips 清除、快捷筛选置空后都能自动跟上。 */
 function smSyncStatusBar() {
   var bar = $('#f-status-bar'); if (!bar) return;
@@ -1325,20 +1350,23 @@ function smSyncStatusBar() {
 }
 
 /** 切换单个状态（未选则加入，已选则移除）；移除最后一个后值载体为空串 = 回到「全部状态」。
- *  随后走既有 loadSamples 链路，参数构建/渲染/分页/导出全部复用，无重复实现。 */
+ *  随后走既有 loadSamples 链路，参数构建/渲染/分页/导出全部复用，无重复实现。
+ *  P1-7：改完值先本地同步高亮再发请求，不等网络往返。 */
 function smToggleStatus(k) {
   var sel = smStatusValues();
   var i = sel.indexOf(k);
   if (i >= 0) sel.splice(i, 1); else sel.push(k);
-  $('#f-status').value = sel.join(',');
+  smSetStatusValue(sel.join(','));
+  smSyncStatusBar();
   loadSamples();
 }
 
-/** 「在用（不含已作废）」预设：未全选则一次选中 6 个状态；已全选则清空（再点取消，回到全部状态）。 */
+/** 「在用（不含已作废）」预设：未全选则一次选中 6 个状态；已全选则清空（再点取消，回到全部状态）。同样先本地同步高亮（P1-7）。 */
 function smToggleActivePreset() {
   var sel = smStatusValues();
   var allActive = sel.length === _ACTIVE_STATUSES.length && _ACTIVE_STATUSES.every(function(k) { return sel.indexOf(k) >= 0; });
-  $('#f-status').value = allActive ? '' : _ACTIVE_STATUSES.join(',');
+  smSetStatusValue(allActive ? '' : _ACTIVE_STATUSES.join(','));
+  smSyncStatusBar();
   loadSamples();
 }
 
@@ -1400,19 +1428,21 @@ function loadSamplesOverdue(v) {
   _quickFilterType = v === '1' ? 'overdue' : 'soon';
   _sampleIsOverdue = true;
   _roleScopeApplied = false;
-  $('#f-status').value = ''; $('#f-dept').value = '';
+  var stBox = $('#f-status'); if (stBox) stBox.value = ''; $('#f-dept').value = '';
   _sampleBuildParams = function() { return _buildQueryParams('overdue=' + v); };
   _fetchSamplePage(true);
 }
 
 function renderChips() {
-  var chips = $('#f-chips'); if (!chips) return;
+  // 2026-09-17 修复 P1-3：不适用 `if (!chips) return;` 提前返回——标签排（#f-status-bar）与 chips（#f-chips）是
+  // 两个互不依赖的容器，标签排同步 MUST NOT 被 chips 容器缺失短路；故改为 chips 存在才写 innerHTML，最后统一同步标签排。
+  var chips = $('#f-chips');
   var html = '', st = $('#f-status').value, dept = $('#f-dept').value, sort = $('#f-sort').value;
   var tp = $('#f-type').value, li = $('#f-limit-item').value, src = $('#f-source').value;
   var mo = $('#f-model').value;
   var stLabels = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
   var stn = $('#f-station') ? $('#f-station').value : '';
-  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-status\').value=\'\';loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
+  if (st) html += '<span class="chip done" style="cursor:pointer" onclick="smSetStatusValue(\'\');loadSamples()">' + e(stLabels[st] || _roleStatusLabel(st)) + ' ✕</span>';
   if (dept) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-dept\').value=\'\';loadSamples()">' + e(dept) + ' ✕</span>';
   if (tp) html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-type\').value=\'\';loadSamples()">' + e(sampleTypeLabel(tp)) + ' ✕</span>';
   if (li) { var liLabel = (LIMIT_ITEMS.find(function(x) { return x.code === li; }) || {}).label || li; html += '<span class="chip done" style="cursor:pointer" onclick="$(\'#f-limit-item\').value=\'\';loadSamples()">' + e(liLabel) + ' ✕</span>'; }
@@ -1423,13 +1453,14 @@ function renderChips() {
   if (_quickFilterType === 'pending') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">待处理 ✕</span>';
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
   if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
-  chips.innerHTML = html;
+  if (chips) chips.innerHTML = html;
   smSyncStatusBar(); // 状态多选标签排同步（单一事实来源 = #f-status.value）：深链/chips 清除/快捷筛选等写入点都经此收敛
 }
 
 function clearQuickFilter() {
   _quickFilterType = null;
-  $('#f-status').value = ''; $('#f-dept').value = '';
+  smSetStatusValue(''); // 统一经安全写入口（P1-7 核查项）
+  $('#f-dept').value = '';
   loadSamples();
 }
 
@@ -1460,7 +1491,7 @@ function _sampleRowHtml(s, isOverdue, i) {
   var img = s.produced_image || s.image
     ? '<img src="' + e(s.produced_image || s.image) + '" width="40" style="border-radius:4px"/>' : '—';
   var typeCell = s.sample_type
-    ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + sampleTypeLabel(s.sample_type) + '</span>'
+    ? '<span class="badge" style="background:' + (s.sample_type === 'OK' ? '#16a34a' : '#dc2626') + ';color:#fff">' + e(sampleTypeLabel(s.sample_type)) + '</span>'
     : '—';
   var actions = '<a class="link" onclick="viewDetail(' + s.id + ')">详情</a>';
   if (s.status === 'NEW')
@@ -1503,7 +1534,11 @@ function _fetchSamplePage(resetOffset) {
     samplePager.total = data.total || 0;
     _renderSampleList(data.samples || [], _sampleIsOverdue, samplePager);
     renderChips();
-  }).catch(function(e) { $('#s-list').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>'; });
+  }).catch(function(e) { $('#s-list').innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+    // 2026-09-17 修复 P1-7：失败路径也要同步 chips 与状态标签排（P1-3 已解耦自 chips 容器），
+    // 否则标签排/参数源显示「筛了 X」而列表是错误文案，点「导出 CSV」仍按 #f-status 真值导出，显示与导出口径不一致。
+    // 仅同步视图，不动任何筛选状态（_sampleIsOverdue/_quickFilterType/#f-* 全部保持原值）。
+    if (typeof renderChips === 'function') renderChips(); });
 }
 
 function goSamplePage(page) {
@@ -2088,6 +2123,7 @@ document.addEventListener('click', function(ev) {
 // scan-camera.js — 摄像头扫码 + 连续扫码 + 输入辅助
 var _scanContinuous=false;
 let _camStream=null;
+var _camRaf=0;   // 检测循环的 rAF 句柄（P1-9：切页时必须取消，否则循环与摄像头常驻）
 
 function camProtocolOk(){return location.protocol==='https:';}
 
@@ -2106,10 +2142,11 @@ async function startCamera(){
     video.srcObject=_camStream;video.style.display='block';await video.play();
     var bd=new BarcodeDetector({formats:['qr_code']});msg.textContent='摄像头已开启，对准二维码…';
     var tick=async function(){
+      if(!_camStream)return;   // 流已停止（切页 stopCamera / 重复开启）则自终止，杜绝 rAF 循环残留
       if(video.readyState>=2){
         try{var cs=await bd.detect(video);if(cs.length){stopCamera();$('#scan-code').value=cs[0].rawValue.trim();doScan();return;}}catch(e){}
       }
-      requestAnimationFrame(tick);
+      _camRaf=requestAnimationFrame(tick);
     };tick();
   }catch(e){
     if(e.name==='NotAllowedError')msg.textContent='摄像头权限被拒绝，请在浏览器设置中允许摄像头访问。';
@@ -2118,7 +2155,13 @@ async function startCamera(){
   }
 }
 
-function stopCamera(){if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;$('#cam').style.display='none';}}
+// 停止摄像头 — 视图卸载协议入口（router.js 的 VIEWS.scan.leave 调用；也可被检测成功路径调用）
+// 幂等：重复调用不抛错；同时取消 rAF 循环、停所有 track、清空 video.srcObject、置空 _camStream
+function stopCamera(){
+  if(_camRaf){cancelAnimationFrame(_camRaf);_camRaf=0;}
+  if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
+  var v=$('#cam');if(v){v.srcObject=null;v.style.display='none';}
+}
 
 function renderCameraSection(){
   return '<details>'+
@@ -3755,10 +3798,11 @@ id:'create', module:'新建样品', desc:'研发人员创建新样品',
 // help.js — 前端使用指南：浮动按钮 + 搜索面板 + 上下文提示条
 // 依赖：HELP_DATA（help-data.js）、me（api.js）、$（constants.js）
 
-// 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）
+// 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）；键 MUST 与 router.js 的 NAV 键一致
+// P3-16：users 视图已移除，改为 models（#/models 机型列表）
 var HELP_PAGE_MAP={
   dashboard:null, samples:'list', new:'create', scan:'scan',
-  logs:null, users:'users', wall:'wall', storagemap:'storagemap', report:'report'
+  logs:null, models:'models', wall:'wall', storagemap:'storagemap', report:'report'
 };
 var HELP_PAGE_TIPS={
   dashboard:'样品看板：查看统计数据和待办事项',
@@ -3766,7 +3810,7 @@ var HELP_PAGE_TIPS={
   new:'新建样品：填写信息后自动生成编号和标签',
   scan:'扫码台：扫描样品二维码驱动状态流转',
   logs:'操作日志：系统全局操作记录',
-  users:'用户管理：管理账号和角色',
+  models:'机型列表：按机型聚合统计与筛选',
   wall:'机型视图：按机型聚合的样品卡片墙（点卡片按机型筛列表）',
   storagemap:'柜位视图：样品柜数字孪生，点格位看该格样品',
   report:'样品报表：只读聚合的状态/机型/组别/柜位与我的待办'
@@ -4391,18 +4435,30 @@ function buildNav(){
 }
 function setActive(k){document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.k===k));}
 
-const VIEWS={dashboard:viewDashboard,samples:viewSamples,wall:viewSampleModelWall,new:viewNew,models:viewModels,scan:viewScan,logs:viewLogs,storagemap:viewStorageMap,report:viewReport,};
+// 路由令牌（P2-6）：route() 每次自增。视图可在 await 前取 var seq=_routeSeq，await 后比对
+// seq!==_routeSeq 即判定「本页已被卸载」并放弃写 DOM；接入视图见后续批次（本批次不动视图文件）。
+var _routeSeq=0,_prevView=null;
+
+// VIEWS 项兼容两种取值：裸函数（原行为）或 {render,leave} 对象（卸载协议，§25.6.1）
+const VIEWS={dashboard:viewDashboard,samples:viewSamples,wall:viewSampleModelWall,new:viewNew,models:viewModels,
+  scan:{render:viewScan,leave:function(){if(typeof stopCamera==='function')stopCamera();}},logs:viewLogs,storagemap:viewStorageMap,report:viewReport,};
 function route(){
   const k=(location.hash.replace('#/','').split('?')[0]||'dashboard');
   const navItem=NAV.find(n=>n.k===k);
   if(navItem&&!navItem.roles.includes(me.role)){location.hash='#/dashboard';return;}
-  const v=VIEWS[k]||viewDashboard; setActive(k);
+  _routeSeq++;
+  if(_prevView&&typeof _prevView.leave==='function'){try{_prevView.leave();}catch(err){/* leave 失败不得阻断导航 */}}   // 卸载协议：覆写 #view 前先调用上一个视图的 leave
+  const entry=VIEWS[k]||viewDashboard;
+  _prevView=entry;
+  const v=typeof entry==='function'?entry:entry.render;
+  setActive(k);
   const meta={dashboard:'样品看板',samples:'样品列表',wall:'机型视图',new:'新建样品',models:'机型列表',scan:'扫码台',logs:'操作日志',storagemap:'柜位视图',report:'样品报表',};
   $('#page-title').textContent=meta[k]||'';
   $('#page-actions').innerHTML='';
   v();
-  var hint=renderContextHint(k);
-  if(hint)$('#view').insertAdjacentHTML('afterbegin',hint);
+  // 上下文提示条渲染进 #view 之外的独立容器（#page-hint）：6 个视图在 await 后整体重写 #view.innerHTML，写在 #view 内会被静默清除
+  var hintBox=$('#page-hint');
+  if(hintBox)hintBox.innerHTML=renderContextHint(k);
 }
 
 
