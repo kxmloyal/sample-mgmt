@@ -42,31 +42,47 @@ function fixGridColumns(container) {
   } else { apply(); }
 }
 
-/** 列宽拖拽调整 — 拖拽 th 右侧的 .col-rsz 把手修改对应 col 宽度（样品/治具共用） */
+// P1-8 修复：document 级 mousemove/mouseup 改为模块级单例（全页只注册 1 组，与表格列数无关）；
+// 拖动目标（表/列/起始 x/起始宽度）在 mousedown 时记录、mouseup 时清空，
+// 故表格被 innerHTML 重渲后不再残留监听器与游离 DOM（原先 12 列 × 每次渲染 = +24 个 document 监听器）。
+var _colRszState = null, _colRszBound = false;
+
+/** 注册 document 级拖拽监听（幂等，只成功注册一次） */
+function _bindColRszDoc() {
+  if (_colRszBound) return;
+  _colRszBound = true;
+  document.addEventListener('mousemove', function(e) {
+    if (!_colRszState) return;
+    if (_colRszState.col) _colRszState.col.style.width = Math.max(36, _colRszState.startW + (e.pageX - _colRszState.startX)) + 'px';
+  });
+  document.addEventListener('mouseup', function() {
+    if (!_colRszState) return;
+    _colRszState = null;
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+  });
+}
+
+/** 列宽拖拽调整 — 拖拽 th 右侧的 .col-rsz 把手修改对应 col 宽度（样品/治具共用）
+ *  事件委托：mousedown 挂在表格自身（随表格 DOM 一同销毁），document 监听走 _bindColRszDoc 单例；
+ *  函数名与签名 (table) 保持不变，全部既有调用点无需改动，对外行为不可区分。
+ */
 function _initColResize(table) {
-  if (!table) return;
-  var cols = table.querySelectorAll('colgroup col');
-  var ths = table.querySelectorAll('thead th');
-  ths.forEach(function(th, i) {
-    var handle = th.querySelector('.col-rsz');
+  if (!table || table._colRszBound) return; // 同一表格重复初始化直接跳过
+  table._colRszBound = 1;
+  table.addEventListener('mousedown', function(e) {
+    var handle = e.target && e.target.classList && e.target.classList.contains('col-rsz') ? e.target : null;
     if (!handle) return;
-    var dragging = false, startX, startW;
-    handle.addEventListener('mousedown', function(e) {
-      e.preventDefault(); e.stopPropagation();
-      dragging = true; startX = e.pageX;
-      startW = cols[i] ? parseInt(cols[i].style.width || getComputedStyle(cols[i]).width) : th.offsetWidth;
-      document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!dragging) return;
-      var w = Math.max(36, startW + (e.pageX - startX));
-      if (cols[i]) cols[i].style.width = w + 'px';
-    });
-    document.addEventListener('mouseup', function() {
-      if (!dragging) return;
-      dragging = false;
-      document.body.style.cursor = ''; document.body.style.userSelect = '';
-    });
+    var th = handle.parentNode;
+    while (th && th.tagName !== 'TH') th = th.parentNode;
+    if (!th) return;
+    var i = Array.prototype.indexOf.call(table.querySelectorAll('thead th'), th);
+    if (i < 0) return;
+    var cols = table.querySelectorAll('colgroup col');
+    e.preventDefault(); e.stopPropagation();
+    _colRszState = { col: cols[i] || null, startX: e.pageX,
+      startW: cols[i] ? parseInt(cols[i].style.width || getComputedStyle(cols[i]).width) : th.offsetWidth };
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+    _bindColRszDoc();
   });
 }
 

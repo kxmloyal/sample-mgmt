@@ -1,10 +1,11 @@
 // help.js — 前端使用指南：浮动按钮 + 搜索面板 + 上下文提示条
 // 依赖：HELP_DATA（help-data.js）、me（api.js）、$（constants.js）
 
-// 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）
+// 页面 hash → 帮助模块 ID 映射（用于上下文提示条「了解更多」）；键 MUST 与 router.js 的 NAV 键一致
+// P3-16：users 视图已移除，改为 models（#/models 机型列表）
 var HELP_PAGE_MAP={
   dashboard:null, samples:'list', new:'create', scan:'scan',
-  logs:null, users:'users', wall:'wall', storagemap:'storagemap', report:'report'
+  logs:null, models:'models', wall:'wall', storagemap:'storagemap', report:'report'
 };
 var HELP_PAGE_TIPS={
   dashboard:'样品看板：查看统计数据和待办事项',
@@ -12,7 +13,7 @@ var HELP_PAGE_TIPS={
   new:'新建样品：填写信息后自动生成编号和标签',
   scan:'扫码台：扫描样品二维码驱动状态流转',
   logs:'操作日志：系统全局操作记录',
-  users:'用户管理：管理账号和角色',
+  models:'机型列表：按机型聚合统计与筛选',
   wall:'机型视图：按机型聚合的样品卡片墙（点卡片按机型筛列表）',
   storagemap:'柜位视图：样品柜数字孪生，点格位看该格样品',
   report:'样品报表：只读聚合的状态/机型/组别/柜位与我的待办'

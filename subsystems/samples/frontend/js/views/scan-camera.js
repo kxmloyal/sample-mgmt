@@ -1,6 +1,7 @@
 // scan-camera.js — 摄像头扫码 + 连续扫码 + 输入辅助
 var _scanContinuous=false;
 let _camStream=null;
+var _camRaf=0;   // 检测循环的 rAF 句柄（P1-9：切页时必须取消，否则循环与摄像头常驻）
 
 function camProtocolOk(){return location.protocol==='https:';}
 
@@ -19,10 +20,11 @@ async function startCamera(){
     video.srcObject=_camStream;video.style.display='block';await video.play();
     var bd=new BarcodeDetector({formats:['qr_code']});msg.textContent='摄像头已开启，对准二维码…';
     var tick=async function(){
+      if(!_camStream)return;   // 流已停止（切页 stopCamera / 重复开启）则自终止，杜绝 rAF 循环残留
       if(video.readyState>=2){
         try{var cs=await bd.detect(video);if(cs.length){stopCamera();$('#scan-code').value=cs[0].rawValue.trim();doScan();return;}}catch(e){}
       }
-      requestAnimationFrame(tick);
+      _camRaf=requestAnimationFrame(tick);
     };tick();
   }catch(e){
     if(e.name==='NotAllowedError')msg.textContent='摄像头权限被拒绝，请在浏览器设置中允许摄像头访问。';
@@ -31,7 +33,13 @@ async function startCamera(){
   }
 }
 
-function stopCamera(){if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;$('#cam').style.display='none';}}
+// 停止摄像头 — 视图卸载协议入口（router.js 的 VIEWS.scan.leave 调用；也可被检测成功路径调用）
+// 幂等：重复调用不抛错；同时取消 rAF 循环、停所有 track、清空 video.srcObject、置空 _camStream
+function stopCamera(){
+  if(_camRaf){cancelAnimationFrame(_camRaf);_camRaf=0;}
+  if(_camStream){_camStream.getTracks().forEach(function(t){t.stop();});_camStream=null;}
+  var v=$('#cam');if(v){v.srcObject=null;v.style.display='none';}
+}
 
 function renderCameraSection(){
   return '<details>'+
