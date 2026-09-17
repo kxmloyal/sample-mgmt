@@ -163,7 +163,7 @@
 - 70%:停止新增业务,输出拆分方案
 - 90%:仅允许精简/重构,禁追加新功能
 
-**2026-09-17 LF 归一复核（权威口径，见 AGENTS.md 第 7.1 节）**——实际已触发/超出预警：`subsystems/fixtures/backend/routes-fixtures.js` 19,403 字符（**97.0%，仅允许精简/重构**）、`public/css/app.css` 21,910 字符（**109.5%，已超 20000 红线**）、~~`README.md` LF 19,714 字符（98.6%）~~ **已解决（2026-09-17）：`## API 一览` 外迁 `docs/api.md`，现 LF 15,525 字符（77.6%，台账口径 15,960），已退出预警区**（计划 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 17,615 字符（88.1%）。**`subsystems/samples/frontend/js/views/scan.js` 已于批次二由 17,109 字符（85.5%）降至 10,648 字符（53.2%），退出预警清单**（T0 外迁 `views/scan-forms.js`，T4 挂钩批量模式）；接替关注：`views/scan-batch.js` 12,708 字符（63.5%，**顶层函数 10 个已达上限**）。容量现状以第 11 节与每次修改报告为准。
+**2026-09-17 LF 归一复核（权威口径，见 AGENTS.md 第 7.1 节）**——实际已触发/超出预警：`subsystems/fixtures/backend/routes-fixtures.js` 19,403 字符（**97.0%，仅允许精简/重构**）、`public/css/app.css` 21,910 字符（**109.5%，已超 20000 红线**）、~~`README.md` LF 19,714 字符（98.6%）~~ **已解决（2026-09-17）：`## API 一览` 外迁 `docs/api.md`，现 LF 15,525 字符（77.6%，台账口径 15,960），已退出预警区**（计划 `docs/superpowers/plans/2026-09-15-split-readme.md`）、~~`subsystems/samples/backend/routes-samples.js` 17,840 字符（89.2%）~~ **已解决（2026-09-17：`POST /api/samples/batch` 外迁 `routes-samples-batch.js`，现 15,397 字符 / 77.0%）**、`subsystems/samples/backend/scan-actions.js` 18,039 字符（**90.2%，仅允许精简/重构**）。**`subsystems/samples/frontend/js/views/scan.js` 已于批次二由 17,109 字符（85.5%）降至 10,648 字符（53.2%），退出预警清单**（T0 外迁 `views/scan-forms.js`，T4 挂钩批量模式）；接替关注：`views/scan-batch.js` 12,708 字符（63.5%，**顶层函数 10 个已达上限**）。容量现状以第 11 节与每次修改报告为准。
 
 ## 7. 修改完成强制报告
 
@@ -227,7 +227,7 @@
 - 管制子系统已拆分（2026-09-08）：`routes-orders.js` 薄入口（crud+flow 两域）、`dao.js` 薄入口（dao-orders/dao-signs/dao-misc 三域，对外函数名不变）；看板新增「会签超时」统计卡（stats.signOverdue + 列表 sign_overdue=1）；manifest 删除 SIGN_REJECT/DISPOSAL_REJECT 旁路边与「单据详情」导航项（深链 #/detail?id= 保留）
 - 无阻塞性技术债；旧版 `public/js/*`、`routes/samples.js` 等已随 Phase 5/6 迁移删除，子系统前端均按 views/ 拆分
 - `public/css/app.css` **2026-09-16 LF 归一复核：300 行 / 21,910 字符（109.5%）已超 20000 字符红线**（旧记录 94% / 109.6% 以本次为准）；建议门户块拆独立样式文件（需三系统回归）
-- `subsystems/samples/db/dao.js` **2026-09-17 LF 归一复核：174 行 / 10,441 字符（52.2%）**（批次二新增 `listBatchLogs` 供 `batchId` 幂等探测，+7 行 / +480 字符；旧记录 167 行 / 9,961 字符 / 49.8% 已过时）；当前已越线/最接近红线：`routes-fixtures.js` 97.0%、`public/css/app.css` 109.5%、~~`README.md` LF 98.6%~~ **已解决（2026-09-17：外迁 `docs/api.md`，现 LF 15,525 字符 / 77.6%，台账口径 15,960）**、`routes-samples.js` 89.2%、`scan-actions.js` 88.1%。**`samples scan.js` 已由 85.5% 降至 53.2%（批次二）**
+- `subsystems/samples/db/dao.js` **2026-09-17 LF 归一复核：186 行 / 11,361 字符（56.8%）**（批次三修复 `listLogs` 同别名 JOIN、`listBatchLogs` 动作维度限定、`deleteSample` 存活条件）；当前已越线/最接近红线：`routes-fixtures.js` 97.0%、`public/css/app.css` 109.5%、~~`README.md` LF 98.6%~~ **已解决（2026-09-17：外迁 `docs/api.md`，现 LF 15,525 字符 / 77.6%）**、~~`routes-samples.js` 89.2%~~ **已解决（2026-09-17：外迁 `routes-samples-batch.js`，现 15,397 字符 / 77.0%）**、`scan-actions.js` **90.2%（仅允许精简/重构）**。**`samples scan.js` 已由 85.5% 降至 53.2%（批次二）**
 - `subsystems/control/backend/flow-ops.js` **2026-09-16 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / LF 5,112 字符（25.6%，台账旧值 5,231 = LF 值 + 行数），建议按 NCR / 重工 / 出货结余三域拆分
 - 新增 DAO 函数 MUST 检查 5 个 `subsystems/*/db/dao.js` 命名唯一（db.js 展平冲突会加子系统前缀导致调用点拿错函数，2026-09-05 `aggregateModelsWall` 为 samples 专属）
 
@@ -389,7 +389,7 @@ Claude 生成 manifest.json 后 MUST 自检：
 ## 17. JS 合并构建（Claude 实施指引）
 
 > 完整规范见 [AGENTS.md 第 19 节](./AGENTS.md#19-js-合并构建规范强制)。
-> 每个子系统前端仅 1 个 `bundle.js`（control 25→1 / fixtures 20→1 / projects 29→1 / **samples 37→1** / workbench 10→1，**2026-09-17 LF 归一实测**；批次二新增 `scan-forms.js` / `scan-batch.js` / `scan-batch-result.js` 三个源文件，samples bundle 207,039→231,002 字符），defer 加载。
+> 每个子系统前端仅 1 个 `bundle.js`（control 25→1 / fixtures 20→1 / projects 29→1 / **samples 38→1** / workbench 10→1，**2026-09-17 LF 归一实测**；批次三因共享 `shared/frontend/shared/utils.js` 变更全量重建，samples bundle 231,002→239,076 字符，5 个子系统版本号统一 `?v=bmu5s2bz4`），defer 加载。
 
 ### 17.1 Claude MUST 遵守
 
