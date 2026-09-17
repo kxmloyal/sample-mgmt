@@ -77,10 +77,13 @@ module.exports = function createDaoList(deps) {
   function listDueSoonSamples() { return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='IN_CUSTODY' AND next_inspect_at IS NOT NULL AND " + ISO_UTC + " >= " + NOW_UTC + " AND " + ISO_UTC + " < " + NOW_UTC_7D); }
   // T12.4: RETURNING 停留超时（默认 72 小时）待办查询——供 QA/ADMIN 看板/工作台挂载兜底提醒
   // 口径：status=RETURNING 且 updated_at 早于 N 小时前（RETURNING 期间无其他写操作，updated_at 近似进入退回审核的时刻）
+  // 时钟同源（§25.3.2，2026-09-17 修复 P2-2）：updated_at 在 schema.sql 是 TIMESTAMP（会话墙钟，+08），
+  // 原用 UTC_TIMESTAMP() 比较（UTC 真实时刻）差固定 8 小时 → 72h 窗口实际退化为 80h；
+  // 本文件其余谓词比较的 ISO 字符串列（next_inspect_at / expected_return_at）继续用 UTC_TIMESTAMP() 规范化值，勿混改。
   function listReturningOverdue(hours) {
     var h = Math.floor(Number(hours));
     if (!h || h <= 0) h = 72;
-    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RETURNING' AND updated_at < UTC_TIMESTAMP() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
+    return q("SELECT * FROM samples WHERE deleted_at IS NULL AND status='RETURNING' AND updated_at < NOW() - INTERVAL " + h + " HOUR ORDER BY updated_at ASC LIMIT 50");
   }
 
   // 领用/归还（2026-09-05）：领出超时未归还清单——纯查询计算，无定时任务

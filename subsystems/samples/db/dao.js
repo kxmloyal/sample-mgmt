@@ -109,8 +109,10 @@ module.exports = function createDao(deps) {
   // 软删的 PRODUCED 及以后仍占用；唯一索引已由 migrateSamplesSampleNoRelease 改为「仅存活行唯一」
   // 时区口径（2026-09-09）：NOW() 与 created_at/updated_at 的 CURRENT_TIMESTAMP 同为会话墙钟（+08），
   // 原 UTC_TIMESTAMP() 与同行其他时间列差 8h，已统一；存量行由 migrateSamplesDeletedAtTz 一次性校正
+  // 存活条件（§25.3.6）：本语句是 deleted_at 的写入者，条件补在 AND deleted_at IS NULL 之后
+  // —— 软删本身不被再软删（重复调用不再空推 version），「只改存活行」不再依赖调用点是否记得判重
   async function deleteSample(id) {
-    await run('UPDATE samples SET deleted_at=NOW(), version=version+1 WHERE id=?', [id]);
+    await run('UPDATE samples SET deleted_at=NOW(), version=version+1 WHERE id=? AND deleted_at IS NULL', [id]);
   }
 
   // 日志
@@ -143,15 +145,25 @@ module.exports = function createDao(deps) {
         return out;
       });
   }
+  // 2026-09-17 修复 P1-3（静默数据缺失）：原写作 ON l.id = l.sample_id —— ON 两侧同取别名 l，
+  // 条件退化为 scan_logs.id = scan_logs.sample_id，samples 侧永远匹配不上（LEFT JOIN 故不报错），
+  // sample_no / sample_name 两列恒为 NULL，前端列表照常渲染、后端不报错，故长期无人发现。
+  // 正确口径与同文件 listBatchLogs 一致（s.id = l.sample_id）；`/api/logs` 为唯一调用方。
   function listLogs() {
-    return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON l.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
+    return q('SELECT l.*, s.sample_no, s.name AS sample_name FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id ORDER BY l.id DESC LIMIT 500');
   }
 
   // 批量领用/归还的幂等探测（2026-09-16，设计文档 §5.5）：batchId 记在 scan_logs.note 尾部 ' [batch:<id>]'（零 DDL）。
   // 只防「同批重复提交」——返回该批次已落库的样例（sample_no 供前端标「已生效」）；跨批并发仍由 updateSample 的 CAS 兜底。
   // 代价提示：note 前置通配符走全表扫描，故每批仅调用 1 次并由调用方 LIMIT 1 判定命中；实测耗时由路由记入响应 probeMs。
+  // 2026-09-17 取证收敛（§25.3.1 过渡期要求）：标记 ' [batch:<id>]' 只由 batch-scan.js:101 在
+  //   applyAction 返回 logData 后追加，而批量通道的 action 被 BATCH_ACTIONS 限制为 CHECKOUT / RETURN_OUT
+  //   （batch-scan.js:19,36），故补 action 维度限定 —— 用户把 'x [batch:ABCD1234]' 写进其它动作
+  //   （RETURN_REQUEST 退回原因 / RETIRE_ONLY 作废原因等）的自由文本时不再误判 409。
+  // 遗留耦合风险：该动作清单与 batch-scan.js 的 BATCH_ACTIONS 是两份字面量，批量通道新增动作时
+  //   MUST 同步此处，否则该新动作的幂等探测静默失效（fail-open）；根治方案见评审建议（标记迁独立列）。
   function listBatchLogs(batchId) {
-    return q("SELECT l.sample_id, s.sample_no FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id WHERE l.note LIKE CONCAT('%[batch:', ?, ']%') LIMIT 200", [batchId]);
+    return q("SELECT l.sample_id, s.sample_no FROM scan_logs l LEFT JOIN samples s ON s.id = l.sample_id WHERE l.action IN ('CHECKOUT','RETURN_OUT') AND l.note LIKE CONCAT('%[batch:', ?, ']%') LIMIT 200", [batchId]);
   }
 
   // 机型主数据
