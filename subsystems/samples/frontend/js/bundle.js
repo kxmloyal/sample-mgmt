@@ -1,4 +1,4 @@
-/** BUNDLE vbmu4g7w4d — 37 files */
+/** BUNDLE vbmu5czv8c — 37 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -613,8 +613,16 @@ var _dashCheckoutData = [];
 // 即**已发行但保管部尚未接收**的待办滞留量，不是「累计发行量」。实测同口径差异很大
 // （累计曾发行 released_at 非空 = 61 件，该卡显示 31 件），标签若写作「已发行」会被读成累计数，
 // 故卡片与比例条图例统一改为「已发行·待接收」；列表筛选/导出等状态名场景仍保留「已发行」。
+// 2026-09-17 口径修正（用户反馈：确认某机种正式发行数量时「多的数据」）：
+// /api/dashboard 的 total 是「存活样品总数」（只排软删、**含 RETIRED 已废弃**）。原先总数卡直接显示 total，
+// 用户按「在用」读取时会误判为多算（实测：total 135 = 在用 109 + 已废弃 26，全部 26 件集中在 BD7620D）。
+// 现总数卡主数字改为「在管总量 = total - RETIRED」——术语与报表 report.js:125-126 / help-data.js:46
+// 既有的权威口径「存活样品总量 / 在管总量 = 存活总量 − 已作废」统一，避免同一系统出现两套词；
+// 标签补「（已废弃 N）」，使「存活 = 在管 + 已废弃」两数可直接读出。
+// 兼容性：比例条仍以 total 为分母（分段加总恒为 100%）；_kbStats 的键仍为 'total'，
+// 故 dashboard-todo.js「总数卡=不筛选全部待办」的语义不变；retired=0 时行为与修正前逐字一致。
 var DASH_STATS = [
-  { label: '总数', key: 'total', color: 'var(--brand)', countByStatus: false },
+  { label: '在管总量', key: 'total', color: 'var(--brand)', countByStatus: false },
   { label: '新建·待制作', key: 'NEW', color: 'var(--muted)', countByStatus: true },
   { label: '制作完成', key: 'PRODUCED', color: 'var(--warn)', countByStatus: true },
   { label: '已发行·待接收', key: 'RELEASED', color: 'var(--ok)', countByStatus: true },
@@ -666,14 +674,20 @@ async function viewDashboard() {
 // 统计卡片组 + CSS 比例条（DASH_STATS 配置驱动，按角色优先级排序）
 function _renderStats(d) {
   var s = d.byStatus || {}, total = d.total || 0;
+  // 在管总量 = 存活总数 − 已废弃（RETIRED 不计入「在管」）；retired=0 时 active===total，行为与修正前逐字一致
+  var retired = s['RETIRED'] || 0;
+  var active = total - retired;
   var order = STAT_ORDER[me.role] || STAT_ORDER.ADMIN;
   var sorted = DASH_STATS.slice().sort(function(a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
-  // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]
-  _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? total : (s[cfg.key] || 0), cfg.key]; });
+  // 构建 _kbStats 供 dashboard-todo.js 兼容 [[label, count, key], ...]（键仍为 'total'，筛选语义不变）
+  _kbStats = sorted.map(function(cfg) { return [cfg.label, cfg.key === 'total' ? active : (s[cfg.key] || 0), cfg.key]; });
   var cards = sorted.map(function(cfg, idx) {
-    var count = cfg.key === 'total' ? total : (s[cfg.key] || 0);
-    var href = cfg.key === 'total' ? '#/samples' : '#/samples?status=' + cfg.key;
-    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + cfg.label + '</div></fluent-card>';
+    var isTotal = cfg.key === 'total';
+    var count = isTotal ? active : (s[cfg.key] || 0);
+    var href = isTotal ? '#/samples' : '#/samples?status=' + cfg.key;
+    // 总数卡口径自带说明：主数字 = 在管总量，标签补「（已废弃 N）」，使「存活 = 在管 + 已废弃」可直接读出
+    var label = isTotal && retired > 0 ? cfg.label + '（已废弃 ' + retired + '）' : cfg.label;
+    return '<fluent-card class="kb-stat" style="--stat-color:' + cfg.color + '" onclick="filterKbStat(' + idx + ',this)" ondblclick="location.hash=\'' + href + '\'" title="单击筛选待办·双击查看列表"><div class="n">' + count + '</div><div class="l">' + label + '</div></fluent-card>';
   }).join('');
   // 比例条
   var barHtml = '';
@@ -1462,7 +1476,14 @@ function _renderSampleList(list, isOverdue, pager) {
 //       机型写操作即时失效）；旧后端（未重启、忽略 view 参数）返回纯主数据数组 → 自动回退一期并发计数渲染，行为兼容
 // 跳转：#/samples?model=<code>（viewSamples 深链预选 f-model 下拉，chips 自动出现机型筛选）
 // 入口：样品列表页「机型视图」按钮 + 导航（hash 路由切换，勿直调本函数——直调不改 hash 会导致后续切换失效，与治具同款坑）
-// 状态徽章口径：IN_CUSTODY 保管中 / CHECKED_OUT 领用中 / RETURNING 退回审核中（流转态）；逾期红标与看板/列表逾期口径一致
+// 状态徽章口径：IN_CUSTODY 保管中 / CHECKED_OUT 领用中 / RETURNING 退回审核中（流转态）/ RETIRED 已废弃；
+//       逾期红标与看板/列表逾期口径一致
+// 2026-09-17 口径修正（用户反馈：确认某机种正式发行数量时「多的数据」）：
+//   卡片 sample_count 是「该机型样品总数」（后端 aggregateModelsWall 的 COUNT(*) ，只排除软删、含已废弃），
+//   原先徽章只渲染 3 个流转态、不含 RETIRED，数字与徽章之和不可对账（实测 BD7620D：卡片 86 vs 三态合计 60，
+//   差 26 件已废弃），按「在用」读取时会误判为多算。现补齐 RETIRED 徽章并在数字后标注「（含已废弃 N）」，
+//   使「各徽章之和 = 卡片数字」恒成立、口径自带说明。注意：sample_count ≠ 累计发行量
+//   （累计发行量口径为 samples.released_at 非空，两者对本机型恰好相等，新机型会不等）。
 async function viewSampleModelWall() {
   var v = $('#view');
   v.innerHTML = '<div class="muted" style="text-align:center;padding:40px">加载中…</div>';
@@ -1496,21 +1517,23 @@ async function viewSampleModelWall() {
   var kwMatch = (location.hash || '').match(/[?&]kw=([^&]+)/);
   if (kwMatch) kw = decodeURIComponent(kwMatch[1]);
 
-  var totalSamples = 0, unknown = 0, overdueTotal = 0, checkoutOverdueTotal = 0;
+  var totalSamples = 0, unknown = 0, overdueTotal = 0, checkoutOverdueTotal = 0, retiredTotal = 0;
   models.forEach(function (m) {
     if (m.sample_count === null || m.sample_count === undefined) unknown++;
     else totalSamples += m.sample_count;
     overdueTotal += (m.overdue_count || 0);
     checkoutOverdueTotal += (m.checkout_overdue_count || 0);
+    retiredTotal += ((m.status_stats && m.status_stats.RETIRED) || 0);
   });
 
-  var WALL_STATUSES = ['IN_CUSTODY', 'CHECKED_OUT', 'RETURNING'];
-  var WALL_LABELS = { IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中' };
+  var WALL_STATUSES = ['IN_CUSTODY', 'CHECKED_OUT', 'RETURNING', 'RETIRED'];
+  var WALL_LABELS = { IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已废弃' };
 
   var html = '<div class="filters" style="justify-content:space-between">' +
     '<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
     '<fluent-button appearance="accent" size="small" onclick="location.hash=\'#/samples\'">列表视图</fluent-button>' +
     '<span class="muted">共 <b>' + models.length + '</b> 个机型 · <b>' + totalSamples + '</b> 件样品' +
+    (retiredTotal > 0 ? '（含已废弃 <b>' + retiredTotal + '</b>）' : '') +
     (overdueTotal > 0 ? ' · <span style="color:#b91c1c">复检逾期 ' + overdueTotal + '</span>' : '') +
     (checkoutOverdueTotal > 0 ? ' · <span style="color:#c2410c">领用超时 ' + checkoutOverdueTotal + '</span>' : '') +
     (unknown > 0 ? ' · <span title="部分机型计数查询失败">' + unknown + ' 个机型计数不可用</span>' : '') + '</span></span>' +
@@ -1527,6 +1550,8 @@ async function viewSampleModelWall() {
   window._smwData = models;
   window._smwKeyword = kw;
   window.smwCard = rich ? function (m) {
+    // 已废弃件数随徽章一起渲染，保证「各徽章之和 = 卡片数字」
+    var retired = (m.status_stats && m.status_stats.RETIRED) || 0;
     var badges = WALL_STATUSES.filter(function (k) { return m.status_stats && m.status_stats[k]; })
       .map(function (k) { return '<span class="smw-badge">' + WALL_LABELS[k] + ' ' + m.status_stats[k] + '</span>'; }).join('');
     var cover = m.cover
@@ -1538,10 +1563,12 @@ async function viewSampleModelWall() {
       '<div class="smw-body"><div class="smw-code"><b>' + e(m.code) + '</b>' +
       (m.checkout_overdue_count > 0 ? '<span class="smw-flag-inline">超时未还 ' + m.checkout_overdue_count + '</span>' : '') + '</div>' +
       '<div class="smw-name" title="' + e(m.full_name) + '">' + e(m.full_name || '—') + '</div>' +
-      '<div class="smw-count">样品 <b>' + (m.sample_count || 0) + '</b> 件</div>' +
+      '<div class="smw-count">样品 <b>' + (m.sample_count || 0) + '</b> 件' +
+      (retired > 0 ? '<span class="muted">（含已废弃 ' + retired + '）</span>' : '') + '</div>' +
       (badges ? '<div class="smw-badges">' + badges + '</div>' : '') +
       '</div></div>';
   } : function (m) {
+    // 一期回退：旧后端不提供 status_stats，无法拆分已废弃，数字沿用列表 total（同为「含已废弃」口径）
     var count = (m.sample_count === null) ? '—' : m.sample_count;
     return '<div class="smw-card" onclick="location.hash=\'#/samples?model=' + encodeURIComponent(m.code) + '\'" title="查看该机型全部样品">' +
       '<div class="smw-cover">▦</div>' +
@@ -3531,7 +3558,7 @@ var HELP_DATA=[
   {
     id:'dashboard', module:'看板', desc:'登录后的样品看板',
     items:[
-      {h:'样品状态概览',body:'顶部指标卡：总数 + 7 个状态各自数量\n单击卡片筛选下方待办列表（再次单击取消），双击跳转样品列表并带状态筛选\nNEW=待制作确认 / PRODUCED=制作完成 / RELEASED=已发行·待接收（已发行但保管部尚未接收的待办量，非累计发行量） / IN_CUSTODY=保管中 / CHECKED_OUT=领用中 / RETURNING=退回审核中 / RETIRED=已作废'},
+      {h:'样品状态概览',body:'顶部指标卡：在管总量 + 7 个状态各自数量\n「在管总量」= 存活样品总量 − 已废弃，卡片标签后附「（已废弃 N）」，口径与「样品报表」一致\n单击卡片筛选下方待办列表（再次单击取消），双击跳转样品列表并带状态筛选\nNEW=待制作确认 / PRODUCED=制作完成 / RELEASED=已发行·待接收（已发行但保管部尚未接收的待办量，非累计发行量） / IN_CUSTODY=保管中 / CHECKED_OUT=领用中 / RETURNING=退回审核中 / RETIRED=已作废'},
       {h:'待办列表',body:'根据您的角色显示需要处理的样品\n研发：待制作+指派重做的样品\n品保：待发行+退回审核的样品\n保管/生技：待接收的样品'},
       {h:'复检提醒',body:'逾期样品：已过复检日期仍未复检\n7日内到期：未来7天需要复检的样品\n点击可跳转对应列表'},
       {h:'操作日志',body:'最近操作记录表格，显示时间/样品/动作/操作人\n点击右上角「查看全部日志」查看全量'}
@@ -3550,7 +3577,7 @@ var HELP_DATA=[
     id:'wall', module:'机型视图', desc:'按机型聚合的样品卡片墙',
     items:[
       {h:'入口',body:'样品列表页右上角「机型视图」按钮，或左侧导航「机型视图」（地址栏 hash：#/wall）\n两处都是路由跳转；切到本视图后再点导航仍可正常切换'},
-      {h:'卡片内容',body:'每个机型一张卡片：样品数 / 复检逾期数 / 领用超时数 / 各状态分布 / 封面图\n数据由后端聚合（GET /api/samples/models?view=wall），机型字典缓存 60 秒，机型主数据变更即时失效'},
+      {h:'卡片内容',body:'每个机型一张卡片：样品数 / 复检逾期数 / 领用超时数 / 各状态分布 / 封面图\n「样品 N 件」是该机型的存活样品总数（含已废弃），数字后附「（含已废弃 N）」\n状态徽章含 RETIRED（已废弃），各徽章之和 = 卡片上的样品数（可直接对账）\n数据由后端聚合（GET /api/samples/models?view=wall），机型字典缓存 60 秒，机型主数据变更即时失效'},
       {h:'点卡片做什么',body:'跳转样品列表并自动按该机型筛选（#/samples?model=机型代号）\n列表顶部出现机型筛选标签，可继续叠加状态/组别/类型条件'},
       {h:'与样品列表的分工',body:'机型视图：按机型横向对比（哪个机型借出多、复检逾期多）\n样品列表：按单个样品档案检索、看详情、取消或打印'}
     ]
