@@ -422,7 +422,7 @@ module.exports = { register, initDB, seed };
 **标记块外的人工同步项（AI MUST 同步）**：
 - AGENTS.md 第 1 节子系统概述（如「三大子系统」措辞）、第 14 节技术债、API 表
 - CLAUDE.md 第 1 节、第 5.1 节隔离原则、第 11 节技术债
-- README.md 各子系统功能章节、API 表
+- README.md 各子系统功能章节（**API 表已于 2026-09-17 外迁至 `docs/api.md`**，该表的人工同步项随之移至该文件；README 仅保留指针）
 - docs/subsystem-management-guide.md 迁移表
 
 **AI 拦截规则**：

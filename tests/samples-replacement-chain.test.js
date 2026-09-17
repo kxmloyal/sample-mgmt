@@ -140,8 +140,11 @@ describe('替代链构建与隔离（bundle / css）', () => {
       'subsystems/samples/frontend/js/views/models.js'
     ].forEach(f => expect(read(f)).not.toContain('sm-chain'));
   });
-  test('新增接口已登记进 README API 表', () => {
-    expect(read('README.md')).toContain('/api/samples/:id/chain');
+  test('新增接口已登记进接口文档（2026-09-17 外迁至 docs/api.md）', () => {
+    // 2026-09-17 README 拆分：API 表整体外迁 docs/api.md，本断言同步指向新载体
+    expect(read('docs/api.md')).toContain('/api/samples/:id/chain');
+    // README 原位保留指针，保证从入口仍可发现完整接口清单
+    expect(read('README.md')).toContain('docs/api.md');
   });
 });
 

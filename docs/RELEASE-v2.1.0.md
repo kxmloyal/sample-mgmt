@@ -218,9 +218,9 @@ git revert --no-edit <本版提交区间>   # 逐个 revert，禁止 reset --har
 
 | 项 | 状态 |
 |---|---|
-| `AGENTS.md` §13 版本号（2.0.9 → 2.1.0） | **待授权**（规则文件，需用户明确同意） |
-| `AGENTS.md` §14 / `CLAUDE.md` §6·§11 容量台账刷新 | **待授权** |
-| `README.md` 拆分（`README.md` LF 98.6%） | 已立项未执行（`docs/superpowers/plans/2026-09-15-split-readme.md`） |
+| `AGENTS.md` §13 版本号（2.0.9 → 2.1.0） | **已执行（2026-09-17，用户授权）**：提交 `eff4f5c` |
+| `AGENTS.md` §14 / `CLAUDE.md` §6·§11 容量台账刷新 | **已执行（2026-09-17，用户授权）**：提交 `eff4f5c`；本次 README 拆分后 README 容量条目需再次刷新 |
+| `README.md` 拆分（`README.md` LF 98.6%） | **已执行（2026-09-17）**：`## API 一览` 外迁 `docs/api.md`，README LF 19,796 → **15,525（77.6%）**；验收 A1~A5 全部通过（计划 `docs/superpowers/plans/2026-09-15-split-readme.md`） |
 | `public/css/app.css` 门户块拆分（109.5%，已超红线） | 未授权（需三系统回归） |
 | `routes-fixtures.js` 97.0% / `scan-actions.js` 88.1% | 仅允许精简重构，本版零变更 |
 | `flow-ops.js` 顶层函数 12 个（超 §7.2 上限） | 待拆分 |
