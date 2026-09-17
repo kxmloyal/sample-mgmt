@@ -106,7 +106,7 @@
 │   ├── label-card-standard.md         # 标签/标示卡标准
 │   ├── sample-code-encoding.md        # 样品编号编码与占用口径
 │   ├── fixtures-flow-report.md / fixtures-model-view-2026-09-03.md / projects-review-2026-09-03.md  # 专项报告(带日期快照)
-│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md / RELEASE-v2.0.3.md / RELEASE-v2.0.4.md / RELEASE-v2.0.5.md / RELEASE-v2.0.6.md / RELEASE-v2.0.7.md / RELEASE-v2.0.8.md / RELEASE-v2.0.9.md  # 发布说明
+│   ├── RELEASE-v2.0.0.md / RELEASE-v2.0.1.md / RELEASE-v2.0.2.md / RELEASE-v2.0.3.md / RELEASE-v2.0.4.md / RELEASE-v2.0.5.md / RELEASE-v2.0.6.md / RELEASE-v2.0.7.md / RELEASE-v2.0.8.md / RELEASE-v2.0.9.md / RELEASE-v2.1.0.md  # 发布说明
 │   ├── 账号收集模板.xlsx / 通用项目追踪模板.xlsx  # 表格模板
 │   ├── archive/           # 已完成迭代的设计文档与实现计划归档
 │   └── superpowers/       # 当前有效规范与计划
@@ -359,7 +359,7 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - 接口文档(docs/api.md 或 Swagger 注释,若有)
 - 依赖说明(版本变更原因与兼容性影响)
 - 提供**变更记录**:文件/接口/配置清单 + 兼容性影响 + 部署/回滚步骤
-- **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（2026-09-16 复核：当前 **2.0.9**）；发版时四处 MUST 同步更新
+- **版本号约定（2026-09-11）**：发布号 = `package.json.version` = 5 个子系统 `subsystems/*/manifest.json.version` = 最新 `docs/RELEASE-vX.Y.Z.md`（**2026-09-17 复核：当前 2.1.0**，对应 `docs/RELEASE-v2.1.0.md`；上一版 2.0.9）；发版时四处 MUST 同步更新
 
 ## 14. 当前已知技术债
 
@@ -372,10 +372,10 @@ feat(responsive): add 3 breakpoints (768/1200/1600px)
 - `routes-samples.js` 已拆分（2026-09-02 B3-T1）：机型路由拆至 `routes-samples-models.js`、图片保存拆至 `sample-images.js`，主文件降至 65.7% 红线内。**2026-09-16 LF 归一实测：353 行 / 17,840 字符（89.2%）——已逼近 90% 线，新增内容前 MUST 先等量精简。**
 - `db/migrations.js` 已拆分（2026-09-02 B3-T2）：迁移按子系统拆至 `db/migrations/` 目录（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 为薄转发，接口不变
 - `subsystems/projects/frontend/js/views/task-detail.js` 已达字符红线（约 19.8k/20k，2026-08-06 记录），2026-09-08 v3 迭代后降至 13.6k（tabs 拆分/空态收敛）；**2026-09-16 LF 归一实测：`task-detail.js` 193 行 / 13,219 字符（66.1%）、`backend/routes-tasks.js` 271 行 / 14,315 字符（71.6%，已过 70% 预警线）**；`kanban.js`（15.0k，2026-09-08 记录）在红线内，后续迭代仍需关注容量
-- `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）为纯编排层；**2026-09-16 LF 归一实测：`routes-scan.js` 98 行 / 4,694 字符（23.5%）；`scan-actions.js` 312 行 / 17,615 字符（88.1%，已越过 70% 预警线）**——后续批次改动 scan 逻辑前 MUST 先评估 `scan-actions.js` 再拆分，禁止继续向其中堆入业务
+- `subsystems/samples/backend/routes-scan.js` 已于批次 2 拆分（2026-09-01）为纯编排层；**2026-09-17 LF 归一实测：`routes-scan.js` 82 行 / 3,968 字符（19.8%，批次二抽取 `scan-allowed.js` 后净减）；`scan-actions.js` 312 行 / 17,615 字符（88.1%，已越过 70% 预警线，批次二零变更）**——后续批次改动 scan 逻辑前 MUST 先评估 `scan-actions.js` 再拆分，禁止继续向其中堆入业务
 - ~~`db/migrations.js` 顶层函数 11 个~~ **已解决**：2026-09-02 B3-T2 已拆分为 `db/migrations/`（fixtures/control/projects/samples/users + index 聚合），`db/migrations.js` 现为薄转发
-- `subsystems/samples/frontend/js/views/scan.js` **2026-09-16 LF 归一实测：244 行 / 17,109 字符（85.5%）**（2026-09-01 记录的 ≈74% 已过时）——已越过 70% 预警线，后续批次 MUST 先把动作表单构造外迁至独立文件再挂钩（方案见 `docs/superpowers/specs/2026-09-16-samples-batch-checkout-and-inspect-display-design.md` 的 T0）
-- `subsystems/samples/db/dao.js` **2026-09-16 LF 归一复核：167 行 / 9,961 字符（49.8%），已在红线内**（旧记录 234 行 / 18044 字符 ≈90% 已过时）。当前已越线/最接近红线者：`subsystems/fixtures/backend/routes-fixtures.js` 368 行 / 19,403 字符（**97.0%，仅允许精简**）、`public/css/app.css` 300 行 / 21,910 字符（**109.5%，已超 20000 兜底线**）、`README.md` 497 行 / **LF 19,714 字符（98.6%）**（台账口径 20,211 = LF 值 + 行数，101.1%；2026-09-15 已立项拆分外迁 `docs/api.md`，计划见 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 312 行 / 17,615 字符（88.1%）、`subsystems/samples/frontend/js/views/scan.js` 244 行 / 17,109 字符（85.5%）
+- `subsystems/samples/frontend/js/views/scan.js` **2026-09-17 LF 归一实测：182 行 / 10,648 字符（53.2%，已退出预警区）**——批次二 T0 先把动作表单构造外迁至 `views/scan-forms.js`（83 行 / 7,832 字符 / 39.2%）后由 85.5% 降至 49.7%，T4 再挂钩批量模式开关与入队分流至 53.2%。**该文件仍有约 9,300 字符余量，但后续挂钩前 MUST 复核同一批新增文件**：`views/scan-batch.js` 238 行 / 12,708 字符（63.5%，**顶层函数 10 个已达 §7.2 上限，不可再加**）、`views/scan-batch-result.js` 107 行 / 6,801 字符（34.0%）、`backend/batch-scan.js` 178 行 / 9,955 字符（49.8%）
+- `subsystems/samples/db/dao.js` **2026-09-17 LF 归一复核：174 行 / 10,441 字符（52.2%），在红线内**（批次二新增 `listBatchLogs` 用于 `batchId` 幂等探测，+7 行 / +480 字符）。当前已越线/最接近红线者：`subsystems/fixtures/backend/routes-fixtures.js` 368 行 / 19,403 字符（**97.0%，仅允许精简**）、`public/css/app.css` 300 行 / 21,910 字符（**109.5%，已超 20000 兜底线**）、`README.md` 497 行 / **LF 19,714 字符（98.6%）**（台账口径 20,211 = LF 值 + 行数，101.1%；2026-09-15 已立项拆分外迁 `docs/api.md`，计划见 `docs/superpowers/plans/2026-09-15-split-readme.md`）、`subsystems/samples/backend/routes-samples.js` 353 行 / 17,840 字符（89.2%）、`subsystems/samples/backend/scan-actions.js` 312 行 / 17,615 字符（88.1%）。**注：`views/scan.js` 已于批次二退出该清单（85.5% → 53.2%）**
 - 共享统计卡渲染组件 `shared/frontend/kb-stats.js`（KbStats.render，2026-09-04）：fixtures/projects 看板在用；samples 看板为内联实现但**交互协议等价**（单击筛选/双击跳列表），后续统一迁移时注意 samples dashboard.js 已含 CHECKED_OUT 卡；control/workbench 未接入（用户决定排除）
 - db.js DAO 展平有**跨子系统同名改名机制**（冲突时加 `<subsystem>_` 前缀）：新增 DAO 函数 MUST 全局检索 5 个 `subsystems/*/db/dao.js` 确认命名唯一（2026-09-05 `aggregateModelsWall` 为 samples 专属，治具做同款机型聚合时须错开命名）
 - `subsystems/control/backend/flow-ops.js` **2026-09-16 复核：顶层函数 12 个（超 §7.2 上限 10）**，119 行 / **LF 5,112 字符（25.6%）**（台账旧值 5,231 = LF 值 + 119 行）；建议按「NCR 域 / 重工域 / 出货结余域」拆分（同 2026-09-08 `dao-*` 拆分风格），拆分前先补回归
@@ -436,16 +436,16 @@ node tools/build-bundles.js
 4. 将 `bundle.js` 输出到 `/tmp`（避免 `subsystems/` 目录权限问题）
 5. 生成唯一版本号（`b`+时间戳），写入 `tools/.bundle-ver`
 
-**输出**（2026-09-16 LF 归一实测）：
+**输出**（**2026-09-17 LF 归一实测**）：
 | 子系统 | 原始文件数 | bundle 字符数 | bundle 大小 |
 |---|---|---|---|
 | control | 25 → 1 | 103,978 | ~102KB |
 | fixtures | 20 → 1 | 108,542 | ~106KB |
 | projects | 29 → 1 | 177,250 | ~173KB |
-| samples | 34 → 1 | 207,039 | ~202KB |
+| samples | **37 → 1** | **231,002** | **~226KB** |
 | workbench | 10 → 1 | 48,200 | ~47KB |
 
-> 「原始文件数」= `tools/bundle-sources.json` 中该子系统的条目数（含 `shared/frontend/*` 共享模块；2026-09-11 记录的 projects 28 / samples 30 已过时）；「bundle 字符数」= 磁盘上 `bundle.js` 的 LF 归一字符数（构建脚本按同一源码集拼接，`out.length` 与之相等，「bundle 大小」= 字符数 / 1024，非字节）。
+> 「原始文件数」= `tools/bundle-sources.json` 中该子系统的条目数（含 `shared/frontend/*` 共享模块；2026-09-11 记录的 projects 28 / samples 30、2026-09-16 记录的 samples 34 均已过时，批次二新增 `scan-forms.js` / `scan-batch.js` / `scan-batch-result.js` 三个文件）；「bundle 字符数」= 磁盘上 `bundle.js` 的 LF 归一字符数（构建脚本按同一源码集拼接，`out.length` 与之相等，「bundle 大小」= 字符数 / 1024，非字节）。**当前版本号：samples `?v=bmu4g7w4d`（重启后失效前以磁盘值为准）**。
 
 ### 19.2 部署步骤
 
