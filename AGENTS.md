@@ -11,8 +11,9 @@
 |---|---|---|
 | `docs/agents-plugin-protocol.md` | §17（§17.1~§17.12 子系统插件协议） | 新增/删除子系统、改 `manifest.json`、改 `backend/index.js` 或前端视图注册、运行 `tools/sync-subsystem-docs.js` / `tools/create-subsystem.js` |
 | `docs/agents-ui-standards.md` | §18（卡片设计系统）、§18.6（详情弹窗设计系统）、§24（标签与标示卡标准） | 动看板/门户卡片、详情弹窗骨架、标签纸与标示卡字段/尺寸/接口/二维码缓存 |
+| `docs/agents-enforcement-rules.md` | §25（强制检查点与规则补充，24 条） | 新增/修改任何写接口、DAO 写语句、前端视图、共享文件、构建与容量台账、规则或测试 |
 
-**编号承诺**：外迁章节在参考卷中**保留原编号**（§17.x / §18.x / §24.x），主文件对应位置保留同名标题与摘要，故全项目既有「见 AGENTS.md §17 / §18 / §24」类引用**无需改写**。
+**编号承诺**：外迁章节在参考卷中**保留原编号**（§17.x / §18.x / §24.x / §25.x），主文件对应位置保留同名标题与摘要，故全项目既有「见 AGENTS.md §17 / §18 / §24 / §25」类引用**无需改写**。
 
 ---
 
@@ -643,3 +644,46 @@ sudo cp /tmp/bundle-workbench.js  subsystems/workbench/frontend/js/bundle.js
 > **正文见 `docs/agents-ui-standards.md`**（编号不变）；权威细则仍为 `docs/label-card-standard.md`。
 > **动手前 MUST 先读**：改标签纸/标示卡字段、尺寸、打印接口或二维码缓存。
 > 摘要：标签与标示卡**实时派生自 `samples` 表，无独立存储**——禁止独立数据副本/持久化缓存/冗余快照字段；尺寸唯一来源 `subsystems/samples/frontend/js/card-constants.js` 的 `PRESET_MM`（小 37×18 / 中 52×25 / 大 60×40mm + 自定义 30~150mm），禁止各处硬编码；新建/首发版次默认 `01`，复检/再发行自动 +1（上限 99）；仅 QR 有 LRU 缓存（上限 200，键 = `sample_no/qr_token + width`）。
+
+---
+
+## 25. 强制检查点与规则补充（2026-09-17）——已外迁参考卷
+
+> **正文（24 条规则全文 + 依据 `file:line` + 可执行检查点）见 `docs/agents-enforcement-rules.md`**（编号不变，为参考卷 C）。
+> **动手前 MUST 先读该参考卷**：新增/修改任何写接口、DAO 写语句、前端视图、共享文件、构建与容量台账、规则或测试。
+> **来源**：`docs/samples-review-2026-09-17.md` 专项评审（三路并行专家评审 + 主控逐行复核）。
+
+**以下 16 条为常驻红线（不查参考卷也必须遵守）**：
+
+**A. 安全与转义（§25.2）**
+
+1. 用户可写入的枚举/标签字段 MUST 在**服务端白名单化**（`includes` 校验）；**禁止**只做 `.trim()`，**不得**以「前端下拉已限制」豁免。
+2. 非本函数产出的字符串进入 `innerHTML` 或 HTML 属性前 MUST 经 `e()`；**标签映射函数 MUST NOT 用原始值兜底**（禁止 `x==='A'?'甲':x`），兜底须返回安全常量。
+3. `catch` 分支 MUST NOT 透出 `err.message`；除白名单业务态文案外一律固定文案 + `logger.error`（样板：`server.js:164`）。
+4. CSV 生成 MUST 单点复用 `shared/csv.js`（后端导出与前端 Blob 下载均适用）；公式中和 MUST 覆盖前导空白。**禁止**自写 `esc`。
+
+**B. 数据正确性（§25.3）**
+
+5. 幂等键、批次号等**机器可读标记 MUST NOT 写入用户自由文本列**；幂等键 MUST 落在**有 UNIQUE 约束**的列或独立表，**禁止**用 `LIKE` 探测实现幂等。
+6. 超时/期限谓词 MUST **时钟同源**：`TIMESTAMP` 列只与 `NOW()` 比较，ISO 字符串列只与 `UTC_TIMESTAMP()` 比较。
+7. 一个业务不变量 = **一个校验器**，被全部写入口共用；DAO 写语句 MUST 自带 `AND deleted_at IS NULL`。
+8. 多出口业务动作 MUST 把副作用收敛到**单一列表驱动函数**，并 MUST 补「全部出口动作名覆盖」断言测试。
+9. 状态机动作 MUST 声明并断言 `to`（目标状态）；**禁止**只校验 `from`。
+10. `manifest.json` 是导航/状态机/表结构的**单一事实来源**；各 `router.js` MUST 派生而非硬编码，且 MUST 有全量漂移测试（视图名/状态/表/导航键**双向**比对）。
+
+**C. 跨子系统边界（§25.4）**
+
+11. **禁止跨子系统借用实现**（含经 `db.js` 展平后的 `D.<fn>`）；DAO 导出唯一性检查 MUST 用**运行期工厂展开**，**禁止**用 grep 代替。给借用方补同名导出**不会生效**（`db.js` 会前缀改名）→ MUST 三步独立提交。
+12. 修改 `shared/` 下任何文件前 MUST 先实测其**真实使用方数量**并列出清单；**跨子系统同名文件不等于共享代码**，禁止据文件名合并。
+
+**D. 容量与构建（§25.5）**
+
+13. 容量判定 MUST 用权威口径 `fs.readFileSync(p,'utf8').replace(/\r/g,'').length`（LF 归一**字符数**）；台账值 MUST 由**脚本重算**并标注口径，**禁止手工誊写**；**禁止**用 `Get-Content`/`wc -c`/`Buffer.length`（字节数会假性越线）。
+14. §7.2 的「单函数 ≤60 行」对路由注册函数 **`register()` 不适用**（它是注册表，非业务函数）；「顶层函数 ≤10 / 文件」红线不变，**顶层隐式全局赋值同样计入该计数**。
+15. 修改 `subsystems/*/frontend/js/` 下任何文件后 MUST 重建 bundle；构建版本号 SHOULD 由**源文件集合内容哈希**派生并可断言校验。
+
+**E. 前端生命周期与脚本护栏（§25.6）**
+
+16. SPA 视图 MUST 声明**卸载协议** `VIEWS[k].leave()`；涉及 `getUserMedia`、`document` 级监听、`MutationObserver`、`requestAnimationFrame`、在途请求的视图 MUST 实现 `leave()`。状态/字典的中文名与颜色 MUST 只有一处来源（`shared/frontend/api-base.js`），视图内 MUST NOT 新建状态映射字面量。`subsystems/*/frontend/**` MUST 被 ESLint 覆盖（`env.browser` + `no-redeclare` + `no-implicit-globals`）。含 `DELETE`/`TRUNCATE` 的 seed 脚本，其护栏调用 MUST 位于函数入口（行号早于首个破坏性语句）。
+
+**AI 拦截逻辑**：违反上述任一条 → **暂停改动，先补齐**；无法确认使用方/归属/时钟类型 → **标注风险并要求人工排查**，禁止盲目变更。
