@@ -7,6 +7,7 @@
 //                    ③ 兜底按姓名中文序
 // 供扫码领用弹窗「领用人」可搜索选择器使用；独立文件原因：routes-samples.js 已达 92% 字符红线
 const D = require('../../../db');
+const { logger } = require('../../../logger'); // §25.2.3：固定文案 + 服务端日志，禁止回显 e.message
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -33,7 +34,7 @@ function register(app) {
         return String(a.display_name).localeCompare(String(b.display_name), 'zh'); // 姓名中文序兜底
       });
       res.json(rows);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { logger.error('领用人候选查询失败: ' + (e.message || String(e))); res.status(500).json({ error: '服务器内部错误' }); }
   });
 }
 

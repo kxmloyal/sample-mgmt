@@ -8,6 +8,7 @@
 // 格位编码：N#样品柜C-R = 第N柜·第C列·第R行（parseLoc 兼容「1#样品柜 3-7」等历史脏空格）
 // 注册顺序：必须先于 routes-samples（GET /:id 会贪婪捕获 storage-map，实证教训同 checkout-users）
 const D = require('../../../db');
+const { logger } = require('../../../logger'); // §25.2.3：固定文案 + 服务端日志，禁止回显 e.message
 
 // 格位解析：'1#样品柜3-8' / '1#样品柜 3-8' → { key:'1#样品柜', no:1, col:3, row:8 }；不匹配返回 null
 function parseLoc(loc) {
@@ -35,6 +36,7 @@ async function ensureCabinetTable() {
 function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
+  const hasRole = app.locals.hasRole; // §25 红线：多角色鉴权走共享 hasRole，禁用裸 u.role
 
   app.get('/api/samples/storage-map', requireAuth, async (req, res) => {
     try {
@@ -94,14 +96,14 @@ function register(app) {
         return { key: c.key, no: c.no, cols: c.cols, rows: c.rows, configured: c.configured, cells: cells, summary: { total: c.cols * c.rows, inCustody: sum.in, checkedOut: sum.out, returning: sum.ret, reserved: sum.reserved, empty: sum.empty } };
       });
       res.json({ cabinets: list, unknownLoc: unknownLoc.map(s => ({ id: s.id, sample_no: s.sample_no, storage_location: s.storage_location })), uncabineted: uncabineted.map(s => ({ id: s.id, sample_no: s.sample_no, name: s.name, status: s.status })) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { logger.error('样品柜位图查询失败: ' + (e.message || String(e))); res.status(500).json({ error: '服务器内部错误' }); }
   });
 
   // 柜配置读写（ADMIN 可改行列，全员可读）——供孪生页内联配置
   app.put('/api/samples/storage-map/cabinets/:key', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
-      if (u.role !== 'ADMIN') return res.status(403).json({ error: '仅管理员可修改柜配置' });
+      if (!hasRole(u, ['ADMIN'])) return res.status(403).json({ error: '仅管理员可修改柜配置' });
       const key = decodeURIComponent(req.params.key);
       const rws = Math.min(Math.max(parseInt(req.body.rows, 10) || 0, 1), 50);
       const cls = Math.min(Math.max(parseInt(req.body.columns, 10) || 0, 1), 50);
@@ -116,7 +118,7 @@ function register(app) {
         'ON DUPLICATE KEY UPDATE `rows`=VALUES(`rows`), `columns`=VALUES(`columns`), updated_by=VALUES(updated_by)',
         [key, Number(m[1]), rws, cls, u.id]);
       res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { logger.error('样品柜配置保存失败: ' + (e.message || String(e))); res.status(500).json({ error: '服务器内部错误' }); }
   });
 }
 
