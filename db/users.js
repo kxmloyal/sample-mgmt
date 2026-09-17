@@ -132,7 +132,12 @@ module.exports = function({ q, one, dbRef }) {
     if (fields.role !== undefined) {
       await exec('DELETE FROM user_roles WHERE user_id IN (' + placeholders(ids) + ')', ids, conn);
       for (var i = 0; i < ids.length; i++) {
-        await exec('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [ids[i], fields.role]);
+        // 修复（2026-09-17）：此处 MUST 传 conn。漏传会退化为 dbRef.run，语句落到池上
+        // 另一条独立连接，而本事务已持 UPDATE users 的行级 X 锁且未提交；该 INSERT 的外键
+        // 检查需要同一 users 行的 S 锁，于是形成「同一请求两条连接互相等待」的死等，直到
+        // innodb_lock_wait_timeout(50s) 抛 ER_LOCK_WAIT_TIMEOUT(1205)，并连带堵死其它请求
+        // 的 user_roles 写入（建号/导入），表现为 tests/users.test.js 批量改角色用例挂起
+        await exec('INSERT INTO user_roles (user_id, role) VALUES (?, ?)', [ids[i], fields.role], conn);
       }
     }
     return ids.length;
