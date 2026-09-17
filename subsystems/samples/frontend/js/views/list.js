@@ -21,13 +21,15 @@ async function viewSamples() {
   try {
     (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
   } catch (_) {}
-  var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
+  // 2026-09-17 状态筛选升级为多选：原单选下拉的选项定义已由 views/list-status-bar.js 的 _STATUS_LIST/_STATUS_CN 接管
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   // 2026-09-08 方案C：保管/生技日常以「看板待接收 + 列表查找」为主，高级筛选（类型/项目/来源/机型/排序）默认隐藏精简首屏（保留 DOM 仅折叠，避免 chips/参数构建空引用；devtools 可展开无副作用）
   var hideAdv = (me.role === 'CUSTODY' || me.role === 'ME') ? ' style="display:none"' : '';
+  // 2026-09-17 状态多选：原 fluent-select 单选下拉改为下方 status-bar 标签排（多选 + 「在用（不含已作废）」预设）；
+  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
+    '<input type="hidden" id="f-status" />' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -42,6 +44,7 @@ async function viewSamples() {
     // 机型/柜位视图切换入口（hash 路由切换；勿直调视图函数——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/storagemap\'">柜位视图</fluent-button></div>' +
+    '<div class="filters" style="margin-bottom:10px"><span id="f-status-bar" class="lsb"></span></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
     // 2026-09-08：待处理=角色待办（与看板同口径）；ADMIN 无角色待办语义，隐藏入口（列表回归全量档案角色）
@@ -70,6 +73,8 @@ async function viewSamples() {
     loadSamplesWithScope();
   }
   else loadSamples();
+  // 状态多选标签排首帧就位（深链已在上面赋值完毕）；数据返回后 renderChips 会再同步一次，保证任何写入点都不脱钩
+  smSyncStatusBar();
 }
 
 /** 角色置顶加载：scope=role 交由服务端按会话角色派生排序（RD→我建的 / QA→待办+复检临期 / 保管生技→在库借出归还中 置顶） */

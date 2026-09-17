@@ -178,4 +178,15 @@
 @media (max-width:575px){.sm-chain-node{padding:8px 10px}.sm-chain-meta{font-size:11px}}
 /* 批量领用/归还样式（.sb-*）已于 2026-09-16 拆至 batch.css：本文件加入该批样式后达 72.2%，
    越过 AGENTS §7.1 的 70% 预警线（须停止新增业务 + 输出拆分方案），故独立成文件，本文件回落 62.4% */
+/* 状态多选标签排（.lsb-* = list status bar，2026-09-17）：列表「状态」由单选下拉升级为多选 + 「在用（不含已作废）」预设；
+   前缀刻意避开 batch.css 已占用的 .sb-*，避免与批量领用/归还样式互相污染 */
+.lsb{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lsb-label{font-size:12px;color:var(--muted,#64748b)}
+.lsb-tag{display:inline-block;padding:2px 9px;font-size:12px;color:#475467;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:12px;cursor:pointer;user-select:none}
+.lsb-tag:hover{border-color:var(--brand,#2563eb);color:var(--brand,#2563eb)}
+.lsb-tag.on{background:var(--brand,#2563eb);border-color:var(--brand,#2563eb);color:#fff}
+.lsb-sep{width:1px;height:14px;background:var(--line,#e2e8f0);margin:0 2px}
+.lsb-preset{border-style:dashed}
+.lsb-preset.on{border-style:solid}
+@media (max-width:575px){.lsb-tag{font-size:11px}}
 

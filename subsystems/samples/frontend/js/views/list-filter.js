@@ -78,6 +78,7 @@ function renderChips() {
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
   if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
   chips.innerHTML = html;
+  smSyncStatusBar(); // 状态多选标签排同步（单一事实来源 = #f-status.value）：深链/chips 清除/快捷筛选等写入点都经此收敛
 }
 
 function clearQuickFilter() {
