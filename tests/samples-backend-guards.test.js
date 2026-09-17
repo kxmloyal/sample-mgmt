@@ -9,9 +9,12 @@ const path = require('path');
 const read = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf-8');
 
 const BE = 'subsystems/samples/backend/';
-// 本批清单内的后端文件（routes-storage-map.js / routes-checkout-users.js 不在本批，留待后续批次）
-const GUARD_FILES = ['routes-samples.js', 'scan-actions.js', 'routes-scan.js', 'batch-scan.js',
-  'routes-cards.js', 'routes-samples-models.js', 'scan-allowed.js'];
+// 本批清单内的后端文件；2026-09-17 独立复核后追加 routes-samples-batch.js（批量新建写入口，自
+// routes-samples.js 外迁）、routes-storage-map.js / routes-checkout-users.js（独立复核发现的
+// 3 处错误回显 + 1 处裸角色判定，已在本批收口）
+const GUARD_FILES = ['routes-samples.js', 'routes-samples-batch.js', 'scan-actions.js', 'routes-scan.js',
+  'batch-scan.js', 'routes-cards.js', 'routes-samples-models.js', 'scan-allowed.js',
+  'routes-storage-map.js', 'routes-checkout-users.js'];
 
 describe('样品后端加固（源码静态断言）', () => {
   it('① 裸 u.role 出现次数为 0（权限判定走 hasRole，审计留痕走 primaryRole）', () => {
@@ -105,11 +108,11 @@ describe('样品后端加固（源码静态断言）', () => {
     expect(iEdit).toBeGreaterThan(-1);
     expect(iEditUse).toBeGreaterThan(iEdit);
 
-    // 计数据锁定：4 个写入口 = routes-samples 2 处 + scan-actions 2 处
-    expect((read(BE + 'routes-samples.js').match(/isValidSampleType\(/g) || []).length).toBe(3); // import + 建样 + PUT
+    // 计数据锁定：routes-samples 建样 1 + PUT 1 = 2 处；批量 1 处随路由外迁至 routes-samples-batch.js
+    expect((read(BE + 'routes-samples.js').match(/isValidSampleType\(/g) || []).length).toBe(2);
     expect((read(BE + 'scan-actions.js').match(/sampleTypeReject\(sample_type\)/g) || []).length).toBe(2); // release + EDIT_CARD
     // 逻辑第 5 个写点（POST /api/samples/batch 行级 items[].sample_type）同样受同一校验器保护
-    expect(read(BE + 'routes-samples.js')).toContain('if (!isValidSampleType(st))');
+    expect(read(BE + 'routes-samples-batch.js')).toContain('if (!isValidSampleType(st))');
   });
 
   it('③ 响应体不再拼接 err.message / e.message（业务态白名单除外）', () => {
@@ -132,7 +135,7 @@ describe('样品后端加固（源码静态断言）', () => {
     expect(read(BE + 'routes-samples-models.js')).toContain("res.status(500).json({ error: '新增机型失败，请联系管理员' });");
     expect(read(BE + 'batch-scan.js')).toContain("reason: '服务器内部错误'");
     // 业务态白名单仍保留原文案（不牺牲可用性）：「上限」与行级 err.status
-    const rs = read(BE + 'routes-samples.js');
+    const rs = read(BE + 'routes-samples-batch.js');
     expect(rs).toContain("err.message.includes('上限')");
     expect(rs).toContain('const bizMsg = (err.status ||');
   });

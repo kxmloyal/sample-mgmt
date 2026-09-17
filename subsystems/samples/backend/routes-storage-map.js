@@ -36,7 +36,7 @@ async function ensureCabinetTable() {
 function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
-  const hasRole = app.locals.hasRole; // §25 红线：多角色鉴权走共享 hasRole，禁用裸 u.role
+  const hasRole = app.locals.hasRole; // §25 红线：多角色鉴权走共享 hasRole，禁用裸会话角色字段比较
 
   app.get('/api/samples/storage-map', requireAuth, async (req, res) => {
     try {
