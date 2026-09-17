@@ -1,5 +1,5 @@
-// routes/samples.js — 样品 CRUD（列表/详情/新建/删除/更新 + 历史照片；机型路由与图片保存已拆至独立模块，B3-T1）
-const path = require('path');
+// routes/samples.js — 样品 CRUD（列表/详情/新建/删除/更新 + 历史照片；机型路由/图片保存已拆至独立模块 B3-T1，
+// 批量新建 2026-09-17 拆至 routes-samples-batch.js）
 const fs = require('fs');
 const D = require('../../../db');
 const { STATION_GROUPS, generateSampleCode, previewSampleCode } = require('../db/sample-code');
@@ -8,10 +8,12 @@ const { asyncHandler } = require('./async-handler');
 const { toCsv, sendCsv } = require('../../../shared/csv');
 const { saveSampleImage, UPLOAD_DIR } = require('./sample-images');
 const { inspectStateCn } = require('./inspect-state-cn'); // 复检状态中文（导出列口径唯一落点，2026-09-16 外迁）
+const { isValidSampleType, primaryRole, SAMPLE_TYPE_MSG } = require('./sample-type');
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
+  const hasRole = app.locals.hasRole;
 
   // sort 白名单：旧值 created_at/sample_no + 2026-09-07 角色范围档新增 mine/inspect/status
   const SAMPLE_SORTS = ['', 'created_at', '-created_at', 'sample_no', '-sample_no', 'mine', 'inspect', 'status'];
@@ -36,10 +38,10 @@ function register(app) {
       mine_uid: (query.mine === '1' && user && user.id) ? user.id : undefined,
       checkout_overdue: query.checkout_overdue || undefined,
       // pending=role → 角色待办（与看板我的待办同源；仅非 ADMIN 生效）
-      pending_role: (query.pending === 'role' && user && user.role && user.role !== 'ADMIN') ? user.role : undefined,
+      pending_role: (query.pending === 'role' && user && user.role && !hasRole(user, ['ADMIN'])) ? primaryRole(user) : undefined,
       pending_uid: user && user.id,
       // scope=role → 角色相关置顶排序（2026-09-07 排序版：相关排前、全量可见；ADMIN/未知角色不注入；无 scope 参数行为与旧版完全一致）
-      role_scope_role: query.scope === 'role' && user && user.role && user.role !== 'ADMIN' ? user.role : undefined,
+      role_scope_role: query.scope === 'role' && user && user.role && !hasRole(user, ['ADMIN']) ? primaryRole(user) : undefined,
       role_scope_uid: user && user.id
     };
   }
@@ -134,7 +136,9 @@ function register(app) {
       });
       res.json({ sample_no });
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      // §25.2.3：原为 err.message（回显库表/列名）
+      logger.error('编号预览失败: ' + (err.message || String(err)));
+      res.status(400).json({ error: '编号预览失败，请检查机型编码/组别/版次' });
     }
   });
 
@@ -175,7 +179,7 @@ function register(app) {
   app.post('/api/samples', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
-      if (!['RD', 'ADMIN'].includes(u.role))
+      if (!hasRole(u, ['RD', 'ADMIN']))
         return res.status(403).json({ error: '无权限：仅研发可新建样品' });
       const { name, spec, model, station, notes,
         sample_type, limit_item, source_type, valid_until, card_version,
@@ -183,6 +187,7 @@ function register(app) {
       if (!name || !name.trim()) return res.status(400).json({ error: '请填写样品名称' });
       const src = (source_type || '').toUpperCase();
       if (!['C', 'T', 'G'].includes(src)) return res.status(400).json({ error: '请选择有效的提供处（C/T/G）' });
+      if (!isValidSampleType(sample_type)) return res.status(400).json({ error: SAMPLE_TYPE_MSG }); // §25.3.3
       if (!model || model.trim().length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
       const m = await D.getModelByCode(model.trim());
       if (!m) return res.status(400).json({ error: '机型不存在，请先在机型列表添加该机型' });
@@ -198,15 +203,17 @@ function register(app) {
           signed_by_rd: u.display_name || u.username,
           signed_by_qa: ''
         }, conn);
-        await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '新建样品' }, conn);
+        await D.addLog({ sample_id: ns.id, action: 'CREATE', role: primaryRole(u), user_id: u.id, dept: u.dept, note: '新建样品' }, conn);
         return ns;
       });
       res.json(s);
     } catch (err) {
-      // 流水号达 999 上限等运行时编码错误降级为 400
-      if (err.message && err.message.includes('上限')) return res.status(400).json({ error: err.message });
+      // 业务态白名单：原文案回（§25.2.3）
+      const upMsg = String(err.message || err);
+      if (err.message && err.message.includes('上限')) return res.status(400).json({ error: upMsg });
+      // §25.2.3：其余固定文案（原拼接 err.message）
       logger.error('新建样品失败: ' + (err.message || String(err)));
-      res.status(500).json({ error: '新建样品失败：' + (err.message || '服务器内部错误') });
+      res.status(500).json({ error: '新建样品失败，请联系管理员' });
     }
   });
 
@@ -214,62 +221,8 @@ function register(app) {
   // 批次级：model/card_version/source_type/station 整批共用（样品编号前四段一致才成批）
   // items 每行 {name*, notes?, sample_type?, limit_item?, test_standard?}（限度样品信息按行填写）
   // 兼容：行级 source_type/station 仍接受但忽略（旧前端 payload 不报错）；createSample 内含 SAVEPOINT 重试，事务内逐条复用安全
-  app.post('/api/samples/batch', requireAuth, async (req, res) => {
-    let conn;
-    try {
-      const u = await currentUser(req);
-      if (!['RD', 'ADMIN'].includes(u.role))
-        return res.status(403).json({ error: '无权限：仅研发可新建样品' });
-      const _b = req.body || {};
-      const model = (_b.model || '').trim();
-      const cardVersion = (_b.card_version || '').trim() || '01';
-      const src = ((_b.source_type) || '').toUpperCase();
-      const station = ((_b.station) || '').trim();
-      const items = Array.isArray(_b.items) ? _b.items : [];
-      if (!model || model.length < 6) return res.status(400).json({ error: '机型编码至少 6 位' });
-      if (!['C', 'T', 'G'].includes(src)) return res.status(400).json({ error: '请选择有效的提供处（C/T/G）' });
-      if (!STATION_GROUPS.includes(station)) return res.status(400).json({ error: '请选择有效的组别' });
-      if (!items.length) return res.status(400).json({ error: '请至少填写一条样品' });
-      if (items.length > 50) return res.status(400).json({ error: '单次最多创建 50 条样品' });
-      const m = await D.getModelByCode(model);
-      if (!m) return res.status(400).json({ error: '机型不存在，请先在机型列表添加该机型' });
-      const cleaned = items.map((it, idx) => {
-        const name = ((it || {}).name || '').trim();
-        if (!name) { const e = new Error('第 ' + (idx + 1) + ' 行：样品名称必填'); e.status = 400; throw e; }
-        return {
-          name,
-          notes: ((it || {}).notes || '').trim(),
-          sample_type: ((it || {}).sample_type || '').trim(),
-          limit_item: ((it || {}).limit_item || '').trim(),
-          test_standard: ((it || {}).test_standard || '').trim()
-        };
-      });
-      const created = await D.withTransaction(async conn => {
-        const out = [];
-        for (let i = 0; i < cleaned.length; i++) {
-          const ns = await D.createSample({
-            name: cleaned[i].name, spec: m.full_name || '', model,
-            station, notes: cleaned[i].notes, image: '',
-            created_by: u.id,
-            sample_type: cleaned[i].sample_type, limit_item: cleaned[i].limit_item,
-            source_type: src,
-            card_version: cardVersion, test_standard: cleaned[i].test_standard,
-            test_data: '',
-            signed_by_rd: u.display_name || u.username,
-            signed_by_qa: ''
-          }, conn);
-          await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '批量新建样品（第' + (i + 1) + '条/共' + cleaned.length + '条）' }, conn);
-          out.push({ id: ns.id, sample_no: ns.sample_no, name: ns.name });
-        }
-        return out;
-      });
-      res.json({ created: created.length, samples: created });
-    } catch (err) {
-      const status = err.status || ((err.message && err.message.includes('上限')) ? 400 : 500);
-      if (status >= 500) logger.error('批量新建样品失败: ' + (err.message || String(err)));
-      res.status(status).json({ error: err.message || '批量创建失败' });
-    }
-  });
+  // 批量新建样品 POST /api/samples/batch 已于 2026-09-17 外迁至 routes-samples-batch.js（容量治理：
+  // 主文件因白名单与多角色鉴权修复升至 92.1%，外迁最大单块后回到 75% 区间）。注册顺序见 backend/index.js。
 
   // 删除样品=软删除 deleted_at 置位（仅NEW/PRODUCED，仅ADMIN或创建者可删；2026-08-06 P2-2 收紧：RD 不再无条件放行；T13 起日志保留）
   // 编号口径（2026-09-11 修订）：取消 NEW 样品（建样后未制作，无实物/无已贴标签）→ 释放其流水号供新样品复用；
@@ -280,7 +233,7 @@ function register(app) {
     if (!s) return res.status(404).json({ error: '样品不存在' });
     if (!['NEW', 'PRODUCED'].includes(s.status))
       return res.status(400).json({ error: '仅允许删除NEW或PRODUCED状态的样品' });
-    if (u.role !== 'ADMIN' && s.created_by !== u.id)
+    if (!hasRole(u, ['ADMIN']) && s.created_by !== u.id)
       return res.status(403).json({ error: '无权限：仅管理员或创建者可删除' });
     await D.deleteSample(s.id);
     // 审计留痕（无界面回收台账，仅日志）：标注该编号是已释放还是仍占用，便于事后追溯
@@ -291,7 +244,7 @@ function register(app) {
   // 更新样品限度信息（RD/QA/ADMIN）
   app.put('/api/samples/:id', requireAuth, asyncHandler(async (req, res) => {
     const u = await currentUser(req);
-    if (!['RD', 'QA', 'ADMIN'].includes(u.role))
+    if (!hasRole(u, ['RD', 'QA', 'ADMIN']))
       return res.status(403).json({ error: '无权限：仅研发/品保/管理员可编辑' });
     const s = await D.getSampleById(Number(req.params.id));
     if (!s) return res.status(404).json({ error: '样品不存在' });
@@ -309,6 +262,9 @@ function register(app) {
         (typeof version !== 'number' || !Number.isInteger(version) || version < 0))
       return res.status(400).json({ error: 'version 必须是非负整数' });
 
+    // 仅显式携带时校验；未携带沿用原值，行为与旧版一致（§25.3.3）
+    if (sample_type !== undefined && !isValidSampleType(sample_type)) return res.status(400).json({ error: SAMPLE_TYPE_MSG });
+
     const updated = { ...s,
       sample_type: sample_type !== undefined ? sample_type : s.sample_type,
       limit_item: limit_item !== undefined ? limit_item : s.limit_item,
@@ -317,8 +273,8 @@ function register(app) {
       test_standard: test_standard !== undefined ? test_standard : s.test_standard,
       test_data: test_data !== undefined ? test_data : s.test_data,
       // 签名字段服务端派生：仅对应角色可签名，禁止客户端伪造他人签名
-      signed_by_rd: u.role === 'RD' ? (u.display_name || u.username) : s.signed_by_rd,
-      signed_by_qa: u.role === 'QA' ? (u.display_name || u.username) : s.signed_by_qa
+      signed_by_rd: hasRole(u, ['RD']) ? (u.display_name || u.username) : s.signed_by_rd,
+      signed_by_qa: hasRole(u, ['QA']) ? (u.display_name || u.username) : s.signed_by_qa
     };
 
     // 更新 + 审计日志原子提交；携带 version 时走 CAS 乐观锁，
@@ -326,7 +282,7 @@ function register(app) {
     try {
       const result = await D.withTransaction(async conn => {
         const r = await D.updateSample(updated, conn, version);
-        await D.addLog({ sample_id: s.id, action: 'UPDATE_CARD', role: u.role, user_id: u.id, dept: u.dept, note: '更新标示卡信息' }, conn);
+        await D.addLog({ sample_id: s.id, action: 'UPDATE_CARD', role: primaryRole(u), user_id: u.id, dept: u.dept, note: '更新标示卡信息' }, conn);
         return r;
       });
       res.json({ ...result, logs: await D.listLogsBySample(s.id) });

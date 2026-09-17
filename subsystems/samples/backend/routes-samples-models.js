@@ -11,6 +11,7 @@ function invalidateModelCaches() { MODEL_CACHE_KEYS.forEach(function (k) { cache
 function register(app) {
   const requireAuth = app.locals.requireAuth;
   const currentUser = app.locals.currentUser;
+  const hasRole = app.locals.hasRole;
 
   // 机型列表：GET 所有登录角色可读（新建下拉/筛选数据源）；POST/DELETE 仅 RD/ADMIN（须注册在 /:id 之前）
   // 字典缓存：机型为低变数据，TTL 60s；写操作走 invalidateModelCaches 即时失效（见 AGENTS.md 性能优化）
@@ -63,7 +64,7 @@ function register(app) {
   app.post('/api/samples/models', requireAuth, async (req, res) => {
     try {
       const u = await currentUser(req);
-      if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+      if (!hasRole(u, ['RD', 'ADMIN'])) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
       const code = ((req.body || {}).code || '').trim().toUpperCase();
       const full_name = ((req.body || {}).full_name || '').trim();
       if (!code) return res.status(400).json({ error: '请填写机型短码' });
@@ -77,13 +78,14 @@ function register(app) {
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) return res.status(409).json({ error: '机型短码或全称已存在' });
       logger.error('新增机型失败: ' + (err.message || String(err)));
-      res.status(500).json({ error: '新增机型失败：' + (err.message || '服务器内部错误') });
+      // §25.2.3：原为拼接 err.message，会回显库表/列名/约束名
+      res.status(500).json({ error: '新增机型失败，请联系管理员' });
     }
   });
 
   app.delete('/api/samples/models/:id', requireAuth, asyncHandler(async (req, res) => {
     const u = await currentUser(req);
-    if (!['RD', 'ADMIN'].includes(u.role)) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
+    if (!hasRole(u, ['RD', 'ADMIN'])) return res.status(403).json({ error: '无权限：仅研发或管理员可维护机型' });
     const m = await D.getModelById(Number(req.params.id));
     if (!m) return res.status(404).json({ error: '机型不存在' });
     const used = await D.countSamplesByModel(m.code);

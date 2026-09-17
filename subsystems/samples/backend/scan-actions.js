@@ -3,7 +3,7 @@
 //   { status, error }  由路由直接回 HTTP 错误
 //   { logData }        交由路由主事务 updateSample(CAS) + addLog 原子提交
 //   { respond }        action 已自行完成事务与响应数据（RECREATE）
-
+const { sampleTypeReject, primaryRole } = require('./sample-type');
 // 计算下一个版次号
 // 规则：存储为字符串 "01"~"99"（两位整数，padStart 补零）
 // 兼容旧格式 V1.0/A1 等取首个数字部分 +1；无数字时从 "01" 开始
@@ -75,6 +75,8 @@ async function applyInspect(req, s, updated, ts, opts) {
 function applyReleaseFields(req, s, updated, ts, cyc, typeErrMsg) {
   const { sample_type, limit_item, source_type, card_version, test_standard, test_data } = (req.body || {});
   if (!sample_type || !sample_type.trim()) return { status: 400, error: typeErrMsg };
+  const trel = sampleTypeReject(sample_type); // §25.3.3 白名单，与其余 3 个写入口同一校验器
+  if (trel) return trel;
   if (!limit_item || !limit_item.trim()) return { status: 400, error: '请选择限度项目' };
   const d = new Date(ts); d.setUTCDate(d.getUTCDate() + cyc);
   updated.status = 'RELEASED';
@@ -115,6 +117,8 @@ async function applyAction(chosenAction, ctx) {
   const { req, s, updated, ts, u, D, saveSampleImage } = ctx;
   const { location, cycleDays, note } = req.body || {};
   var logData = null;
+  // 审计留痕角色取单值（多角色不写 join，scan_logs.role 为 VARCHAR(20)）
+  const role = primaryRole(u);
 
   if (chosenAction === 'PRODUCE') {
     const img = req.body.image;
@@ -126,7 +130,7 @@ async function applyAction(chosenAction, ctx) {
     updated.status = 'PRODUCED';
     updated.produced_at = ts;
     updated.signed_by_rd = u.display_name || u.username;
-    logData = { sample_id: s.id, action: 'PRODUCE', role: u.role, user_id: u.id, dept: u.dept, note: note || '研发确认制作完成' };
+    logData = { sample_id: s.id, action: 'PRODUCE', role, user_id: u.id, dept: u.dept, note: note || '研发确认制作完成' };
   } else if (chosenAction === 'RELEASE') {
     const cyc = Number(cycleDays);
     if (!cyc || cyc <= 0) return { status: 400, error: '请填写有效的复检周期（天）' };
@@ -134,7 +138,7 @@ async function applyAction(chosenAction, ctx) {
     const rel = applyReleaseFields(req, null, updated, ts, cyc, '请选择样品类型（OK样品/NG样品）');
     if (rel) return rel;
     updated.signed_by_qa = u.display_name || u.username;
-    logData = { sample_id: s.id, action: 'RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: `正式发行，复检周期${cyc}天，标示卡已签署` };
+    logData = { sample_id: s.id, action: 'RELEASE', role, user_id: u.id, dept: u.dept, note: `正式发行，复检周期${cyc}天，标示卡已签署` };
   } else if (chosenAction === 'INSPECT') {
     // 已发行样品复检：沿用旧文件名（_insp 固定名），版次不自动递增（由标示卡修正流程管理）
     const r = await applyInspect(req, s, updated, ts, { photoName: s.sample_no + '_insp', saveImage: saveSampleImage });
@@ -142,7 +146,7 @@ async function applyAction(chosenAction, ctx) {
     const { card_version, test_data } = req.body || {};
     const cardUpdated = (card_version||test_data)?'、「标示卡已更新」':'';
     const isEarly = s.next_inspect_at && new Date(s.next_inspect_at).getTime() > Date.now();
-    logData = { sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role: u.role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + r.cyc + '天' + cardUpdated) };
+    logData = { sample_id: s.id, action: isEarly ? 'INSPECT_EARLY' : 'INSPECT', role, user_id: u.id, dept: u.dept, note: note || ('复检通过，下次周期' + r.cyc + '天' + cardUpdated) };
   } else if (chosenAction === 'INSPECT_CUSTODY') {
     // 保管中复检：IN_CUSTODY 自环（样品不脱离保管）；照片文件名时间戳化防覆盖；标示卡版次自动 +1
     const r = await applyInspect(req, s, updated, ts, {
@@ -151,14 +155,14 @@ async function applyAction(chosenAction, ctx) {
     });
     if (r.error) return { status: r.status, error: r.error };
     const oldVer = s.card_version || '01';
-    logData = { sample_id: s.id, action: 'INSPECT_CUSTODY', role: u.role, user_id: u.id, dept: u.dept,
+    logData = { sample_id: s.id, action: 'INSPECT_CUSTODY', role, user_id: u.id, dept: u.dept,
       note: note || ('保管中复检通过，标示卡版次 ' + oldVer + '→' + updated.card_version + '，周期' + r.cyc + '天') };
   } else if (chosenAction === 'CUSTODY') {
     if (!location || !location.trim()) return { status: 400, error: '请填写保管储位' };
     updated.status = 'IN_CUSTODY';
     updated.custody_dept = u.dept;
     updated.storage_location = location.trim();
-    logData = { sample_id: s.id, action: 'CUSTODY', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' };
+    logData = { sample_id: s.id, action: 'CUSTODY', role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '部门接收保管' };
   }
   // === 领用/归还流程（2026-09-05，docs/archive/specs/2026-09-05-samples-checkout-design.md） ===
   else if (chosenAction === 'CHECKOUT') {
@@ -176,7 +180,7 @@ async function applyAction(chosenAction, ctx) {
     updated.expected_return_at = due.toISOString();
     updated.checkout_note = (note && note.trim()) || null;
     updated.returned_at = null;
-    logData = { sample_id: s.id, action: 'CHECKOUT', role: u.role, user_id: u.id, dept: u.dept, note: '样品领出：领用人 ' + updated.checkout_user + '（' + updated.checkout_dept + '），领用 ' + dur + ' 小时，应还 ' + updated.expected_return_at + (updated.checkout_note ? '，备注：' + updated.checkout_note : '') };
+    logData = { sample_id: s.id, action: 'CHECKOUT', role, user_id: u.id, dept: u.dept, note: '样品领出：领用人 ' + updated.checkout_user + '（' + updated.checkout_dept + '），领用 ' + dur + ' 小时，应还 ' + updated.expected_return_at + (updated.checkout_note ? '，备注：' + updated.checkout_note : '') };
   } else if (chosenAction === 'RETURN_OUT') {
     // 归还入库：回 IN_CUSTODY，写实际归还时间，清全部领用字段；日志留借出时长实绩
     updated.status = 'IN_CUSTODY';
@@ -187,12 +191,14 @@ async function applyAction(chosenAction, ctx) {
     updated.checkout_at = null;
     updated.expected_return_at = null;
     updated.checkout_note = null;
-    logData = { sample_id: s.id, action: 'RETURN_OUT', role: u.role, user_id: u.id, dept: u.dept, note: '归还入库' + (borrowedHours ? '，实际借出 ' + borrowedHours + ' 小时' : '') + (s.checkout_user ? '（领用人 ' + s.checkout_user + '）' : '') + ((note && note.trim()) ? '，备注：' + note.trim() : '') };
+    logData = { sample_id: s.id, action: 'RETURN_OUT', role, user_id: u.id, dept: u.dept, note: '归还入库' + (borrowedHours ? '，实际借出 ' + borrowedHours + ' 小时' : '') + (s.checkout_user ? '（领用人 ' + s.checkout_user + '）' : '') + ((note && note.trim()) ? '，备注：' + note.trim() : '') };
   }
   // === 新增 Action ===
   else if (chosenAction === 'EDIT_CARD') {
     const { sample_type, limit_item, source_type, card_version, test_data, test_standard } = req.body || {};
-    if (sample_type) updated.sample_type = sample_type.trim();
+    const ted = sampleTypeReject(sample_type); // §25.3.3 白名单；空值沿用原值，行为不变
+    if (ted) return ted;
+    if (sample_type) updated.sample_type = String(sample_type).trim();
     if (limit_item) updated.limit_item = limit_item.trim();
     if (source_type) updated.source_type = source_type.trim();
     if (card_version !== undefined) {
@@ -206,15 +212,15 @@ async function applyAction(chosenAction, ctx) {
     updated.signed_by_qa = u.display_name || u.username;
     const oldCardVer = s.card_version || '01';
     const verNote = (updated.card_version && updated.card_version !== oldCardVer) ? '，版次 ' + oldCardVer + '→' + updated.card_version : '';
-    logData = { sample_id: s.id, action: 'EDIT_CARD', role: u.role, user_id: u.id, dept: u.dept, note: (note || '修正标示卡') + verNote };
+    logData = { sample_id: s.id, action: 'EDIT_CARD', role, user_id: u.id, dept: u.dept, note: (note || '修正标示卡') + verNote };
   } else if (chosenAction === 'EDIT_STORAGE') {
     if (!location || !location.trim()) return { status: 400, error: '请填写新储位' };
     updated.storage_location = location.trim();
-    logData = { sample_id: s.id, action: 'EDIT_STORAGE', role: u.role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '修改储位' };
+    logData = { sample_id: s.id, action: 'EDIT_STORAGE', role, user_id: u.id, dept: u.dept, location: location.trim(), note: note || '修改储位' };
   } else if (chosenAction === 'RETURN_REQUEST') {
     if (!note || !note.trim()) return { status: 400, error: '请填写退回原因' };
     updated.status = 'RETURNING';
-    logData = { sample_id: s.id, action: 'RETURN_REQUEST', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
+    logData = { sample_id: s.id, action: 'RETURN_REQUEST', role, user_id: u.id, dept: u.dept, note: note.trim() };
   } else if (chosenAction === 'RE_RELEASE') {
     const cyc = Number(cycleDays);
     if (!cyc || cyc <= 0) return { status: 400, error: '请填写有效的复检周期（天）' };
@@ -226,7 +232,7 @@ async function applyAction(chosenAction, ctx) {
     // 重新发行即脱离保管链路：清空保管部门与储位，等待保管单位重新接收
     updated.custody_dept = null;
     updated.storage_location = null;
-    logData = { sample_id: s.id, action: 'RE_RELEASE', role: u.role, user_id: u.id, dept: u.dept, note: '品保确认重新发行，周期' + cyc + '天' };
+    logData = { sample_id: s.id, action: 'RE_RELEASE', role, user_id: u.id, dept: u.dept, note: '品保确认重新发行，周期' + cyc + '天' };
   } else if (chosenAction === 'RETIRE_RECREATE') {
     const assignedRd = (req.body.retire_assigned_rd || '').trim();
     if (!assignedRd) return { status: 400, error: '请选择指派重新制作的研发人员' };
@@ -239,19 +245,21 @@ async function applyAction(chosenAction, ctx) {
     updated.retire_assigned_rd = assignedRd;
     const assignedLabel = assignedUser.display_name || assignedUser.username;
     // 作废即清柜（2026-09-16）：指派重做即实物随研发离柜，同步释放柜位（状态仍为 RETURNING，见发布说明 §已知行为）
-    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_RECREATE', role: u.role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel });
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_RECREATE', role, user_id: u.id, dept: u.dept, note: '退回研发重新制作，指派 ' + assignedLabel });
   } else if (chosenAction === 'RETIRE_ONLY') {
     if (!note || !note.trim()) return { status: 400, error: '请填写作废原因' };
     updated.status = 'RETIRED';
     updated.retired_reason = note.trim();
     updated.retire_assigned_rd = null;
     // 作废即清柜（2026-09-16）：状态落 RETIRED 时同步释放柜位，原储位写入日志 location 列留痕
-    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_ONLY', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() });
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'RETIRE_ONLY', role, user_id: u.id, dept: u.dept, note: note.trim() });
   } else if (chosenAction === 'RETURN_REJECT') {
     if (!note || !note.trim()) return { status: 400, error: '请填写拒绝理由' };
     updated.status = 'IN_CUSTODY';
     updated.retire_assigned_rd = null;
     updated.retired_reason = null;
+    // P1-12：回保管链须恢复储位，否则「在库却无位」；未传不改写（旧调用方行为不变）
+    if (location && location.trim()) updated.storage_location = location.trim();
     // 顺延复检时间：退回审核消耗的天数（最近一次 RETURN_REQUEST 日志至今的整天数）补回 next_inspect_at
     if (s.next_inspect_at) {
       const logs = await D.listLogsBySample(s.id);
@@ -265,7 +273,7 @@ async function applyAction(chosenAction, ctx) {
         }
       }
     }
-    logData = { sample_id: s.id, action: 'RETURN_REJECT', role: u.role, user_id: u.id, dept: u.dept, note: note.trim() };
+    logData = { sample_id: s.id, action: 'RETURN_REJECT', role, user_id: u.id, dept: u.dept, note: note.trim() };
   } else if (chosenAction === 'FORCE_REASSIGN') {
     // T12.3 ADMIN 兜底：退回审核卡死时强制改派重做研发（存在性/角色/enabled 校验同 T12.1）
     const targetRd = (req.body.retire_assigned_rd || '').trim();
@@ -274,7 +282,8 @@ async function applyAction(chosenAction, ctx) {
     if (!targetUser || targetUser.role !== 'RD' || Number(targetUser.enabled) !== 1)
       return { status: 400, error: '指派对象须为启用状态的研发人员' };
     updated.retire_assigned_rd = targetRd;
-    logData = { sample_id: s.id, action: 'FORCE_REASSIGN', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制改派至 ' + (targetUser.display_name || targetUser.username) };
+    // P1-12：改派即实物随研发离柜，同 RETIRE_RECREATE 释放柜位
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'FORCE_REASSIGN', role, user_id: u.id, dept: u.dept, note: '管理员强制改派至 ' + (targetUser.display_name || targetUser.username) });
   } else if (chosenAction === 'FORCE_RETIRE') {
     // T12.3 ADMIN 兜底：退回审核卡死时强制作废（原因必填，日志前缀留痕）
     if (!note || !note.trim()) return { status: 400, error: '请填写作废原因' };
@@ -282,7 +291,7 @@ async function applyAction(chosenAction, ctx) {
     updated.retired_reason = note.trim();
     updated.retire_assigned_rd = null;
     // 作废即清柜（2026-09-16）：同 RETIRE_ONLY，强制作废亦同步释放柜位
-    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'FORCE_RETIRE', role: u.role, user_id: u.id, dept: u.dept, note: '管理员强制作废：' + note.trim() });
+    logData = releaseCabinet(updated, s, { sample_id: s.id, action: 'FORCE_RETIRE', role, user_id: u.id, dept: u.dept, note: '管理员强制作废：' + note.trim() });
   } else if (chosenAction === 'RECREATE') {
     // 4 步写事务：createSample(新) + updateSample(旧→RETIRED) + 2 addLog
     const newSample = await D.withTransaction(async conn => {
@@ -297,10 +306,10 @@ async function applyAction(chosenAction, ctx) {
       const oldUpdated = { ...s, status: 'RETIRED', replaced_by: ns.sample_no };
       // 作废即清柜（2026-09-16）：原样品转 RETIRED 同步释放柜位；替代品不继承储位（需重新走接收保管入柜）。
       // 注意顺序：必须在 updateSample 之前调用，releaseCabinet 就地改写 oldUpdated.storage_location。
-      const oldLog = releaseCabinet(oldUpdated, s, { sample_id: s.id, action: 'RECREATE_REPLACED', role: u.role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' });
+      const oldLog = releaseCabinet(oldUpdated, s, { sample_id: s.id, action: 'RECREATE_REPLACED', role, user_id: u.id, dept: u.dept, note: '由 ' + ns.sample_no + ' 替代' });
       await D.updateSample(oldUpdated, conn, s.version);
       await D.addLog(oldLog, conn);
-      await D.addLog({ sample_id: ns.id, action: 'CREATE', role: u.role, user_id: u.id, dept: u.dept, note: '替代 ' + s.sample_no }, conn);
+      await D.addLog({ sample_id: ns.id, action: 'CREATE', role, user_id: u.id, dept: u.dept, note: '替代 ' + s.sample_no }, conn);
       return ns;
     });
     return { respond: { sample: newSample, replaced: s.sample_no, action: 'RECREATE', message: '替代样品已创建：' + newSample.sample_no } };

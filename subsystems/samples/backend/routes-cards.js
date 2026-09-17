@@ -30,7 +30,7 @@ function setCachedQR(sampleNo, width, dataUrl) {
 var DOWNLOAD_ROLES = ['ADMIN', 'QA', 'RD'];
 async function assertDownloadRole(app, req, res) {
   const u = await app.locals.currentUser(req);
-  if (!DOWNLOAD_ROLES.includes(u.role)) {
+  if (!app.locals.hasRole(u, DOWNLOAD_ROLES)) {
     res.status(403).json({ error: '无权限下载，仅限管理员/品保/研发' });
     return false;
   }

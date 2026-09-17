@@ -14,6 +14,7 @@ const { asyncHandler } = require('./async-handler');
 const A = require('./scan-actions');
 // 动作可用集与状态标签：与单件扫码台共用同一份口径（scan-allowed.js），避免复制粘贴漂移（§15）
 const { allowedActions, STATUS_LABEL } = require('./scan-allowed');
+const { primaryRole } = require('./sample-type'); // 提示/审计取单角色（多角色不作 join）
 
 const BATCH_LIMIT = 50;                                                   // 上限 50 件/批（与批量新建/批量打印/打印队列三处先例一致）
 const BATCH_ACTIONS = ['CHECKOUT', 'RETURN_OUT'];                         // 仅领出/归还；图片类动作与批量不兼容
@@ -72,10 +73,10 @@ async function precheckAll(codes, action, u) {
   for (const code of codes) {
     const s = await D.getSampleByNo(code) || await D.getSampleByToken(code);
     if (!s) { rejected.push({ code: code, code_: 'NOT_FOUND', status: null, reason: '未找到对应样品' }); continue; }
-    const acts = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
+    const acts = allowedActions(u, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
     if (acts.indexOf(action) < 0) {
       rejected.push({ code: code, id: s.id, sample_no: s.sample_no, code_: 'ACTION_NOT_ALLOWED', status: s.status,
-        reason: '当前状态「' + (STATUS_LABEL[s.status] || s.status) + '」下你的角色（' + u.role + '）不可执行「' + action + '」' });
+        reason: '当前状态「' + (STATUS_LABEL[s.status] || s.status) + '」下你的角色（' + primaryRole(u) + '）不可执行「' + action + '」' });
       continue;
     }
     items.push({ code: code, sample: s });
@@ -89,7 +90,7 @@ async function precheckAll(codes, action, u) {
 async function runOne(item, action, params, batchId, u, saveSampleImage) {
   const s = await D.getSampleByNo(item.code) || await D.getSampleByToken(item.code);
   if (!s) return { code: item.code, ok: false, code_: 'NOT_FOUND', reason: '未找到对应样品', retryable: false };
-  const acts = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
+  const acts = allowedActions(u, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
   if (acts.indexOf(action) < 0)
     return { code: item.code, ok: false, code_: 'ACTION_NOT_ALLOWED', status: s.status, retryable: false,
       reason: '状态已变更为「' + (STATUS_LABEL[s.status] || s.status) + '」，不可执行「' + action + '」' };
@@ -109,7 +110,8 @@ async function runOne(item, action, params, batchId, u, saveSampleImage) {
   } catch (err) {
     if (err && err.code === 'CONFLICT')
       return { code: item.code, ok: false, code_: 'VERSION_CONFLICT', reason: '该样品刚被他人操作，请刷新后重试', retryable: true };
-    return { code: item.code, ok: false, code_: 'SERVER_ERROR', reason: err.message || '服务器内部错误', retryable: true };
+    // §25.2.3：固定文案，原为 err.message（会回显库表/列名；单件失败不中断整批）
+    return { code: item.code, ok: false, code_: 'SERVER_ERROR', reason: '服务器内部错误', retryable: true };
   }
 }
 
@@ -129,7 +131,7 @@ function resolveRoute(app) {
     for (const c of d.list) {
       const s = await D.getSampleByNo(c) || await D.getSampleByToken(c);
       if (!s) { items.push({ code: c, ok: false, reason: '未找到对应样品' }); continue; }
-      const acts = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
+      const acts = allowedActions(u, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
       items.push({ code: c, ok: true, id: s.id, status: s.status, name: s.name,
         checkout_user: s.checkout_user || null, expected_return_at: s.expected_return_at || null,
         allowedActions: acts, reason: (want && acts.indexOf(want) < 0) ? '当前状态不可执行「' + want + '」' : null });

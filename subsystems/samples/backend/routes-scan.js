@@ -2,9 +2,11 @@
 const D = require('../../../db');
 const { asyncHandler } = require('./async-handler');
 const A = require('./scan-actions');
+const { logger } = require('../../../logger'); // §25.2.3：固定文案 + 日志
 // 动作可用集 / 状态标签 / 临期窗口（2026-09-16 外迁 scan-allowed.js）：单件扫码与批量通道共用同一份口径，
 // 避免复制粘贴漂移（§15）；本文件不再自行构造状态机，也降低了自己的容量占用。
 const { allowedActions, STATUS_LABEL } = require('./scan-allowed');
+const { primaryRole } = require('./sample-type'); // 审计取单角色（role 列 VARCHAR(20)）
 
 function register(app) {
   const requireAuth = app.locals.requireAuth;
@@ -18,7 +20,7 @@ function register(app) {
     let s = await D.getSampleByNo(code) || await D.getSampleByToken(code);
     if (!s) return res.status(404).json({ error: '未找到对应样品：' + code });
     const u = await currentUser(req);
-    const actions = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
+    const actions = allowedActions(u, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
     // 仅 RETURNING 状态下按需加载 RD 用户（SQL WHERE 过滤，避免全量 listUsers 内存过滤）
     // T12.2: 指派下拉只列启用状态的 RD（禁用账号不可被指派）；按状态而非角色加载，ADMIN 兜底改派同样可用
     const rdUsers = s.status === 'RETURNING'
@@ -39,7 +41,7 @@ function register(app) {
       const s = await D.getSampleByNo(scanCode) || await D.getSampleByToken(scanCode);
       if (!s) return res.status(404).json({ error: '未找到对应样品：' + scanCode });
 
-      const actions = allowedActions(u.role, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
+      const actions = allowedActions(u, s.status, s.next_inspect_at, s.retire_assigned_rd, String(u.id));
       const chosenAction = bodyAction || actions[0];
       if (!chosenAction || !actions.includes(chosenAction))
         return res.status(409).json({
@@ -47,7 +49,7 @@ function register(app) {
           // 供批量通道按 code 分组（ACTION_NOT_ALLOWED → 失败·需人工）；既有调用方读 error 不受影响
           code: 'ACTION_NOT_ALLOWED',
           status: s.status,
-          error: `当前角色(${u.role})无法对状态为「${STATUS_LABEL[s.status] || s.status}」的样品执行「${chosenAction}」操作`,
+          error: `当前角色(${primaryRole(u)})无法对状态为「${STATUS_LABEL[s.status] || s.status}」的样品执行「${chosenAction}」操作`,
           sample: s
         });
 
@@ -74,7 +76,9 @@ function register(app) {
       if (err && err.code === 'CONFLICT')
         // 2026-09-16 兼容增量（设计 §5.3）：仅补 code，文案不变
         return res.status(409).json({ code: 'VERSION_CONFLICT', error: '该样品刚被他人操作，请刷新后重试' });
-      res.status(500).json({ error: '扫码操作失败：' + (err.message || '服务器内部错误') });
+      // §25.2.3：原为拼接 err.message（可回显库表/列名/约束名）
+      logger.error('扫码操作失败: ' + (err.message || String(err)));
+      res.status(500).json({ error: '扫码操作失败，请刷新后重试或联系管理员' });
     }
   });
 }

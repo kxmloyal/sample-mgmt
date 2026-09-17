@@ -17,8 +17,17 @@ const STATUS_LABEL = {
   IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废'
 };
 
-function allowedActions(role, status, next_inspect_at, retire_assigned_rd, currentUserId) {
-  return SM.getAllowedActions(role, status).map(function (t) { return t.action; }).filter(function (a) {
+// 多角色并集（2026-09-17，P1-5）：逐个角色问状态机后取并集；shared/state-machine.js 的
+// t.role.includes(role) 不接受数组且该共享文件不在本批清单内，故不改它。
+// 角色口径与 shared/middleware/auth.js 的 hasRole 回退一致（roles 非空取 roles，否则取会话主角色）；
+// 兼容旧调用方：直接传角色字符串时按单角色处理，行为与改动前逐字相同。
+function allowedActions(u, status, next_inspect_at, retire_assigned_rd, currentUserId) {
+  const roles = Array.isArray(u) ? u : (Array.isArray(u && u.roles) && u.roles.length ? u.roles : [(u || {}).role || u]);
+  const acts = [];
+  roles.forEach(function (r) {
+    SM.getAllowedActions(r, status).forEach(function (t) { if (acts.indexOf(t.action) === -1) acts.push(t.action); });
+  });
+  return acts.filter(function (a) {
     if (a === 'INSPECT_CUSTODY')
       return next_inspect_at && new Date(next_inspect_at).getTime() - Date.now() <= INSPECT_EARLY_DAYS * 86400000;
     if (a === 'RECREATE') return String(retire_assigned_rd) === String(currentUserId);

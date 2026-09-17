@@ -13,11 +13,12 @@ const fs = require('fs');
  */
 function register(app) {
   // Phase 6: 子系统自行注册路由
-  // 注意顺序：checkout-users / storage-map / batch-scan 须在 routes-samples 之前注册——/api/samples/:id 会把它们
-  // 当作 :id 捕获（实测返回「样品不存在」），与文件内 export/code-preview 先例同理
+  // 注意顺序：checkout-users / storage-map / batch-scan / samples-batch 须在 routes-samples 之前注册——
+  // /api/samples/:id 会把它们当作 :id 捕获（实测返回「样品不存在」），与文件内 export/code-preview 先例同理
   require('./batch-scan').register(app);            // 批量领用/归还（2026-09-16）：/api/samples/batch-* 同样不得被 :id 捕获
   require('./routes-checkout-users').register(app); // 领用人候选（2026-09-09 方案A，只读轻接口）
   require('./routes-storage-map').register(app);    // 柜位数字孪生（2026-09-09，聚合+ADMIN柜配置）
+  require('./routes-samples-batch').register(app);  // 批量新建样品（2026-09-17 自 routes-samples 外迁，容量治理）：/api/samples/batch 亦须先于 :id
   require('./routes-samples').register(app);
   require('./routes-chain').register(app);          // 样品替代链只读（2026-09-14）：三段路径 /api/samples/:id/chain，不会被 :id 捕获，无顺序约束
   require('./routes-scan').register(app);
