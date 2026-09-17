@@ -274,9 +274,15 @@ mysql2/lib/base/connection.js:111            Socket.<anonymous> → TCP.onStream
 
 `tests/samples-picker-timing.test.js:20` 断言 `if(action==='CUSTODY'||action==='EDIT_STORAGE')_smCache=null;`，而 `subsystems/samples/frontend/js/views/scan.js:6,219` 已改为广义机制 `_SM_LOC_ACTIONS`（`CUSTODY/EDIT_STORAGE/RETIRE_ONLY/RETIRE_RECREATE/FORCE_RETIRE/RECREATE`，注释明确为 2026-09-16 扩入作废/重做类）⇒ 断言陈旧。修法：断言同步为机制校验（覆盖面**强于**原字面量的 2 个动作）。该套件此前从未被真正执行（全量运行在 `cesu8` 处中断）⇒ **新暴露的既存问题**。
 
-### 9.4 遗留：`tests/users.test.js` 4 项失败（环境性，本次未修）
+### 9.4 遗留：`tests/users.test.js` 4 项失败（**原判「环境性」有误 — 2026-09-17 已定位为代码缺陷并修复**）
 
-失败形态为 `Lock wait timeout exceeded`（`db/dao.js:65` 的 `pool.execute`）与 2 项 30s 用例超时，伴随数据库侧慢查询（实测单请求 22–24s）；测试库残留连接数 0，MySQL 侧配置正常（`max_connections=500`、`max_user_connections=0`、`Threads_connected=44`）。A/B 显示旧提交失败**更多**（6 项）⇒ 非本版引入，属测试库负载/慢查询导致的既存环境性失败，建议独立排查（不属本版范围）。
+> **更正（2026-09-17）**：本节原结论「属测试库负载/慢查询导致的既存环境性失败」**错误**——缺陷在代码不在环境。真实根因：`db/users.js:135` 的 `INSERT INTO user_roles` 漏传事务连接 `conn`，退化为 `dbRef.run` 而落到池上另一条独立连接；事务连接已持 `UPDATE users` 的行级 X 锁且未提交，该 INSERT 的外键检查需同一 `users` 行的 S 锁 ⇒ **同一请求、两条连接、互相等待**，至 `innodb_lock_wait_timeout=50s` 抛 `ER_LOCK_WAIT_TIMEOUT(1205)`。
+>
+> - **抛出点更正**：原文记为 `db/dao.js:65`，实为 **`db.js:65`**（`dbRef.run` 的 `pool.execute`）——这一点恰是定位缺陷的决定性证据（错误栈证明该 INSERT 走的是 `dbRef.run` 而非 `conn.execute`）。
+> - **A/B 差异更正**：原文「旧提交失败更多」并非环境波动，而是该缺陷的触发依赖用例执行顺序——批量改角色用例触发后事务持锁不放，后续建号/导入用例的 `INSERT INTO user_roles` 被级联阻塞 50s。
+> - **完整证据链（6 项实测）、影响面（5 维度）、修复与验证结果见 `docs/RELEASE-v2.1.0.md` 第 9 节**；修复提交 `5a862c6`（修复后 `users.test.js` 31/31 通过、47.7s；全量 42 suites / 566 tests 全绿、0 failed）。
+
+原记录的失败形态与当时观测（保留备查）：失败形态为 `Lock wait timeout exceeded`（`db.js:65` 的 `pool.execute`）与 2 项 30s 用例超时，伴随数据库侧慢查询（实测单请求 22–24s）；测试库残留连接数 0，MySQL 侧配置正常（`max_connections=500`、`max_user_connections=0`、`Threads_connected=44`）。A/B 显示旧提交失败**更多**（6 项）⇒ 非本版引入。
 
 ---
 
@@ -301,5 +307,10 @@ mysql2/lib/base/connection.js:111            Socket.<anonymous> → TCP.onStream
 
 ### 10.2 其他
 
-- 测试环境：`tests/users.test.js` 的 `Lock wait timeout` 环境性失败需独立排查（§9.4）。
-- 方案 A 去留（§9.1 备注）：建议保留 `iconv-lite@0.6.3` override（无副作用，符合 mysql2 长期依赖组合）。
+- ~~测试环境：`tests/users.test.js` 的 `Lock wait timeout` 环境性失败需独立排查（§9.4）。~~ **已解决（2026-09-17）**：经立项独立排查确认**非环境问题**，系 `db/users.js:135` 漏传事务连接 `conn` 导致的「同一请求两条连接互相等待」，已修复并全量回归通过（提交 `5a862c6`，证据链见 `docs/RELEASE-v2.1.0.md` 第 9 节）。
+- **批次一遗留修复的最终处置（2026-09-17 用户决策「修复遗留」= 全部保留；逐项复核已在位且相互自洽）**：
+  - **修复 A — `iconv-lite` 钉 `0.6.3`（§9.1）**：**保留**。`package.json:46` `overrides.iconv-lite = "0.6.3"` 在位；无副作用，符合 mysql2 长期依赖组合。
+  - **修复 D — 测试进程编码表预热（§9.1）**：**保留**。`tests/setup-env.js:38-51` 在位；实测 `cesu8` 出现次数 3 → 0，且首次能打印 `Tests` 汇总行；作用域仅测试进程（生产为纯 node 运行，不经此路径）。
+  - **修复 E — `lazyTabs` 3 元素断言（§9.2）**：**保留**。`tests/detail-modal-shared.test.js:247` 的断言与 `subsystems/samples/frontend/js/views/detail.js:25` 实现逐字一致。
+  - **修复 F — `_SM_LOC_ACTIONS` 广义机制断言（§9.3）**：**保留**。`subsystems/samples/frontend/js/views/scan.js:6,157` 在位，`tests/samples-picker-timing.test.js:22-23` 断言与之逐字一致；覆盖面**强于**原字面量断言（2 个动作 → 6 个动作）。
+  - 复核方式：四项在生产/测试链路逐一比对实现与断言，无一处回退、无一处不一致；决策与证据已落档本节。

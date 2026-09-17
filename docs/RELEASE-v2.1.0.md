@@ -224,7 +224,7 @@ git revert --no-edit <本版提交区间>   # 逐个 revert，禁止 reset --har
 | `public/css/app.css` 门户块拆分（109.5%，已超红线） | 未授权（需三系统回归） |
 | `routes-fixtures.js` 97.0% / `scan-actions.js` 88.1% | 仅允许精简重构，本版零变更 |
 | `flow-ops.js` 顶层函数 12 个（超 §7.2 上限） | 待拆分 |
-| `tests/users.test.js` 4 个 `Lock wait timeout` 失败 | 环境基线问题，需独立排查（与本次变更无关） |
+| `tests/users.test.js` 4 个 `Lock wait timeout` 失败 | **已解决（2026-09-17）**：立项独立排查确认**非环境基线问题**，系 `db/users.js:135` 漏传事务连接 `conn`，已修复并全量回归通过（提交 `5a862c6`，见第 9 节） |
 
 ---
 
@@ -249,4 +249,72 @@ git revert --no-edit <本版提交区间>   # 逐个 revert，禁止 reset --har
 
 **判定**：当前规模（千行级、百 KB 级）下单次探测 < 1 ms，**不构成性能问题**，无需在本版加索引。
 **触发后续优化的阈值**：`scan_logs` 超过 **10 万行**，或现场反馈单次提交总耗时（`probeMs`）持续 > 50 ms 时，评估把批次标记迁至独立列（如 `scan_logs.batch_id`）+ 索引，属后续迭代范围。
+
+---
+
+## 9. 发布后缺陷修复：批量改角色「跨连接自我锁等待」（2026-09-17，提交 `5a862c6`）
+
+> 本版发布后，对 `tests/users.test.js` 长期 4 项失败**立项独立排查**，确认其为**真实代码缺陷**，而非 `docs/RELEASE-v2.0.9.md` §9.4 原记的「环境性失败」（该节结论已更正）。
+
+### 9.1 根因（单点缺陷）
+
+`db/users.js` 的 `updateUsers(ids, fields, conn)` 内三条语句传参不一致：
+
+| 行 | 语句 | 传 `conn` | 后果 |
+|---|---|---|---|
+| 131 | `UPDATE users SET role/dept WHERE id IN (…)` | 传了 | 走**事务连接**，持 `users(N)` 行级 X 锁且未提交 |
+| 133 | `DELETE FROM user_roles WHERE user_id IN (…)` | 传了 | 走事务连接 |
+| **135** | **`INSERT INTO user_roles (user_id, role) VALUES (?,?)`** | **漏传** | 退化为 `dbRef.run` ⇒ 落到**池上另一条独立连接** |
+
+### 9.2 失效机理
+
+事务连接持 `users(N)` 行级 **X 锁**（未提交）→ 池上另一条连接的 `INSERT INTO user_roles (N,…)` 其**外键检查需同一 `users(N)` 行的 S 锁**，被该 X 锁挡住 → 而事务回调正在 `await` 这条 INSERT ⇒ **回调等 INSERT、INSERT 等回调释放锁**；等满 `innodb_lock_wait_timeout=50s` 抛 `ER_LOCK_WAIT_TIMEOUT(1205)`，抛出点 `db.js:65`（`dbRef.run` 的 `pool.execute`）。
+
+### 9.3 证据链（6 项实测）
+
+| # | 证据 | 手段 |
+|---|---|---|
+| 1 | 卡住语句恒为 `INSERT INTO user_roles (…) VALUES (N,'…')`，`STATE=update`，`t=27~50` | `information_schema.PROCESSLIST` 采样 |
+| 2 | `users(N)` 确被 X 锁：`FOR UPDATE NOWAIT` → `ERROR 3572` | 独立会话锁探针（立即返回，无等待无写入） |
+| 3 | 事务连接呈 **Sleep + 未结束事务**（末语句 `DELETE FROM user_roles`） | mysql2 `Pool.prototype.getConnection` 层连接探针（纯 JS，免 PROCESS 权限） |
+| 4 | **错误栈 `exec (db/users.js:108)` ← `dbRef.run (db.js:65)`，`sql: INSERT INTO user_roles`** | 70s 长等待抓取 —— **决定性证据**：证明走池连接而非 `conn.execute` |
+| 5 | 同一 SQL 序列（UPDATE→DELETE→INSERT）纯 SQL 执行 **7 ms 通过** | 排除 SQL 层自身锁，反证问题在「跨连接」 |
+| 6 | 测试库 `users.id=514/516` 的 role 仍为 `RD` | 证明事务已正确 `rollback`，**无脏数据** |
+
+### 9.4 全链路排查（§6 五维度）
+
+| 维度 | 结论 |
+|---|---|
+| 代码层 | `updateUsers` 全项目**仅 1 个调用点**（`routes/misc.js:137`）；「三参 `exec(sql,params,conn)`」模式全项目**仅 `db/users.js:107` 一处**，6 个 `exec` 调用逐行核对——**只有 L135 漏传**，其余 5 处正确 |
+| 接口层 | `POST /api/users/batch` 且 `action='update'` 且带 `role` → 必现；其余 action（`delete`/`reset-password`/`enable`/`disable`）不受影响 |
+| 级联面 | 事务持锁期间任何 `INSERT INTO user_roles`（建号 `createUser`、`/api/users/import`）被阻塞最多 50s ⇒ 解释另 2 例「级联受害者」 |
+| 数据库层 | 无 schema 变更、无数据变更（失败即回滚） |
+| 文档层 | `docs/RELEASE-v2.0.9.md` §9.4 结论已更正 |
+
+### 9.5 修复与验证（服务器实测）
+
+修复：`db/users.js:135` 补第 3 个参数 `conn`（+5 行 why 注释）。
+
+| 项 | 修复前 | 修复后 |
+|---|---|---|
+| `tests/users.test.js` | 4 failed / 31，145.1 s | **31 passed / 31，47.7 s** |
+| `should update role to PM in batch` | ✕ 30,002 ms | ✓ 1,152 ms |
+| `should update role and dept in batch` | ✕ 30,001 ms | ✓ 2,256 ms |
+| `should create user with PM role`（级联） | ✕ 23,369 ms | ✓ 1,470 ms |
+| `should import valid users`（级联） | ✕ 25,147 ms | ✓ 3,317 ms |
+| **全量回归** | 1 suite failed / 4 tests failed，493.555 s | **42 suites passed（42/49）、566 passed、0 failed，388.186 s** |
+| `Encoding not recognized`（cesu8） | 0 | 0 |
+
+### 9.6 部署与回滚
+
+- **部署**：已随 2026-09-17 11:42:48 重启生效（PID 2497127 → **2577563**；进程启动时间晚于文件 mtime ⇒ 已加载新版）。
+- **回滚**：`git revert 5a862c6`（无 schema / 数据迁移，回滚零风险）。
+- **重启后只读巡检**：`/api/login`、`/api/users`、`/api/dashboard`、`/api/logs`、`/api/rd-users`、`/api/subsystems`、`/api/portal/prefs`、`/api/samples?limit=3`、`/api/samples/batch-resolve`、`/api/fixtures?limit=1`、`/api/fixtures/dashboard`、`bundle.js`、`batch.css`、`portal.html` 全部 **200**；5 个子系统均加载 v2.1.0；启动日志无 error；`pgrep -fc '[s]ample-mgmt/server.js'` = **1**（单实例）。
+- **生产数据护栏（与批次二验收基线逐项一致、零漂移）**：`samples` 存活 **126**、`CHECKED_OUT` **53**、`scan_logs` **747**、`[batch:` 标记 **0**、`users` **40**、`user_roles` **41**、非法角色 **0**。
+
+### 9.7 监控提示
+
+- 关注生产日志是否再现 `ER_LOCK_WAIT_TIMEOUT` / `Lock wait timeout exceeded`（缺陷唯一表现形态）；若再现且栈指向 `db.js:65`，说明仍有语句在事务内漏用 `conn`。
+- 用户管理页「批量改角色」响应时间正常应为数十毫秒级。
+- **顺带发现（未修，独立事项）**：`sessions` 表 5,658 行，索引仅 `PRIMARY(session_id)`，**`expires` 列无索引**；`server.js:61-63` 已刻意禁用 `touch` 以避免每请求 UPDATE。若后续启用会话清理或 `touch`，该表将出现全表扫描/大范围加锁，届时评估补 `expires` 索引。
 
