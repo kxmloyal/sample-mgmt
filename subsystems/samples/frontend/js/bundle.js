@@ -1,4 +1,4 @@
-/** BUNDLE vbmu5czv8c — 37 files */
+/** BUNDLE vbmu5isi2j — 38 files */
 /* --- shared constants (data/*.json) --- */
 var LIMIT_ITEMS = [{"code":"A","label":"成品震动(限度)"},{"code":"AI","label":"扇叶震动(限度)"},{"code":"A1","label":"MCU IC烧録器(限度)"},{"code":"A2","label":"平衡机测试(限度)"},{"code":"A3","label":"入充磁扇叶组立(限度)"},{"code":"B","label":"异音(限度)"},{"code":"C","label":"外观(限度)"},{"code":"D","label":"定子组绝缘耐压/阻抗"},{"code":"E","label":"马达组电测（波形、反转）"},{"code":"F","label":"层间测试"},{"code":"G","label":"定子组大小边"},{"code":"H","label":"AOI视觉/CCD检测"},{"code":"I","label":"压定子高度"},{"code":"J","label":"扣环检测"},{"code":"K","label":"PCB组与定子组结合焊锡"},{"code":"L","label":"自动化马达组组立"},{"code":"M","label":"马达组焊导线组"},{"code":"N","label":"导线焊点位置检测"},{"code":"O","label":"断电功能检测"},{"code":"P","label":"成品检测(转速、电流)"},{"code":"Q","label":"定子组自动绕、缠线"},{"code":"R","label":"铜轴承自动化"},{"code":"S","label":"CCD检测浸锡后定子组"},{"code":"T","label":"CCD检测外框组"},{"code":"U","label":"2Ball成品自动化组立"},{"code":"X","label":"特殊工站"}];
 var SOURCE_TYPES = {"C":"客供","T":"元山","G":"元将五金塔岗分厂"};
@@ -1198,13 +1198,15 @@ async function viewSamples() {
   try {
     (await api('GET', '/api/samples/model-options')).forEach(function (o) { modelOpts += '<fluent-option value="' + e(o.value) + '">' + e(o.label) + '</fluent-option>'; });
   } catch (_) {}
-  var stOpts = '<fluent-option value="">全部状态</fluent-option><fluent-option value="NEW">待制作</fluent-option><fluent-option value="PRODUCED">制作完成</fluent-option><fluent-option value="RELEASED">已发行</fluent-option><fluent-option value="IN_CUSTODY">保管中</fluent-option><fluent-option value="CHECKED_OUT">领用中</fluent-option><fluent-option value="RETURNING">退回审核中</fluent-option><fluent-option value="RETIRED">已作废</fluent-option>';
+  // 2026-09-17 状态筛选升级为多选：原单选下拉的选项定义已由 views/list-status-bar.js 的 _STATUS_LIST/_STATUS_CN 接管
   var deptOpts = '<fluent-option value="">保管部门</fluent-option>' + (typeof DEPTS !== 'undefined' ? DEPTS : ['研发部','品保文管中心','制造部','资材部','FQC','生技部','项目部','系统']).map(function(d) { return '<fluent-option value="' + d + '">' + d + '</fluent-option>'; }).join('');
   var sortOpts = '<fluent-option value="">排序：最新优先</fluent-option><fluent-option value="created_at">最早优先</fluent-option><fluent-option value="sample_no">编号升序</fluent-option><fluent-option value="-sample_no">编号降序</fluent-option>';
   // 2026-09-08 方案C：保管/生技日常以「看板待接收 + 列表查找」为主，高级筛选（类型/项目/来源/机型/排序）默认隐藏精简首屏（保留 DOM 仅折叠，避免 chips/参数构建空引用；devtools 可展开无副作用）
   var hideAdv = (me.role === 'CUSTODY' || me.role === 'ME') ? ' style="display:none"' : '';
+  // 2026-09-17 状态多选：原 fluent-select 单选下拉改为下方 status-bar 标签排（多选 + 「在用（不含已作废）」预设）；
+  // #f-status 保留为隐藏值载体（逗号分隔多值），使 _buildQueryParams / renderChips / 深链 / 导出等既有读写点全部零改动
   v.innerHTML = '<div class="filters"><fluent-text-field id="f-q" placeholder="搜索编号/名称/规格" oninput="debounceSearch()"></fluent-text-field>' +
-    '<fluent-select id="f-status" onchange="loadSamples()">' + stOpts + '</fluent-select>' +
+    '<input type="hidden" id="f-status" />' +
     '<fluent-select id="f-dept" onchange="loadSamples()">' + deptOpts + '</fluent-select>' +
     '<fluent-select id="f-type"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部类型</fluent-option><fluent-option value="OK">OK样品</fluent-option><fluent-option value="NG">NG样品</fluent-option></fluent-select>' +
     '<fluent-select id="f-limit-item"' + hideAdv + ' onchange="loadSamples()"><fluent-option value="">全部项目</fluent-option>' + (typeof LIMIT_ITEMS !== 'undefined' ? LIMIT_ITEMS : []).map(function(x) { return '<fluent-option value="' + x.code + '">' + x.label + '</fluent-option>'; }).join('') + '</fluent-select>' +
@@ -1219,6 +1221,7 @@ async function viewSamples() {
     // 机型/柜位视图切换入口（hash 路由切换；勿直调视图函数——直调不改 hash 会导致再点导航时切换失效，治具同款坑）
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/wall\'">机型视图</fluent-button>' +
     '<fluent-button appearance="neutral" size="small" onclick="location.hash=\'#/storagemap\'">柜位视图</fluent-button></div>' +
+    '<div class="filters" style="margin-bottom:10px"><span id="f-status-bar" class="lsb"></span></div>' +
     '<div class="filters" style="margin-bottom:14px;align-items:center">' +
     '<span style="font-size:12px;color:var(--muted)">快捷：</span>' +
     // 2026-09-08：待处理=角色待办（与看板同口径）；ADMIN 无角色待办语义，隐藏入口（列表回归全量档案角色）
@@ -1247,6 +1250,8 @@ async function viewSamples() {
     loadSamplesWithScope();
   }
   else loadSamples();
+  // 状态多选标签排首帧就位（深链已在上面赋值完毕）；数据返回后 renderChips 会再同步一次，保证任何写入点都不脱钩
+  smSyncStatusBar();
 }
 
 /** 角色置顶加载：scope=role 交由服务端按会话角色派生排序（RD→我建的 / QA→待办+复检临期 / 保管生技→在库借出归还中 置顶） */
@@ -1278,6 +1283,63 @@ async function deleteSample(id) {
 function exportSamplesCsv() {
   var qs = (_sampleBuildParams ? _sampleBuildParams() : _buildQueryParams('')).replace(/^&/, '');
   location.href = '/api/samples/export' + (qs ? '?' + qs : '');
+}
+
+
+/* --- subsystems/samples/frontend/js/views/list-status-bar.js --- */
+// list-status-bar.js — 样品列表「状态多选」标签排（2026-09-17）
+// 背景：原 #f-status 是单值 fluent-select，其「全部状态」= 不过滤 = **含已作废**；用户要确认「某机种正式发行了
+//       多少个样品」时无法排除作废样品，读到的数字偏大（实测 BD7620D：卡片 86 件，其中已作废 26 件，
+//       详见 docs/RELEASE-v2.1.0.md §10）。后端 /api/samples 早已支持多值（db/dao-list.js `_listWhere`：
+//       `status=A,B` → `status IN ('A','B')`），仅前端缺入口，故本次只补 UI，不动接口、不动 SQL。
+// 设计（兼容优先，零改动既有读写点）：控件本体改为本文件渲染的标签排；#f-status 退化为隐藏值载体（逗号分隔），
+//       于是 _buildQueryParams / renderChips / 深链(#/samples?status=A,B) / 导出 CSV / 快捷筛选 全部无需改动。
+// 单一事实来源：选中态一律由 #f-status.value 反推（smSyncStatusBar），本文件不另存选中状态，避免两处漂移。
+// 样式前缀 .lsb-*（list status bar）：与 batch.css 已占用的 .sb-*（批量领用/归还）刻意区分，见 module.css。
+// 入口：list.js 渲染 #f-status-bar 容器并首帧调用 smSyncStatusBar()；list-filter.js 的 renderChips 每次重绘后调用同步。
+
+/** 状态全集（顺序即展示顺序，与后端 status 枚举、看板卡片顺序一致） */
+var _STATUS_LIST = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'CHECKED_OUT', 'RETURNING', 'RETIRED'];
+/** 状态中文名（与 list-filter.js 的 chips / _roleStatusLabel 用词保持一致） */
+var _STATUS_CN = { NEW: '待制作', PRODUCED: '制作完成', RELEASED: '已发行', IN_CUSTODY: '保管中', CHECKED_OUT: '领用中', RETURNING: '退回审核中', RETIRED: '已作废' };
+/** 「在用（不含已作废）」预设 = 除 RETIRED 外的 6 个状态；与看板总数卡「在管总量 = 存活 − 已作废」同口径 */
+var _ACTIVE_STATUSES = ['NEW', 'PRODUCED', 'RELEASED', 'IN_CUSTODY', 'CHECKED_OUT', 'RETURNING'];
+
+/** 读取当前已选状态数组。值载体为逗号分隔串，空串表示不过滤（= 全部状态，含已作废）。
+ *  兼容：任何单值（如看板卡片深链 #/samples?status=RELEASED）都自然解析为长度 1 的数组。 */
+function smStatusValues() {
+  var el = $('#f-status');
+  return String((el && el.value) || '').split(',').filter(function(s) { return s; });
+}
+
+/** 渲染状态标签排。选中态由 #f-status.value 反推，故深链赋值、chips 清除、快捷筛选置空后都能自动跟上。 */
+function smSyncStatusBar() {
+  var bar = $('#f-status-bar'); if (!bar) return;
+  var sel = smStatusValues();
+  var html = '<span class="lsb-label">状态：</span>' + _STATUS_LIST.map(function(k) {
+    return '<span class="lsb-tag' + (sel.indexOf(k) >= 0 ? ' on' : '') + '" onclick="smToggleStatus(\'' + k + '\')" title="点击筛选该状态，可多选；再次点击取消">' + _STATUS_CN[k] + '</span>';
+  }).join('');
+  var allActive = sel.length === _ACTIVE_STATUSES.length && _ACTIVE_STATUSES.every(function(k) { return sel.indexOf(k) >= 0; });
+  html += '<span class="lsb-sep"></span><span class="lsb-tag lsb-preset' + (allActive ? ' on' : '') + '" onclick="smToggleActivePreset()" title="一次筛出 6 个未作废状态（不含已作废），与看板「在管总量」同口径">在用（不含已作废）</span>';
+  bar.innerHTML = html;
+}
+
+/** 切换单个状态（未选则加入，已选则移除）；移除最后一个后值载体为空串 = 回到「全部状态」。
+ *  随后走既有 loadSamples 链路，参数构建/渲染/分页/导出全部复用，无重复实现。 */
+function smToggleStatus(k) {
+  var sel = smStatusValues();
+  var i = sel.indexOf(k);
+  if (i >= 0) sel.splice(i, 1); else sel.push(k);
+  $('#f-status').value = sel.join(',');
+  loadSamples();
+}
+
+/** 「在用（不含已作废）」预设：未全选则一次选中 6 个状态；已全选则清空（再点取消，回到全部状态）。 */
+function smToggleActivePreset() {
+  var sel = smStatusValues();
+  var allActive = sel.length === _ACTIVE_STATUSES.length && _ACTIVE_STATUSES.every(function(k) { return sel.indexOf(k) >= 0; });
+  $('#f-status').value = allActive ? '' : _ACTIVE_STATUSES.join(',');
+  loadSamples();
 }
 
 
@@ -1362,6 +1424,7 @@ function renderChips() {
   if (_quickFilterType === 'overdue') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">逾期 ✕</span>';
   if (_quickFilterType === 'soon') html += '<span class="chip done" style="cursor:pointer" onclick="clearQuickFilter()">近7天 ✕</span>';
   chips.innerHTML = html;
+  smSyncStatusBar(); // 状态多选标签排同步（单一事实来源 = #f-status.value）：深链/chips 清除/快捷筛选等写入点都经此收敛
 }
 
 function clearQuickFilter() {
