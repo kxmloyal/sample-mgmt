@@ -5,10 +5,15 @@
 // 固定文案与「可直接 return 的 400」放本模块，是为让两个已越 70% 预警线的大文件（routes-samples/scan-actions）
 // 只写一次校验调用（§7.1 容量与 §25.3.3 单一校验器两条一起满足）。
 const SAMPLE_TYPE_MSG = '请选择有效的样品类型（OK样品/NG样品）';
+// 兼容口径（2026-09-17 回归修正）：字段「未传」(undefined/null) 等同「未指定」('')，合法。
+// 原实现用 String(v).trim() 会把 undefined 变成字面量 'undefined' 而判为非法，导致
+// POST /api/samples 与 EDIT_CARD 对所有不传该字段的既有调用方返回 400（破坏性变更，§6.2）。
+// 实测反证：tests/samples-checkout-e2e、tests/samples-batch-scan-e2e 均在服务端回归中报
+// 「请选择有效的样品类型」；且 scan-actions.js:199 的注释本就声明「空值沿用原值，行为不变」。
 
 // 唯一校验器：合法返回 true。所有写入口 MUST 经它判定，禁止各处复制 ['OK','NG'] 字面量。
 function isValidSampleType(v) {
-  return ['', 'OK', 'NG'].includes(String(v).trim());
+  return ['', 'OK', 'NG'].includes(String(v == null ? '' : v).trim());
 }
 
 // 非法值 → 可直接 return 的 { status, error }（scan-actions 的返回约定）；合法 → null。
