@@ -32,7 +32,7 @@ describe('storage-map 端点（routes-storage-map.js）', () => {
   test('柜配置表幂等建表：rows/columns 可配置，ADMIN PUT 端点存在', () => {
     expect(src).toMatch(/CREATE TABLE IF NOT EXISTS sample_storage_cabinets/);
     expect(src).toContain("'/api/samples/storage-map/cabinets/:key'");
-    expect(src).toContain("u.role !== 'ADMIN'");
+    expect(src).toContain("hasRole(u, ['ADMIN'])"); // 2026-09-17：改走共享 hasRole，支持多角色（§25 红线）
     // 2026-09-09 修复：全局 db.js 无 D.run（臆造接口致「D.run is not a function」）——写操作统一走 D.pool().query
     expect(src).toContain('await D.pool().query(');
     expect(src).not.toContain('D.run(');
@@ -228,7 +228,7 @@ describe('作废即清柜（scan-actions.js + manifest + 前端接线）', () =>
   });
 
   test('4 个出口全部接入，且 RECREATE 事务内「先释放后写库」顺序正确', () => {
-    expect((act.match(/releaseCabinet\(/g) || []).length).toBe(5); // 1 定义 + 4 调用
+    expect((act.match(/releaseCabinet\(/g) || []).length).toBe(6); // 1 定义 + 5 调用（FORCE_REASSIGN 出口 2026-09-17 补齐）
     ['RETIRE_ONLY', 'RETIRE_RECREATE', 'FORCE_RETIRE', 'RECREATE_REPLACED'].forEach(a => {
       expect(act).toContain("action: '" + a + "'");
     });
