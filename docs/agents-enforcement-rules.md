@@ -34,6 +34,12 @@
 
 **例外**：自由文本字段（备注、原因）不适用白名单，但 MUST 按 §25.2.2 在输出侧转义。
 
+**可选字段的兼容口径（2026-09-18 补充，来源：本批修复的服务端回归实测）**：当被校验字段是**可选**的（既有调用方可以完全不传），校验器 MUST 把「字段未传（`undefined`/`null`）」与「未指定（空串）」**同等视为合法**。**禁止**写成 `['','OK','NG'].includes(String(v).trim())` —— 字段未传时 `String(undefined)` 会得到字面量 `'undefined'`，不在白名单 → 对**所有不传该字段的既有调用方返回 400**，构成 §6.2 所禁的破坏性变更。正确写法：`String(v == null ? '' : v).trim()`。
+
+**依据（实测）**：本批新增的 `subsystems/samples/backend/sample-type.js` 初版即犯此错。服务端全量回归（47 套件）暴露两处 400：`routes-samples.js:190` 的 `POST /api/samples`（`tests/samples-checkout-e2e.test.js:30` 的建样 fixture 因此由 201 变 400）、`scan-actions.js:199` 的 `EDIT_CARD`（**该行注释本就写着「空值沿用原值，行为不变」，代码与自身注释矛盾**）。注意 `routes-samples.js:266` 的 `sample_type !== undefined && !isValidSampleType(...)` 已自带该豁免，同一不变量在两个写入口口径不一致——正因如此，豁免 MUST 收敛到**唯一校验器内部**（§25.3.3），而非散落在各调用点。
+
+**检查点**：改白名单校验器时，MUST 用 `undefined` / `null` / `''` / 非法串 / XSS 载荷 / 数字 / 注入串各跑一次；确认前三个返回 true、后四个返回 false。
+
 ### 25.2.2 非本函数产出的字符串进 `innerHTML`/HTML 属性前 MUST 经 `e()`（R-7）
 
 **规则**：
